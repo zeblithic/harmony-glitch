@@ -406,4 +406,95 @@ mod tests {
         let factor = street.parallax_factor(sky);
         assert!((factor - 5160.0 / 6000.0).abs() < 0.001);
     }
+
+    #[test]
+    fn parse_empty_street_no_layers() {
+        let xml = r#"
+        <game_object tsid="GTEST" label="Empty">
+          <object id="dynamic">
+            <str id="tsid">LTEST</str>
+            <str id="label">Empty Street</str>
+            <int id="l">-100</int>
+            <int id="r">100</int>
+            <int id="t">-50</int>
+            <int id="b">0</int>
+            <int id="ground_y">0</int>
+          </object>
+        </game_object>
+        "#;
+
+        let street = parse_street(xml).unwrap();
+        assert_eq!(street.name, "Empty Street");
+        assert!(street.layers.is_empty());
+        assert!(street.platforms().is_empty());
+    }
+
+    #[test]
+    fn parse_missing_optional_fields() {
+        // No gradient, no filters on the layer
+        let xml = r#"
+        <game_object tsid="GTEST" label="Bare">
+          <object id="dynamic">
+            <str id="tsid">LBARE</str>
+            <str id="label">Bare Street</str>
+            <int id="l">-500</int>
+            <int id="r">500</int>
+            <int id="t">-200</int>
+            <int id="b">0</int>
+            <int id="ground_y">0</int>
+            <object id="layers">
+              <object id="middleground">
+                <int id="w">1000</int>
+                <int id="h">200</int>
+                <int id="z">0</int>
+                <str id="name">middleground</str>
+              </object>
+            </object>
+          </object>
+        </game_object>
+        "#;
+
+        let street = parse_street(xml).unwrap();
+        assert!(street.gradient.is_none());
+        assert_eq!(street.layers.len(), 1);
+        let mg = &street.layers[0];
+        assert!(mg.filters.is_none());
+        assert!(mg.decos.is_empty());
+        assert!(mg.platform_lines.is_empty());
+        assert!(mg.walls.is_empty());
+        assert!(mg.ladders.is_empty());
+    }
+
+    #[test]
+    fn parse_unknown_xml_elements_ignored() {
+        let xml = r#"
+        <game_object tsid="GTEST" label="Custom">
+          <object id="dynamic">
+            <str id="tsid">LCUSTOM</str>
+            <str id="label">Custom Street</str>
+            <int id="l">-100</int>
+            <int id="r">100</int>
+            <int id="t">-50</int>
+            <int id="b">0</int>
+            <int id="ground_y">0</int>
+            <custom id="foo">bar</custom>
+            <widget id="baz">qux</widget>
+            <object id="layers">
+              <object id="middleground">
+                <int id="w">200</int>
+                <int id="h">50</int>
+                <int id="z">0</int>
+                <str id="name">middleground</str>
+                <sparkle id="glitter">shine</sparkle>
+              </object>
+            </object>
+          </object>
+        </game_object>
+        "#;
+
+        let street = parse_street(xml).unwrap();
+        assert_eq!(street.name, "Custom Street");
+        assert_eq!(street.layers.len(), 1);
+        assert!(street.layers[0].is_middleground);
+    }
 }

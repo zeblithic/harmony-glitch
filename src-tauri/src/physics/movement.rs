@@ -281,4 +281,110 @@ mod tests {
 
         assert!(body.vy <= TERMINAL_VELOCITY);
     }
+
+    #[test]
+    fn standing_still_on_slope_does_not_slide() {
+        // Slope from (0, 0) to (200, -100) — rises 100px over 200px
+        let platforms = vec![PlatformLine {
+            id: "slope".into(),
+            start: Point { x: 0.0, y: 0.0 },
+            end: Point { x: 200.0, y: -100.0 },
+            pc_perm: None,
+            item_perm: None,
+        }];
+
+        let slope_y_at_100 = -50.0;
+        let mut body = PhysicsBody::new(100.0, slope_y_at_100);
+        body.on_ground = true;
+        let input = InputState::default(); // No input
+
+        let initial_x = body.x;
+        let initial_y = body.y;
+
+        // Run several ticks with no input
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        }
+
+        // Player should not have slid — position essentially unchanged
+        assert!(
+            (body.x - initial_x).abs() < 0.01,
+            "Player slid horizontally: {} -> {}",
+            initial_x,
+            body.x
+        );
+        assert!(
+            (body.y - initial_y).abs() < 0.01,
+            "Player slid vertically: {} -> {}",
+            initial_y,
+            body.y
+        );
+        assert!(body.on_ground);
+    }
+
+    #[test]
+    fn lands_on_higher_of_overlapping_platforms() {
+        // Two platforms at the same X range, different heights.
+        // Body starts just above the higher one so it doesn't tunnel through.
+        let platforms = vec![
+            PlatformLine {
+                id: "high".into(),
+                start: Point { x: -100.0, y: -50.0 },
+                end: Point { x: 100.0, y: -50.0 },
+                pc_perm: None,
+                item_perm: None,
+            },
+            PlatformLine {
+                id: "low".into(),
+                start: Point { x: -100.0, y: 0.0 },
+                end: Point { x: 100.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+            },
+        ];
+
+        // Start just above the high platform with a gentle falling velocity
+        let mut body = PhysicsBody::new(0.0, -51.0);
+        body.vy = 50.0; // Gentle fall
+        let input = InputState::default();
+
+        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+
+        assert!(body.on_ground);
+        // Should have landed on the higher platform (y = -50), not the lower one (y = 0)
+        assert!(
+            (body.y - (-50.0)).abs() < 1.0,
+            "Expected to land on high platform at y=-50, got y={}",
+            body.y
+        );
+    }
+
+    #[test]
+    fn walking_off_platform_edge_starts_falling() {
+        // Short platform from x=0 to x=100
+        let platforms = vec![PlatformLine {
+            id: "short".into(),
+            start: Point { x: 0.0, y: -50.0 },
+            end: Point { x: 100.0, y: -50.0 },
+            pc_perm: None,
+            item_perm: None,
+        }];
+
+        let mut body = PhysicsBody::new(90.0, -50.0); // Near the right edge, on platform
+        body.on_ground = true;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+
+        // Walk right until past the platform edge
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        }
+
+        // Player should have walked past x=100 and started falling
+        assert!(body.x > 100.0, "Player should have walked past edge");
+        assert!(!body.on_ground, "Player should be falling after walking off edge");
+        assert!(body.vy > 0.0, "Player should have downward velocity");
+    }
 }
