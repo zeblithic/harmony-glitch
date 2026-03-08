@@ -20,6 +20,7 @@ pub struct RenderFrame {
     pub player: PlayerFrame,
     pub camera: CameraFrame,
     pub street_id: String,
+    pub remote_players: Vec<RemotePlayerFrame>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +37,18 @@ pub struct PlayerFrame {
 pub struct CameraFrame {
     pub x: f64,
     pub y: f64,
+}
+
+/// A remote player's state for rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemotePlayerFrame {
+    pub address_hash: String, // hex-encoded for JSON/IPC
+    pub display_name: String,
+    pub x: f64,
+    pub y: f64,
+    pub facing: String, // "left" or "right"
+    pub on_ground: bool,
 }
 
 impl GameState {
@@ -108,6 +121,7 @@ impl GameState {
             },
             camera: CameraFrame { x: cam_x, y: cam_y },
             street_id: street.tsid.clone(),
+            remote_players: vec![],
         })
     }
 }
