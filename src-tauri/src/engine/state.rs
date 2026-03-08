@@ -67,7 +67,8 @@ impl GameState {
             self.facing = Direction::Right;
         }
 
-        // Physics tick
+        // Physics tick — walls are parsed from street data but not yet enforced
+        // in the collision system (Phase A scope: platforms only).
         self.player
             .tick(dt, input, street.platforms(), street.left, street.right);
 

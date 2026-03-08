@@ -101,6 +101,12 @@ fn parse_object_children(reader: &mut Reader<&[u8]>, parent_tag: &str) -> Result
                             map.insert(id, XmlValue::Int(v));
                         }
                     }
+                    "float" => {
+                        let text = read_text(reader, "float")?;
+                        if let Ok(v) = text.parse::<f64>() {
+                            map.insert(id, XmlValue::Float(v));
+                        }
+                    }
                     "str" => {
                         let text = read_text(reader, "str")?;
                         map.insert(id, XmlValue::Str(text));
@@ -211,12 +217,14 @@ mod tests {
         let xml = r#"
         <object id="root">
             <int id="width">6000</int>
+            <float id="rotation">1.5</float>
             <str id="name">Test Street</str>
             <bool id="active">true</bool>
             <null id="nothing"/>
         </object>"#;
         let val = parse_glitch_xml(xml).unwrap();
         assert_eq!(val.get("width").unwrap().as_int(), Some(6000));
+        assert_eq!(val.get("rotation").unwrap().as_f64(), Some(1.5));
         assert_eq!(val.get("name").unwrap().as_str(), Some("Test Street"));
         assert_eq!(val.get("active").unwrap().as_bool(), Some(true));
         assert!(matches!(val.get("nothing"), Some(XmlValue::Null)));

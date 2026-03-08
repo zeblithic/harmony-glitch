@@ -9,6 +9,7 @@ use street::parser::parse_street;
 use street::types::StreetData;
 
 use std::sync::Mutex;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -20,6 +21,10 @@ struct InputStateWrapper(Mutex<InputState>);
 
 /// Flag to control the game loop.
 struct GameRunning(Mutex<bool>);
+
+/// Handle to the game loop thread — joined before spawning a new one
+/// to prevent concurrent loops from a rapid stop→start sequence.
+struct GameLoopHandle(Mutex<Option<JoinHandle<()>>>);
 
 #[tauri::command]
 fn list_streets() -> Vec<String> {
@@ -60,10 +65,17 @@ fn start_game(app: AppHandle) -> Result<(), String> {
     *is_running = true;
     drop(is_running);
 
+    // Join any previous thread still winding down to prevent concurrent loops
+    let handle_wrapper = app.state::<GameLoopHandle>();
+    let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
+    if let Some(h) = handle.take() {
+        let _ = h.join();
+    }
+
     let app_handle = app.clone();
-    std::thread::spawn(move || {
+    *handle = Some(std::thread::spawn(move || {
         game_loop(app_handle);
-    });
+    }));
 
     Ok(())
 }
@@ -73,6 +85,15 @@ fn stop_game(app: AppHandle) -> Result<(), String> {
     let running = app.state::<GameRunning>();
     let mut is_running = running.0.lock().map_err(|e| e.to_string())?;
     *is_running = false;
+    drop(is_running);
+
+    // Wait for the game loop thread to exit before returning,
+    // preventing a subsequent start_game from racing with the old thread.
+    let handle_wrapper = app.state::<GameLoopHandle>();
+    let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
+    if let Some(h) = handle.take() {
+        let _ = h.join();
+    }
     Ok(())
 }
 
@@ -129,6 +150,7 @@ pub fn run() {
         .manage(GameStateWrapper(Mutex::new(GameState::new(1280.0, 720.0))))
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
         .manage(GameRunning(Mutex::new(false)))
+        .manage(GameLoopHandle(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             list_streets,
             load_street,

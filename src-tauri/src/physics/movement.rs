@@ -317,18 +317,20 @@ mod tests {
             item_perm: None,
         }];
 
-        let mut body = PhysicsBody::new(100.0, -48.0); // Near the slope surface
-        body.vy = 10.0; // Slight downward velocity
+        // Player starts ABOVE the slope surface (y=-52 is above plat_y=-50
+        // in Glitch coords where more-negative = higher) with enough downward
+        // velocity to cross through the platform in one tick via swept collision.
+        let mut body = PhysicsBody::new(100.0, -52.0);
+        body.vy = 200.0;
         body.on_ground = false;
         let input = InputState::default();
 
         body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
 
-        // Should land on slope — y should be at the slope's Y at x=100
+        // Should land on slope via swept collision — y snapped to slope surface
         // slope y_at(100) = 0 + 0.5 * (-100) = -50
-        if body.on_ground {
-            assert!((body.y - (-50.0)).abs() < 5.0);
-        }
+        assert!(body.on_ground, "Player should land on slope");
+        assert!((body.y - (-50.0)).abs() < 1.0, "Player Y should snap to slope surface, got {}", body.y);
     }
 
     #[test]

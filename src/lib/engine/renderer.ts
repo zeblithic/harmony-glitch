@@ -80,7 +80,9 @@ export class GameRenderer {
         g.fill({ color: 0x4a6741, alpha: 0.3 });
         if (deco.hFlip) {
           g.scale.x = -1;
-          g.x += deco.w;
+          // scale.x=-1 mirrors around g.x=0, so we offset to keep the
+          // rect visually anchored at its original screen position.
+          g.x = 2 * (deco.x - street.left) + deco.w;
         }
         container.addChild(g);
       }
