@@ -34,7 +34,11 @@ const APP_NAME: &str = "harmony";
 const DEST_ASPECTS: &[&str] = &["glitch", "player"];
 
 /// Announce interval in seconds (5 minutes).
-const ANNOUNCE_INTERVAL_SECS: u64 = 300;
+/// Re-announce every 30s so evicted peers reappear promptly.
+/// This is intentionally shorter than Reticulum's default (300s) to
+/// stay consistent with STALE_TIMEOUT (10s) in the registry — a peer
+/// evicted for silence will re-announce within 30s rather than 5 minutes.
+const ANNOUNCE_INTERVAL_SECS: u64 = 30;
 
 /// Separator between display name and street in announce app_data.
 const APP_DATA_SEPARATOR: u8 = 0x00;
@@ -557,11 +561,15 @@ impl NetworkState {
 ///
 /// Format: `display_name\0street_name` (NUL-separated).
 /// If no street, just `display_name`.
+///
+/// NUL bytes are stripped from inputs to prevent delimiter injection
+/// by untrusted peers crafting names like `"Alice\0LADEMO001"`.
 fn encode_app_data(display_name: &str, street: Option<&str>) -> Vec<u8> {
-    let mut data = display_name.as_bytes().to_vec();
+    let safe_name = display_name.replace('\0', "");
+    let mut data = safe_name.as_bytes().to_vec();
     if let Some(street) = street {
         data.push(APP_DATA_SEPARATOR);
-        data.extend_from_slice(street.as_bytes());
+        data.extend_from_slice(street.replace('\0', "").as_bytes());
     }
     data
 }

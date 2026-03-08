@@ -101,8 +101,11 @@ export type AnimationState = 'idle' | 'walking' | 'jumping' | 'falling';
 export interface PlayerFrame {
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   facing: Direction;
   animation: AnimationState;
+  onGround: boolean;
 }
 
 export interface CameraFrame {
@@ -140,6 +143,7 @@ export interface NetworkStatus {
 export interface PlayerIdentity {
   displayName: string;
   addressHash: string;
+  setupComplete: boolean;
 }
 
 export interface ChatEvent {
