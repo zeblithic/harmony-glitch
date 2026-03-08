@@ -1,3 +1,5 @@
+pub mod avatar;
+pub mod engine;
 pub mod physics;
 pub mod street;
 
