@@ -1,5 +1,6 @@
 pub mod avatar;
 pub mod engine;
+pub mod identity;
 pub mod physics;
 pub mod street;
 
@@ -25,6 +26,12 @@ struct GameRunning(Mutex<bool>);
 /// Handle to the game loop thread — joined before spawning a new one
 /// to prevent concurrent loops from a rapid stop→start sequence.
 struct GameLoopHandle(Mutex<Option<JoinHandle<()>>>);
+
+/// Player identity and display name, loaded from disk on startup.
+struct PlayerIdentityWrapper {
+    identity: Mutex<harmony_identity::PrivateIdentity>,
+    display_name: Mutex<String>,
+}
 
 #[tauri::command]
 fn list_streets() -> Vec<String> {
@@ -114,6 +121,25 @@ fn stop_game(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_identity(app: AppHandle) -> Result<serde_json::Value, String> {
+    let pi = app.state::<PlayerIdentityWrapper>();
+    let identity = pi.identity.lock().map_err(|e| e.to_string())?;
+    let name = pi.display_name.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "displayName": *name,
+        "addressHash": hex::encode(identity.public_identity().address_hash),
+    }))
+}
+
+#[tauri::command]
+fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
+    let pi = app.state::<PlayerIdentityWrapper>();
+    let mut display_name = pi.display_name.lock().map_err(|e| e.to_string())?;
+    *display_name = name;
+    Ok(())
+}
+
 fn game_loop(app: AppHandle) {
     let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
     let dt = 1.0 / 60.0;
@@ -169,12 +195,25 @@ pub fn run() {
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
         .manage(GameRunning(Mutex::new(false)))
         .manage(GameLoopHandle(Mutex::new(None)))
+        .setup(|app| {
+            let data_dir = app.path().app_data_dir()?;
+            let (player_identity, display_name) =
+                identity::persistence::load_or_create_profile(&data_dir)
+                    .map_err(std::io::Error::other)?;
+            app.manage(PlayerIdentityWrapper {
+                identity: Mutex::new(player_identity),
+                display_name: Mutex::new(display_name),
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             list_streets,
             load_street,
             send_input,
             start_game,
             stop_game,
+            get_identity,
+            set_display_name,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

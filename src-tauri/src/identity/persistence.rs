@@ -1,0 +1,65 @@
+use harmony_identity::PrivateIdentity;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerProfile {
+    pub identity_hex: String,
+    pub display_name: String,
+}
+
+/// Load or create a player profile. Creates directory and new identity if none exists.
+pub fn load_or_create_profile(data_dir: &Path) -> Result<(PrivateIdentity, String), String> {
+    let profile_path = data_dir.join("profile.json");
+
+    if profile_path.exists() {
+        let json = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
+        let profile: PlayerProfile = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+        let id_bytes = hex::decode(&profile.identity_hex).map_err(|e| e.to_string())?;
+        let identity =
+            PrivateIdentity::from_private_bytes(&id_bytes).map_err(|e| format!("{e:?}"))?;
+        Ok((identity, profile.display_name))
+    } else {
+        let mut rng = rand::rngs::OsRng;
+        let identity = PrivateIdentity::generate(&mut rng);
+        let addr_hash = identity.public_identity().address_hash;
+        let display_name = format!("Glitchen_{}", &hex::encode(addr_hash)[..6]);
+
+        std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
+        let profile = PlayerProfile {
+            identity_hex: hex::encode(identity.to_private_bytes()),
+            display_name: display_name.clone(),
+        };
+        let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
+        std::fs::write(&profile_path, json).map_err(|e| e.to_string())?;
+
+        Ok((identity, display_name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn creates_new_profile_when_none_exists() {
+        let dir = TempDir::new().unwrap();
+        let (identity, name) = load_or_create_profile(dir.path()).unwrap();
+        assert!(name.starts_with("Glitchen_"));
+        assert!(dir.path().join("profile.json").exists());
+        assert_eq!(identity.public_identity().address_hash.len(), 16);
+    }
+
+    #[test]
+    fn loads_existing_profile_with_same_identity() {
+        let dir = TempDir::new().unwrap();
+        let (id1, name1) = load_or_create_profile(dir.path()).unwrap();
+        let (id2, name2) = load_or_create_profile(dir.path()).unwrap();
+        assert_eq!(name1, name2);
+        assert_eq!(
+            id1.public_identity().address_hash,
+            id2.public_identity().address_hash
+        );
+    }
+}
