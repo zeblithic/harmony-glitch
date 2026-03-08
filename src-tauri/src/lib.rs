@@ -76,7 +76,10 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
         let epoch = app.state::<MonotonicEpoch>();
         let now_secs = epoch.0.elapsed().as_secs_f64();
-        net_state.change_street(&name, now_secs, &mut rand::rngs::OsRng)
+        // Use the canonical TSID from parsed street data, not the raw input name.
+        // This ensures peers using short names ("demo_meadow") and TSIDs ("LADEMO001")
+        // resolve to the same street identity for peer discovery.
+        net_state.change_street(&street_data.tsid, now_secs, &mut rand::rngs::OsRng)
     };
     execute_network_actions(&app, actions);
 

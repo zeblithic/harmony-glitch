@@ -63,6 +63,15 @@ impl TransitionState {
         street_left: f64,
         street_right: f64,
     ) {
+        // If already pre-subscribed, check if the player retreated from the signpost.
+        if let TransitionPhase::PreSubscribed { signpost_x, .. } = &self.phase {
+            if (player_x - signpost_x).abs() > PRE_SUBSCRIBE_DISTANCE {
+                self.phase = TransitionPhase::None;
+            } else {
+                return; // Still near the signpost — no change needed.
+            }
+        }
+
         if self.phase != TransitionPhase::None {
             return;
         }
@@ -299,6 +308,24 @@ mod tests {
             }
             other => panic!("Expected Swooping (stalled), got {:?}", other),
         }
+    }
+
+    #[test]
+    fn retreating_from_signpost_resets_to_none() {
+        let mut ts = TransitionState::new();
+        let signposts = vec![make_signpost(1950.0, "LADEMO002")];
+
+        // Enter pre-subscribe zone
+        ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
+        assert!(matches!(ts.phase, TransitionPhase::PreSubscribed { .. }));
+
+        // Walk away from the signpost
+        ts.check_signposts(0.0, &signposts, -2000.0, 2000.0);
+        assert_eq!(ts.phase, TransitionPhase::None);
+
+        // Should be able to re-enter the zone
+        ts.check_signposts(1600.0, &signposts, -2000.0, 2000.0);
+        assert!(matches!(ts.phase, TransitionPhase::PreSubscribed { .. }));
     }
 
     #[test]
