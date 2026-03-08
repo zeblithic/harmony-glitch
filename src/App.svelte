@@ -3,12 +3,13 @@
   import GameCanvas from './lib/components/GameCanvas.svelte';
   import StreetPicker from './lib/components/StreetPicker.svelte';
   import DebugOverlay from './lib/components/DebugOverlay.svelte';
-  import { stopGame } from './lib/ipc';
+  import { stopGame, loadStreet } from './lib/ipc';
   import type { StreetData, RenderFrame } from './lib/types';
 
   let currentStreet = $state<StreetData | null>(null);
   let latestFrame = $state<RenderFrame | null>(null);
   let debugMode = $state(false);
+  let transitionPending = $state(false);
 
   function handleStreetLoaded(street: StreetData) {
     currentStreet = street;
@@ -16,6 +17,19 @@
 
   function handleFrame(frame: RenderFrame) {
     latestFrame = frame;
+
+    // When swoop transition completes, load the target street
+    if (frame.transition && frame.transition.progress >= 1.0 && !transitionPending) {
+      transitionPending = true;
+      loadStreet(frame.transition.toStreet)
+        .then((street) => {
+          currentStreet = street;
+        })
+        .catch(console.error)
+        .finally(() => {
+          transitionPending = false;
+        });
+    }
   }
 
   function toggleDebug() {

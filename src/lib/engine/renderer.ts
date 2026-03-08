@@ -236,6 +236,19 @@ export class GameRenderer {
         this.remoteSprites.delete(hash);
       }
     }
+
+    // Swoop transition — slide old street off-screen
+    if (frame.transition) {
+      const { progress, direction } = frame.transition;
+      const viewportWidth = this.app.canvas.width;
+      const offset = direction === 'right'
+        ? -progress * viewportWidth
+        : progress * viewportWidth;
+      this.worldContainer.x += offset;
+      for (const [, container] of this.layerContainers) {
+        container.x += offset;
+      }
+    }
   }
 
   destroy(): void {
