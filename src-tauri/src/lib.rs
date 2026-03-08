@@ -65,17 +65,24 @@ fn start_game(app: AppHandle) -> Result<(), String> {
     *is_running = true;
     drop(is_running);
 
-    // Join any previous thread still winding down to prevent concurrent loops
+    // Take handle out from under the lock, then join outside it.
+    // Joining while holding the lock would block stop_game from acquiring it.
     let handle_wrapper = app.state::<GameLoopHandle>();
-    let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
-    if let Some(h) = handle.take() {
+    let old_handle = {
+        let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
+        handle.take()
+    };
+    if let Some(h) = old_handle {
         let _ = h.join();
     }
 
     let app_handle = app.clone();
-    *handle = Some(std::thread::spawn(move || {
-        game_loop(app_handle);
-    }));
+    {
+        let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
+        *handle = Some(std::thread::spawn(move || {
+            game_loop(app_handle);
+        }));
+    }
 
     Ok(())
 }
@@ -94,11 +101,14 @@ fn stop_game(app: AppHandle) -> Result<(), String> {
     *is_running = false;
     drop(is_running);
 
-    // Wait for the game loop thread to exit before returning,
-    // preventing a subsequent start_game from racing with the old thread.
+    // Take handle out from under the lock, then join outside it.
+    // Joining while holding the lock would block start_game from acquiring it.
     let handle_wrapper = app.state::<GameLoopHandle>();
-    let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
-    if let Some(h) = handle.take() {
+    let old_handle = {
+        let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
+        handle.take()
+    };
+    if let Some(h) = old_handle {
         let _ = h.join();
     }
     Ok(())

@@ -8,7 +8,11 @@ pub const WALK_SPEED: f64 = 200.0; // px/s
 pub const JUMP_VELOCITY: f64 = -400.0; // px/s (negative = up in Glitch coords)
 pub const TERMINAL_VELOCITY: f64 = 600.0; // px/s
 /// Max Y displacement to snap to when walking along a slope.
-/// Must exceed the steepest slope's Y change per frame at walk speed.
+/// Must exceed the steepest slope's Y change per frame at walk speed:
+///   WALK_SPEED * (dy/dx) / 60 fps.
+/// At 200 px/s and dy/dx=0.5 (steepest demo slope): 200*0.5/60 ≈ 1.7 px.
+/// 10 px gives comfortable headroom. If this is reduced below the per-frame
+/// Y change of any slope, players will briefly detach until Phase 2 catches them.
 const SLOPE_SNAP_TOLERANCE: f64 = 10.0;
 
 /// Player physics state.
