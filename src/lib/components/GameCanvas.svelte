@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { GameRenderer } from '../engine/renderer';
   import { sendInput, onRenderFrame, startGame } from '../ipc';
   import type { StreetData, InputState, RenderFrame } from '../types';
@@ -36,6 +36,8 @@
     if (changed) sendInput({ ...keys }).catch(console.error);
   }
 
+  let cleanupFns: (() => void)[] = [];
+
   onMount(async () => {
     const r = new GameRenderer();
     await r.init(canvasEl);
@@ -46,15 +48,16 @@
       onFrame?.(frame);
     });
 
+    cleanupFns.push(unlisten, () => r.destroy());
+
     if (street) {
       r.buildScene(street);
       startGame().catch(console.error);
     }
+  });
 
-    return () => {
-      unlisten();
-      r.destroy();
-    };
+  onDestroy(() => {
+    for (const fn of cleanupFns) fn();
   });
 
   // Debug mode toggle — only redraws platform overlays, not the full scene.
@@ -65,12 +68,12 @@
 
 <svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
 
-<div class="canvas-container">
-  <canvas
-    bind:this={canvasEl}
-    role="application"
-    aria-label="Harmony Glitch game — use arrow keys or WASD to move, Space to jump, F3 for debug overlay"
-  ></canvas>
+<div
+  class="canvas-container"
+  role="application"
+  aria-label="Harmony Glitch game — use arrow keys or WASD to move, Space to jump, F3 for debug overlay"
+>
+  <canvas bind:this={canvasEl}></canvas>
 </div>
 
 <style>

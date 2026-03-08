@@ -106,7 +106,6 @@ impl PhysicsBody {
         // vertical sweep occurs, but the platform Y changed with X.
         if was_on_ground && self.vy >= 0.0 {
             let mut best_snap: Option<f64> = None;
-            let mut best_dist = f64::MAX;
             for platform in platforms {
                 if !platform.solid_from_top() {
                     continue;
@@ -118,9 +117,14 @@ impl PhysicsBody {
                 }
                 let plat_y = platform.y_at(self.x);
                 let dist = (self.y - plat_y).abs();
-                if dist < SLOPE_SNAP_TOLERANCE && dist < best_dist {
-                    best_snap = Some(plat_y);
-                    best_dist = dist;
+                if dist < SLOPE_SNAP_TOLERANCE {
+                    // Prefer the highest platform (most-negative Y) so slopes
+                    // win over flat ground when they overlap in X range.
+                    match best_snap {
+                        Some(best) if plat_y < best => best_snap = Some(plat_y),
+                        None => best_snap = Some(plat_y),
+                        _ => {}
+                    }
                 }
             }
             if let Some(plat_y) = best_snap {
@@ -492,6 +496,48 @@ mod tests {
 
         // Player should have moved right and followed the slope upward
         assert!(body.x > 50.0, "Player should have moved right");
+    }
+
+    #[test]
+    fn walks_onto_slope_overlapping_flat_ground() {
+        // Flat ground at y=0 from x=-1800 to x=1800, and a slope from
+        // (400, 0) to (800, -120). The slope starts at the same Y as
+        // the flat ground but rises. The player should follow the slope
+        // (highest platform = most-negative Y), not stay stuck on flat ground.
+        let platforms = vec![
+            PlatformLine {
+                id: "flat".into(),
+                start: Point { x: -1800.0, y: 0.0 },
+                end: Point { x: 1800.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+            },
+            PlatformLine {
+                id: "hill".into(),
+                start: Point { x: 400.0, y: 0.0 },
+                end: Point { x: 800.0, y: -120.0 },
+                pc_perm: None,
+                item_perm: None,
+            },
+        ];
+
+        // Start on flat ground just before the slope begins
+        let mut body = PhysicsBody::new(390.0, 0.0);
+        body.on_ground = true;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+
+        // Walk right for enough frames to enter the slope region
+        for _ in 0..120 {
+            body.tick(1.0 / 60.0, &input, &platforms, -1800.0, 1800.0);
+        }
+
+        // Player should have moved past x=400 and followed the slope upward
+        assert!(body.x > 500.0, "Player should have walked into slope region, x={}", body.x);
+        assert!(body.y < -10.0, "Player should have followed slope upward, y={}", body.y);
+        assert!(body.on_ground, "Player should still be grounded on slope");
     }
 
     #[test]
