@@ -146,13 +146,16 @@ export class GameRenderer {
     this.avatarGraphics.y = avatarScreenY;
     this.avatarGraphics.scale.x = frame.player.facing === 'right' ? 1 : -1;
 
-    // Update camera — shift world container
+    // Update camera — shift world container.
+    // Y axis inversion is intentional: Glitch Y=0 at bottom (negative up),
+    // screen Y=0 at top (positive down). The negation of camScreenY correctly
+    // shifts the world up when the camera moves down in Glitch coords.
     const camScreenX = frame.camera.x - this.street.left;
     const camScreenY = streetHeight - (frame.camera.y - this.street.top) - this.app.screen.height;
     this.worldContainer.x = -camScreenX;
     this.worldContainer.y = -camScreenY;
 
-    // Update parallax layers
+    // Update parallax layers — same Y inversion applies, scaled by factor.
     for (const layer of this.street.layers) {
       if (layer.isMiddleground) continue;
       const container = this.layerContainers.get(layer.name);

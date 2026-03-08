@@ -95,11 +95,15 @@ fn game_loop(app: AppHandle) {
         let input_wrapper = app.state::<InputStateWrapper>();
         let input = *input_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
 
-        // Tick game state
-        let state_wrapper = app.state::<GameStateWrapper>();
-        let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(frame) = state.tick(dt, &input) {
-            drop(state); // Release lock before emitting
+        // Tick game state — lock is scoped to the block so it is always
+        // released before emitting, preventing potential deadlocks.
+        let frame = {
+            let state_wrapper = app.state::<GameStateWrapper>();
+            let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+            state.tick(dt, &input)
+        };
+
+        if let Some(frame) = frame {
             let _ = app.emit("render_frame", &frame);
         }
 
@@ -112,14 +116,12 @@ fn game_loop(app: AppHandle) {
 }
 
 fn load_street_xml(name: &str) -> Result<String, String> {
-    // Phase A: load from bundled assets directory
-    // The asset files live at assets/streets/<name>.xml relative to the app
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../assets/streets")
-        .join(format!("{}.xml", name));
-
-    std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to load street '{}': {} (path: {:?})", name, e, path))
+    // Phase A: embed street XML at compile time so the binary is self-contained
+    // and doesn't depend on CARGO_MANIFEST_DIR paths at runtime.
+    match name {
+        "demo_meadow" => Ok(include_str!("../../assets/streets/demo_meadow.xml").to_string()),
+        _ => Err(format!("Unknown street: {}", name)),
+    }
 }
 
 pub fn run() {

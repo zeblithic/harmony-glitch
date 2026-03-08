@@ -84,11 +84,17 @@ impl GameState {
             AnimationState::Idle
         };
 
-        // Camera: center on player, clamped to street bounds
+        // Camera: center on player, clamped to street bounds.
+        // When the street is smaller than the viewport, center the street
+        // instead of panicking (f64::clamp requires min <= max).
         let cam_x = self.player.x - self.viewport_width / 2.0;
         let cam_y = self.player.y - self.viewport_height * 0.6; // Player in lower 40%
-        let cam_x = cam_x.clamp(street.left, street.right - self.viewport_width);
-        let cam_y = cam_y.clamp(street.top, street.bottom - self.viewport_height);
+        let cam_x_min = street.left;
+        let cam_x_max = (street.right - self.viewport_width).max(cam_x_min);
+        let cam_y_min = street.top;
+        let cam_y_max = (street.bottom - self.viewport_height).max(cam_y_min);
+        let cam_x = cam_x.clamp(cam_x_min, cam_x_max);
+        let cam_y = cam_y.clamp(cam_y_min, cam_y_max);
 
         Some(RenderFrame {
             player: PlayerFrame {
@@ -205,6 +211,47 @@ mod tests {
         };
         let frame = state.tick(1.0 / 60.0, &input).unwrap();
         assert_eq!(frame.player.animation, AnimationState::Walking);
+    }
+
+    #[test]
+    fn camera_does_not_panic_on_small_street() {
+        // Street smaller than viewport (600px wide, 400px tall vs 1280x720 viewport)
+        let mut state = GameState::new(1280.0, 720.0);
+        let small_street = StreetData {
+            tsid: "small".into(),
+            name: "Tiny".into(),
+            left: -300.0,
+            right: 300.0,
+            top: -400.0,
+            bottom: 0.0,
+            ground_y: 0.0,
+            gradient: None,
+            layers: vec![Layer {
+                name: "middleground".into(),
+                z: 0,
+                w: 600.0,
+                h: 400.0,
+                is_middleground: true,
+                decos: vec![],
+                platform_lines: vec![PlatformLine {
+                    id: "ground".into(),
+                    start: Point { x: -300.0, y: 0.0 },
+                    end: Point { x: 300.0, y: 0.0 },
+                    pc_perm: None,
+                    item_perm: None,
+                }],
+                walls: vec![],
+                ladders: vec![],
+                filters: None,
+            }],
+            signposts: vec![],
+        };
+        state.load_street(small_street);
+
+        // Should not panic — camera clamp handles min > max gracefully
+        let input = InputState::default();
+        let frame = state.tick(1.0 / 60.0, &input);
+        assert!(frame.is_some());
     }
 
     #[test]

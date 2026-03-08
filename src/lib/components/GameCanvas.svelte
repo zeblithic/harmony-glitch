@@ -51,16 +51,20 @@
     };
   });
 
+  // Build scene when street loads — separated from debug mode to prevent
+  // rebuilding the entire scene graph on every debugMode toggle.
   $effect(() => {
     if (renderer && street) {
       renderer.buildScene(street);
-      renderer.setDebugMode(debugMode);
       startGame();
     }
   });
 
+  // Debug mode toggle — only redraws platform overlays, not the full scene.
   $effect(() => {
-    renderer?.setDebugMode(debugMode);
+    if (renderer) {
+      renderer.setDebugMode(debugMode);
+    }
   });
 </script>
 

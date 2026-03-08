@@ -79,6 +79,9 @@ impl PhysicsBody {
             self.vy = self.vy.min(TERMINAL_VELOCITY);
         }
 
+        // Save pre-move Y for swept collision detection
+        let prev_y = self.y;
+
         // Move
         self.x += self.vx * dt;
         self.y += self.vy * dt;
@@ -88,8 +91,12 @@ impl PhysicsBody {
             .x
             .clamp(street_left + self.half_width, street_right - self.half_width);
 
-        // Platform collision
+        // Platform collision — swept interval check.
+        // Compare player's Y before and after movement to detect crossings
+        // at any speed, preventing tunneling at high velocities.
         self.on_ground = false;
+        let mut best_plat_y: Option<f64> = None;
+
         for platform in platforms {
             if !platform.solid_from_top() {
                 continue;
@@ -104,15 +111,27 @@ impl PhysicsBody {
 
             let plat_y = platform.y_at(self.x);
 
-            // Player feet are at self.y. If feet are at or below platform surface
-            // and were above it before (falling onto it), snap to platform.
-            // "Below" in Glitch coords means more positive Y.
-            if self.vy >= 0.0 && self.y >= plat_y && self.y <= plat_y + GRAVITY * dt * dt + 2.0 {
-                self.y = plat_y;
-                self.vy = 0.0;
-                self.on_ground = true;
-                break;
+            // Swept collision: player was at or above the platform before the
+            // tick and is at or below it after. This works at any fall speed.
+            if self.vy >= 0.0 && prev_y <= plat_y && self.y >= plat_y {
+                // Among overlapping platforms, land on the highest one
+                // (most negative Y = first encountered when falling).
+                match best_plat_y {
+                    Some(best) if plat_y < best => {
+                        best_plat_y = Some(plat_y);
+                    }
+                    None => {
+                        best_plat_y = Some(plat_y);
+                    }
+                    _ => {}
+                }
             }
+        }
+
+        if let Some(plat_y) = best_plat_y {
+            self.y = plat_y;
+            self.vy = 0.0;
+            self.on_ground = true;
         }
     }
 }
@@ -357,6 +376,23 @@ mod tests {
             "Expected to land on high platform at y=-50, got y={}",
             body.y
         );
+    }
+
+    #[test]
+    fn lands_at_terminal_velocity() {
+        // A player falling at terminal velocity (600 px/s = 10px/frame)
+        // must still collide with a platform via swept collision.
+        // Start at y=-5 so the player sweeps through y=0 in one frame.
+        let mut body = PhysicsBody::new(0.0, -5.0);
+        body.vy = TERMINAL_VELOCITY;
+        let input = InputState::default();
+        let platforms = flat_ground();
+
+        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+
+        assert!(body.on_ground, "Player at terminal velocity should land, not tunnel through");
+        assert_eq!(body.y, 0.0, "Player should snap to platform surface");
+        assert_eq!(body.vy, 0.0);
     }
 
     #[test]

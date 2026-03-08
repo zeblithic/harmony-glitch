@@ -132,7 +132,7 @@ fn parse_platform_lines(layer: &XmlValue) -> Vec<PlatformLine> {
         None => return vec![],
     };
 
-    plats.iter().map(|(plat_id, p)| {
+    let mut result: Vec<PlatformLine> = plats.iter().map(|(plat_id, p)| {
         let start = p.get("start").map(|s| Point {
             x: s.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
             y: s.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
@@ -153,7 +153,11 @@ fn parse_platform_lines(layer: &XmlValue) -> Vec<PlatformLine> {
             pc_perm,
             item_perm,
         }
-    }).collect()
+    }).collect();
+
+    // Sort by start.x for deterministic collision order (HashMap has no guaranteed order)
+    result.sort_by(|a, b| a.start.x.partial_cmp(&b.start.x).unwrap_or(std::cmp::Ordering::Equal));
+    result
 }
 
 fn parse_walls(layer: &XmlValue) -> Vec<Wall> {

@@ -124,11 +124,9 @@ fn parse_object_children(reader: &mut Reader<&[u8]>, parent_tag: &str) -> Result
                         }
                     }
                     _ => {
-                        // Unknown element — skip it
-                        let text = read_text(reader, &tag).unwrap_or_default();
-                        if !text.is_empty() && !id.is_empty() {
-                            map.insert(id, XmlValue::Str(text));
-                        }
+                        // Unknown element — use skip_to_end to safely consume
+                        // any nested children, preventing stream corruption.
+                        skip_to_end(reader, &tag);
                     }
                 }
             }
