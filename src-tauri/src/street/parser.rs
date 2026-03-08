@@ -110,7 +110,7 @@ fn parse_decos(layer: &XmlValue) -> Vec<Deco> {
         None => return vec![],
     };
 
-    decos_obj.iter().map(|(deco_id, d)| {
+    let mut decos: Vec<Deco> = decos_obj.iter().map(|(deco_id, d)| {
         Deco {
             id: deco_id.clone(),
             name: d.get("name").and_then(|v| v.as_str()).unwrap_or(deco_id).to_string(),
@@ -123,7 +123,11 @@ fn parse_decos(layer: &XmlValue) -> Vec<Deco> {
             r: d.get("r").and_then(|v| v.as_f64()).unwrap_or(0.0),
             h_flip: d.get("h_flip").and_then(|v| v.as_bool()).unwrap_or(false),
         }
-    }).collect()
+    }).collect();
+
+    // Sort by z for deterministic back-to-front rendering (HashMap has no guaranteed order)
+    decos.sort_by_key(|d| d.z);
+    decos
 }
 
 fn parse_platform_lines(layer: &XmlValue) -> Vec<PlatformLine> {
@@ -401,6 +405,72 @@ mod tests {
         let sky = &street.layers[0];
         assert_eq!(sky.decos.len(), 1);
         assert_eq!(sky.decos[0].sprite_class, "cloud_fluffy");
+    }
+
+    #[test]
+    fn decos_sorted_by_z() {
+        let xml = r#"
+        <game_object tsid="GTEST" label="Deco Z">
+          <object id="dynamic">
+            <str id="tsid">LDECOZ</str>
+            <str id="label">Deco Z Street</str>
+            <int id="l">-100</int>
+            <int id="r">100</int>
+            <int id="t">-50</int>
+            <int id="b">0</int>
+            <int id="ground_y">0</int>
+            <object id="layers">
+              <object id="middleground">
+                <int id="w">200</int>
+                <int id="h">50</int>
+                <int id="z">0</int>
+                <str id="name">middleground</str>
+                <object id="decos">
+                  <object id="bush">
+                    <int id="x">0</int>
+                    <int id="y">0</int>
+                    <int id="w">20</int>
+                    <int id="h">10</int>
+                    <int id="z">5</int>
+                    <int id="r">0</int>
+                    <str id="name">bush</str>
+                  </object>
+                  <object id="tree_bg">
+                    <int id="x">-50</int>
+                    <int id="y">-20</int>
+                    <int id="w">40</int>
+                    <int id="h">60</int>
+                    <int id="z">0</int>
+                    <int id="r">0</int>
+                    <str id="name">tree_bg</str>
+                  </object>
+                  <object id="tree_fg">
+                    <int id="x">50</int>
+                    <int id="y">-10</int>
+                    <int id="w">30</int>
+                    <int id="h">50</int>
+                    <int id="z">2</int>
+                    <int id="r">0</int>
+                    <str id="name">tree_fg</str>
+                  </object>
+                </object>
+                <object id="platform_lines"/>
+              </object>
+            </object>
+          </object>
+        </game_object>
+        "#;
+
+        let street = parse_street(xml).unwrap();
+        let mg = &street.layers[0];
+        assert_eq!(mg.decos.len(), 3);
+        // Should be sorted by z: tree_bg(0), tree_fg(2), bush(5)
+        assert_eq!(mg.decos[0].name, "tree_bg");
+        assert_eq!(mg.decos[0].z, 0);
+        assert_eq!(mg.decos[1].name, "tree_fg");
+        assert_eq!(mg.decos[1].z, 2);
+        assert_eq!(mg.decos[2].name, "bush");
+        assert_eq!(mg.decos[2].z, 5);
     }
 
     #[test]
