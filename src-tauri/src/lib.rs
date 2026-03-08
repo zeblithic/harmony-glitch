@@ -377,7 +377,7 @@ pub fn run() {
 
             // Save identity bytes BEFORE moving identity into PlayerIdentityWrapper,
             // since PrivateIdentity is not Clone.
-            let identity_bytes = player_identity.to_private_bytes();
+            let identity_bytes = zeroize::Zeroizing::new(player_identity.to_private_bytes());
 
             app.manage(PlayerIdentityWrapper {
                 identity: Mutex::new(player_identity),
@@ -388,7 +388,7 @@ pub fn run() {
 
             // Reconstruct a second identity from saved bytes for NetworkState.
             let net_identity =
-                harmony_identity::PrivateIdentity::from_private_bytes(&identity_bytes)
+                harmony_identity::PrivateIdentity::from_private_bytes(identity_bytes.as_ref())
                     .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
             app.manage(NetworkWrapper(Mutex::new(NetworkState::new(
                 net_identity,
