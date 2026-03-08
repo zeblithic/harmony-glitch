@@ -3,6 +3,7 @@
   import GameCanvas from './lib/components/GameCanvas.svelte';
   import StreetPicker from './lib/components/StreetPicker.svelte';
   import DebugOverlay from './lib/components/DebugOverlay.svelte';
+  import { stopGame } from './lib/ipc';
   import type { StreetData, RenderFrame } from './lib/types';
 
   let currentStreet = $state<StreetData | null>(null);
@@ -28,7 +29,7 @@
   {#if currentStreet}
     <GameCanvas street={currentStreet} {debugMode} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
-    <button type="button" class="back-btn" onclick={() => { currentStreet = null; latestFrame = null; }}>
+    <button type="button" class="back-btn" onclick={async () => { await stopGame(); currentStreet = null; latestFrame = null; }}>
       Back
     </button>
   {:else}

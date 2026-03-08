@@ -185,18 +185,15 @@ fn read_text(reader: &mut Reader<&[u8]>, end_tag: &str) -> Result<String, String
     }
 }
 
-fn skip_to_end(reader: &mut Reader<&[u8]>, tag: &str) {
+fn skip_to_end(reader: &mut Reader<&[u8]>, _tag: &str) {
     let mut depth = 1;
     loop {
         match reader.read_event() {
             Ok(Event::Start(_)) => depth += 1,
-            Ok(Event::End(ref e)) => {
-                let t = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                if t == tag {
-                    depth -= 1;
-                    if depth == 0 {
-                        return;
-                    }
+            Ok(Event::End(_)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return;
                 }
             }
             Ok(Event::Eof) | Err(_) => return,

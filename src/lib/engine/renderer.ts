@@ -35,7 +35,7 @@ export class GameRenderer {
   setDebugMode(enabled: boolean): void {
     this.debugMode = enabled;
     if (this.street) {
-      this.buildScene(this.street);
+      this.drawPlatforms(this.street, this.street.bottom - this.street.top);
     }
   }
 

@@ -25,7 +25,7 @@
       keys.jump = true;
       changed = true;
     }
-    if (changed) sendInput({ ...keys });
+    if (changed) sendInput({ ...keys }).catch(console.error);
   }
 
   function handleKeyUp(e: KeyboardEvent) {
@@ -33,7 +33,7 @@
     if (e.key === 'ArrowLeft' || e.key === 'a') { keys.left = false; changed = true; }
     if (e.key === 'ArrowRight' || e.key === 'd') { keys.right = false; changed = true; }
     if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w') { keys.jump = false; changed = true; }
-    if (changed) sendInput({ ...keys });
+    if (changed) sendInput({ ...keys }).catch(console.error);
   }
 
   onMount(async () => {

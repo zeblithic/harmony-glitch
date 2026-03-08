@@ -109,6 +109,7 @@ pub struct Deco {
 
 /// Visual filters applied to a layer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LayerFilters {
     pub brightness: Option<i32>,
     pub contrast: Option<i32>,
