@@ -214,9 +214,11 @@ impl NetworkState {
     }
 
     /// Send a chat message to all active peers.
+    /// Text is truncated to 200 chars to stay within the Reticulum 500-byte MTU.
     pub fn send_chat(&mut self, text: String) -> Vec<NetworkAction> {
+        let truncated: String = text.chars().take(200).collect();
         let chat = ChatMessage {
-            text,
+            text: truncated,
             sender: self.public_identity.address_hash,
             sender_name: self.display_name.clone(),
         };

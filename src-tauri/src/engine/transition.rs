@@ -158,15 +158,19 @@ impl TransitionState {
 
                 if *street_ready {
                     *progress = (*elapsed / *target_duration).min(1.0);
+                    if *progress >= 1.0 {
+                        Some(TransitionPhase::Complete {
+                            new_street: to_street.clone(),
+                        })
+                    } else {
+                        Option::None
+                    }
+                } else if *elapsed >= MAX_SWOOP_SECS {
+                    // Street data never arrived — cancel so the player isn't
+                    // stuck at 90% swoop forever.
+                    Some(TransitionPhase::None)
                 } else {
                     *progress = (*elapsed / MAX_SWOOP_SECS).min(0.9);
-                }
-
-                if *progress >= 1.0 {
-                    Some(TransitionPhase::Complete {
-                        new_street: to_street.clone(),
-                    })
-                } else {
                     Option::None
                 }
             }
@@ -285,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn swoop_stalls_without_ready() {
+    fn swoop_stalls_then_cancels_without_ready() {
         let mut ts = TransitionState::new();
         let signposts = vec![make_signpost(1950.0, "LADEMO002")];
 
@@ -293,11 +297,10 @@ mod tests {
         ts.trigger_swoop("LADEMO001".into());
         // Do NOT mark street ready
 
-        // Tick 180 times at 1/60s = 3 seconds (beyond MAX_SWOOP_SECS)
-        for _ in 0..180 {
+        // Tick 60 times at 1/60s = 1 second (within MAX_SWOOP_SECS) — should stall at ≤0.9
+        for _ in 0..60 {
             ts.tick(1.0 / 60.0);
         }
-
         match &ts.phase {
             TransitionPhase::Swooping { progress, .. } => {
                 assert!(
@@ -308,6 +311,16 @@ mod tests {
             }
             other => panic!("Expected Swooping (stalled), got {:?}", other),
         }
+
+        // Tick past MAX_SWOOP_SECS (2.0s total) — should cancel
+        for _ in 0..120 {
+            ts.tick(1.0 / 60.0);
+        }
+        assert_eq!(
+            ts.phase,
+            TransitionPhase::None,
+            "Should cancel after MAX_SWOOP_SECS timeout"
+        );
     }
 
     #[test]
@@ -326,6 +339,24 @@ mod tests {
         // Should be able to re-enter the zone
         ts.check_signposts(1600.0, &signposts, -2000.0, 2000.0);
         assert!(matches!(ts.phase, TransitionPhase::PreSubscribed { .. }));
+    }
+
+    #[test]
+    fn swoop_cancels_on_timeout() {
+        let mut ts = TransitionState::new();
+        let signposts = vec![make_signpost(1950.0, "LADEMO002")];
+
+        ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
+        ts.trigger_swoop("LADEMO001".into());
+        // Do NOT mark street ready — simulate failed load
+
+        // Tick past MAX_SWOOP_SECS (2.0s) — 150 frames at 1/60s = 2.5s
+        for _ in 0..150 {
+            ts.tick(1.0 / 60.0);
+        }
+
+        // Should have cancelled back to None, not stuck at 90%
+        assert_eq!(ts.phase, TransitionPhase::None);
     }
 
     #[test]
