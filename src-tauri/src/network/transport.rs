@@ -40,6 +40,13 @@ impl UdpTransport {
                     packets.push((self.recv_buf[..len].to_vec(), addr));
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                Err(ref e)
+                    if e.kind() == io::ErrorKind::ConnectionReset
+                        || e.kind() == io::ErrorKind::ConnectionRefused =>
+                {
+                    // Transient ICMP unreachable — skip and drain the next packet.
+                    continue;
+                }
                 Err(e) => {
                     eprintln!("[UdpTransport] recv_from error: {e}");
                     break;

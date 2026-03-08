@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use zeroize::Zeroizing;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PlayerProfile {
     pub identity_hex: String,
     pub display_name: String,
@@ -11,6 +11,17 @@ pub struct PlayerProfile {
     /// Defaults to false for backward compatibility with existing profiles.
     #[serde(default)]
     pub setup_complete: bool,
+}
+
+/// Redact private key material from debug output.
+impl std::fmt::Debug for PlayerProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlayerProfile")
+            .field("identity_hex", &"[REDACTED]")
+            .field("display_name", &self.display_name)
+            .field("setup_complete", &self.setup_complete)
+            .finish()
+    }
 }
 
 /// Write profile JSON to disk with restrictive permissions (0600 on Unix).
@@ -80,8 +91,9 @@ pub fn load_or_create_profile(
         let display_name = format!("Glitchen_{}", &hex::encode(addr_hash)[..6]);
 
         std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
+        let identity_hex = Zeroizing::new(hex::encode(identity.to_private_bytes()));
         let profile = PlayerProfile {
-            identity_hex: hex::encode(identity.to_private_bytes()),
+            identity_hex: (*identity_hex).clone(),
             display_name: display_name.clone(),
             setup_complete: false,
         };

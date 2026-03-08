@@ -5,6 +5,7 @@
   let { onComplete }: { onComplete: () => void } = $props();
   let name = $state('');
   let submitting = $state(false);
+  let error = $state('');
   let inputEl = $state<HTMLInputElement>();
 
   onMount(() => { inputEl?.focus(); });
@@ -13,11 +14,13 @@
     const trimmed = name.trim();
     if (trimmed.length < 1 || submitting) return;
     submitting = true;
+    error = '';
     try {
       await setDisplayName(trimmed);
       onComplete();
     } catch (e) {
       console.error('Failed to set display name:', e);
+      error = 'Could not save your name. Please try again.';
     } finally {
       submitting = false;
     }
@@ -40,6 +43,9 @@
     <button type="submit" disabled={name.trim().length < 1 || submitting}>
       Enter the World
     </button>
+    {#if error}
+      <p class="error" role="alert">{error}</p>
+    {/if}
   </form>
 </div>
 
@@ -119,5 +125,11 @@
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .error {
+    color: #ff6b6b;
+    font-size: 0.85rem;
+    margin: 0;
   }
 </style>

@@ -49,6 +49,8 @@
   <div class="chat-input">
     <label>
       <span class="sr-only">Chat message</span>
+      <!-- maxlength counts chars; backend enforces 200-byte UTF-8 limit.
+           Multi-byte chars (emoji, CJK) may be further truncated server-side. -->
       <input
         bind:this={inputEl}
         bind:value={text}

@@ -178,12 +178,15 @@ fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
         let mut setup_complete = pi.setup_complete.lock().map_err(|e| e.to_string())?;
         *display_name = name.clone();
         *setup_complete = true;
+        // Wrap hex-encoded key in Zeroizing so it's wiped on drop.
+        let identity_hex = zeroize::Zeroizing::new(hex::encode(identity.to_private_bytes()));
         identity::persistence::PlayerProfile {
-            identity_hex: hex::encode(identity.to_private_bytes()),
+            identity_hex: (*identity_hex).clone(),
             display_name: name.clone(),
             setup_complete: true,
         }
-        // identity, display_name, setup_complete locks dropped here
+        // identity, display_name, setup_complete locks dropped here;
+        // identity_hex is zeroized on drop.
     };
 
     // Disk I/O outside identity lock scope.
