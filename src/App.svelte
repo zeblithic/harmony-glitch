@@ -29,7 +29,16 @@
   {#if currentStreet}
     <GameCanvas street={currentStreet} {debugMode} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
-    <button type="button" class="back-btn" onclick={async () => { await stopGame(); currentStreet = null; latestFrame = null; }}>
+    <button type="button" class="back-btn" onclick={async () => {
+      try {
+        await stopGame();
+      } catch (e) {
+        console.error('stopGame failed:', e);
+      } finally {
+        currentStreet = null;
+        latestFrame = null;
+      }
+    }}>
       Back
     </button>
   {:else}

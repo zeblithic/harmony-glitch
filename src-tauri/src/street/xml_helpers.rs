@@ -121,7 +121,7 @@ fn parse_object_children(reader: &mut Reader<&[u8]>, parent_tag: &str) -> Result
                         let label = get_attr(e, "label").unwrap_or_default();
                         map.insert(id, XmlValue::ObjRef { tsid, label });
                         // objref may be self-closing or have an end tag
-                        skip_to_end(reader, "objref");
+                        skip_to_end(reader);
                     }
                     "objrefs" => {
                         // Container of objref elements — parse as object
@@ -133,7 +133,7 @@ fn parse_object_children(reader: &mut Reader<&[u8]>, parent_tag: &str) -> Result
                     _ => {
                         // Unknown element — use skip_to_end to safely consume
                         // any nested children, preventing stream corruption.
-                        skip_to_end(reader, &tag);
+                        skip_to_end(reader);
                     }
                 }
             }
@@ -197,7 +197,7 @@ fn read_text(reader: &mut Reader<&[u8]>, end_tag: &str) -> Result<String, String
     }
 }
 
-fn skip_to_end(reader: &mut Reader<&[u8]>, _tag: &str) {
+fn skip_to_end(reader: &mut Reader<&[u8]>) {
     let mut depth = 1;
     loop {
         match reader.read_event() {

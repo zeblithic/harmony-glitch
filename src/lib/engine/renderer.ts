@@ -84,17 +84,18 @@ export class GameRenderer {
       const container = new Container();
       container.label = layer.name;
 
-      // Draw decos as placeholder rectangles (until real art assets are available)
+      // Draw decos as placeholder rectangles (until real art assets are available).
+      // Rect drawn at local origin so g.rotation pivots around the deco's anchor.
       for (const deco of layer.decos) {
         const g = new Graphics();
         const screenY = deco.y - street.top;
-        g.rect(deco.x - street.left, screenY - deco.h, deco.w, deco.h);
+        g.rect(0, -deco.h, deco.w, deco.h);
         g.fill({ color: 0x4a6741, alpha: 0.3 });
+        g.x = deco.x - street.left;
+        g.y = screenY;
         if (deco.hFlip) {
           g.scale.x = -1;
-          // scale.x=-1 mirrors around g.x=0, so we offset to keep the
-          // rect visually anchored at its original screen position.
-          g.x = 2 * (deco.x - street.left) + deco.w;
+          g.x += deco.w;
         }
         g.rotation = deco.r;
         container.addChild(g);
