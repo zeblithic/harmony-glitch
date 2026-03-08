@@ -140,6 +140,11 @@ fn parse_object_children(reader: &mut Reader<&[u8]>, parent_tag: &str) -> Result
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 let id = get_attr(e, "id").unwrap_or_default();
                 match tag.as_str() {
+                    "object" | "objrefs" => {
+                        if !id.is_empty() {
+                            map.insert(id, XmlValue::Object(HashMap::new()));
+                        }
+                    }
                     "null" => {
                         map.insert(id, XmlValue::Null);
                     }
@@ -243,6 +248,21 @@ mod tests {
         let grad = val.get("gradient").unwrap();
         assert_eq!(grad.get("top").unwrap().as_str(), Some("87A8C9"));
         assert_eq!(grad.get("bottom").unwrap().as_str(), Some("FFC400"));
+    }
+
+    #[test]
+    fn parse_self_closing_object() {
+        let xml = r#"
+        <object id="root">
+            <object id="decos"/>
+            <int id="count">5</int>
+        </object>"#;
+        let val = parse_glitch_xml(xml).unwrap();
+        // Self-closing <object id="decos"/> should be an empty object, not dropped
+        let decos = val.get("decos").expect("self-closing object should not be dropped");
+        assert!(decos.as_object().unwrap().is_empty());
+        // Subsequent elements should still parse
+        assert_eq!(val.get("count").unwrap().as_int(), Some(5));
     }
 
     #[test]

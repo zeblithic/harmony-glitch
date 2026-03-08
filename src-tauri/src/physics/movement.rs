@@ -23,6 +23,9 @@ pub struct PhysicsBody {
     pub half_width: f64,
     /// Height from feet (y) to head.
     pub height: f64,
+    /// Previous tick's jump input — used for rising-edge detection
+    /// so holding jump doesn't auto-repeat.
+    prev_jump: bool,
 }
 
 /// Input state from the player.
@@ -44,6 +47,7 @@ impl PhysicsBody {
             on_ground: false,
             half_width: 15.0,
             height: 60.0,
+            prev_jump: false,
         }
     }
 
@@ -69,8 +73,8 @@ impl PhysicsBody {
             0.0
         };
 
-        // Jump (only if on ground)
-        if input.jump && self.on_ground {
+        // Jump (rising edge only — prevents auto-repeat while key is held)
+        if input.jump && !self.prev_jump && self.on_ground {
             self.vy = JUMP_VELOCITY;
             self.on_ground = false;
         }
@@ -177,6 +181,8 @@ impl PhysicsBody {
                 }
             }
         }
+
+        self.prev_jump = input.jump;
     }
 }
 
@@ -266,6 +272,31 @@ mod tests {
         // Should have negative vy (going up) and moved up (negative y)
         assert!(body.vy < 0.0 || body.y < 0.0);
         assert!(!body.on_ground);
+    }
+
+    #[test]
+    fn jump_does_not_auto_repeat_while_held() {
+        let mut body = PhysicsBody::new(0.0, 0.0);
+        body.on_ground = true;
+        let jump_input = InputState {
+            jump: true,
+            ..Default::default()
+        };
+        let platforms = flat_ground();
+
+        // First tick with jump pressed: should jump
+        body.tick(1.0 / 60.0, &jump_input, &platforms, -1000.0, 1000.0);
+        assert!(!body.on_ground, "Should jump on rising edge");
+        assert!(body.vy < 0.0, "Should have upward velocity");
+
+        // Simulate landing back on ground while key is still held
+        body.y = 0.0;
+        body.vy = 0.0;
+        body.on_ground = true;
+
+        // Tick again with jump still held — should NOT re-jump
+        body.tick(1.0 / 60.0, &jump_input, &platforms, -1000.0, 1000.0);
+        assert!(body.on_ground, "Should NOT re-jump while key is held");
     }
 
     #[test]
