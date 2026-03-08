@@ -1,12 +1,24 @@
-import { Application, Container, FillGradient, Graphics } from 'pixi.js';
-import type { StreetData, RenderFrame } from '../types';
+import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
+import type { StreetData, RenderFrame, RemotePlayerFrame } from '../types';
+
+interface ChatBubble {
+  text: Text;
+  targetHash: string;
+  age: number;
+}
 
 export class GameRenderer {
+  private static REMOTE_COLOR = 0x4488ff;
+  private static CHAT_DURATION = 5.0;
+
   app: Application;
   private parallaxContainer: Container;
   private worldContainer: Container;
   private uiContainer: Container;
   private layerContainers: Map<string, Container> = new Map();
+  private remoteSprites: Map<string, Container> = new Map();
+  private chatBubbles: ChatBubble[] = [];
+  private lastFrameTime = 0;
   private platformGraphics: Graphics | null = null;
   private avatarGraphics: Graphics | null = null;
   private bgGraphics: Graphics | null = null;
@@ -73,6 +85,14 @@ export class GameRenderer {
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
+    for (const [, sprite] of this.remoteSprites) {
+      sprite.destroy();
+    }
+    this.remoteSprites.clear();
+    for (const bubble of this.chatBubbles) {
+      bubble.text.destroy();
+    }
+    this.chatBubbles = [];
 
     // Build gradient background (redrawn on resize via drawBackground)
     this.bgGraphics = new Graphics();
@@ -189,9 +209,123 @@ export class GameRenderer {
       container.x = -camScreenX * factor;
       container.y = -camScreenY;
     }
+
+    // Remote players — create/update/remove sprite lifecycle
+    const remotePlayers = frame.remotePlayers ?? [];
+    const seen = new Set<string>();
+    for (const remote of remotePlayers) {
+      seen.add(remote.addressHash);
+      let sprite = this.remoteSprites.get(remote.addressHash);
+
+      if (!sprite) {
+        sprite = new Container();
+        const body = new Graphics();
+        body.rect(-15, -60, 30, 60);
+        body.fill(GameRenderer.REMOTE_COLOR);
+        sprite.addChild(body);
+
+        const label = new Text({
+          text: remote.displayName,
+          style: { fontSize: 12, fill: 0xffffff, align: 'center' },
+        });
+        label.anchor.set(0.5, 1);
+        label.y = -65;
+        sprite.addChild(label);
+
+        this.worldContainer.addChild(sprite);
+        this.remoteSprites.set(remote.addressHash, sprite);
+      }
+
+      // Sync label text in case the peer's display name changed.
+      const label = sprite.children[1] as Text;
+      if (label && label.text !== remote.displayName) {
+        label.text = remote.displayName;
+      }
+
+      sprite.x = remote.x - this.street.left;
+      sprite.y = remote.y - this.street.top;
+      sprite.scale.x = remote.facing === 'right' ? 1 : -1;
+    }
+
+    // Remove departed players
+    for (const [hash, sprite] of this.remoteSprites) {
+      if (!seen.has(hash)) {
+        this.worldContainer.removeChild(sprite);
+        sprite.destroy();
+        this.remoteSprites.delete(hash);
+      }
+    }
+
+    // Update chat bubbles with real elapsed time
+    const now = performance.now();
+    const dt = this.lastFrameTime ? (now - this.lastFrameTime) / 1000 : 1 / 60;
+    this.lastFrameTime = now;
+    this.updateChatBubbles(dt, remotePlayers);
+
+    // Swoop transition — slide old street off-screen.
+    // Only shift parallax layers here; the middleground is a child of worldContainer
+    // and inherits its offset automatically.
+    if (frame.transition) {
+      const { progress, direction } = frame.transition;
+      const viewportWidth = this.app.canvas.width;
+      const offset = direction === 'right'
+        ? -progress * viewportWidth
+        : progress * viewportWidth;
+      this.worldContainer.x += offset;
+      for (const [name, container] of this.layerContainers) {
+        const layer = this.street.layers.find(l => l.name === name);
+        if (layer?.isMiddleground) continue;
+        container.x += offset;
+      }
+    }
+  }
+
+  addChatBubble(addressHash: string, message: string): void {
+    const bubble = new Text({
+      text: message,
+      style: {
+        fontSize: 12,
+        fill: 0xffffff,
+        wordWrap: true,
+        wordWrapWidth: 200,
+      },
+    });
+    bubble.anchor.set(0.5, 1);
+    this.worldContainer.addChild(bubble);
+    this.chatBubbles.push({ text: bubble, targetHash: addressHash, age: 0 });
+  }
+
+  private updateChatBubbles(dt: number, remotePlayers: RemotePlayerFrame[]): void {
+    this.chatBubbles = this.chatBubbles.filter((bubble) => {
+      bubble.age += dt;
+      if (bubble.age >= GameRenderer.CHAT_DURATION) {
+        this.worldContainer.removeChild(bubble.text);
+        bubble.text.destroy();
+        return false;
+      }
+      const player = remotePlayers.find((p) => p.addressHash === bubble.targetHash);
+      if (player && this.street) {
+        bubble.text.x = player.x - this.street.left;
+        bubble.text.y = player.y - this.street.top - 75;
+      } else if (this.avatarGraphics) {
+        // Local player's bubble — position above local avatar.
+        bubble.text.x = this.avatarGraphics.x;
+        bubble.text.y = this.avatarGraphics.y - 75;
+      }
+      bubble.text.alpha = Math.min(1, GameRenderer.CHAT_DURATION - bubble.age);
+      return true;
+    });
   }
 
   destroy(): void {
+    for (const [, sprite] of this.remoteSprites) {
+      sprite.destroy();
+    }
+    this.remoteSprites.clear();
+    for (const bubble of this.chatBubbles) {
+      bubble.text.destroy();
+    }
+    this.chatBubbles = [];
     this.app.destroy(true);
   }
 }

@@ -3,12 +3,31 @@
   import GameCanvas from './lib/components/GameCanvas.svelte';
   import StreetPicker from './lib/components/StreetPicker.svelte';
   import DebugOverlay from './lib/components/DebugOverlay.svelte';
-  import { stopGame } from './lib/ipc';
+  import ChatInput from './lib/components/ChatInput.svelte';
+  import IdentitySetup from './lib/components/IdentitySetup.svelte';
+  import NetworkStatus from './lib/components/NetworkStatus.svelte';
+  import { stopGame, loadStreet, getIdentity } from './lib/ipc';
   import type { StreetData, RenderFrame } from './lib/types';
+  import { onMount } from 'svelte';
 
   let currentStreet = $state<StreetData | null>(null);
   let latestFrame = $state<RenderFrame | null>(null);
   let debugMode = $state(false);
+  let chatFocused = $state(false);
+  let transitionPending = $state(false);
+  let identityReady = $state(false);
+  let checkingIdentity = $state(true);
+
+  onMount(async () => {
+    try {
+      const identity = await getIdentity();
+      identityReady = identity.setupComplete;
+    } catch {
+      identityReady = false;
+    } finally {
+      checkingIdentity = false;
+    }
+  });
 
   function handleStreetLoaded(street: StreetData) {
     currentStreet = street;
@@ -16,6 +35,19 @@
 
   function handleFrame(frame: RenderFrame) {
     latestFrame = frame;
+
+    // When swoop transition completes, load the target street
+    if (frame.transition && frame.transition.progress >= 1.0 && !transitionPending) {
+      transitionPending = true;
+      loadStreet(frame.transition.toStreet)
+        .then((street) => {
+          currentStreet = street;
+        })
+        .catch(console.error)
+        .finally(() => {
+          transitionPending = false;
+        });
+    }
   }
 
   function toggleDebug() {
@@ -26,9 +58,15 @@
 <svelte:window onkeydown={(e) => { if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }}} />
 
 <main>
-  {#if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} onFrame={handleFrame} />
+  {#if checkingIdentity}
+    <!-- Wait for identity check before showing anything -->
+  {:else if !identityReady}
+    <IdentitySetup onComplete={() => { identityReady = true; }} />
+  {:else if currentStreet}
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
+    <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
+    <NetworkStatus />
     <button type="button" class="back-btn" onclick={async () => {
       try {
         await stopGame();

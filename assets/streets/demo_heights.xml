@@ -1,67 +1,77 @@
-<game_object tsid="GADEMO001" label="Demo Meadow">
+<game_object tsid="GADEMO002" label="Demo Heights">
   <object id="dynamic">
     <int id="l">-2000</int>
     <int id="r">2000</int>
-    <int id="t">-800</int>
+    <int id="t">-1000</int>
     <int id="b">0</int>
-    <str id="label">Demo Meadow</str>
-    <str id="tsid">LADEMO001</str>
+    <str id="label">Demo Heights</str>
+    <str id="tsid">LADEMO002</str>
     <int id="ground_y">0</int>
     <object id="gradient">
-      <str id="top">87A8C9</str>
-      <str id="bottom">98D4A0</str>
+      <str id="top">4A6670</str>
+      <str id="bottom">7A8B6E</str>
     </object>
     <object id="layers">
       <object id="T_sky">
         <int id="w">3600</int>
-        <int id="h">800</int>
+        <int id="h">1000</int>
         <int id="z">-3</int>
         <str id="name">sky</str>
         <object id="decos"></object>
       </object>
       <object id="T_bg">
-        <int id="w">3800</int>
-        <int id="h">800</int>
+        <int id="w">5000</int>
+        <int id="h">1000</int>
         <int id="z">-1</int>
         <str id="name">bg_1</str>
         <object id="decos">
-          <object id="tree_bg_1">
-            <int id="x">800</int>
-            <int id="y">-500</int>
-            <int id="w">120</int>
-            <int id="h">200</int>
+          <object id="mountain_bg_1">
+            <int id="x">-800</int>
+            <int id="y">-600</int>
+            <int id="w">400</int>
+            <int id="h">500</int>
             <int id="z">0</int>
             <int id="r">0</int>
-            <str id="sprite_class">tree_bg</str>
-            <str id="name">tree_bg_1</str>
+            <str id="sprite_class">mountain_bg</str>
+            <str id="name">mountain_bg_1</str>
           </object>
-          <object id="tree_bg_2">
-            <int id="x">2200</int>
-            <int id="y">-450</int>
-            <int id="w">100</int>
-            <int id="h">180</int>
+          <object id="mountain_bg_2">
+            <int id="x">1200</int>
+            <int id="y">-550</int>
+            <int id="w">350</int>
+            <int id="h">450</int>
             <int id="z">1</int>
             <int id="r">0</int>
-            <str id="sprite_class">tree_bg</str>
-            <str id="name">tree_bg_2</str>
+            <str id="sprite_class">mountain_bg</str>
+            <str id="name">mountain_bg_2</str>
           </object>
         </object>
       </object>
       <object id="middleground">
         <int id="w">4000</int>
-        <int id="h">800</int>
+        <int id="h">1000</int>
         <int id="z">0</int>
         <str id="name">middleground</str>
         <object id="decos">
-          <object id="bush_1">
-            <int id="x">1500</int>
-            <int id="y">0</int>
-            <int id="w">60</int>
-            <int id="h">40</int>
-            <int id="z">5</int>
+          <object id="rock_1">
+            <int id="x">-200</int>
+            <int id="y">-200</int>
+            <int id="w">50</int>
+            <int id="h">30</int>
+            <int id="z">3</int>
             <int id="r">0</int>
-            <str id="sprite_class">bush_small</str>
-            <str id="name">bush_1</str>
+            <str id="sprite_class">rock_plateau</str>
+            <str id="name">rock_1</str>
+          </object>
+          <object id="rock_2">
+            <int id="x">100</int>
+            <int id="y">-200</int>
+            <int id="w">40</int>
+            <int id="h">25</int>
+            <int id="z">4</int>
+            <int id="r">0</int>
+            <str id="sprite_class">rock_plateau</str>
+            <str id="name">rock_2</str>
           </object>
         </object>
         <object id="platform_lines">
@@ -75,44 +85,44 @@
               <int id="y">0</int>
             </object>
           </object>
-          <object id="plat_hill_up">
+          <object id="plat_slope_up">
             <object id="start">
-              <int id="x">400</int>
+              <int id="x">-1200</int>
               <int id="y">0</int>
             </object>
             <object id="end">
-              <int id="x">800</int>
-              <int id="y">-120</int>
+              <int id="x">-600</int>
+              <int id="y">-200</int>
             </object>
           </object>
-          <object id="plat_hill_top">
-            <object id="start">
-              <int id="x">800</int>
-              <int id="y">-120</int>
-            </object>
-            <object id="end">
-              <int id="x">1200</int>
-              <int id="y">-120</int>
-            </object>
-          </object>
-          <object id="plat_hill_down">
-            <object id="start">
-              <int id="x">1200</int>
-              <int id="y">-120</int>
-            </object>
-            <object id="end">
-              <int id="x">1600</int>
-              <int id="y">0</int>
-            </object>
-          </object>
-          <object id="plat_floating">
+          <object id="plat_plateau">
             <object id="start">
               <int id="x">-600</int>
               <int id="y">-200</int>
             </object>
             <object id="end">
-              <int id="x">-200</int>
+              <int id="x">200</int>
               <int id="y">-200</int>
+            </object>
+          </object>
+          <object id="plat_slope_down">
+            <object id="start">
+              <int id="x">200</int>
+              <int id="y">-200</int>
+            </object>
+            <object id="end">
+              <int id="x">800</int>
+              <int id="y">0</int>
+            </object>
+          </object>
+          <object id="plat_floating">
+            <object id="start">
+              <int id="x">1000</int>
+              <int id="y">-300</int>
+            </object>
+            <object id="end">
+              <int id="x">1400</int>
+              <int id="y">-280</int>
             </object>
             <int id="platform_pc_perm">-1</int>
           </object>
@@ -133,12 +143,12 @@
       </object>
     </object>
     <object id="signposts">
-      <object id="sign_to_heights">
-        <int id="x">1900</int>
+      <object id="sign_to_meadow">
+        <int id="x">-1900</int>
         <int id="y">0</int>
         <object id="connects">
           <object id="connect_1">
-            <objref id="target" tsid="LADEMO002" label="To the Heights" />
+            <objref id="target" tsid="LADEMO001" label="Back to the Meadow" />
           </object>
         </object>
       </object>

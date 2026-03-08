@@ -101,8 +101,11 @@ export type AnimationState = 'idle' | 'walking' | 'jumping' | 'falling';
 export interface PlayerFrame {
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   facing: Direction;
   animation: AnimationState;
+  onGround: boolean;
 }
 
 export interface CameraFrame {
@@ -110,10 +113,43 @@ export interface CameraFrame {
   y: number;
 }
 
+export interface RemotePlayerFrame {
+  addressHash: string;
+  displayName: string;
+  x: number;
+  y: number;
+  facing: string;
+  onGround: boolean;
+}
+
+export interface TransitionInfo {
+  progress: number;
+  direction: 'left' | 'right';
+  toStreet: string;
+}
+
 export interface RenderFrame {
   player: PlayerFrame;
+  remotePlayers: RemotePlayerFrame[];
   camera: CameraFrame;
   streetId: string;
+  transition?: TransitionInfo | null;
+}
+
+export interface NetworkStatus {
+  peerCount: number;
+}
+
+export interface PlayerIdentity {
+  displayName: string;
+  addressHash: string;
+  setupComplete: boolean;
+}
+
+export interface ChatEvent {
+  text: string;
+  senderHash: string;
+  senderName: string;
 }
 
 export interface InputState {
