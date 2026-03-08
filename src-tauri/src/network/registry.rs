@@ -70,6 +70,13 @@ impl RemotePlayerRegistry {
         }
     }
 
+    /// Update the display name for a known player (e.g. after a re-announce).
+    pub fn update_display_name(&mut self, address_hash: &[u8; 16], name: String) {
+        if let Some(player) = self.players.get_mut(address_hash) {
+            player.display_name = name;
+        }
+    }
+
     /// Update position/velocity for a known player. Silently ignores
     /// updates for players not in the registry.
     pub fn update_state(&mut self, address_hash: &[u8; 16], state: PlayerNetState, now: f64) {
@@ -283,6 +290,22 @@ mod tests {
         assert_eq!(frames[0].display_name, "Alice v2");
         // Position should reset to defaults, not retain old state
         assert!((frames[0].x - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn update_display_name_propagates_to_frames() {
+        let mut reg = RemotePlayerRegistry::new();
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "OldName".into(),
+            },
+            1.0,
+        );
+        assert_eq!(reg.frames()[0].display_name, "OldName");
+
+        reg.update_display_name(&make_hash(1), "NewName".into());
+        assert_eq!(reg.frames()[0].display_name, "NewName");
     }
 
     #[test]

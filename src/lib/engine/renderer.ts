@@ -236,6 +236,12 @@ export class GameRenderer {
         this.remoteSprites.set(remote.addressHash, sprite);
       }
 
+      // Sync label text in case the peer's display name changed.
+      const label = sprite.children[1] as Text;
+      if (label && label.text !== remote.displayName) {
+        label.text = remote.displayName;
+      }
+
       sprite.x = remote.x - this.street.left;
       sprite.y = remote.y - this.street.top;
       sprite.scale.x = remote.facing === 'right' ? 1 : -1;
@@ -301,6 +307,10 @@ export class GameRenderer {
       if (player && this.street) {
         bubble.text.x = player.x - this.street.left;
         bubble.text.y = player.y - this.street.top - 75;
+      } else if (this.avatarGraphics) {
+        // Local player's bubble — position above local avatar.
+        bubble.text.x = this.avatarGraphics.x;
+        bubble.text.y = this.avatarGraphics.y - 75;
       }
       bubble.text.alpha = Math.min(1, GameRenderer.CHAT_DURATION - bubble.age);
       return true;

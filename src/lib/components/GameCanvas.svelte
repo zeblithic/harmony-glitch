@@ -17,6 +17,14 @@
   // Track key state
   let keys = $state<InputState>({ left: false, right: false, jump: false });
 
+  // Clear held keys when chat opens so the player stops moving while typing.
+  $effect(() => {
+    if (chatFocused) {
+      keys = { left: false, right: false, jump: false };
+      sendInput({ ...keys }).catch(console.error);
+    }
+  });
+
   function handleKeyDown(e: KeyboardEvent) {
     if (chatFocused) return;
     let changed = false;

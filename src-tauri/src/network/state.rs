@@ -266,6 +266,7 @@ impl NetworkState {
 
     /// Send a chat message to all active peers.
     /// Text is truncated to 200 chars to stay within the Reticulum 500-byte MTU.
+    /// Also emits a local `ChatReceived` so the sender sees their own bubble.
     pub fn send_chat(&mut self, text: String) -> Vec<NetworkAction> {
         let truncated: String = text.chars().take(200).collect();
         let chat = ChatMessage {
@@ -273,12 +274,15 @@ impl NetworkState {
             sender: self.public_identity.address_hash,
             sender_name: self.display_name.clone(),
         };
+
+        // Echo locally so the sender sees their own speech bubble.
+        let mut actions = vec![NetworkAction::ChatReceived(chat.clone())];
+
         let msg = NetMessage::Chat(chat);
-        let payload = match serde_json::to_vec(&msg) {
-            Ok(p) => p,
-            Err(_) => return Vec::new(),
-        };
-        self.publish_to_all_peers(&payload)
+        if let Ok(payload) = serde_json::to_vec(&msg) {
+            actions.extend(self.publish_to_all_peers(&payload));
+        }
+        actions
     }
 
     /// Change the street we're on.
@@ -475,11 +479,14 @@ impl NetworkState {
         if self.peers.contains_key(&addr) {
             // Update their display name / street in case it changed.
             if let Some(peer) = self.peers.get_mut(&addr) {
-                peer.display_name = display_name;
+                peer.display_name = display_name.clone();
                 if let Some(s) = &street {
                     peer.street = s.clone();
                 }
             }
+            // Propagate name change to the registry so render frames use
+            // the updated name (not just PeerState).
+            self.registry.update_display_name(&addr, display_name);
             return;
         }
 
