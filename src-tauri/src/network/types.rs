@@ -112,6 +112,7 @@ mod tests {
 
     #[test]
     fn max_chat_fits_in_mtu() {
+        // ASCII worst case: 200 bytes of text
         let msg = NetMessage::Chat(ChatMessage {
             text: "x".repeat(200),
             sender: [0xFF; 16],
@@ -120,8 +121,24 @@ mod tests {
         let bytes = serde_json::to_vec(&msg).unwrap();
         assert!(
             bytes.len() <= MAX_PAYLOAD,
-            "Max chat is {} bytes, max is {}",
+            "Max ASCII chat is {} bytes, max is {}",
             bytes.len(),
+            MAX_PAYLOAD
+        );
+
+        // Emoji worst case: 200 bytes of 4-byte emoji (50 emoji max).
+        // Truncation is byte-based, so this should still fit.
+        let emoji_text: String = "😀".repeat(50); // 50 * 4 = 200 bytes
+        let msg_emoji = NetMessage::Chat(ChatMessage {
+            text: emoji_text,
+            sender: [0xFF; 16],
+            sender_name: "A".repeat(30),
+        });
+        let bytes_emoji = serde_json::to_vec(&msg_emoji).unwrap();
+        assert!(
+            bytes_emoji.len() <= MAX_PAYLOAD,
+            "Max emoji chat is {} bytes, max is {}",
+            bytes_emoji.len(),
             MAX_PAYLOAD
         );
     }

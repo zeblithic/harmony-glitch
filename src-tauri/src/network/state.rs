@@ -265,10 +265,11 @@ impl NetworkState {
     }
 
     /// Send a chat message to all active peers.
-    /// Text is truncated to 200 chars to stay within the Reticulum 500-byte MTU.
+    /// Text is truncated to 200 UTF-8 bytes to stay within the Reticulum
+    /// 500-byte MTU (worst case: 500 - 35 header - 33 Zenoh = 432 payload).
     /// Also emits a local `ChatReceived` so the sender sees their own bubble.
     pub fn send_chat(&mut self, text: String) -> Vec<NetworkAction> {
-        let truncated: String = text.chars().take(200).collect();
+        let truncated = truncate_to_bytes(&text, 200);
         let chat = ChatMessage {
             text: truncated,
             sender: self.public_identity.address_hash,
@@ -616,6 +617,21 @@ impl NetworkState {
         // TODO: Wire up in Task 8 when link/session data routing is complete.
         Vec::new()
     }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+/// Truncate a string to at most `max_bytes` UTF-8 bytes, splitting on
+/// character boundaries so the result is always valid UTF-8.
+fn truncate_to_bytes(s: &str, max_bytes: usize) -> String {
+    let mut result = String::new();
+    for ch in s.chars() {
+        if result.len() + ch.len_utf8() > max_bytes {
+            break;
+        }
+        result.push(ch);
+    }
+    result
 }
 
 // ── App data encoding ────────────────────────────────────────────────────

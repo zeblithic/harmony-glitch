@@ -1,6 +1,7 @@
 use harmony_identity::PrivateIdentity;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerProfile {
@@ -38,7 +39,21 @@ pub fn write_profile(path: &Path, json: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Try to load an existing profile from disk. Returns an error if the file
+/// is missing, malformed, or contains invalid key material.
+///
+/// Intermediate key bytes are wrapped in `Zeroizing` so they are wiped
+/// from memory on drop, matching the codebase's key-material hygiene.
+fn try_load_profile(path: &Path) -> Result<(PrivateIdentity, String, bool), String> {
+    let json = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let profile: PlayerProfile = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    let raw = Zeroizing::new(hex::decode(&profile.identity_hex).map_err(|e| e.to_string())?);
+    let identity = PrivateIdentity::from_private_bytes(&raw).map_err(|e| format!("{e:?}"))?;
+    Ok((identity, profile.display_name, profile.setup_complete))
+}
+
 /// Load or create a player profile. Creates directory and new identity if none exists.
+/// If an existing profile is corrupted, logs the error and generates a fresh identity.
 /// Returns (identity, display_name, setup_complete).
 pub fn load_or_create_profile(
     data_dir: &Path,
@@ -46,13 +61,19 @@ pub fn load_or_create_profile(
     let profile_path = data_dir.join("profile.json");
 
     if profile_path.exists() {
-        let json = std::fs::read_to_string(&profile_path).map_err(|e| e.to_string())?;
-        let profile: PlayerProfile = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-        let id_bytes = hex::decode(&profile.identity_hex).map_err(|e| e.to_string())?;
-        let identity =
-            PrivateIdentity::from_private_bytes(&id_bytes).map_err(|e| format!("{e:?}"))?;
-        Ok((identity, profile.display_name, profile.setup_complete))
-    } else {
+        match try_load_profile(&profile_path) {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                eprintln!(
+                    "[identity] Failed to load profile ({}); regenerating.",
+                    e
+                );
+                // Fall through to generate a fresh profile.
+            }
+        }
+    }
+
+    {
         let mut rng = rand::rngs::OsRng;
         let identity = PrivateIdentity::generate(&mut rng);
         let addr_hash = identity.public_identity().address_hash;
@@ -94,6 +115,19 @@ mod tests {
         let metadata = std::fs::metadata(dir.path().join("profile.json")).unwrap();
         let mode = std::os::unix::fs::PermissionsExt::mode(&metadata.permissions());
         assert_eq!(mode & 0o777, 0o600, "profile.json should be owner-only (0600)");
+    }
+
+    #[test]
+    fn corrupted_profile_regenerates_identity() {
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path()).unwrap();
+        std::fs::write(dir.path().join("profile.json"), "not valid json!!!").unwrap();
+
+        // Should succeed by generating a fresh identity, not crash.
+        let (identity, name, setup_complete) = load_or_create_profile(dir.path()).unwrap();
+        assert!(name.starts_with("Glitchen_"));
+        assert!(!setup_complete);
+        assert_eq!(identity.public_identity().address_hash.len(), 16);
     }
 
     #[test]
