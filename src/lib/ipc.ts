@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent } from './types';
 
 export async function listStreets(): Promise<string[]> {
   return invoke<string[]>('list_streets');
@@ -44,4 +44,12 @@ export async function getIdentity(): Promise<PlayerIdentity> {
 
 export async function setDisplayName(name: string): Promise<void> {
   return invoke('set_display_name', { name });
+}
+
+export async function onChatMessage(
+  callback: (event: ChatEvent) => void
+): Promise<UnlistenFn> {
+  return listen<ChatEvent>('chat_message', (event) => {
+    callback(event.payload);
+  });
 }

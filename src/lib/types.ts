@@ -142,6 +142,12 @@ export interface PlayerIdentity {
   addressHash: string;
 }
 
+export interface ChatEvent {
+  text: string;
+  senderHash: string;
+  senderName: string;
+}
+
 export interface InputState {
   left: boolean;
   right: boolean;

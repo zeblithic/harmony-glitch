@@ -198,12 +198,25 @@ fn get_network_status(app: AppHandle) -> Result<serde_json::Value, String> {
 /// Execute network actions by broadcasting packets via the UDP transport.
 fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
     for action in actions {
-        if let NetworkAction::SendPacket { data, .. } = action {
-            let transport = app.state::<TransportWrapper>();
-            let guard = transport.0.lock();
-            if let Ok(t) = guard {
-                let _ = t.broadcast(&data, DEFAULT_PORT);
+        match action {
+            NetworkAction::SendPacket { data, .. } => {
+                let transport = app.state::<TransportWrapper>();
+                let guard = transport.0.lock();
+                if let Ok(t) = guard {
+                    let _ = t.broadcast(&data, DEFAULT_PORT);
+                }
             }
+            NetworkAction::ChatReceived(chat) => {
+                let _ = app.emit(
+                    "chat_message",
+                    serde_json::json!({
+                        "text": chat.text,
+                        "senderHash": hex::encode(chat.sender),
+                        "senderName": chat.sender_name,
+                    }),
+                );
+            }
+            _ => {}
         }
     }
 }

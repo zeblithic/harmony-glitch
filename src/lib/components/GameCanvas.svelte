@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { GameRenderer } from '../engine/renderer';
-  import { sendInput, onRenderFrame, startGame } from '../ipc';
+  import { sendInput, onRenderFrame, onChatMessage, startGame } from '../ipc';
   import type { StreetData, InputState, RenderFrame } from '../types';
 
-  let { street, debugMode = false, onFrame }: {
+  let { street, debugMode = false, chatFocused = false, onFrame }: {
     street: StreetData | null;
     debugMode?: boolean;
+    chatFocused?: boolean;
     onFrame?: (frame: RenderFrame) => void;
   } = $props();
 
@@ -17,6 +18,7 @@
   let keys = $state<InputState>({ left: false, right: false, jump: false });
 
   function handleKeyDown(e: KeyboardEvent) {
+    if (chatFocused) return;
     let changed = false;
     if (e.key === 'ArrowLeft' || e.key === 'a') { keys.left = true; changed = true; }
     if (e.key === 'ArrowRight' || e.key === 'd') { keys.right = true; changed = true; }
@@ -29,6 +31,7 @@
   }
 
   function handleKeyUp(e: KeyboardEvent) {
+    if (chatFocused) return;
     let changed = false;
     if (e.key === 'ArrowLeft' || e.key === 'a') { keys.left = false; changed = true; }
     if (e.key === 'ArrowRight' || e.key === 'd') { keys.right = false; changed = true; }
@@ -48,7 +51,11 @@
       onFrame?.(frame);
     });
 
-    cleanupFns.push(unlisten, () => r.destroy());
+    const unlistenChat = await onChatMessage((event) => {
+      r.addChatBubble(event.senderHash, event.text);
+    });
+
+    cleanupFns.push(unlisten, unlistenChat, () => r.destroy());
 
     if (street) {
       r.buildScene(street);

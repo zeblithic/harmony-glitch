@@ -3,12 +3,14 @@
   import GameCanvas from './lib/components/GameCanvas.svelte';
   import StreetPicker from './lib/components/StreetPicker.svelte';
   import DebugOverlay from './lib/components/DebugOverlay.svelte';
+  import ChatInput from './lib/components/ChatInput.svelte';
   import { stopGame, loadStreet } from './lib/ipc';
   import type { StreetData, RenderFrame } from './lib/types';
 
   let currentStreet = $state<StreetData | null>(null);
   let latestFrame = $state<RenderFrame | null>(null);
   let debugMode = $state(false);
+  let chatFocused = $state(false);
   let transitionPending = $state(false);
 
   function handleStreetLoaded(street: StreetData) {
@@ -41,8 +43,9 @@
 
 <main>
   {#if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
+    <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <button type="button" class="back-btn" onclick={async () => {
       try {
         await stopGame();

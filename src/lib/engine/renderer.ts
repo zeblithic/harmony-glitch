@@ -1,8 +1,15 @@
 import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
-import type { StreetData, RenderFrame } from '../types';
+import type { StreetData, RenderFrame, RemotePlayerFrame } from '../types';
+
+interface ChatBubble {
+  text: Text;
+  targetHash: string;
+  age: number;
+}
 
 export class GameRenderer {
   private static REMOTE_COLOR = 0x4488ff;
+  private static CHAT_DURATION = 5.0;
 
   app: Application;
   private parallaxContainer: Container;
@@ -10,6 +17,7 @@ export class GameRenderer {
   private uiContainer: Container;
   private layerContainers: Map<string, Container> = new Map();
   private remoteSprites: Map<string, Container> = new Map();
+  private chatBubbles: ChatBubble[] = [];
   private platformGraphics: Graphics | null = null;
   private avatarGraphics: Graphics | null = null;
   private bgGraphics: Graphics | null = null;
@@ -80,6 +88,10 @@ export class GameRenderer {
       sprite.destroy();
     }
     this.remoteSprites.clear();
+    for (const bubble of this.chatBubbles) {
+      bubble.text.destroy();
+    }
+    this.chatBubbles = [];
 
     // Build gradient background (redrawn on resize via drawBackground)
     this.bgGraphics = new Graphics();
@@ -237,6 +249,9 @@ export class GameRenderer {
       }
     }
 
+    // Update chat bubbles
+    this.updateChatBubbles(1 / 60, remotePlayers);
+
     // Swoop transition — slide old street off-screen
     if (frame.transition) {
       const { progress, direction } = frame.transition;
@@ -251,11 +266,48 @@ export class GameRenderer {
     }
   }
 
+  addChatBubble(addressHash: string, message: string): void {
+    const bubble = new Text({
+      text: message,
+      style: {
+        fontSize: 12,
+        fill: 0xffffff,
+        wordWrap: true,
+        wordWrapWidth: 200,
+      },
+    });
+    bubble.anchor.set(0.5, 1);
+    this.worldContainer.addChild(bubble);
+    this.chatBubbles.push({ text: bubble, targetHash: addressHash, age: 0 });
+  }
+
+  private updateChatBubbles(dt: number, remotePlayers: RemotePlayerFrame[]): void {
+    this.chatBubbles = this.chatBubbles.filter((bubble) => {
+      bubble.age += dt;
+      if (bubble.age >= GameRenderer.CHAT_DURATION) {
+        this.worldContainer.removeChild(bubble.text);
+        bubble.text.destroy();
+        return false;
+      }
+      const player = remotePlayers.find((p) => p.addressHash === bubble.targetHash);
+      if (player && this.street) {
+        bubble.text.x = player.x - this.street.left;
+        bubble.text.y = player.y - this.street.top - 75;
+      }
+      bubble.text.alpha = Math.min(1, GameRenderer.CHAT_DURATION - bubble.age);
+      return true;
+    });
+  }
+
   destroy(): void {
     for (const [, sprite] of this.remoteSprites) {
       sprite.destroy();
     }
     this.remoteSprites.clear();
+    for (const bubble of this.chatBubbles) {
+      bubble.text.destroy();
+    }
+    this.chatBubbles = [];
     this.app.destroy(true);
   }
 }
