@@ -8,6 +8,7 @@
   } = $props();
 
   let streets = $state<string[]>([]);
+  let initialLoading = $state(true);
   let loading = $state(false);
   let error = $state<string | null>(null);
 
@@ -16,6 +17,8 @@
       streets = await listStreets();
     } catch (e) {
       error = `Failed to list streets: ${e}`;
+    } finally {
+      initialLoading = false;
     }
   });
 
@@ -53,7 +56,9 @@
       </button>
     {/each}
 
-    {#if streets.length === 0 && !error}
+    {#if initialLoading}
+      <p class="empty">Loading streets…</p>
+    {:else if streets.length === 0 && !error}
       <p class="empty">No streets available</p>
     {/if}
   </div>

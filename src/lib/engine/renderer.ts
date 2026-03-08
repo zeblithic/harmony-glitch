@@ -124,26 +124,31 @@ export class GameRenderer {
     if (!this.platformGraphics) return;
     this.platformGraphics.clear();
 
-    for (const platform of street.layers.filter(l => l.isMiddleground).flatMap(l => l.platformLines)) {
+    const platforms = street.layers.filter(l => l.isMiddleground).flatMap(l => l.platformLines);
+    for (const platform of platforms) {
       const startScreenY = platform.start.y - street.top;
       const endScreenY = platform.end.y - street.top;
       const startScreenX = platform.start.x - street.left;
       const endScreenX = platform.end.x - street.left;
 
-      // Draw platform line
       this.platformGraphics.moveTo(startScreenX, startScreenY);
       this.platformGraphics.lineTo(endScreenX, endScreenY);
+    }
+    // Stroke all platform lines in one draw call
+    if (platforms.length > 0) {
       this.platformGraphics.stroke({ color: this.debugMode ? 0x00ff00 : 0x6b5b3a, width: this.debugMode ? 2 : 4 });
     }
 
     // Draw walls in debug mode
     if (this.debugMode) {
-      for (const wall of street.layers.filter(l => l.isMiddleground).flatMap(l => l.walls)) {
+      const walls = street.layers.filter(l => l.isMiddleground).flatMap(l => l.walls);
+      for (const wall of walls) {
         const screenX = wall.x - street.left;
         const screenY = wall.y - street.top;
-        // Wall extends h pixels downward (toward ground/positive Y)
         this.platformGraphics.moveTo(screenX, screenY);
         this.platformGraphics.lineTo(screenX, screenY + wall.h);
+      }
+      if (walls.length > 0) {
         this.platformGraphics.stroke({ color: 0xff0000, width: 2 });
       }
     }
@@ -172,7 +177,8 @@ export class GameRenderer {
     this.worldContainer.x = -camScreenX;
     this.worldContainer.y = -camScreenY;
 
-    // Update parallax layers — scroll proportionally to the camera offset.
+    // Update parallax layers — horizontal scroll proportional to width ratio,
+    // vertical scroll tracks camera 1:1 (backgrounds share middleground height).
     for (const layer of this.street.layers) {
       if (layer.isMiddleground) continue;
       const container = this.layerContainers.get(layer.name);
@@ -180,7 +186,7 @@ export class GameRenderer {
 
       const factor = layer.w / mgWidth;
       container.x = -camScreenX * factor;
-      container.y = -camScreenY * factor;
+      container.y = -camScreenY;
     }
   }
 

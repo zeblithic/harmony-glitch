@@ -66,7 +66,11 @@
 <svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
 
 <div class="canvas-container">
-  <canvas bind:this={canvasEl}></canvas>
+  <canvas
+    bind:this={canvasEl}
+    role="application"
+    aria-label="Harmony Glitch game — use arrow keys or WASD to move, Space to jump, F3 for debug overlay"
+  ></canvas>
 </div>
 
 <style>
