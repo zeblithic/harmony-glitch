@@ -1132,7 +1132,6 @@ dependencies = [
 name = "harmony-glitch"
 version = "0.1.0"
 dependencies = [
- "log",
  "quick-xml 0.37.5",
  "serde",
  "serde_json",

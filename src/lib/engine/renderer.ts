@@ -185,7 +185,7 @@ export class GameRenderer {
       const container = this.layerContainers.get(layer.name);
       if (!container) continue;
 
-      const factor = layer.w / mgWidth;
+      const factor = mgWidth > 0 ? layer.w / mgWidth : 1.0;
       container.x = -camScreenX * factor;
       container.y = -camScreenY;
     }
