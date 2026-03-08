@@ -110,10 +110,36 @@ export interface CameraFrame {
   y: number;
 }
 
+export interface RemotePlayerFrame {
+  addressHash: string;
+  displayName: string;
+  x: number;
+  y: number;
+  facing: string;
+  onGround: boolean;
+}
+
+export interface TransitionInfo {
+  progress: number;
+  direction: 'left' | 'right';
+  toStreet: string;
+}
+
 export interface RenderFrame {
   player: PlayerFrame;
+  remotePlayers: RemotePlayerFrame[];
   camera: CameraFrame;
   streetId: string;
+  transition?: TransitionInfo | null;
+}
+
+export interface NetworkStatus {
+  peerCount: number;
+}
+
+export interface PlayerIdentity {
+  displayName: string;
+  addressHash: string;
 }
 
 export interface InputState {

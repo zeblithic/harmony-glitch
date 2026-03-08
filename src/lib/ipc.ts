@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity } from './types';
 
 export async function listStreets(): Promise<string[]> {
   return invoke<string[]>('list_streets');
@@ -28,4 +28,20 @@ export async function onRenderFrame(
   return listen<RenderFrame>('render_frame', (event) => {
     callback(event.payload);
   });
+}
+
+export async function sendChat(message: string): Promise<void> {
+  return invoke('send_chat', { message });
+}
+
+export async function getNetworkStatus(): Promise<NetworkStatus> {
+  return invoke('get_network_status');
+}
+
+export async function getIdentity(): Promise<PlayerIdentity> {
+  return invoke('get_identity');
+}
+
+export async function setDisplayName(name: string): Promise<void> {
+  return invoke('set_display_name', { name });
 }
