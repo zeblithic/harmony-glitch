@@ -98,7 +98,7 @@ impl RemotePlayerRegistry {
     /// seconds behind `now`.
     pub fn purge_stale(&mut self, now: f64) {
         self.players
-            .retain(|_, player| (now - player.last_update) <= STALE_TIMEOUT);
+            .retain(|_, player| (now - player.last_update) < STALE_TIMEOUT);
     }
 
     /// Produce render frames for all tracked players, sorted by
