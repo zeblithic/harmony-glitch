@@ -252,7 +252,9 @@ export class GameRenderer {
     // Update chat bubbles
     this.updateChatBubbles(1 / 60, remotePlayers);
 
-    // Swoop transition — slide old street off-screen
+    // Swoop transition — slide old street off-screen.
+    // Only shift parallax layers here; the middleground is a child of worldContainer
+    // and inherits its offset automatically.
     if (frame.transition) {
       const { progress, direction } = frame.transition;
       const viewportWidth = this.app.canvas.width;
@@ -260,7 +262,9 @@ export class GameRenderer {
         ? -progress * viewportWidth
         : progress * viewportWidth;
       this.worldContainer.x += offset;
-      for (const [, container] of this.layerContainers) {
+      for (const [name, container] of this.layerContainers) {
+        const layer = this.street.layers.find(l => l.name === name);
+        if (layer?.isMiddleground) continue;
         container.x += offset;
       }
     }

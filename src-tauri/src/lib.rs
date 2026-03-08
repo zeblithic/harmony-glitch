@@ -19,6 +19,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
+/// Shared monotonic epoch — all time fed to NetworkState is relative to this.
+struct MonotonicEpoch(Instant);
+
 /// Shared game state protected by a mutex.
 struct GameStateWrapper(Mutex<GameState>);
 
@@ -65,14 +68,13 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
         state.load_street(street_data.clone());
     }
 
-    // Update network state for the new street
+    // Update network state for the new street.
+    // Use monotonic time relative to app start — must match the game loop's time source.
     let actions = {
         let net = app.state::<NetworkWrapper>();
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
-        let now_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let epoch = app.state::<MonotonicEpoch>();
+        let now_secs = epoch.0.elapsed().as_secs();
         net_state.change_street(&name, now_secs, &mut rand::rngs::OsRng)
     };
     execute_network_actions(&app, actions);
@@ -161,11 +163,10 @@ fn get_identity(app: AppHandle) -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
     let pi = app.state::<PlayerIdentityWrapper>();
+    // Lock identity FIRST to match get_identity ordering (prevents ABBA deadlock).
+    let identity = pi.identity.lock().map_err(|e| e.to_string())?;
     let mut display_name = pi.display_name.lock().map_err(|e| e.to_string())?;
     *display_name = name.clone();
-
-    // Persist to disk so the name survives restarts.
-    let identity = pi.identity.lock().map_err(|e| e.to_string())?;
     let profile = identity::persistence::PlayerProfile {
         identity_hex: hex::encode(identity.to_private_bytes()),
         display_name: name,
@@ -224,7 +225,7 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
 fn game_loop(app: AppHandle) {
     let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
     let dt = 1.0 / 60.0;
-    let game_start = Instant::now();
+    let game_start = app.state::<MonotonicEpoch>().0;
 
     loop {
         let tick_start = Instant::now();
@@ -330,6 +331,7 @@ fn load_street_xml(name: &str) -> Result<String, String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(MonotonicEpoch(Instant::now()))
         .manage(GameStateWrapper(Mutex::new(GameState::new(1280.0, 720.0))))
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
         .manage(GameRunning(Mutex::new(false)))

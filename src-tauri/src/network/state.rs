@@ -474,7 +474,13 @@ impl NetworkState {
         };
 
         if session.state() == SessionState::Closed {
-            return false;
+            // Session already closed on a prior tick — clean up the zombie entry.
+            let event = PresenceEvent::Left {
+                address_hash: *addr,
+            };
+            self.registry.handle_presence(&event);
+            out.push(NetworkAction::PresenceChange(event));
+            return true;
         }
 
         // Tick the session timer.

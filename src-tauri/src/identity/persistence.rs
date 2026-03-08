@@ -2,9 +2,6 @@ use harmony_identity::PrivateIdentity;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerProfile {
     pub identity_hex: String,
@@ -13,12 +10,26 @@ pub struct PlayerProfile {
 
 /// Write profile JSON to disk with restrictive permissions (0600 on Unix).
 /// Private key material lives in this file — it should not be world-readable.
+///
+/// On Unix, the file is created with 0600 permissions atomically (no TOCTOU window).
+/// On Windows, default ACLs apply; OS-keychain integration is deferred.
 pub fn write_profile(path: &Path, json: &str) -> Result<(), String> {
-    std::fs::write(path, json).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {
-        let perms = std::fs::Permissions::from_mode(0o600);
-        std::fs::set_permissions(path, perms).map_err(|e| e.to_string())?;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        f.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, json).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
