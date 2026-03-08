@@ -487,6 +487,9 @@ impl NetworkState {
             // Propagate name change to the registry so render frames use
             // the updated name (not just PeerState).
             self.registry.update_display_name(&addr, display_name);
+            // A re-announce proves the peer is alive — refresh their
+            // liveness so they aren't evicted by purge_stale while idle.
+            self.registry.refresh_liveness(&addr, now_secs_f64);
             return;
         }
 

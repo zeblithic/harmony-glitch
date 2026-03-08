@@ -77,6 +77,14 @@ impl RemotePlayerRegistry {
         }
     }
 
+    /// Refresh a player's liveness timestamp (e.g. on re-announce).
+    /// Prevents active-but-silent peers from being evicted by `purge_stale`.
+    pub fn refresh_liveness(&mut self, address_hash: &[u8; 16], now: f64) {
+        if let Some(player) = self.players.get_mut(address_hash) {
+            player.last_update = now;
+        }
+    }
+
     /// Update position/velocity for a known player. Silently ignores
     /// updates for players not in the registry.
     pub fn update_state(&mut self, address_hash: &[u8; 16], state: PlayerNetState, now: f64) {
@@ -290,6 +298,30 @@ mod tests {
         assert_eq!(frames[0].display_name, "Alice v2");
         // Position should reset to defaults, not retain old state
         assert!((frames[0].x - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn refresh_liveness_prevents_stale_purge() {
+        let mut reg = RemotePlayerRegistry::new();
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
+
+        // At t=8, refresh liveness (simulates re-announce).
+        reg.refresh_liveness(&make_hash(1), 8.0);
+
+        // At t=12, player would be stale relative to join time (1.0)
+        // but liveness was refreshed at 8.0 — only 4s ago, within timeout.
+        reg.purge_stale(12.0);
+        assert_eq!(reg.count(), 1, "Should survive purge after liveness refresh");
+
+        // At t=19, 11s since last refresh — should be purged.
+        reg.purge_stale(19.0);
+        assert_eq!(reg.count(), 0);
     }
 
     #[test]

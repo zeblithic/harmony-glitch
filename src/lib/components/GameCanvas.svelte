@@ -18,10 +18,12 @@
   let keys = $state<InputState>({ left: false, right: false, jump: false });
 
   // Clear held keys when chat opens so the player stops moving while typing.
+  // Pass the literal to sendInput to avoid reading `keys` (which would create
+  // a reactive dependency and cause an infinite re-run loop).
   $effect(() => {
     if (chatFocused) {
       keys = { left: false, right: false, jump: false };
-      sendInput({ ...keys }).catch(console.error);
+      sendInput({ left: false, right: false, jump: false }).catch(console.error);
     }
   });
 
