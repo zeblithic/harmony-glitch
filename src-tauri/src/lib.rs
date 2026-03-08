@@ -5,7 +5,11 @@ pub mod network;
 pub mod physics;
 pub mod street;
 
+use avatar::types::Direction;
 use engine::state::GameState;
+use network::state::{NetworkAction, NetworkState};
+use network::transport::{UdpTransport, DEFAULT_PORT};
+use network::types::PlayerNetState;
 use physics::movement::InputState;
 use street::parser::parse_street;
 use street::types::StreetData;
@@ -35,6 +39,12 @@ struct PlayerIdentityWrapper {
     data_dir: std::path::PathBuf,
 }
 
+/// Shared network state — driven by the game loop, queried by commands.
+struct NetworkWrapper(Mutex<NetworkState>);
+
+/// Shared UDP transport — owned by the game loop, used for sends.
+struct TransportWrapper(Mutex<UdpTransport>);
+
 #[tauri::command]
 fn list_streets() -> Vec<String> {
     // For Phase A: return hardcoded demo street names.
@@ -49,9 +59,23 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
     let street_data = parse_street(&xml)?;
 
     // Update game state
-    let state_wrapper = app.state::<GameStateWrapper>();
-    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    state.load_street(street_data.clone());
+    {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        state.load_street(street_data.clone());
+    }
+
+    // Update network state for the new street
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        net_state.change_street(&name, now_secs, &mut rand::rngs::OsRng)
+    };
+    execute_network_actions(&app, actions);
 
     Ok(street_data)
 }
@@ -151,38 +175,129 @@ fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn send_chat(message: String, app: AppHandle) -> Result<(), String> {
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.send_chat(message)
+    };
+    execute_network_actions(&app, actions);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_network_status(app: AppHandle) -> Result<serde_json::Value, String> {
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "peerCount": net_state.peer_count(),
+    }))
+}
+
+/// Execute network actions by broadcasting packets via the UDP transport.
+fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
+    for action in actions {
+        if let NetworkAction::SendPacket { data, .. } = action {
+            let transport = app.state::<TransportWrapper>();
+            let guard = transport.0.lock();
+            if let Ok(t) = guard {
+                let _ = t.broadcast(&data, DEFAULT_PORT);
+            }
+        }
+    }
+}
+
 fn game_loop(app: AppHandle) {
     let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
     let dt = 1.0 / 60.0;
+    let game_start = Instant::now();
 
     loop {
         let tick_start = Instant::now();
 
-        // Check if still running
-        let running = app.state::<GameRunning>();
-        let is_running = running.0.lock().unwrap_or_else(|e| e.into_inner());
-        if !*is_running {
-            break;
+        // 1. Check if still running
+        {
+            let running = app.state::<GameRunning>();
+            let is_running = running.0.lock().unwrap_or_else(|e| e.into_inner());
+            if !*is_running {
+                break;
+            }
         }
-        drop(is_running);
 
-        // Read current input
-        let input_wrapper = app.state::<InputStateWrapper>();
-        let input = *input_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+        // 2. Drain inbound UDP packets (non-blocking)
+        let inbound_packets: Vec<(String, Vec<u8>)> = {
+            let transport = app.state::<TransportWrapper>();
+            let mut t = transport.0.lock().unwrap_or_else(|e| e.into_inner());
+            t.recv_all()
+                .into_iter()
+                .map(|(data, _addr)| ("udp0".to_string(), data))
+                .collect()
+        };
 
-        // Tick game state — lock is scoped to the block so it is always
-        // released before emitting, preventing potential deadlocks.
+        // 3. Tick NetworkState with packets + monotonic seconds
+        let now_secs = tick_start.duration_since(game_start).as_secs();
+        let net_actions = {
+            let net = app.state::<NetworkWrapper>();
+            let mut net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
+            net_state.tick(&inbound_packets, now_secs, &mut rand::rngs::OsRng)
+        };
+
+        // 4. Execute NetworkActions (broadcast packets)
+        execute_network_actions(&app, net_actions);
+
+        // 5. Read current input
+        let input = {
+            let input_wrapper = app.state::<InputStateWrapper>();
+            let guard = input_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+            *guard
+        };
+
+        // 6. Tick game state — lock is scoped so it is released before emitting
         let frame = {
             let state_wrapper = app.state::<GameStateWrapper>();
             let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
             state.tick(dt, &input)
         };
 
-        if let Some(frame) = frame {
+        if let Some(mut frame) = frame {
+            // 7. Augment RenderFrame with remote players from NetworkState
+            {
+                let net = app.state::<NetworkWrapper>();
+                let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                frame.remote_players = net_state.remote_frames();
+            }
+
+            // 8. Publish local player state via NetworkState
+            let publish_actions = {
+                let on_ground = matches!(
+                    frame.player.animation,
+                    crate::avatar::types::AnimationState::Idle
+                        | crate::avatar::types::AnimationState::Walking
+                );
+                let net_state = PlayerNetState {
+                    x: frame.player.x as f32,
+                    y: frame.player.y as f32,
+                    vx: 0.0,
+                    vy: 0.0,
+                    facing: if frame.player.facing == Direction::Left {
+                        0
+                    } else {
+                        1
+                    },
+                    on_ground,
+                };
+                let net = app.state::<NetworkWrapper>();
+                let ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                ns.publish_player_state(&net_state)
+            };
+            execute_network_actions(&app, publish_actions);
+
+            // 9. Emit RenderFrame to frontend
             let _ = app.emit("render_frame", &frame);
         }
 
-        // Sleep for remainder of tick
+        // 10. Sleep for remainder of tick
         let elapsed = tick_start.elapsed();
         if elapsed < tick_duration {
             std::thread::sleep(tick_duration - elapsed);
@@ -211,11 +326,31 @@ pub fn run() {
             let (player_identity, display_name) =
                 identity::persistence::load_or_create_profile(&data_dir)
                     .map_err(std::io::Error::other)?;
+
+            // Save identity bytes BEFORE moving identity into PlayerIdentityWrapper,
+            // since PrivateIdentity is not Clone.
+            let identity_bytes = player_identity.to_private_bytes();
+
             app.manage(PlayerIdentityWrapper {
                 identity: Mutex::new(player_identity),
-                display_name: Mutex::new(display_name),
+                display_name: Mutex::new(display_name.clone()),
                 data_dir: data_dir.clone(),
             });
+
+            // Reconstruct a second identity from saved bytes for NetworkState.
+            let net_identity =
+                harmony_identity::PrivateIdentity::from_private_bytes(&identity_bytes)
+                    .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+            app.manage(NetworkWrapper(Mutex::new(NetworkState::new(
+                net_identity,
+                display_name,
+            ))));
+
+            // Bind UDP transport for LAN discovery.
+            let transport = UdpTransport::bind(DEFAULT_PORT)
+                .map_err(|e| std::io::Error::other(format!("UDP bind failed: {e}")))?;
+            app.manage(TransportWrapper(Mutex::new(transport)));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -226,6 +361,8 @@ pub fn run() {
             stop_game,
             get_identity,
             set_display_name,
+            send_chat,
+            get_network_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");
