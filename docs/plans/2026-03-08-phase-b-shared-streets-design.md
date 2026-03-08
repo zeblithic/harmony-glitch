@@ -89,9 +89,9 @@ struct PlayerNetState {
     vy: f32,
     facing: u8,      // 0=left, 1=right
     on_ground: bool,
-    street: u16,     // street index (compact, resolved from announce)
 }
-// ~19 bytes payload — fits easily in Reticulum's 500-byte MTU with headers
+// ~17 bytes payload — fits easily in Reticulum's 500-byte MTU with headers
+// Street context comes from the Zenoh topic key expression, not the payload.
 ```
 
 At 60Hz with snap rendering (no interpolation), every received update directly sets the remote avatar's position. If a packet drops, `vx`/`vy` allow one frame of dead-reckoning before the next update arrives.
@@ -100,12 +100,13 @@ At 60Hz with snap rendering (no interpolation), every received update directly s
 
 ```rust
 struct ChatMessage {
-    text: String,    // UTF-8, capped at ~200 chars to fit MTU
-    timestamp: u64,  // sender's local timestamp
+    text: String,        // UTF-8, capped at ~200 chars to fit MTU
+    sender: [u8; 16],    // sender's address hash (for rendering bubble above correct avatar)
+    sender_name: String, // display name at time of sending
 }
 ```
 
-Published on the chat topic. All subscribers on the street receive it. Ephemeral — no history.
+Published on the chat topic. All subscribers on the street receive it. Ephemeral — no history. Sender identity is included in the payload (rather than derived from the topic path) so the renderer can position chat bubbles without a separate lookup.
 
 ### Presence Events
 

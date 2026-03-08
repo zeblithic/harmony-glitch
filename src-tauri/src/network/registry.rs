@@ -226,6 +226,31 @@ mod tests {
     }
 
     #[test]
+    fn rejoin_resets_player_state() {
+        let mut reg = RemotePlayerRegistry::new();
+        reg.handle_presence(&PresenceEvent::Joined {
+            address_hash: make_hash(1),
+            display_name: "Alice".into(),
+        });
+        reg.update_state(&make_hash(1), make_state(500.0, -200.0), 1.0);
+
+        // Leave and rejoin
+        reg.handle_presence(&PresenceEvent::Left {
+            address_hash: make_hash(1),
+        });
+        reg.handle_presence(&PresenceEvent::Joined {
+            address_hash: make_hash(1),
+            display_name: "Alice v2".into(),
+        });
+
+        assert_eq!(reg.count(), 1);
+        let frames = reg.frames();
+        assert_eq!(frames[0].display_name, "Alice v2");
+        // Position should reset to defaults, not retain old state
+        assert!((frames[0].x - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn frames_sorted_deterministically() {
         let mut reg = RemotePlayerRegistry::new();
         // Insert in reverse order: hash 0xFF before 0x01

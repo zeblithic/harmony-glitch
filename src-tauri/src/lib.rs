@@ -32,6 +32,7 @@ struct GameLoopHandle(Mutex<Option<JoinHandle<()>>>);
 struct PlayerIdentityWrapper {
     identity: Mutex<harmony_identity::PrivateIdentity>,
     display_name: Mutex<String>,
+    data_dir: std::path::PathBuf,
 }
 
 #[tauri::command]
@@ -137,7 +138,16 @@ fn get_identity(app: AppHandle) -> Result<serde_json::Value, String> {
 fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
     let pi = app.state::<PlayerIdentityWrapper>();
     let mut display_name = pi.display_name.lock().map_err(|e| e.to_string())?;
-    *display_name = name;
+    *display_name = name.clone();
+
+    // Persist to disk so the name survives restarts.
+    let identity = pi.identity.lock().map_err(|e| e.to_string())?;
+    let profile = identity::persistence::PlayerProfile {
+        identity_hex: hex::encode(identity.to_private_bytes()),
+        display_name: name,
+    };
+    let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
+    identity::persistence::write_profile(&pi.data_dir.join("profile.json"), &json)?;
     Ok(())
 }
 
@@ -204,6 +214,7 @@ pub fn run() {
             app.manage(PlayerIdentityWrapper {
                 identity: Mutex::new(player_identity),
                 display_name: Mutex::new(display_name),
+                data_dir: data_dir.clone(),
             });
             Ok(())
         })

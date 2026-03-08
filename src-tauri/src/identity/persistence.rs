@@ -2,10 +2,25 @@ use harmony_identity::PrivateIdentity;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerProfile {
     pub identity_hex: String,
     pub display_name: String,
+}
+
+/// Write profile JSON to disk with restrictive permissions (0600 on Unix).
+/// Private key material lives in this file — it should not be world-readable.
+pub fn write_profile(path: &Path, json: &str) -> Result<(), String> {
+    std::fs::write(path, json).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        let perms = std::fs::Permissions::from_mode(0o600);
+        std::fs::set_permissions(path, perms).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// Load or create a player profile. Creates directory and new identity if none exists.
@@ -31,7 +46,7 @@ pub fn load_or_create_profile(data_dir: &Path) -> Result<(PrivateIdentity, Strin
             display_name: display_name.clone(),
         };
         let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
-        std::fs::write(&profile_path, json).map_err(|e| e.to_string())?;
+        write_profile(&profile_path, &json)?;
 
         Ok((identity, display_name))
     }
@@ -49,6 +64,16 @@ mod tests {
         assert!(name.starts_with("Glitchen_"));
         assert!(dir.path().join("profile.json").exists());
         assert_eq!(identity.public_identity().address_hash.len(), 16);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn profile_has_restrictive_permissions() {
+        let dir = TempDir::new().unwrap();
+        load_or_create_profile(dir.path()).unwrap();
+        let metadata = std::fs::metadata(dir.path().join("profile.json")).unwrap();
+        let mode = std::os::unix::fs::PermissionsExt::mode(&metadata.permissions());
+        assert_eq!(mode & 0o777, 0o600, "profile.json should be owner-only (0600)");
     }
 
     #[test]
