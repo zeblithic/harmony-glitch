@@ -1,4 +1,4 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, FillGradient, Graphics } from 'pixi.js';
 import type { StreetData, RenderFrame } from '../types';
 
 export class GameRenderer {
@@ -61,10 +61,11 @@ export class GameRenderer {
     const bg = new Graphics();
     const topColor = street.gradient ? parseInt(street.gradient.top, 16) : 0x87a8c9;
     const bottomColor = street.gradient ? parseInt(street.gradient.bottom, 16) : 0xffc400;
-    // Use top color as simple fill — full gradient would use a shader
-    void bottomColor;
+    const gradient = new FillGradient(0, 0, 0, this.app.screen.height);
+    gradient.addColorStop(0, topColor);
+    gradient.addColorStop(1, bottomColor);
     bg.rect(0, 0, this.app.screen.width, this.app.screen.height);
-    bg.fill(topColor);
+    bg.fill(gradient);
     this.parallaxContainer.addChild(bg);
 
     // Build parallax layers

@@ -11,7 +11,7 @@
   } = $props();
 
   let canvasEl: HTMLCanvasElement;
-  let renderer: GameRenderer | null = null;
+  let renderer = $state<GameRenderer | null>(null);
 
   // Track key state
   let keys = $state<InputState>({ left: false, right: false, jump: false });
