@@ -1397,6 +1397,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tempfile",
+ "zeroize",
 ]
 
 [[package]]

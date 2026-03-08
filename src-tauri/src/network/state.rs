@@ -13,10 +13,10 @@ use std::collections::HashMap;
 use harmony_identity::{Identity, PrivateIdentity};
 use harmony_reticulum::{DestinationName, InterfaceMode, Link, Node, NodeAction, NodeEvent};
 use harmony_zenoh::{
-    PubSubAction, PubSubRouter, PublisherId, Session, SessionAction, SessionEvent, SessionState,
-    SubscriptionId,
+    PubSubRouter, PublisherId, Session, SessionAction, SessionEvent, SessionState, SubscriptionId,
 };
 use rand_core::CryptoRngCore;
+use zeroize::Zeroizing;
 
 use crate::engine::state::RemotePlayerFrame;
 use crate::network::registry::RemotePlayerRegistry;
@@ -90,7 +90,8 @@ pub struct NetworkState {
     /// Reticulum node (packet routing, announces, links).
     node: Node,
     /// Our private identity (kept as raw bytes since PrivateIdentity is not Clone).
-    identity_bytes: [u8; 64],
+    /// Wrapped in `Zeroizing` so key material is zeroed on drop.
+    identity_bytes: Zeroizing<[u8; 64]>,
     /// Our public identity.
     public_identity: Identity,
     /// Our display name.
@@ -115,7 +116,7 @@ impl NetworkState {
     /// for creating Sessions later.
     pub fn new(identity: PrivateIdentity, display_name: String) -> Self {
         // Save identity bytes before we hand it off to the node.
-        let identity_bytes = identity.to_private_bytes();
+        let identity_bytes = Zeroizing::new(identity.to_private_bytes());
         let public_identity = identity.public_identity().clone();
 
         let mut node = Node::new();
@@ -175,8 +176,15 @@ impl NetworkState {
         // Tick all active sessions and process their actions.
         let now_ms = now_secs * 1000;
         let peer_keys: Vec<[u8; 16]> = self.peers.keys().copied().collect();
+        let mut closed_peers = Vec::new();
         for addr in peer_keys {
-            self.tick_peer_session(&addr, now_ms, &mut actions);
+            if self.tick_peer_session(&addr, now_ms, &mut actions) {
+                closed_peers.push(addr);
+            }
+        }
+        // Remove peers whose sessions have closed/gone stale.
+        for addr in closed_peers {
+            self.peers.remove(&addr);
         }
 
         // Purge stale players from the registry.
@@ -186,7 +194,7 @@ impl NetworkState {
     }
 
     /// Publish our player state to all active peers.
-    pub fn publish_player_state(&mut self, state: &PlayerNetState) -> Vec<NetworkAction> {
+    pub fn publish_player_state(&self, state: &PlayerNetState) -> Vec<NetworkAction> {
         let msg = NetMessage::PlayerState(*state);
         let payload = match serde_json::to_vec(&msg) {
             Ok(p) => p,
@@ -196,7 +204,7 @@ impl NetworkState {
     }
 
     /// Send a chat message to all active peers.
-    pub fn send_chat(&mut self, text: String) -> Vec<NetworkAction> {
+    pub fn send_chat(&self, text: String) -> Vec<NetworkAction> {
         let chat = ChatMessage {
             text,
             sender: self.public_identity.address_hash,
@@ -233,7 +241,7 @@ impl NetworkState {
         }
 
         // Create fresh identity from saved bytes for re-registration.
-        let identity = PrivateIdentity::from_private_bytes(&self.identity_bytes)
+        let identity = PrivateIdentity::from_private_bytes(self.identity_bytes.as_ref())
             .expect("identity bytes are valid");
 
         let dest_name =
@@ -447,36 +455,46 @@ impl NetworkState {
 
     // ── Internal: Session ticking ────────────────────────────────────────
 
-    fn tick_peer_session(&mut self, addr: &[u8; 16], now_ms: u64, out: &mut Vec<NetworkAction>) {
+    /// Tick a single peer's session. Returns `true` if the peer should be
+    /// removed (session closed or peer went stale).
+    fn tick_peer_session(
+        &mut self,
+        addr: &[u8; 16],
+        now_ms: u64,
+        out: &mut Vec<NetworkAction>,
+    ) -> bool {
         let peer = match self.peers.get_mut(addr) {
             Some(p) => p,
-            None => return,
+            None => return false,
         };
 
         let session = match peer.session.as_mut() {
             Some(s) => s,
-            None => return,
+            None => return false,
         };
 
         if session.state() == SessionState::Closed {
-            return;
+            return false;
         }
 
         // Tick the session timer.
         let session_actions = match session.handle_event(SessionEvent::TimerTick { now_ms }) {
             Ok(a) => a,
-            Err(_) => return,
+            Err(_) => return false,
         };
 
+        let mut should_remove = false;
         for action in session_actions {
             match action {
                 SessionAction::PeerStale | SessionAction::SessionClosed => {
-                    // Peer went stale or session closed — emit presence leave.
+                    // Peer went stale or session closed — emit presence leave
+                    // and mark for removal so they can rejoin via fresh announce.
                     let event = PresenceEvent::Left {
                         address_hash: *addr,
                     };
                     self.registry.handle_presence(&event);
                     out.push(NetworkAction::PresenceChange(event));
+                    should_remove = true;
                 }
                 SessionAction::SendKeepalive
                 | SessionAction::SendClose
@@ -492,44 +510,22 @@ impl NetworkState {
                 | SessionAction::ResourceRemoved { .. } => {}
             }
         }
+        should_remove
     }
 
     // ── Internal: Publishing ─────────────────────────────────────────────
 
-    fn publish_to_all_peers(&mut self, payload: &[u8]) -> Vec<NetworkAction> {
-        let actions = Vec::new();
-        let peer_keys: Vec<[u8; 16]> = self.peers.keys().copied().collect();
-
-        for addr in peer_keys {
-            let peer = match self.peers.get(&addr) {
-                Some(p) => p,
-                None => continue,
-            };
-
-            // Only publish to peers with active sessions and routers.
-            let session = match &peer.session {
-                Some(s) if s.state() == SessionState::Active => s,
-                _ => continue,
-            };
-            let router = match &peer.router {
-                Some(r) => r,
-                None => continue,
-            };
-
-            for &pub_id in &peer.publisher_ids {
-                if let Ok(pub_actions) = router.publish(pub_id, payload.to_vec(), session) {
-                    for pa in pub_actions {
-                        if let PubSubAction::SendMessage { .. } = pa {
-                            // This message needs to be wrapped in a Reticulum
-                            // data packet and routed through the node.
-                            // Will be wired up in Task 8.
-                        }
-                    }
-                }
-            }
-        }
-
-        actions
+    /// Publish a payload to all peers with active sessions and routers.
+    ///
+    /// Currently a no-op stub — PubSubRouter.publish() produces SendMessage
+    /// actions that need to be wrapped in Reticulum data packets and routed
+    /// through the Node. This requires the socket layer (Task 7) and game
+    /// loop integration (Task 8) to be in place. Once those are done, this
+    /// method will iterate peers, call router.publish(), and convert
+    /// SendMessage actions into NetworkAction::SendPacket.
+    fn publish_to_all_peers(&self, _payload: &[u8]) -> Vec<NetworkAction> {
+        // TODO: Wire up in Task 8 when link/session data routing is complete.
+        Vec::new()
     }
 }
 
