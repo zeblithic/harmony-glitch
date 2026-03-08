@@ -168,6 +168,22 @@ fn get_identity(app: AppHandle) -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
+    // Enforce server-side length limit (frontend has maxlength="30" but IPC
+    // callers can bypass it). Truncate on char boundary to avoid partial emoji.
+    let name = {
+        let mut s = String::new();
+        for ch in name.chars() {
+            if s.len() + ch.len_utf8() > 30 {
+                break;
+            }
+            s.push(ch);
+        }
+        s
+    };
+    if name.is_empty() {
+        return Err("display name must not be empty".to_string());
+    }
+
     // Extract what we need under the identity locks, then drop them
     // before disk I/O and network updates to minimize lock contention.
     let pi = app.state::<PlayerIdentityWrapper>();
@@ -230,7 +246,14 @@ fn get_network_status(app: AppHandle) -> Result<serde_json::Value, String> {
 fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
     for action in actions {
         match action {
-            NetworkAction::SendPacket { data, .. } => {
+            NetworkAction::SendPacket {
+                interface_name,
+                data,
+            } => {
+                debug_assert_eq!(
+                    interface_name, "udp0",
+                    "received SendPacket for unexpected interface {interface_name}"
+                );
                 let transport = app.state::<TransportWrapper>();
                 let guard = transport.0.lock();
                 if let Ok(t) = guard {
