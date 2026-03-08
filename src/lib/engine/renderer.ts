@@ -85,6 +85,7 @@ export class GameRenderer {
           // rect visually anchored at its original screen position.
           g.x = 2 * (deco.x - street.left) + deco.w;
         }
+        g.rotation = deco.r;
         container.addChild(g);
       }
 

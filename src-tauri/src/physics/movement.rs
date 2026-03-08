@@ -111,7 +111,9 @@ impl PhysicsBody {
                 if !platform.solid_from_top() {
                     continue;
                 }
-                if self.x < platform.min_x() || self.x > platform.max_x() {
+                if self.x + self.half_width < platform.min_x()
+                    || self.x - self.half_width > platform.max_x()
+                {
                     continue;
                 }
                 let plat_y = platform.y_at(self.x);
@@ -136,7 +138,9 @@ impl PhysicsBody {
                 if !platform.solid_from_top() {
                     continue;
                 }
-                if self.x < platform.min_x() || self.x > platform.max_x() {
+                if self.x + self.half_width < platform.min_x()
+                    || self.x - self.half_width > platform.max_x()
+                {
                     continue;
                 }
                 let plat_y = platform.y_at(self.x);
@@ -168,7 +172,9 @@ impl PhysicsBody {
                 if !platform.solid_from_bottom() {
                     continue;
                 }
-                if self.x < platform.min_x() || self.x > platform.max_x() {
+                if self.x + self.half_width < platform.min_x()
+                    || self.x - self.half_width > platform.max_x()
+                {
                     continue;
                 }
                 let plat_y = platform.y_at(self.x);

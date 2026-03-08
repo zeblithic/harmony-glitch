@@ -27,7 +27,7 @@
         <object id="decos">
           <object id="tree_bg_1">
             <int id="x">800</int>
-            <int id="y">300</int>
+            <int id="y">-500</int>
             <int id="w">120</int>
             <int id="h">200</int>
             <int id="z">0</int>
@@ -37,7 +37,7 @@
           </object>
           <object id="tree_bg_2">
             <int id="x">2200</int>
-            <int id="y">350</int>
+            <int id="y">-450</int>
             <int id="w">100</int>
             <int id="h">180</int>
             <int id="z">1</int>

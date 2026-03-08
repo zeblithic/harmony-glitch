@@ -50,9 +50,11 @@ impl GameState {
     }
 
     pub fn load_street(&mut self, street: StreetData) {
-        // Place player at ground level, center of street
+        // Place player at ground level, center of street.
+        // Spawning directly at ground_y ensures the first physics tick's
+        // swept collision snaps to the nearest platform below.
         let center_x = (street.left + street.right) / 2.0;
-        self.player = PhysicsBody::new(center_x, street.ground_y - 100.0);
+        self.player = PhysicsBody::new(center_x, street.ground_y);
         self.street = Some(street);
     }
 

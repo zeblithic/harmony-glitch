@@ -42,6 +42,7 @@ impl XmlValue {
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             XmlValue::Bool(v) => Some(*v),
+            XmlValue::Int(v) => Some(*v != 0),
             _ => None,
         }
     }
@@ -232,6 +233,8 @@ mod tests {
         assert_eq!(val.get("rotation").unwrap().as_f64(), Some(1.5));
         assert_eq!(val.get("name").unwrap().as_str(), Some("Test Street"));
         assert_eq!(val.get("active").unwrap().as_bool(), Some(true));
+        // Int-encoded booleans (common in Glitch XML archives)
+        assert_eq!(val.get("width").unwrap().as_bool(), Some(true)); // 6000 != 0
         assert!(matches!(val.get("nothing"), Some(XmlValue::Null)));
     }
 
