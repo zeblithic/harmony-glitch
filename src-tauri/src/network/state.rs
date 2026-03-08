@@ -150,9 +150,60 @@ impl NetworkState {
         }
     }
 
-    /// Update the display name used in announces and chat messages.
-    pub fn set_display_name(&mut self, name: String) {
+    /// Update the display name and re-register the announcing destination
+    /// so the next announce broadcasts the new name immediately.
+    ///
+    /// Returns actions for the caller to execute (the immediate re-announce).
+    pub fn set_display_name(
+        &mut self,
+        name: String,
+        now_secs: f64,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
         self.display_name = name;
+
+        // Re-register destination with fresh app_data containing the new name.
+        let mut actions = Vec::new();
+        let now_secs_u64 = now_secs as u64;
+
+        if let Some(ref old_hash) = self.dest_hash {
+            self.node.unregister_announcing_destination(old_hash);
+        }
+
+        let identity = PrivateIdentity::from_private_bytes(self.identity_bytes.as_ref())
+            .expect("identity bytes are valid");
+
+        let dest_name =
+            DestinationName::from_name(APP_NAME, DEST_ASPECTS).expect("valid destination name");
+        let app_data = encode_app_data(&self.display_name, self.current_street.as_deref());
+
+        let dest_hash = self.node.register_announcing_destination(
+            identity,
+            dest_name.clone(),
+            app_data,
+            Some(ANNOUNCE_INTERVAL_SECS),
+            now_secs_u64,
+        );
+
+        self.dest_hash = Some(dest_hash);
+        self.dest_name = Some(dest_name);
+
+        // Trigger immediate announce with the new name.
+        let announce_actions = self.node.announce(&dest_hash, rng, now_secs_u64);
+        for action in announce_actions {
+            if let NodeAction::SendOnInterface {
+                interface_name,
+                raw,
+            } = action
+            {
+                actions.push(NetworkAction::SendPacket {
+                    interface_name: interface_name.to_string(),
+                    data: raw,
+                });
+            }
+        }
+
+        actions
     }
 
     /// Process inbound packets and timer ticks. Returns actions for the caller.
@@ -741,5 +792,27 @@ mod tests {
     fn display_name_preserved() {
         let state = make_state();
         assert_eq!(state.display_name, "TestPlayer");
+    }
+
+    #[test]
+    fn set_display_name_triggers_re_announce() {
+        let mut state = make_state();
+        let mut rng = OsRng;
+
+        // Rename should produce SendPacket actions (the immediate re-announce).
+        let actions = state.set_display_name("NewName".to_string(), 10.0, &mut rng);
+        assert_eq!(state.display_name, "NewName");
+
+        let send_count = actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::SendPacket { .. }))
+            .count();
+        assert!(
+            send_count > 0,
+            "Expected re-announce SendPacket actions after name change"
+        );
+
+        // Destination should still be registered.
+        assert_eq!(state.node.announcing_destination_count(), 1);
     }
 }

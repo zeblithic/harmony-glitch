@@ -168,25 +168,37 @@ fn get_identity(app: AppHandle) -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
+    // Extract what we need under the identity locks, then drop them
+    // before disk I/O and network updates to minimize lock contention.
     let pi = app.state::<PlayerIdentityWrapper>();
-    // Lock identity FIRST to match get_identity ordering (prevents ABBA deadlock).
-    let identity = pi.identity.lock().map_err(|e| e.to_string())?;
-    let mut display_name = pi.display_name.lock().map_err(|e| e.to_string())?;
-    let mut setup_complete = pi.setup_complete.lock().map_err(|e| e.to_string())?;
-    *display_name = name.clone();
-    *setup_complete = true;
-    let profile = identity::persistence::PlayerProfile {
-        identity_hex: hex::encode(identity.to_private_bytes()),
-        display_name: name.clone(),
-        setup_complete: true,
+    let profile = {
+        // Lock identity FIRST to match get_identity ordering (prevents ABBA deadlock).
+        let identity = pi.identity.lock().map_err(|e| e.to_string())?;
+        let mut display_name = pi.display_name.lock().map_err(|e| e.to_string())?;
+        let mut setup_complete = pi.setup_complete.lock().map_err(|e| e.to_string())?;
+        *display_name = name.clone();
+        *setup_complete = true;
+        identity::persistence::PlayerProfile {
+            identity_hex: hex::encode(identity.to_private_bytes()),
+            display_name: name.clone(),
+            setup_complete: true,
+        }
+        // identity, display_name, setup_complete locks dropped here
     };
+
+    // Disk I/O outside identity lock scope.
     let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
     identity::persistence::write_profile(&pi.data_dir.join("profile.json"), &json)?;
 
-    // Propagate to NetworkState so announces and chat use the new name.
-    let net = app.state::<NetworkWrapper>();
-    let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
-    net_state.set_display_name(name);
+    // Propagate to NetworkState and trigger immediate re-announce.
+    let epoch = app.state::<MonotonicEpoch>();
+    let now_secs = epoch.0.elapsed().as_secs_f64();
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.set_display_name(name, now_secs, &mut rand::rngs::OsRng)
+    };
+    execute_network_actions(&app, actions);
 
     Ok(())
 }
