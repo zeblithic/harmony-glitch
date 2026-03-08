@@ -9,6 +9,7 @@ export class GameRenderer {
   private layerContainers: Map<string, Container> = new Map();
   private platformGraphics: Graphics | null = null;
   private avatarGraphics: Graphics | null = null;
+  private bgGraphics: Graphics | null = null;
   private street: StreetData | null = null;
   private debugMode = false;
 
@@ -30,6 +31,10 @@ export class GameRenderer {
     this.app.stage.addChild(this.parallaxContainer);
     this.app.stage.addChild(this.worldContainer);
     this.app.stage.addChild(this.uiContainer);
+
+    this.app.renderer.on('resize', () => {
+      if (this.street) this.drawBackground(this.street);
+    });
   }
 
   setDebugMode(enabled: boolean): void {
@@ -37,6 +42,18 @@ export class GameRenderer {
     if (this.street) {
       this.drawPlatforms(this.street);
     }
+  }
+
+  private drawBackground(street: StreetData): void {
+    if (!this.bgGraphics) return;
+    this.bgGraphics.clear();
+    const topColor = street.gradient ? parseInt(street.gradient.top, 16) : 0x87a8c9;
+    const bottomColor = street.gradient ? parseInt(street.gradient.bottom, 16) : 0xffc400;
+    const gradient = new FillGradient(0, 0, 0, this.app.screen.height);
+    gradient.addColorStop(0, topColor);
+    gradient.addColorStop(1, bottomColor);
+    this.bgGraphics.rect(0, 0, this.app.screen.width, this.app.screen.height);
+    this.bgGraphics.fill(gradient);
   }
 
   /**
@@ -57,16 +74,10 @@ export class GameRenderer {
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
 
-    // Build gradient background
-    const bg = new Graphics();
-    const topColor = street.gradient ? parseInt(street.gradient.top, 16) : 0x87a8c9;
-    const bottomColor = street.gradient ? parseInt(street.gradient.bottom, 16) : 0xffc400;
-    const gradient = new FillGradient(0, 0, 0, this.app.screen.height);
-    gradient.addColorStop(0, topColor);
-    gradient.addColorStop(1, bottomColor);
-    bg.rect(0, 0, this.app.screen.width, this.app.screen.height);
-    bg.fill(gradient);
-    this.parallaxContainer.addChild(bg);
+    // Build gradient background (redrawn on resize via drawBackground)
+    this.bgGraphics = new Graphics();
+    this.parallaxContainer.addChild(this.bgGraphics);
+    this.drawBackground(street);
 
     // Build parallax layers
     for (const layer of street.layers) {

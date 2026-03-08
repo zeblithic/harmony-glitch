@@ -82,6 +82,13 @@ fn start_game(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn stop_game(app: AppHandle) -> Result<(), String> {
+    // Reset input so the next session doesn't inherit stale key state.
+    {
+        let input_wrapper = app.state::<InputStateWrapper>();
+        let mut input = input_wrapper.0.lock().map_err(|e| e.to_string())?;
+        *input = InputState::default();
+    }
+
     let running = app.state::<GameRunning>();
     let mut is_running = running.0.lock().map_err(|e| e.to_string())?;
     *is_running = false;

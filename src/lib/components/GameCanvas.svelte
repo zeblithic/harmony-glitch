@@ -37,34 +37,29 @@
   }
 
   onMount(async () => {
-    renderer = new GameRenderer();
-    await renderer.init(canvasEl);
+    const r = new GameRenderer();
+    await r.init(canvasEl);
+    renderer = r; // Set *after* init so $effect only fires with a ready instance
 
     const unlisten = await onRenderFrame((frame) => {
-      renderer?.updateFrame(frame);
+      r.updateFrame(frame);
       onFrame?.(frame);
     });
 
-    return () => {
-      unlisten();
-      renderer?.destroy();
-    };
-  });
-
-  // Build scene when street loads — separated from debug mode to prevent
-  // rebuilding the entire scene graph on every debugMode toggle.
-  $effect(() => {
-    if (renderer && street) {
-      renderer.buildScene(street);
+    if (street) {
+      r.buildScene(street);
       startGame().catch(console.error);
     }
+
+    return () => {
+      unlisten();
+      r.destroy();
+    };
   });
 
   // Debug mode toggle — only redraws platform overlays, not the full scene.
   $effect(() => {
-    if (renderer) {
-      renderer.setDebugMode(debugMode);
-    }
+    renderer?.setDebugMode(debugMode);
   });
 </script>
 
