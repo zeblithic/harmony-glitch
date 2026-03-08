@@ -352,16 +352,11 @@ impl NetworkState {
         self.registry.frames()
     }
 
-    /// Number of active peer connections (sessions in Active state).
+    /// Number of discovered players on the same street.
+    /// Uses registry count (announce-based discovery) until session-layer
+    /// peer counting is wired up (Task 8).
     pub fn peer_count(&self) -> usize {
-        self.peers
-            .values()
-            .filter(|p| {
-                p.session
-                    .as_ref()
-                    .is_some_and(|s| s.state() == SessionState::Active)
-            })
-            .count()
+        self.registry.count()
     }
 
     /// The current street name, if any.
@@ -655,12 +650,16 @@ fn encode_app_data(display_name: &str, street: Option<&str>) -> Vec<u8> {
 
 /// Decode announce app_data into (display_name, optional street).
 fn decode_app_data(data: &[u8]) -> (String, Option<String>) {
+    // Strip NUL bytes from decoded values to be robust against peers
+    // running pre-fix clients or sending non-sanitized app_data.
     if let Some(sep_pos) = data.iter().position(|&b| b == APP_DATA_SEPARATOR) {
-        let name = String::from_utf8_lossy(&data[..sep_pos]).to_string();
-        let street = String::from_utf8_lossy(&data[sep_pos + 1..]).to_string();
+        let name = String::from_utf8_lossy(&data[..sep_pos])
+            .replace('\0', "");
+        let street = String::from_utf8_lossy(&data[sep_pos + 1..])
+            .replace('\0', "");
         (name, Some(street))
     } else {
-        let name = String::from_utf8_lossy(data).to_string();
+        let name = String::from_utf8_lossy(data).replace('\0', "");
         (name, None)
     }
 }

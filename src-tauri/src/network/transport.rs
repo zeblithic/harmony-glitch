@@ -31,10 +31,16 @@ impl UdpTransport {
         self.socket.local_addr()
     }
 
-    /// Read all available packets (non-blocking). Returns (data, source_addr) pairs.
+    /// Read available packets (non-blocking), capped to avoid blowing the
+    /// 16ms tick budget on a saturated LAN or UDP flood. Remaining packets
+    /// stay in the kernel buffer for the next tick.
     pub fn recv_all(&mut self) -> Vec<(Vec<u8>, SocketAddr)> {
+        const MAX_PER_TICK: usize = 256;
         let mut packets = Vec::new();
         loop {
+            if packets.len() >= MAX_PER_TICK {
+                break;
+            }
             match self.socket.recv_from(&mut self.recv_buf) {
                 Ok((len, addr)) => {
                     packets.push((self.recv_buf[..len].to_vec(), addr));
