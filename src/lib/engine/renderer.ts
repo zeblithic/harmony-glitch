@@ -1,12 +1,15 @@
-import { Application, Container, FillGradient, Graphics } from 'pixi.js';
+import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
 import type { StreetData, RenderFrame } from '../types';
 
 export class GameRenderer {
+  private static REMOTE_COLOR = 0x4488ff;
+
   app: Application;
   private parallaxContainer: Container;
   private worldContainer: Container;
   private uiContainer: Container;
   private layerContainers: Map<string, Container> = new Map();
+  private remoteSprites: Map<string, Container> = new Map();
   private platformGraphics: Graphics | null = null;
   private avatarGraphics: Graphics | null = null;
   private bgGraphics: Graphics | null = null;
@@ -73,6 +76,10 @@ export class GameRenderer {
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
+    for (const [, sprite] of this.remoteSprites) {
+      sprite.destroy();
+    }
+    this.remoteSprites.clear();
 
     // Build gradient background (redrawn on resize via drawBackground)
     this.bgGraphics = new Graphics();
@@ -189,9 +196,53 @@ export class GameRenderer {
       container.x = -camScreenX * factor;
       container.y = -camScreenY;
     }
+
+    // Remote players — create/update/remove sprite lifecycle
+    const remotePlayers = frame.remotePlayers ?? [];
+    const seen = new Set<string>();
+    for (const remote of remotePlayers) {
+      seen.add(remote.addressHash);
+      let sprite = this.remoteSprites.get(remote.addressHash);
+
+      if (!sprite) {
+        sprite = new Container();
+        const body = new Graphics();
+        body.rect(-15, -60, 30, 60);
+        body.fill(GameRenderer.REMOTE_COLOR);
+        sprite.addChild(body);
+
+        const label = new Text({
+          text: remote.displayName,
+          style: { fontSize: 12, fill: 0xffffff, align: 'center' },
+        });
+        label.anchor.set(0.5, 1);
+        label.y = -65;
+        sprite.addChild(label);
+
+        this.worldContainer.addChild(sprite);
+        this.remoteSprites.set(remote.addressHash, sprite);
+      }
+
+      sprite.x = remote.x - this.street.left;
+      sprite.y = remote.y - this.street.top;
+      sprite.scale.x = remote.facing === 'right' ? 1 : -1;
+    }
+
+    // Remove departed players
+    for (const [hash, sprite] of this.remoteSprites) {
+      if (!seen.has(hash)) {
+        this.worldContainer.removeChild(sprite);
+        sprite.destroy();
+        this.remoteSprites.delete(hash);
+      }
+    }
   }
 
   destroy(): void {
+    for (const [, sprite] of this.remoteSprites) {
+      sprite.destroy();
+    }
+    this.remoteSprites.clear();
     this.app.destroy(true);
   }
 }
