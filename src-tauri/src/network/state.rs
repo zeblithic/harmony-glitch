@@ -159,7 +159,7 @@ impl NetworkState {
         name: String,
         now_secs: f64,
         rng: &mut impl CryptoRngCore,
-    ) -> Vec<NetworkAction> {
+    ) -> Result<Vec<NetworkAction>, String> {
         self.display_name = name;
 
         // Re-register destination with fresh app_data containing the new name.
@@ -171,7 +171,7 @@ impl NetworkState {
         }
 
         let identity = PrivateIdentity::from_private_bytes(self.identity_bytes.as_ref())
-            .expect("identity bytes are valid");
+            .map_err(|e| format!("identity reconstruction failed: {e:?}"))?;
 
         let dest_name =
             DestinationName::from_name(APP_NAME, DEST_ASPECTS).expect("valid destination name");
@@ -203,7 +203,7 @@ impl NetworkState {
             }
         }
 
-        actions
+        Ok(actions)
     }
 
     /// Process inbound packets and timer ticks. Returns actions for the caller.
@@ -296,7 +296,7 @@ impl NetworkState {
         street_name: &str,
         now_secs: f64,
         rng: &mut impl CryptoRngCore,
-    ) -> Vec<NetworkAction> {
+    ) -> Result<Vec<NetworkAction>, String> {
         let mut actions = Vec::new();
         let now_secs_u64 = now_secs as u64;
 
@@ -311,7 +311,7 @@ impl NetworkState {
 
         // Create fresh identity from saved bytes for re-registration.
         let identity = PrivateIdentity::from_private_bytes(self.identity_bytes.as_ref())
-            .expect("identity bytes are valid");
+            .map_err(|e| format!("identity reconstruction failed: {e:?}"))?;
 
         let dest_name =
             DestinationName::from_name(APP_NAME, DEST_ASPECTS).expect("valid destination name");
@@ -344,7 +344,7 @@ impl NetworkState {
             }
         }
 
-        actions
+        Ok(actions)
     }
 
     /// Get render frames for all tracked remote players.
@@ -709,7 +709,7 @@ mod tests {
         assert_eq!(state.registry.count(), 1);
 
         // Change street should clear registry.
-        state.change_street("heights", 100.0, &mut rng);
+        state.change_street("heights", 100.0, &mut rng).unwrap();
         assert_eq!(state.registry.count(), 0);
     }
 
@@ -720,10 +720,10 @@ mod tests {
 
         assert!(state.current_street().is_none());
 
-        state.change_street("meadow", 100.0, &mut rng);
+        state.change_street("meadow", 100.0, &mut rng).unwrap();
         assert_eq!(state.current_street(), Some("meadow"));
 
-        state.change_street("heights", 200.0, &mut rng);
+        state.change_street("heights", 200.0, &mut rng).unwrap();
         assert_eq!(state.current_street(), Some("heights"));
     }
 
@@ -781,7 +781,7 @@ mod tests {
         let mut rng = OsRng;
 
         let old_hash = state.dest_hash.unwrap();
-        state.change_street("heights", 100.0, &mut rng);
+        state.change_street("heights", 100.0, &mut rng).unwrap();
 
         // Destination hash should remain the same (same identity + same dest name).
         // But the announcing destination should still be registered.
@@ -810,7 +810,7 @@ mod tests {
         );
         assert_eq!(state.peers.len(), 1);
 
-        state.change_street("heights", 100.0, &mut rng);
+        state.change_street("heights", 100.0, &mut rng).unwrap();
         assert!(state.peers.is_empty());
     }
 
@@ -826,7 +826,7 @@ mod tests {
         let mut rng = OsRng;
 
         // Rename should produce SendPacket actions (the immediate re-announce).
-        let actions = state.set_display_name("NewName".to_string(), 10.0, &mut rng);
+        let actions = state.set_display_name("NewName".to_string(), 10.0, &mut rng).unwrap();
         assert_eq!(state.display_name, "NewName");
 
         let send_count = actions

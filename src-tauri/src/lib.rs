@@ -79,7 +79,7 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
         // Use the canonical TSID from parsed street data, not the raw input name.
         // This ensures peers using short names ("demo_meadow") and TSIDs ("LADEMO001")
         // resolve to the same street identity for peer discovery.
-        net_state.change_street(&street_data.tsid, now_secs, &mut rand::rngs::OsRng)
+        net_state.change_street(&street_data.tsid, now_secs, &mut rand::rngs::OsRng)?
     };
     execute_network_actions(&app, actions);
 
@@ -119,7 +119,12 @@ fn start_game(app: AppHandle) -> Result<(), String> {
     {
         let mut handle = handle_wrapper.0.lock().map_err(|e| e.to_string())?;
         *handle = Some(std::thread::spawn(move || {
-            game_loop(app_handle);
+            game_loop(app_handle.clone());
+            // Signal stopped on any exit (normal or panic unwind) so the
+            // frontend doesn't hang waiting for render_frame events.
+            if let Ok(mut running) = app_handle.state::<GameRunning>().0.lock() {
+                *running = false;
+            }
         }));
     }
 
@@ -215,7 +220,7 @@ fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
     let actions = {
         let net = app.state::<NetworkWrapper>();
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
-        net_state.set_display_name(name, now_secs, &mut rand::rngs::OsRng)
+        net_state.set_display_name(name, now_secs, &mut rand::rngs::OsRng)?
     };
     execute_network_actions(&app, actions);
 
@@ -281,6 +286,7 @@ fn game_loop(app: AppHandle) {
     let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
     let dt = 1.0 / 60.0;
     let game_start = app.state::<MonotonicEpoch>().0;
+    let mut rng = rand::rngs::ThreadRng::default();
 
     loop {
         let tick_start = Instant::now();
@@ -309,7 +315,7 @@ fn game_loop(app: AppHandle) {
         let net_actions = {
             let net = app.state::<NetworkWrapper>();
             let mut net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
-            net_state.tick(&inbound_packets, now_secs, &mut rand::rngs::OsRng)
+            net_state.tick(&inbound_packets, now_secs, &mut rng)
         };
 
         // 4. Execute NetworkActions (broadcast packets)

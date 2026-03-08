@@ -55,6 +55,7 @@
         bind:this={inputEl}
         bind:value={text}
         onkeydown={handleKeyDown}
+        onblur={handleBlur}
         placeholder="Type a message..."
         maxlength="200"
       />
