@@ -56,7 +56,7 @@
   $effect(() => {
     if (renderer && street) {
       renderer.buildScene(street);
-      startGame();
+      startGame().catch(console.error);
     }
   });
 

@@ -7,6 +7,9 @@ pub const GRAVITY: f64 = 980.0; // px/s²
 pub const WALK_SPEED: f64 = 200.0; // px/s
 pub const JUMP_VELOCITY: f64 = -400.0; // px/s (negative = up in Glitch coords)
 pub const TERMINAL_VELOCITY: f64 = 600.0; // px/s
+/// Max Y displacement to snap to when walking along a slope.
+/// Must exceed the steepest slope's Y change per frame at walk speed.
+const SLOPE_SNAP_TOLERANCE: f64 = 10.0;
 
 /// Player physics state.
 #[derive(Debug, Clone)]
@@ -55,6 +58,8 @@ impl PhysicsBody {
         street_left: f64,
         street_right: f64,
     ) {
+        let was_on_ground = self.on_ground;
+
         // Apply horizontal input
         self.vx = if input.left && !input.right {
             -WALK_SPEED
@@ -71,9 +76,6 @@ impl PhysicsBody {
         }
 
         // Apply gravity (positive direction = down toward y=0 in Glitch coords)
-        // In Glitch coords, gravity pulls toward MORE POSITIVE Y.
-        // Ground_y is 0 and platforms have negative y.
-        // So gravity should push y toward 0 (more positive).
         if !self.on_ground {
             self.vy += GRAVITY * dt;
             self.vy = self.vy.min(TERMINAL_VELOCITY);
@@ -91,47 +93,89 @@ impl PhysicsBody {
             .x
             .clamp(street_left + self.half_width, street_right - self.half_width);
 
-        // Platform collision — swept interval check.
-        // Compare player's Y before and after movement to detect crossings
-        // at any speed, preventing tunneling at high velocities.
+        // --- Platform collision (3 phases) ---
         self.on_ground = false;
-        let mut best_plat_y: Option<f64> = None;
 
-        for platform in platforms {
-            if !platform.solid_from_top() {
-                continue;
-            }
-
-            // Check if player is within platform X range
-            let plat_min_x = platform.min_x();
-            let plat_max_x = platform.max_x();
-            if self.x < plat_min_x || self.x > plat_max_x {
-                continue;
-            }
-
-            let plat_y = platform.y_at(self.x);
-
-            // Swept collision: player was at or above the platform before the
-            // tick and is at or below it after. This works at any fall speed.
-            if self.vy >= 0.0 && prev_y <= plat_y && self.y >= plat_y {
-                // Among overlapping platforms, land on the highest one
-                // (most negative Y = first encountered when falling).
-                match best_plat_y {
-                    Some(best) if plat_y < best => {
-                        best_plat_y = Some(plat_y);
-                    }
-                    None => {
-                        best_plat_y = Some(plat_y);
-                    }
-                    _ => {}
+        // Phase 1: Slope following — if player was on ground and didn't jump,
+        // snap to the platform surface at the new X position. Without this,
+        // walking on a slope detaches the player because vy=0 means no
+        // vertical sweep occurs, but the platform Y changed with X.
+        if was_on_ground && self.vy >= 0.0 {
+            let mut best_snap: Option<f64> = None;
+            let mut best_dist = f64::MAX;
+            for platform in platforms {
+                if !platform.solid_from_top() {
+                    continue;
                 }
+                if self.x < platform.min_x() || self.x > platform.max_x() {
+                    continue;
+                }
+                let plat_y = platform.y_at(self.x);
+                let dist = (self.y - plat_y).abs();
+                if dist < SLOPE_SNAP_TOLERANCE && dist < best_dist {
+                    best_snap = Some(plat_y);
+                    best_dist = dist;
+                }
+            }
+            if let Some(plat_y) = best_snap {
+                self.y = plat_y;
+                self.vy = 0.0;
+                self.on_ground = true;
             }
         }
 
-        if let Some(plat_y) = best_plat_y {
-            self.y = plat_y;
-            self.vy = 0.0;
-            self.on_ground = true;
+        // Phase 2: Swept collision for falling players — compare Y before
+        // and after movement to detect platform crossings at any speed.
+        if !self.on_ground {
+            let mut best_plat_y: Option<f64> = None;
+            for platform in platforms {
+                if !platform.solid_from_top() {
+                    continue;
+                }
+                if self.x < platform.min_x() || self.x > platform.max_x() {
+                    continue;
+                }
+                let plat_y = platform.y_at(self.x);
+                if self.vy >= 0.0 && prev_y <= plat_y && self.y >= plat_y {
+                    match best_plat_y {
+                        Some(best) if plat_y < best => {
+                            best_plat_y = Some(plat_y);
+                        }
+                        None => {
+                            best_plat_y = Some(plat_y);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if let Some(plat_y) = best_plat_y {
+                self.y = plat_y;
+                self.vy = 0.0;
+                self.on_ground = true;
+            }
+        }
+
+        // Phase 3: Ceiling collision — block upward movement through
+        // platforms that are solid from below (pc_perm = None or 1).
+        if self.vy < 0.0 {
+            let prev_head = prev_y - self.height;
+            let new_head = self.y - self.height;
+            for platform in platforms {
+                if !platform.solid_from_bottom() {
+                    continue;
+                }
+                if self.x < platform.min_x() || self.x > platform.max_x() {
+                    continue;
+                }
+                let plat_y = platform.y_at(self.x);
+                // Head swept through platform from below (more positive)
+                // to above (more negative)
+                if prev_head >= plat_y && new_head <= plat_y {
+                    self.y = plat_y + self.height;
+                    self.vy = 0.0;
+                    break;
+                }
+            }
         }
     }
 }
@@ -376,6 +420,114 @@ mod tests {
             "Expected to land on high platform at y=-50, got y={}",
             body.y
         );
+    }
+
+    #[test]
+    fn walks_along_slope_stays_grounded() {
+        // Slope from (0, 0) to (200, -100)
+        let platforms = vec![PlatformLine {
+            id: "slope".into(),
+            start: Point { x: 0.0, y: 0.0 },
+            end: Point { x: 200.0, y: -100.0 },
+            pc_perm: None,
+            item_perm: None,
+        }];
+
+        let mut body = PhysicsBody::new(50.0, -25.0); // On slope at x=50 (y_at(50) = -25)
+        body.on_ground = true;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+
+        // Walk right for several frames
+        for _ in 0..30 {
+            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+            assert!(
+                body.on_ground,
+                "Player fell off slope at x={}, y={}",
+                body.x,
+                body.y
+            );
+        }
+
+        // Player should have moved right and followed the slope upward
+        assert!(body.x > 50.0, "Player should have moved right");
+    }
+
+    #[test]
+    fn ceiling_blocks_jump_through_solid_platform() {
+        // Solid platform (pc_perm = None) above the player
+        let platforms = vec![
+            PlatformLine {
+                id: "ground".into(),
+                start: Point { x: -1000.0, y: 0.0 },
+                end: Point { x: 1000.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+            },
+            PlatformLine {
+                id: "ceiling".into(),
+                start: Point { x: -1000.0, y: -100.0 },
+                end: Point { x: 1000.0, y: -100.0 },
+                pc_perm: None, // Solid from both directions
+                item_perm: None,
+            },
+        ];
+
+        let mut body = PhysicsBody::new(0.0, 0.0);
+        body.on_ground = true;
+        let input = InputState {
+            jump: true,
+            ..Default::default()
+        };
+
+        // Jump — player should be blocked by the ceiling
+        for _ in 0..30 {
+            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        }
+
+        // Player's head should not have passed above the ceiling platform
+        let head_y = body.y - body.height;
+        assert!(
+            head_y >= -100.0,
+            "Player's head passed through solid ceiling: head_y={}",
+            head_y
+        );
+    }
+
+    #[test]
+    fn can_jump_through_one_way_platform() {
+        // One-way from top platform (pc_perm = -1) — should be jumpable from below
+        let platforms = vec![
+            PlatformLine {
+                id: "ground".into(),
+                start: Point { x: -1000.0, y: 0.0 },
+                end: Point { x: 1000.0, y: 0.0 },
+                pc_perm: Some(-1), // One-way from top
+                item_perm: None,
+            },
+            PlatformLine {
+                id: "upper".into(),
+                start: Point { x: -1000.0, y: -80.0 },
+                end: Point { x: 1000.0, y: -80.0 },
+                pc_perm: Some(-1), // One-way from top
+                item_perm: None,
+            },
+        ];
+
+        let mut body = PhysicsBody::new(0.0, 0.0);
+        body.on_ground = true;
+        let input = InputState {
+            jump: true,
+            ..Default::default()
+        };
+
+        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+
+        // Player should be jumping upward, not blocked
+        assert!(body.vy < 0.0, "Player should be moving upward");
+        assert!(!body.on_ground);
     }
 
     #[test]

@@ -35,22 +35,27 @@ export class GameRenderer {
   setDebugMode(enabled: boolean): void {
     this.debugMode = enabled;
     if (this.street) {
-      this.drawPlatforms(this.street, this.street.bottom - this.street.top);
+      this.drawPlatforms(this.street);
     }
   }
 
   /**
    * Build the PixiJS scene graph from street data.
-   * Converts from Glitch coordinates (Y=0 at bottom, negative up)
-   * to screen coordinates (Y=0 at top, positive down).
+   *
+   * Coordinate conversion: Glitch Y and screen Y both increase downward
+   * from different origins. Glitch origin is at ground (Y=0), with negative
+   * values going up (sky). Screen origin is at street.top. The conversion
+   * is a pure translation: screenY = glitchY - street.top.
+   *
+   * Example (top=-800, bottom=0):
+   *   Sky   (glitchY=-800) → screenY=0    (top of screen)
+   *   Ground(glitchY=0)    → screenY=800  (bottom of screen)
    */
   buildScene(street: StreetData): void {
     this.street = street;
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
-
-    const streetHeight = street.bottom - street.top;
 
     // Build gradient background
     const bg = new Graphics();
@@ -70,8 +75,7 @@ export class GameRenderer {
       // Draw decos as placeholder rectangles (until real art assets are available)
       for (const deco of layer.decos) {
         const g = new Graphics();
-        // Convert Glitch Y (0=bottom, negative=up) to screen Y (0=top, positive=down)
-        const screenY = streetHeight - (deco.y - street.top);
+        const screenY = deco.y - street.top;
         g.rect(deco.x - street.left, screenY - deco.h, deco.w, deco.h);
         g.fill({ color: 0x4a6741, alpha: 0.3 });
         if (deco.hFlip) {
@@ -92,7 +96,7 @@ export class GameRenderer {
     // Draw platforms (debug view or always-visible lines)
     this.platformGraphics = new Graphics();
     this.worldContainer.addChild(this.platformGraphics);
-    this.drawPlatforms(street, streetHeight);
+    this.drawPlatforms(street);
 
     // Create avatar placeholder
     this.avatarGraphics = new Graphics();
@@ -101,13 +105,13 @@ export class GameRenderer {
     this.worldContainer.addChild(this.avatarGraphics);
   }
 
-  private drawPlatforms(street: StreetData, streetHeight: number): void {
+  private drawPlatforms(street: StreetData): void {
     if (!this.platformGraphics) return;
     this.platformGraphics.clear();
 
     for (const platform of street.layers.filter(l => l.isMiddleground).flatMap(l => l.platformLines)) {
-      const startScreenY = streetHeight - (platform.start.y - street.top);
-      const endScreenY = streetHeight - (platform.end.y - street.top);
+      const startScreenY = platform.start.y - street.top;
+      const endScreenY = platform.end.y - street.top;
       const startScreenX = platform.start.x - street.left;
       const endScreenX = platform.end.x - street.left;
 
@@ -121,7 +125,8 @@ export class GameRenderer {
     if (this.debugMode) {
       for (const wall of street.layers.filter(l => l.isMiddleground).flatMap(l => l.walls)) {
         const screenX = wall.x - street.left;
-        const screenY = streetHeight - (wall.y - street.top);
+        const screenY = wall.y - street.top;
+        // Wall extends h pixels downward (toward ground/positive Y)
         this.platformGraphics.moveTo(screenX, screenY);
         this.platformGraphics.lineTo(screenX, screenY + wall.h);
         this.platformGraphics.stroke({ color: 0xff0000, width: 2 });
@@ -135,27 +140,24 @@ export class GameRenderer {
   updateFrame(frame: RenderFrame): void {
     if (!this.street || !this.avatarGraphics) return;
 
-    const streetHeight = this.street.bottom - this.street.top;
     const mg = this.street.layers.find(l => l.isMiddleground);
     const mgWidth = mg?.w ?? this.street.right - this.street.left;
 
-    // Update avatar position (convert Glitch coords to screen coords)
+    // Update avatar position — pure translation from Glitch to screen coords
     const avatarScreenX = frame.player.x - this.street.left;
-    const avatarScreenY = streetHeight - (frame.player.y - this.street.top);
+    const avatarScreenY = frame.player.y - this.street.top;
     this.avatarGraphics.x = avatarScreenX;
     this.avatarGraphics.y = avatarScreenY;
     this.avatarGraphics.scale.x = frame.player.facing === 'right' ? 1 : -1;
 
-    // Update camera — shift world container.
-    // Y axis inversion is intentional: Glitch Y=0 at bottom (negative up),
-    // screen Y=0 at top (positive down). The negation of camScreenY correctly
-    // shifts the world up when the camera moves down in Glitch coords.
+    // Update camera — shift world container so the camera region is visible.
+    // camera.y is the Glitch Y of the viewport's top edge.
     const camScreenX = frame.camera.x - this.street.left;
-    const camScreenY = streetHeight - (frame.camera.y - this.street.top) - this.app.screen.height;
+    const camScreenY = frame.camera.y - this.street.top;
     this.worldContainer.x = -camScreenX;
     this.worldContainer.y = -camScreenY;
 
-    // Update parallax layers — same Y inversion applies, scaled by factor.
+    // Update parallax layers — scroll proportionally to the camera offset.
     for (const layer of this.street.layers) {
       if (layer.isMiddleground) continue;
       const container = this.layerContainers.get(layer.name);
