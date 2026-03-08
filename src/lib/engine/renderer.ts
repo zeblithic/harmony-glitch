@@ -18,6 +18,7 @@ export class GameRenderer {
   private layerContainers: Map<string, Container> = new Map();
   private remoteSprites: Map<string, Container> = new Map();
   private chatBubbles: ChatBubble[] = [];
+  private lastFrameTime = 0;
   private platformGraphics: Graphics | null = null;
   private avatarGraphics: Graphics | null = null;
   private bgGraphics: Graphics | null = null;
@@ -249,8 +250,11 @@ export class GameRenderer {
       }
     }
 
-    // Update chat bubbles
-    this.updateChatBubbles(1 / 60, remotePlayers);
+    // Update chat bubbles with real elapsed time
+    const now = performance.now();
+    const dt = this.lastFrameTime ? (now - this.lastFrameTime) / 1000 : 1 / 60;
+    this.lastFrameTime = now;
+    this.updateChatBubbles(dt, remotePlayers);
 
     // Swoop transition — slide old street off-screen.
     // Only shift parallax layers here; the middleground is a child of worldContainer

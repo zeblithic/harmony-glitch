@@ -28,8 +28,11 @@ pub struct RenderFrame {
 pub struct PlayerFrame {
     pub x: f64,
     pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
     pub facing: Direction,
     pub animation: AnimationState,
+    pub on_ground: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,8 +119,11 @@ impl GameState {
             player: PlayerFrame {
                 x: self.player.x,
                 y: self.player.y,
+                vx: self.player.vx,
+                vy: self.player.vy,
                 facing: self.facing,
                 animation,
+                on_ground: self.player.on_ground,
             },
             camera: CameraFrame { x: cam_x, y: cam_y },
             street_id: street.tsid.clone(),

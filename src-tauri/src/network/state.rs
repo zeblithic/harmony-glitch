@@ -154,27 +154,28 @@ impl NetworkState {
     pub fn tick(
         &mut self,
         inbound_packets: &[(String, Vec<u8>)],
-        now_secs: u64,
+        now_secs: f64,
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
         let mut actions = Vec::new();
+        let now_secs_u64 = now_secs as u64;
 
         // Feed inbound packets to the node.
         for (iface, raw) in inbound_packets {
             let node_actions = self.node.handle_event(NodeEvent::InboundPacket {
                 interface_name: iface.clone(),
                 raw: raw.clone(),
-                now: now_secs,
+                now: now_secs_u64,
             });
-            self.process_node_actions(node_actions, now_secs, rng, &mut actions);
+            self.process_node_actions(node_actions, now_secs_u64, rng, &mut actions);
         }
 
         // Timer tick for path expiry, scheduled announces, etc.
-        let tick_actions = self.node.handle_event(NodeEvent::TimerTick { now: now_secs });
-        self.process_node_actions(tick_actions, now_secs, rng, &mut actions);
+        let tick_actions = self.node.handle_event(NodeEvent::TimerTick { now: now_secs_u64 });
+        self.process_node_actions(tick_actions, now_secs_u64, rng, &mut actions);
 
         // Tick all active sessions and process their actions.
-        let now_ms = now_secs * 1000;
+        let now_ms = (now_secs * 1000.0) as u64;
         let peer_keys: Vec<[u8; 16]> = self.peers.keys().copied().collect();
         let mut closed_peers = Vec::new();
         for addr in peer_keys {
@@ -188,13 +189,13 @@ impl NetworkState {
         }
 
         // Purge stale players from the registry.
-        self.registry.purge_stale(now_secs as f64);
+        self.registry.purge_stale(now_secs);
 
         actions
     }
 
     /// Publish our player state to all active peers.
-    pub fn publish_player_state(&self, state: &PlayerNetState) -> Vec<NetworkAction> {
+    pub fn publish_player_state(&mut self, state: &PlayerNetState) -> Vec<NetworkAction> {
         let msg = NetMessage::PlayerState(*state);
         let payload = match serde_json::to_vec(&msg) {
             Ok(p) => p,
@@ -204,7 +205,7 @@ impl NetworkState {
     }
 
     /// Send a chat message to all active peers.
-    pub fn send_chat(&self, text: String) -> Vec<NetworkAction> {
+    pub fn send_chat(&mut self, text: String) -> Vec<NetworkAction> {
         let chat = ChatMessage {
             text,
             sender: self.public_identity.address_hash,
@@ -226,10 +227,11 @@ impl NetworkState {
     pub fn change_street(
         &mut self,
         street_name: &str,
-        now_secs: u64,
+        now_secs: f64,
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
         let mut actions = Vec::new();
+        let now_secs_u64 = now_secs as u64;
 
         // Clear all remote players and peer connections.
         self.registry.clear();
@@ -253,7 +255,7 @@ impl NetworkState {
             dest_name.clone(),
             app_data,
             Some(ANNOUNCE_INTERVAL_SECS),
-            now_secs,
+            now_secs_u64,
         );
 
         self.current_street = Some(street_name.to_string());
@@ -261,7 +263,7 @@ impl NetworkState {
         self.dest_name = Some(dest_name);
 
         // Trigger an immediate announce for the new street.
-        let announce_actions = self.node.announce(&dest_hash, rng, now_secs);
+        let announce_actions = self.node.announce(&dest_hash, rng, now_secs_u64);
         for action in announce_actions {
             if let NodeAction::SendOnInterface {
                 interface_name,
@@ -529,7 +531,7 @@ impl NetworkState {
     /// loop integration (Task 8) to be in place. Once those are done, this
     /// method will iterate peers, call router.publish(), and convert
     /// SendMessage actions into NetworkAction::SendPacket.
-    fn publish_to_all_peers(&self, _payload: &[u8]) -> Vec<NetworkAction> {
+    fn publish_to_all_peers(&mut self, _payload: &[u8]) -> Vec<NetworkAction> {
         // TODO: Wire up in Task 8 when link/session data routing is complete.
         Vec::new()
     }
@@ -603,7 +605,7 @@ mod tests {
         assert_eq!(state.registry.count(), 1);
 
         // Change street should clear registry.
-        state.change_street("heights", 100, &mut rng);
+        state.change_street("heights", 100.0, &mut rng);
         assert_eq!(state.registry.count(), 0);
     }
 
@@ -614,10 +616,10 @@ mod tests {
 
         assert!(state.current_street().is_none());
 
-        state.change_street("meadow", 100, &mut rng);
+        state.change_street("meadow", 100.0, &mut rng);
         assert_eq!(state.current_street(), Some("meadow"));
 
-        state.change_street("heights", 200, &mut rng);
+        state.change_street("heights", 200.0, &mut rng);
         assert_eq!(state.current_street(), Some("heights"));
     }
 
@@ -628,7 +630,7 @@ mod tests {
 
         // First tick at t=0 should trigger AnnounceNeeded (next_announce_at was
         // set to 0 in register_announcing_destination).
-        let actions = state.tick(&[], 0, &mut rng);
+        let actions = state.tick(&[], 0.0, &mut rng);
 
         // Should produce at least one SendPacket (the announce broadcast).
         let send_count = actions
@@ -675,7 +677,7 @@ mod tests {
         let mut rng = OsRng;
 
         let old_hash = state.dest_hash.unwrap();
-        state.change_street("heights", 100, &mut rng);
+        state.change_street("heights", 100.0, &mut rng);
 
         // Destination hash should remain the same (same identity + same dest name).
         // But the announcing destination should still be registered.
@@ -704,7 +706,7 @@ mod tests {
         );
         assert_eq!(state.peers.len(), 1);
 
-        state.change_street("heights", 100, &mut rng);
+        state.change_street("heights", 100.0, &mut rng);
         assert!(state.peers.is_empty());
     }
 

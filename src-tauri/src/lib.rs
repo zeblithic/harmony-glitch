@@ -74,7 +74,7 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
         let net = app.state::<NetworkWrapper>();
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
         let epoch = app.state::<MonotonicEpoch>();
-        let now_secs = epoch.0.elapsed().as_secs();
+        let now_secs = epoch.0.elapsed().as_secs_f64();
         net_state.change_street(&name, now_secs, &mut rand::rngs::OsRng)
     };
     execute_network_actions(&app, actions);
@@ -180,7 +180,7 @@ fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
 fn send_chat(message: String, app: AppHandle) -> Result<(), String> {
     let actions = {
         let net = app.state::<NetworkWrapper>();
-        let net_state = net.0.lock().map_err(|e| e.to_string())?;
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
         net_state.send_chat(message)
     };
     execute_network_actions(&app, actions);
@@ -217,7 +217,9 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     }),
                 );
             }
-            _ => {}
+            // Informational — registry updates happen inside NetworkState::tick
+            // before these actions are emitted. No action needed here.
+            NetworkAction::PresenceChange(_) | NetworkAction::RemotePlayerUpdate { .. } => {}
         }
     }
 }
@@ -249,8 +251,8 @@ fn game_loop(app: AppHandle) {
                 .collect()
         };
 
-        // 3. Tick NetworkState with packets + monotonic seconds
-        let now_secs = tick_start.duration_since(game_start).as_secs();
+        // 3. Tick NetworkState with packets + monotonic seconds (f64 for sub-second precision)
+        let now_secs = tick_start.duration_since(game_start).as_secs_f64();
         let net_actions = {
             let net = app.state::<NetworkWrapper>();
             let mut net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -284,25 +286,20 @@ fn game_loop(app: AppHandle) {
 
             // 8. Publish local player state via NetworkState
             let publish_actions = {
-                let on_ground = matches!(
-                    frame.player.animation,
-                    crate::avatar::types::AnimationState::Idle
-                        | crate::avatar::types::AnimationState::Walking
-                );
                 let net_state = PlayerNetState {
                     x: frame.player.x as f32,
                     y: frame.player.y as f32,
-                    vx: 0.0,
-                    vy: 0.0,
+                    vx: frame.player.vx as f32,
+                    vy: frame.player.vy as f32,
                     facing: if frame.player.facing == Direction::Left {
                         0
                     } else {
                         1
                     },
-                    on_ground,
+                    on_ground: frame.player.on_ground,
                 };
                 let net = app.state::<NetworkWrapper>();
-                let ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
                 ns.publish_player_state(&net_state)
             };
             execute_network_actions(&app, publish_actions);
@@ -322,9 +319,15 @@ fn game_loop(app: AppHandle) {
 fn load_street_xml(name: &str) -> Result<String, String> {
     // Phase A: embed street XML at compile time so the binary is self-contained
     // and doesn't depend on CARGO_MANIFEST_DIR paths at runtime.
+    // Accepts both short names ("demo_meadow") and TSIDs ("LADEMO001") since
+    // signpost connections reference streets by TSID.
     match name {
-        "demo_meadow" => Ok(include_str!("../../assets/streets/demo_meadow.xml").to_string()),
-        "demo_heights" => Ok(include_str!("../../assets/streets/demo_heights.xml").to_string()),
+        "demo_meadow" | "LADEMO001" => {
+            Ok(include_str!("../../assets/streets/demo_meadow.xml").to_string())
+        }
+        "demo_heights" | "LADEMO002" => {
+            Ok(include_str!("../../assets/streets/demo_heights.xml").to_string())
+        }
         _ => Err(format!("Unknown street: {}", name)),
     }
 }
