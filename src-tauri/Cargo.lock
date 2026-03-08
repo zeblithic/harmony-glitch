@@ -1390,6 +1390,7 @@ dependencies = [
  "hex",
  "quick-xml 0.37.5",
  "rand 0.8.5",
+ "rand_core 0.6.4",
  "serde",
  "serde_json",
  "socket2 0.5.10",

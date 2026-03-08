@@ -15,6 +15,7 @@ harmony-zenoh = { path = "../../harmony/crates/harmony-zenoh" }
 socket2 = { version = "0.5", features = ["all"] }
 rand = "0.8"
 hex = "0.4"
+rand_core = "0.6"
 
 [dev-dependencies]
 tempfile = "3"
