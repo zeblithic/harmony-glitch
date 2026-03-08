@@ -39,6 +39,7 @@ struct GameLoopHandle(Mutex<Option<JoinHandle<()>>>);
 struct PlayerIdentityWrapper {
     identity: Mutex<harmony_identity::PrivateIdentity>,
     display_name: Mutex<String>,
+    setup_complete: Mutex<bool>,
     data_dir: std::path::PathBuf,
 }
 
@@ -154,9 +155,11 @@ fn get_identity(app: AppHandle) -> Result<serde_json::Value, String> {
     let pi = app.state::<PlayerIdentityWrapper>();
     let identity = pi.identity.lock().map_err(|e| e.to_string())?;
     let name = pi.display_name.lock().map_err(|e| e.to_string())?;
+    let setup_complete = pi.setup_complete.lock().map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "displayName": *name,
         "addressHash": hex::encode(identity.public_identity().address_hash),
+        "setupComplete": *setup_complete,
     }))
 }
 
@@ -166,13 +169,22 @@ fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
     // Lock identity FIRST to match get_identity ordering (prevents ABBA deadlock).
     let identity = pi.identity.lock().map_err(|e| e.to_string())?;
     let mut display_name = pi.display_name.lock().map_err(|e| e.to_string())?;
+    let mut setup_complete = pi.setup_complete.lock().map_err(|e| e.to_string())?;
     *display_name = name.clone();
+    *setup_complete = true;
     let profile = identity::persistence::PlayerProfile {
         identity_hex: hex::encode(identity.to_private_bytes()),
-        display_name: name,
+        display_name: name.clone(),
+        setup_complete: true,
     };
     let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
     identity::persistence::write_profile(&pi.data_dir.join("profile.json"), &json)?;
+
+    // Propagate to NetworkState so announces and chat use the new name.
+    let net = app.state::<NetworkWrapper>();
+    let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+    net_state.set_display_name(name);
+
     Ok(())
 }
 
@@ -341,7 +353,7 @@ pub fn run() {
         .manage(GameLoopHandle(Mutex::new(None)))
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
-            let (player_identity, display_name) =
+            let (player_identity, display_name, setup_complete) =
                 identity::persistence::load_or_create_profile(&data_dir)
                     .map_err(std::io::Error::other)?;
 
@@ -352,6 +364,7 @@ pub fn run() {
             app.manage(PlayerIdentityWrapper {
                 identity: Mutex::new(player_identity),
                 display_name: Mutex::new(display_name.clone()),
+                setup_complete: Mutex::new(setup_complete),
                 data_dir: data_dir.clone(),
             });
 

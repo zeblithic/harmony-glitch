@@ -21,8 +21,7 @@
   onMount(async () => {
     try {
       const identity = await getIdentity();
-      // Auto-generated names start with "Glitchen_" — prompt user to choose their own
-      identityReady = !identity.displayName.startsWith('Glitchen_');
+      identityReady = identity.setupComplete;
     } catch {
       identityReady = false;
     } finally {

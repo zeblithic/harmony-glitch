@@ -146,6 +146,11 @@ impl NetworkState {
         }
     }
 
+    /// Update the display name used in announces and chat messages.
+    pub fn set_display_name(&mut self, name: String) {
+        self.display_name = name;
+    }
+
     /// Process inbound packets and timer ticks. Returns actions for the caller.
     ///
     /// Called by the game loop each frame. `inbound_packets` are raw bytes
@@ -167,19 +172,19 @@ impl NetworkState {
                 raw: raw.clone(),
                 now: now_secs_u64,
             });
-            self.process_node_actions(node_actions, now_secs_u64, rng, &mut actions);
+            self.process_node_actions(node_actions, now_secs_u64, now_secs, rng, &mut actions);
         }
 
         // Timer tick for path expiry, scheduled announces, etc.
         let tick_actions = self.node.handle_event(NodeEvent::TimerTick { now: now_secs_u64 });
-        self.process_node_actions(tick_actions, now_secs_u64, rng, &mut actions);
+        self.process_node_actions(tick_actions, now_secs_u64, now_secs, rng, &mut actions);
 
         // Tick all active sessions and process their actions.
         let now_ms = (now_secs * 1000.0) as u64;
         let peer_keys: Vec<[u8; 16]> = self.peers.keys().copied().collect();
         let mut closed_peers = Vec::new();
         for addr in peer_keys {
-            if self.tick_peer_session(&addr, now_ms, &mut actions) {
+            if self.tick_peer_session(&addr, now_ms, now_secs, &mut actions) {
                 closed_peers.push(addr);
             }
         }
@@ -308,6 +313,7 @@ impl NetworkState {
         &mut self,
         node_actions: Vec<NodeAction>,
         now_secs: u64,
+        now_secs_f64: f64,
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
@@ -326,7 +332,13 @@ impl NetworkState {
                 NodeAction::AnnounceReceived {
                     validated_announce, ..
                 } => {
-                    self.handle_announce_received(&validated_announce, now_secs, rng, out);
+                    self.handle_announce_received(
+                        &validated_announce,
+                        now_secs,
+                        now_secs_f64,
+                        rng,
+                        out,
+                    );
                 }
 
                 NodeAction::AnnounceNeeded { dest_hash } => {
@@ -370,6 +382,7 @@ impl NetworkState {
         &mut self,
         announce: &harmony_reticulum::ValidatedAnnounce,
         _now_secs: u64,
+        now_secs_f64: f64,
         _rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
@@ -395,7 +408,7 @@ impl NetworkState {
                 let event = PresenceEvent::Left {
                     address_hash: addr,
                 };
-                self.registry.handle_presence(&event);
+                self.registry.handle_presence(&event, now_secs_f64);
                 out.push(NetworkAction::PresenceChange(event));
             }
             return;
@@ -431,7 +444,7 @@ impl NetworkState {
             address_hash: addr,
             display_name,
         };
-        self.registry.handle_presence(&event);
+        self.registry.handle_presence(&event, now_secs_f64);
         out.push(NetworkAction::PresenceChange(event));
 
         // TODO: In Task 8 (game loop integration), initiate a Link to this
@@ -463,6 +476,7 @@ impl NetworkState {
         &mut self,
         addr: &[u8; 16],
         now_ms: u64,
+        now_secs_f64: f64,
         out: &mut Vec<NetworkAction>,
     ) -> bool {
         let peer = match self.peers.get_mut(addr) {
@@ -480,7 +494,7 @@ impl NetworkState {
             let event = PresenceEvent::Left {
                 address_hash: *addr,
             };
-            self.registry.handle_presence(&event);
+            self.registry.handle_presence(&event, now_secs_f64);
             out.push(NetworkAction::PresenceChange(event));
             return true;
         }
@@ -500,7 +514,7 @@ impl NetworkState {
                     let event = PresenceEvent::Left {
                         address_hash: *addr,
                     };
-                    self.registry.handle_presence(&event);
+                    self.registry.handle_presence(&event, now_secs_f64);
                     out.push(NetworkAction::PresenceChange(event));
                     should_remove = true;
                 }
@@ -598,10 +612,13 @@ mod tests {
         let mut rng = OsRng;
 
         // Add a fake remote player to the registry.
-        state.registry.handle_presence(&PresenceEvent::Joined {
-            address_hash: [0xAA; 16],
-            display_name: "Peer".into(),
-        });
+        state.registry.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: [0xAA; 16],
+                display_name: "Peer".into(),
+            },
+            1.0,
+        );
         assert_eq!(state.registry.count(), 1);
 
         // Change street should clear registry.

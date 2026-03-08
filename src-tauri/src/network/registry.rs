@@ -38,7 +38,10 @@ impl RemotePlayerRegistry {
     }
 
     /// Handle a presence event: insert on join, remove on leave.
-    pub fn handle_presence(&mut self, event: &PresenceEvent) {
+    /// `now` is the current monotonic time in seconds — used to initialize
+    /// `last_update` so that newly joined peers that never send state
+    /// updates are still subject to stale purging.
+    pub fn handle_presence(&mut self, event: &PresenceEvent, now: f64) {
         match event {
             PresenceEvent::Joined {
                 address_hash,
@@ -57,7 +60,7 @@ impl RemotePlayerRegistry {
                             facing: 1,
                             on_ground: true,
                         },
-                        last_update: 0.0,
+                        last_update: now,
                     },
                 );
             }
@@ -77,12 +80,10 @@ impl RemotePlayerRegistry {
     }
 
     /// Remove players whose `last_update` is more than `STALE_TIMEOUT`
-    /// seconds behind `now`. Players that have just joined (last_update
-    /// == 0.0) are exempt — they haven't had a chance to send state yet.
+    /// seconds behind `now`.
     pub fn purge_stale(&mut self, now: f64) {
-        self.players.retain(|_, player| {
-            player.last_update == 0.0 || (now - player.last_update) <= STALE_TIMEOUT
-        });
+        self.players
+            .retain(|_, player| (now - player.last_update) <= STALE_TIMEOUT);
     }
 
     /// Produce render frames for all tracked players, sorted by
@@ -146,27 +147,36 @@ mod tests {
         let mut reg = RemotePlayerRegistry::new();
         assert_eq!(reg.count(), 0);
 
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(1),
-            display_name: "Alice".into(),
-        });
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
         assert_eq!(reg.count(), 1);
 
-        reg.handle_presence(&PresenceEvent::Left {
-            address_hash: make_hash(1),
-        });
+        reg.handle_presence(
+            &PresenceEvent::Left {
+                address_hash: make_hash(1),
+            },
+            2.0,
+        );
         assert_eq!(reg.count(), 0);
     }
 
     #[test]
     fn update_position() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(1),
-            display_name: "Alice".into(),
-        });
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
 
-        reg.update_state(&make_hash(1), make_state(100.0, -50.0), 1.0);
+        reg.update_state(&make_hash(1), make_state(100.0, -50.0), 2.0);
 
         let frames = reg.frames();
         assert_eq!(frames.len(), 1);
@@ -185,10 +195,13 @@ mod tests {
     #[test]
     fn purges_stale_players() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(1),
-            display_name: "Alice".into(),
-        });
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
         reg.update_state(&make_hash(1), make_state(0.0, 0.0), 1.0);
 
         // At t=12.0, player's last_update was 1.0 — 11 seconds ago, exceeds STALE_TIMEOUT
@@ -197,28 +210,41 @@ mod tests {
     }
 
     #[test]
-    fn does_not_purge_newly_joined() {
+    fn purges_newly_joined_without_updates() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(1),
-            display_name: "Alice".into(),
-        });
-        // last_update is 0.0 — should NOT be purged even at a late time
-        reg.purge_stale(100.0);
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
+        // Within timeout — should NOT be purged
+        reg.purge_stale(5.0);
         assert_eq!(reg.count(), 1);
+
+        // Past timeout with no state updates — should be purged (no ghost players)
+        reg.purge_stale(12.0);
+        assert_eq!(reg.count(), 0);
     }
 
     #[test]
     fn clear_removes_all() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(1),
-            display_name: "Alice".into(),
-        });
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(2),
-            display_name: "Bob".into(),
-        });
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(2),
+                display_name: "Bob".into(),
+            },
+            1.0,
+        );
         assert_eq!(reg.count(), 2);
 
         reg.clear();
@@ -228,20 +254,29 @@ mod tests {
     #[test]
     fn rejoin_resets_player_state() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(1),
-            display_name: "Alice".into(),
-        });
-        reg.update_state(&make_hash(1), make_state(500.0, -200.0), 1.0);
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
+        reg.update_state(&make_hash(1), make_state(500.0, -200.0), 2.0);
 
         // Leave and rejoin
-        reg.handle_presence(&PresenceEvent::Left {
-            address_hash: make_hash(1),
-        });
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(1),
-            display_name: "Alice v2".into(),
-        });
+        reg.handle_presence(
+            &PresenceEvent::Left {
+                address_hash: make_hash(1),
+            },
+            3.0,
+        );
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice v2".into(),
+            },
+            4.0,
+        );
 
         assert_eq!(reg.count(), 1);
         let frames = reg.frames();
@@ -254,18 +289,27 @@ mod tests {
     fn frames_sorted_deterministically() {
         let mut reg = RemotePlayerRegistry::new();
         // Insert in reverse order: hash 0xFF before 0x01
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(0xFF),
-            display_name: "Zara".into(),
-        });
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(0x01),
-            display_name: "Alice".into(),
-        });
-        reg.handle_presence(&PresenceEvent::Joined {
-            address_hash: make_hash(0x80),
-            display_name: "Mid".into(),
-        });
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(0xFF),
+                display_name: "Zara".into(),
+            },
+            1.0,
+        );
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(0x01),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(0x80),
+                display_name: "Mid".into(),
+            },
+            1.0,
+        );
 
         let frames = reg.frames();
         assert_eq!(frames.len(), 3);

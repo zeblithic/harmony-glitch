@@ -6,6 +6,10 @@ use std::path::Path;
 pub struct PlayerProfile {
     pub identity_hex: String,
     pub display_name: String,
+    /// Whether the user has completed first-run identity setup.
+    /// Defaults to false for backward compatibility with existing profiles.
+    #[serde(default)]
+    pub setup_complete: bool,
 }
 
 /// Write profile JSON to disk with restrictive permissions (0600 on Unix).
@@ -35,7 +39,10 @@ pub fn write_profile(path: &Path, json: &str) -> Result<(), String> {
 }
 
 /// Load or create a player profile. Creates directory and new identity if none exists.
-pub fn load_or_create_profile(data_dir: &Path) -> Result<(PrivateIdentity, String), String> {
+/// Returns (identity, display_name, setup_complete).
+pub fn load_or_create_profile(
+    data_dir: &Path,
+) -> Result<(PrivateIdentity, String, bool), String> {
     let profile_path = data_dir.join("profile.json");
 
     if profile_path.exists() {
@@ -44,7 +51,7 @@ pub fn load_or_create_profile(data_dir: &Path) -> Result<(PrivateIdentity, Strin
         let id_bytes = hex::decode(&profile.identity_hex).map_err(|e| e.to_string())?;
         let identity =
             PrivateIdentity::from_private_bytes(&id_bytes).map_err(|e| format!("{e:?}"))?;
-        Ok((identity, profile.display_name))
+        Ok((identity, profile.display_name, profile.setup_complete))
     } else {
         let mut rng = rand::rngs::OsRng;
         let identity = PrivateIdentity::generate(&mut rng);
@@ -55,11 +62,12 @@ pub fn load_or_create_profile(data_dir: &Path) -> Result<(PrivateIdentity, Strin
         let profile = PlayerProfile {
             identity_hex: hex::encode(identity.to_private_bytes()),
             display_name: display_name.clone(),
+            setup_complete: false,
         };
         let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
         write_profile(&profile_path, &json)?;
 
-        Ok((identity, display_name))
+        Ok((identity, display_name, false))
     }
 }
 
@@ -71,8 +79,9 @@ mod tests {
     #[test]
     fn creates_new_profile_when_none_exists() {
         let dir = TempDir::new().unwrap();
-        let (identity, name) = load_or_create_profile(dir.path()).unwrap();
+        let (identity, name, setup_complete) = load_or_create_profile(dir.path()).unwrap();
         assert!(name.starts_with("Glitchen_"));
+        assert!(!setup_complete);
         assert!(dir.path().join("profile.json").exists());
         assert_eq!(identity.public_identity().address_hash.len(), 16);
     }
@@ -90,8 +99,8 @@ mod tests {
     #[test]
     fn loads_existing_profile_with_same_identity() {
         let dir = TempDir::new().unwrap();
-        let (id1, name1) = load_or_create_profile(dir.path()).unwrap();
-        let (id2, name2) = load_or_create_profile(dir.path()).unwrap();
+        let (id1, name1, _) = load_or_create_profile(dir.path()).unwrap();
+        let (id2, name2, _) = load_or_create_profile(dir.path()).unwrap();
         assert_eq!(name1, name2);
         assert_eq!(
             id1.public_identity().address_hash,
