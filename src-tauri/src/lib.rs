@@ -30,7 +30,7 @@ struct GameLoopHandle(Mutex<Option<JoinHandle<()>>>);
 fn list_streets() -> Vec<String> {
     // For Phase A: return hardcoded demo street names.
     // Later: scan assets directory or query content network.
-    vec!["demo_meadow".to_string()]
+    vec!["demo_meadow".to_string(), "demo_heights".to_string()]
 }
 
 #[tauri::command]
@@ -158,6 +158,7 @@ fn load_street_xml(name: &str) -> Result<String, String> {
     // and doesn't depend on CARGO_MANIFEST_DIR paths at runtime.
     match name {
         "demo_meadow" => Ok(include_str!("../../assets/streets/demo_meadow.xml").to_string()),
+        "demo_heights" => Ok(include_str!("../../assets/streets/demo_heights.xml").to_string()),
         _ => Err(format!("Unknown street: {}", name)),
     }
 }

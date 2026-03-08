@@ -540,6 +540,24 @@ mod tests {
     }
 
     #[test]
+    fn parses_demo_heights() {
+        let xml = include_str!("../../../assets/streets/demo_heights.xml");
+        let street = parse_street(xml).unwrap();
+        assert_eq!(street.tsid, "LADEMO002");
+        assert_eq!(street.name, "Demo Heights");
+        assert!(street.signposts.len() >= 1, "demo_heights should have at least 1 signpost");
+        assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO001");
+    }
+
+    #[test]
+    fn demo_meadow_has_signpost_to_heights() {
+        let xml = include_str!("../../../assets/streets/demo_meadow.xml");
+        let street = parse_street(xml).unwrap();
+        assert!(street.signposts.len() >= 1, "demo_meadow should have signpost");
+        assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO002");
+    }
+
+    #[test]
     fn parse_unknown_xml_elements_ignored() {
         let xml = r#"
         <game_object tsid="GTEST" label="Custom">
