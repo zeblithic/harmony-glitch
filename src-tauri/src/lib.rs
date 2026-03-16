@@ -1,6 +1,7 @@
 pub mod avatar;
 pub mod engine;
 pub mod identity;
+pub mod item;
 pub mod network;
 pub mod physics;
 pub mod street;
