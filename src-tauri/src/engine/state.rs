@@ -2,6 +2,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::avatar::types::{AnimationState, Direction};
+use crate::engine::transition::{
+    TransitionDirection, TransitionPhase, TransitionState, PRE_SUBSCRIBE_DISTANCE,
+};
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
@@ -27,6 +30,21 @@ pub struct GameState {
     pub next_item_id: u64,
     pub next_feedback_id: u64,
     pub pickup_feedback: Vec<PickupFeedback>,
+    pub transition: TransitionState,
+    pub transition_origin_tsid: Option<String>,
+    pub tsid_to_name: std::collections::HashMap<String, String>,
+}
+
+/// Transition animation data sent to the frontend during a swoop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransitionFrame {
+    pub progress: f64,
+    pub direction: TransitionDirection,
+    pub to_street: String,
+    /// Generation counter — the frontend passes this back to `streetTransitionReady`
+    /// so stale promises (from a timed-out swoop) don't mark a new swoop as ready.
+    pub generation: u64,
 }
 
 /// Data sent to the frontend each tick for rendering.
@@ -42,6 +60,7 @@ pub struct RenderFrame {
     pub world_items: Vec<WorldItemFrame>,
     pub interaction_prompt: Option<InteractionPrompt>,
     pub pickup_feedback: Vec<PickupFeedback>,
+    pub transition: Option<TransitionFrame>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,15 +116,28 @@ impl GameState {
             next_item_id: 0,
             next_feedback_id: 0,
             pickup_feedback: vec![],
+            transition: TransitionState::new(),
+            transition_origin_tsid: None,
+            tsid_to_name: std::collections::HashMap::from([
+                ("LADEMO001".to_string(), "demo_meadow".to_string()),
+                ("LADEMO002".to_string(), "demo_heights".to_string()),
+            ]),
         }
     }
 
     pub fn load_street(&mut self, street: StreetData, entities: Vec<WorldEntity>) {
-        // Place player at ground level, center of street.
-        // Spawning directly at ground_y ensures the first physics tick's
-        // swept collision snaps to the nearest platform below.
-        let center_x = (street.left + street.right) / 2.0;
-        self.player = PhysicsBody::new(center_x, street.ground_y);
+        // During an in-flight transition, skip player repositioning — the
+        // Complete handler will place the player at the return signpost.
+        // Only Swooping and Complete are actual in-flight phases; PreSubscribed
+        // just means the player is near a signpost (no swoop yet).
+        let is_transitioning = matches!(
+            self.transition.phase,
+            TransitionPhase::Swooping { .. } | TransitionPhase::Complete { .. }
+        );
+        if !is_transitioning {
+            let center_x = (street.left + street.right) / 2.0;
+            self.player = PhysicsBody::new(center_x, street.ground_y);
+        }
         self.street = Some(street);
         self.world_entities = entities;
         self.world_items.clear();
@@ -116,102 +148,189 @@ impl GameState {
     pub fn tick(&mut self, dt: f64, input: &InputState, rng: &mut impl Rng) -> Option<RenderFrame> {
         let street = self.street.as_ref()?;
 
-        // Update facing direction
-        if input.left && !input.right {
-            self.facing = Direction::Left;
-        } else if input.right && !input.left {
-            self.facing = Direction::Right;
+        let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+
+        // Update facing direction — frozen during swoop so the player
+        // sprite doesn't flip if a direction key is held.
+        if !is_swooping {
+            if input.left && !input.right {
+                self.facing = Direction::Left;
+            } else if input.right && !input.left {
+                self.facing = Direction::Right;
+            }
         }
 
-        // Physics tick — walls are parsed from street data but not yet enforced
-        // in the collision system (Phase A scope: platforms only).
-        self.player
-            .tick(dt, input, street.platforms(), street.left, street.right);
-
-        // --- Interaction system ---
-        // Age and cull pickup feedback
-        for fb in &mut self.pickup_feedback {
-            fb.age_secs += dt;
-        }
-        self.pickup_feedback.retain(|fb| fb.age_secs < 1.5);
-
-        // Proximity scan
-        let nearest = interaction::proximity_scan(
+        // --- Street transition system ---
+        self.transition.check_signposts(
             self.player.x,
-            self.player.y,
-            &self.world_entities,
-            &self.entity_defs,
-            &self.world_items,
+            &street.signposts,
+            street.left,
+            street.right,
         );
 
-        // Build prompt
-        let interaction_prompt = nearest.as_ref().map(|n| {
-            interaction::build_prompt(
-                n,
+        // Trigger swoop when player crosses the signpost X coordinate.
+        // IMPORTANT: Copy values out of the pattern match BEFORE calling trigger_swoop,
+        // because the if-let borrows self.transition immutably while
+        // trigger_swoop needs &mut self.transition.
+        if let TransitionPhase::PreSubscribed {
+            signpost_x,
+            direction,
+            ..
+        } = &self.transition.phase
+        {
+            let signpost_x = *signpost_x;
+            let direction = *direction;
+            let crossed = match direction {
+                TransitionDirection::Right => self.player.x >= signpost_x,
+                TransitionDirection::Left => self.player.x <= signpost_x,
+            };
+            if crossed {
+                self.transition_origin_tsid = Some(street.tsid.clone());
+                self.transition.trigger_swoop();
+            }
+        }
+
+        let was_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+        self.transition.tick(dt);
+
+        // Handle transition completion — two-tick lifecycle:
+        //   Tick 1 (origin_tsid is Some): reposition player, clear origin_tsid.
+        //          TransitionFrame builder emits progress=1.0 so the renderer
+        //          fully extends the viewport offset before teardown.
+        //   Tick 2 (origin_tsid is None): reset phase to None.
+        if let TransitionPhase::Complete { .. } = &self.transition.phase {
+            if self.transition_origin_tsid.is_some() {
+                let origin_tsid = self.transition_origin_tsid.take().unwrap();
+                let return_signpost = street.signposts.iter()
+                    .find(|s| s.connects.iter().any(|c| c.target_tsid == origin_tsid));
+
+                if let Some(sp) = return_signpost {
+                    let street_mid = (street.left + street.right) / 2.0;
+                    let inward = if sp.x < street_mid { 1.0 } else { -1.0 };
+                    self.player.x = sp.x + inward * (PRE_SUBSCRIBE_DISTANCE + 50.0);
+                    self.player.y = street.ground_y;
+                    self.player.vx = 0.0;
+                    self.player.vy = 0.0;
+                } else {
+                    self.player.x = (street.left + street.right) / 2.0;
+                    self.player.y = street.ground_y;
+                    self.player.vx = 0.0;
+                    self.player.vy = 0.0;
+                }
+            } else {
+                self.transition.reset();
+            }
+        }
+
+        // Timeout path: Swooping → None without visiting Complete.
+        // The Complete handler already clears transition_origin_tsid, so this
+        // only fires when Complete was never visited (timeout cancellation).
+        // Prevents a late-arriving loadStreet from seeing is_transitioning=false
+        // and mis-positioning the player.
+        if was_swooping
+            && self.transition.phase == TransitionPhase::None
+            && self.transition_origin_tsid.is_some()
+        {
+            self.transition_origin_tsid = None;
+        }
+
+        // Re-check swooping state after transition system may have changed it.
+        let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+
+        let interaction_prompt = if !is_swooping {
+            // Physics tick — walls are parsed from street data but not yet enforced
+            // in the collision system (Phase A scope: platforms only).
+            self.player
+                .tick(dt, input, street.platforms(), street.left, street.right);
+
+            // --- Interaction system ---
+            // Age and cull pickup feedback
+            for fb in &mut self.pickup_feedback {
+                fb.age_secs += dt;
+            }
+            self.pickup_feedback.retain(|fb| fb.age_secs < 1.5);
+
+            // Proximity scan
+            let nearest = interaction::proximity_scan(
+                self.player.x,
+                self.player.y,
                 &self.world_entities,
                 &self.entity_defs,
                 &self.world_items,
-                &self.item_defs,
-            )
-        });
+            );
 
-        // Rising edge detection for interact
-        let interact_pressed = input.interact && !self.prev_interact;
-        self.prev_interact = input.interact;
-
-        // Execute interaction on rising edge
-        let mut interacted = false;
-        if interact_pressed {
-            if let Some(nearest) = &nearest {
-                let result = interaction::execute_interaction(
-                    nearest,
-                    &mut self.inventory,
+            // Build prompt
+            let interaction_prompt = nearest.as_ref().map(|n| {
+                interaction::build_prompt(
+                    n,
                     &self.world_entities,
                     &self.entity_defs,
                     &self.world_items,
                     &self.item_defs,
-                    rng,
-                );
+                )
+            });
 
-                // Apply results — assign unique IDs to feedback
-                for mut fb in result.feedback {
-                    fb.id = self.next_feedback_id;
-                    self.next_feedback_id += 1;
-                    self.pickup_feedback.push(fb);
-                }
+            // Rising edge detection for interact
+            let interact_pressed = input.interact && !self.prev_interact;
+            self.prev_interact = input.interact;
 
-                // Remove or update ground items BEFORE appending overflow,
-                // so indices from execute_interaction remain valid.
-                if let Some(idx) = result.remove_ground_item {
-                    self.world_items.remove(idx);
-                } else if let Some((idx, new_count)) = result.update_ground_item {
-                    self.world_items[idx].count = new_count;
-                }
+            // Execute interaction on rising edge
+            let mut interacted = false;
+            if interact_pressed {
+                if let Some(nearest) = &nearest {
+                    let result = interaction::execute_interaction(
+                        nearest,
+                        &mut self.inventory,
+                        &self.world_entities,
+                        &self.entity_defs,
+                        &self.world_items,
+                        &self.item_defs,
+                        rng,
+                    );
 
-                // Spawn overflow items (after index-based ops above)
-                for (item_id, count, x, y) in result.spawned_items {
-                    self.world_items.push(WorldItem {
-                        id: format!("drop_{}", self.next_item_id),
-                        item_id,
-                        count,
-                        x,
-                        y,
-                    });
-                    self.next_item_id += 1;
-                }
+                    // Apply results — assign unique IDs to feedback
+                    for mut fb in result.feedback {
+                        fb.id = self.next_feedback_id;
+                        self.next_feedback_id += 1;
+                        self.pickup_feedback.push(fb);
+                    }
 
-                // Only blank prompt when the ground item target was removed.
-                // Entity targets persist after harvest — blanking would cause
-                // a one-frame flicker as the prompt rebuilds next tick.
-                if result.remove_ground_item.is_some() {
-                    interacted = true;
+                    // Remove or update ground items BEFORE appending overflow,
+                    // so indices from execute_interaction remain valid.
+                    if let Some(idx) = result.remove_ground_item {
+                        self.world_items.remove(idx);
+                    } else if let Some((idx, new_count)) = result.update_ground_item {
+                        self.world_items[idx].count = new_count;
+                    }
+
+                    // Spawn overflow items (after index-based ops above)
+                    for (item_id, count, x, y) in result.spawned_items {
+                        self.world_items.push(WorldItem {
+                            id: format!("drop_{}", self.next_item_id),
+                            item_id,
+                            count,
+                            x,
+                            y,
+                        });
+                        self.next_item_id += 1;
+                    }
+
+                    // Only blank prompt when the ground item target was removed.
+                    // Entity targets persist after harvest — blanking would cause
+                    // a one-frame flicker as the prompt rebuilds next tick.
+                    if result.remove_ground_item.is_some() {
+                        interacted = true;
+                    }
                 }
             }
-        }
 
-        // Clear prompt on the frame where a ground item was picked up — the
-        // target was removed, so the pre-interaction prompt is stale.
-        let interaction_prompt = if interacted { None } else { interaction_prompt };
+            // Clear prompt on the frame where a ground item was picked up — the
+            // target was removed, so the pre-interaction prompt is stale.
+            if interacted { None } else { interaction_prompt }
+        } else {
+            self.prev_interact = input.interact;
+            None
+        };
 
         // Determine animation state
         let animation = if !self.player.on_ground {
@@ -256,6 +375,31 @@ impl GameState {
             world_items: self.build_item_frames(),
             interaction_prompt,
             pickup_feedback: self.pickup_feedback.clone(),
+            transition: match &self.transition.phase {
+                TransitionPhase::Swooping { progress, direction, to_street, .. } => {
+                    Some(TransitionFrame {
+                        progress: *progress,
+                        direction: *direction,
+                        to_street: self.tsid_to_name
+                            .get(to_street)
+                            .cloned()
+                            .unwrap_or_else(|| to_street.clone()),
+                        generation: self.transition.generation,
+                    })
+                }
+                TransitionPhase::Complete { new_street, direction } => {
+                    Some(TransitionFrame {
+                        progress: 1.0,
+                        direction: *direction,
+                        to_street: self.tsid_to_name
+                            .get(new_street)
+                            .cloned()
+                            .unwrap_or_else(|| new_street.clone()),
+                        generation: self.transition.generation,
+                    })
+                }
+                _ => None,
+            },
         })
     }
 
@@ -322,6 +466,7 @@ impl GameState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::transition::TransitionPhase;
     use crate::item::types::{EntityDefs, ItemDefs};
     use crate::street::types::*;
 
@@ -515,5 +660,168 @@ mod tests {
 
         assert_eq!(frame.inventory.slots[0].as_ref().unwrap().item_id, "cherry");
         assert!(frame.pickup_feedback.iter().any(|f| f.success));
+    }
+
+    #[test]
+    fn render_frame_has_no_transition_by_default() {
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        state.load_street(test_street(), vec![]);
+        let input = InputState::default();
+        let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
+        assert!(frame.transition.is_none());
+    }
+
+    #[test]
+    fn game_state_has_transition_state() {
+        let state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        assert_eq!(state.transition.phase, TransitionPhase::None);
+    }
+
+    #[test]
+    fn tick_detects_signpost_pre_subscribe() {
+        use crate::street::types::{Signpost, SignpostConnection};
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut street = test_street();
+        street.signposts = vec![Signpost {
+            id: "sign_right".into(),
+            x: 1900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO002".into(),
+                target_label: "To the Heights".into(),
+            }],
+        }];
+        state.load_street(street, vec![]);
+        state.player.x = 1500.0;
+        state.player.on_ground = true;
+
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert!(matches!(state.transition.phase, TransitionPhase::PreSubscribed { .. }));
+    }
+
+    #[test]
+    fn tick_triggers_swoop_on_crossing_signpost() {
+        use crate::street::types::{Signpost, SignpostConnection};
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut street = test_street();
+        street.signposts = vec![Signpost {
+            id: "sign_right".into(),
+            x: 1900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO002".into(),
+                target_label: "To the Heights".into(),
+            }],
+        }];
+        state.load_street(street, vec![]);
+        state.player.x = 1950.0;
+        state.player.on_ground = true;
+
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        // check_signposts puts us in PreSubscribed, then the crossing
+        // check triggers the swoop — both happen in the same tick.
+        assert!(matches!(state.transition.phase, TransitionPhase::Swooping { .. }));
+    }
+
+    #[test]
+    fn tick_freezes_input_during_swoop() {
+        use crate::street::types::{Signpost, SignpostConnection};
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut street = test_street();
+        street.signposts = vec![Signpost {
+            id: "sign_right".into(), x: 1900.0, y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO002".into(), target_label: "To the Heights".into(),
+            }],
+        }];
+        state.load_street(street, vec![]);
+        state.player.x = 1950.0;
+        state.player.on_ground = true;
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        assert!(matches!(state.transition.phase, TransitionPhase::Swooping { .. }));
+
+        let pos_before = state.player.x;
+        let input = InputState { left: true, ..Default::default() };
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert!((state.player.x - pos_before).abs() < 0.01,
+            "Player moved during swoop: {} -> {}", pos_before, state.player.x);
+    }
+
+    #[test]
+    fn render_frame_contains_transition_during_swoop() {
+        use crate::street::types::{Signpost, SignpostConnection};
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut street = test_street();
+        street.signposts = vec![Signpost {
+            id: "sign_right".into(), x: 1900.0, y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO002".into(), target_label: "To the Heights".into(),
+            }],
+        }];
+        state.load_street(street, vec![]);
+        state.player.x = 1950.0;
+        state.player.on_ground = true;
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
+        let transition = frame.transition.unwrap();
+        assert!(transition.progress > 0.0);
+        assert_eq!(transition.to_street, "demo_heights");
+    }
+
+    #[test]
+    fn transition_complete_repositions_player() {
+        use crate::street::types::{Signpost, SignpostConnection};
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut street = test_street();
+        street.tsid = "LADEMO001".into();
+        street.signposts = vec![Signpost {
+            id: "sign_right".into(), x: 1900.0, y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO002".into(), target_label: "To the Heights".into(),
+            }],
+        }];
+        state.load_street(street, vec![]);
+        state.player.x = 1950.0;
+        state.player.on_ground = true;
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        assert!(matches!(state.transition.phase, TransitionPhase::Swooping { .. }));
+
+        state.transition.mark_street_ready(state.transition.generation);
+
+        let mut new_street = test_street();
+        new_street.tsid = "LADEMO002".into();
+        new_street.signposts = vec![Signpost {
+            id: "sign_left".into(), x: -1900.0, y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO001".into(), target_label: "Back to Meadow".into(),
+            }],
+        }];
+        state.load_street(new_street, vec![]);
+
+        for _ in 0..30 {
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+
+        assert_eq!(state.transition.phase, TransitionPhase::None);
+        assert!(state.transition_origin_tsid.is_none());
+        // Player is placed PRE_SUBSCRIBE_DISTANCE + 50px inward from the return
+        // signpost (x=-1900), i.e. at x=-1350, so signpost detection resets cleanly.
+        let expected_x = -1900.0 + (PRE_SUBSCRIBE_DISTANCE + 50.0);
+        assert!((state.player.x - expected_x).abs() < 1.0,
+            "Player should be at x={} (just outside pre-subscribe zone), got {}", expected_x, state.player.x);
     }
 }

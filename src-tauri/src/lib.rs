@@ -262,6 +262,14 @@ fn drop_item(slot: usize, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn street_transition_ready(generation: u64, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.transition.mark_street_ready(generation);
+    Ok(())
+}
+
+#[tauri::command]
 fn get_network_status(app: AppHandle) -> Result<serde_json::Value, String> {
     let net = app.state::<NetworkWrapper>();
     let net_state = net.0.lock().map_err(|e| e.to_string())?;
@@ -485,6 +493,7 @@ pub fn run() {
             set_display_name,
             send_chat,
             drop_item,
+            street_transition_ready,
             get_network_status,
         ])
         .run(tauri::generate_context!())

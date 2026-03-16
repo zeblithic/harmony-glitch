@@ -7,7 +7,7 @@
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady } from './lib/ipc';
   import type { StreetData, RenderFrame } from './lib/types';
   import { onMount } from 'svelte';
 
@@ -17,6 +17,8 @@
   let chatFocused = $state(false);
   let inventoryOpen = $state(false);
   let transitionPending = $state(false);
+  let transitionAttempts = $state(0);
+  const MAX_TRANSITION_ATTEMPTS = 3;
   let identityReady = $state(false);
   let checkingIdentity = $state(true);
 
@@ -38,17 +40,37 @@
   function handleFrame(frame: RenderFrame) {
     latestFrame = frame;
 
-    // When swoop transition completes, load the target street
-    if (frame.transition && frame.transition.progress >= 1.0 && !transitionPending) {
+    // When a transition appears, pre-load the target street immediately.
+    // The TransitionState stalls at progress 0.9 until we signal ready.
+    // transitionPending stays true until frame.transition disappears (swoop
+    // completes) — clearing it earlier causes repeated loadStreet/mark_street_ready
+    // calls that push target_duration forward indefinitely, stalling the swoop.
+    if (frame.transition && !transitionPending && transitionAttempts < MAX_TRANSITION_ATTEMPTS) {
       transitionPending = true;
+      transitionAttempts++;
+      // Capture the generation at the time we start loading — if the swoop
+      // times out and a new one starts, the stale promise will pass the old
+      // generation, and the backend will ignore it.
+      const gen = frame.transition.generation;
       loadStreet(frame.transition.toStreet)
         .then((street) => {
           currentStreet = street;
+          // streetTransitionReady failure is non-retryable — repeated
+          // mark_street_ready calls push target_duration forward, stalling the
+          // swoop. Let the backend timeout (MAX_SWOOP_SECS) handle recovery.
+          return streetTransitionReady(gen).catch((e) => {
+            console.error('streetTransitionReady failed (backend will timeout):', e);
+          });
         })
-        .catch(console.error)
-        .finally(() => {
+        .catch((e) => {
+          // Only loadStreet failed — allow retry up to MAX_TRANSITION_ATTEMPTS.
+          console.error('Street transition failed:', e);
           transitionPending = false;
         });
+    }
+    if (!frame.transition) {
+      transitionPending = false;
+      transitionAttempts = 0;
     }
   }
 
