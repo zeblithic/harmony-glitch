@@ -123,11 +123,16 @@ impl GameState {
     }
 
     pub fn load_street(&mut self, street: StreetData, entities: Vec<WorldEntity>) {
-        // Place player at ground level, center of street.
-        // Spawning directly at ground_y ensures the first physics tick's
-        // swept collision snaps to the nearest platform below.
-        let center_x = (street.left + street.right) / 2.0;
-        self.player = PhysicsBody::new(center_x, street.ground_y);
+        // During an in-flight transition, skip player repositioning — the
+        // Complete handler will place the player at the return signpost.
+        // Without this guard, the player position jumps to center for 1+ ticks
+        // between load_street and Complete, which is masked by the swoop viewport
+        // offset but architecturally fragile.
+        let is_transitioning = !matches!(self.transition.phase, TransitionPhase::None);
+        if !is_transitioning {
+            let center_x = (street.left + street.right) / 2.0;
+            self.player = PhysicsBody::new(center_x, street.ground_y);
+        }
         self.street = Some(street);
         self.world_entities = entities;
         self.world_items.clear();
@@ -138,11 +143,16 @@ impl GameState {
     pub fn tick(&mut self, dt: f64, input: &InputState, rng: &mut impl Rng) -> Option<RenderFrame> {
         let street = self.street.as_ref()?;
 
-        // Update facing direction
-        if input.left && !input.right {
-            self.facing = Direction::Left;
-        } else if input.right && !input.left {
-            self.facing = Direction::Right;
+        let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+
+        // Update facing direction — frozen during swoop so the player
+        // sprite doesn't flip if a direction key is held.
+        if !is_swooping {
+            if input.left && !input.right {
+                self.facing = Direction::Left;
+            } else if input.right && !input.left {
+                self.facing = Direction::Right;
+            }
         }
 
         // --- Street transition system ---
@@ -198,6 +208,7 @@ impl GameState {
             self.transition.reset();
         }
 
+        // Re-check swooping state after transition system may have changed it.
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
         let interaction_prompt = if !is_swooping {
