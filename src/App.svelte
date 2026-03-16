@@ -7,7 +7,7 @@
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady } from './lib/ipc';
   import type { StreetData, RenderFrame } from './lib/types';
   import { onMount } from 'svelte';
 
@@ -38,15 +38,20 @@
   function handleFrame(frame: RenderFrame) {
     latestFrame = frame;
 
-    // When swoop transition completes, load the target street
-    if (frame.transition && frame.transition.progress >= 1.0 && !transitionPending) {
+    // When a transition appears, pre-load the target street immediately.
+    // The TransitionState stalls at progress 0.9 until we signal ready.
+    if (frame.transition && !transitionPending) {
       transitionPending = true;
       loadStreet(frame.transition.toStreet)
         .then((street) => {
           currentStreet = street;
+          return streetTransitionReady();
         })
-        .catch(console.error)
-        .finally(() => {
+        .then(() => {
+          transitionPending = false;
+        })
+        .catch((e) => {
+          console.error('Street transition failed:', e);
           transitionPending = false;
         });
     }
