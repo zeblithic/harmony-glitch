@@ -18,6 +18,10 @@ export class GameRenderer {
   private layerContainers: Map<string, Container> = new Map();
   private remoteSprites: Map<string, Container> = new Map();
   private chatBubbles: ChatBubble[] = [];
+  private entitySprites: Map<string, Container> = new Map();
+  private groundItemSprites: Map<string, Container> = new Map();
+  private promptText: Text | null = null;
+  private feedbackTexts: { text: Text; startAge: number }[] = [];
   private lastFrameTime = 0;
   private platformGraphics: Graphics | null = null;
   private avatarGraphics: Graphics | null = null;
@@ -93,6 +97,13 @@ export class GameRenderer {
       bubble.text.destroy();
     }
     this.chatBubbles = [];
+    for (const [, sprite] of this.entitySprites) { sprite.destroy(); }
+    this.entitySprites.clear();
+    for (const [, sprite] of this.groundItemSprites) { sprite.destroy(); }
+    this.groundItemSprites.clear();
+    if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
+    for (const ft of this.feedbackTexts) { ft.text.destroy(); }
+    this.feedbackTexts = [];
 
     // Build gradient background (redrawn on resize via drawBackground)
     this.bgGraphics = new Graphics();
@@ -139,6 +150,12 @@ export class GameRenderer {
     this.avatarGraphics.rect(-15, -60, 30, 60);
     this.avatarGraphics.fill(0x5865f2);
     this.worldContainer.addChild(this.avatarGraphics);
+
+    // Create interaction prompt text (screen-fixed, in uiContainer)
+    this.promptText = new Text({ text: '', style: { fontSize: 14, fill: 0xffffff } });
+    this.promptText.anchor.set(0.5, 1);
+    this.promptText.visible = false;
+    this.uiContainer.addChild(this.promptText);
   }
 
   private drawPlatforms(street: StreetData): void {
@@ -260,6 +277,138 @@ export class GameRenderer {
     const now = performance.now();
     const dt = this.lastFrameTime ? (now - this.lastFrameTime) / 1000 : 1 / 60;
     this.lastFrameTime = now;
+
+    // World entities — create/update/remove sprites (placeholder colored rectangles)
+    const worldEntities = frame.worldEntities ?? [];
+    const seenEntities = new Set<string>();
+    for (const entity of worldEntities) {
+      seenEntities.add(entity.id);
+      let sprite = this.entitySprites.get(entity.id);
+      if (!sprite) {
+        sprite = new Container();
+        const body = new Graphics();
+        const color = entity.spriteClass.startsWith('tree') ? 0x2d8a4e : 0xc4a35a;
+        const w = entity.spriteClass.startsWith('tree') ? 60 : 30;
+        const h = entity.spriteClass.startsWith('tree') ? 80 : 30;
+        body.rect(-w / 2, -h, w, h);
+        body.fill({ color, alpha: 0.8 });
+        sprite.addChild(body);
+
+        const label = new Text({
+          text: entity.name,
+          style: { fontSize: 10, fill: 0xffffff, align: 'center' },
+        });
+        label.anchor.set(0.5, 1);
+        label.y = -h - 4;
+        sprite.addChild(label);
+
+        this.worldContainer.addChild(sprite);
+        this.entitySprites.set(entity.id, sprite);
+      }
+      sprite.x = entity.x - this.street.left;
+      sprite.y = entity.y - this.street.top;
+    }
+    for (const [id, sprite] of this.entitySprites) {
+      if (!seenEntities.has(id)) {
+        this.worldContainer.removeChild(sprite);
+        sprite.destroy();
+        this.entitySprites.delete(id);
+      }
+    }
+
+    // Ground items — small sprites with bob animation
+    const groundItems = frame.worldItems ?? [];
+    const seenItems = new Set<string>();
+    for (const item of groundItems) {
+      seenItems.add(item.id);
+      let sprite = this.groundItemSprites.get(item.id);
+      if (!sprite) {
+        sprite = new Container();
+        const body = new Graphics();
+        body.circle(0, -8, 8);
+        body.fill({ color: 0xe8c170, alpha: 0.9 });
+        sprite.addChild(body);
+
+        const label = new Text({
+          text: item.count > 1 ? `${item.name} x${item.count}` : item.name,
+          style: { fontSize: 9, fill: 0xffffff, align: 'center' },
+        });
+        label.anchor.set(0.5, 1);
+        label.y = -18;
+        sprite.addChild(label);
+
+        this.worldContainer.addChild(sprite);
+        this.groundItemSprites.set(item.id, sprite);
+      } else {
+        const label = sprite.children[1] as Text;
+        const expectedText = item.count > 1 ? `${item.name} x${item.count}` : item.name;
+        if (label && label.text !== expectedText) {
+          label.text = expectedText;
+        }
+      }
+      sprite.x = item.x - this.street.left;
+      sprite.y = item.y - this.street.top;
+      sprite.y += Math.sin(performance.now() / 500) * 2;
+    }
+    for (const [id, sprite] of this.groundItemSprites) {
+      if (!seenItems.has(id)) {
+        this.worldContainer.removeChild(sprite);
+        sprite.destroy();
+        this.groundItemSprites.delete(id);
+      }
+    }
+
+    // Interaction prompt (in uiContainer, screen-fixed)
+    if (frame.interactionPrompt && this.promptText) {
+      const p = frame.interactionPrompt;
+      this.promptText.text = `[E] ${p.verb} ${p.targetName}`;
+      const screenX = p.targetX - this.street.left + this.worldContainer.x;
+      const screenY = p.targetY - this.street.top + this.worldContainer.y - 90;
+      this.promptText.x = screenX;
+      this.promptText.y = screenY;
+      this.promptText.visible = true;
+    } else if (this.promptText) {
+      this.promptText.visible = false;
+    }
+
+    // Pickup feedback (floating text)
+    const feedback = frame.pickupFeedback ?? [];
+    this.feedbackTexts = this.feedbackTexts.filter((ft) => {
+      if (ft.startAge >= 1.5) {
+        this.uiContainer.removeChild(ft.text);
+        ft.text.destroy();
+        return false;
+      }
+      return true;
+    });
+    for (const fb of feedback) {
+      if (fb.ageSecs < dt * 2) {
+        const existing = this.feedbackTexts.find(
+          (ft) => ft.text.text === fb.text && ft.startAge < 0.1
+        );
+        if (!existing) {
+          const text = new Text({
+            text: fb.text,
+            style: { fontSize: 14, fill: fb.success ? 0x7ae87a : 0xe87a7a },
+          });
+          text.anchor.set(0.5, 1);
+          this.uiContainer.addChild(text);
+          this.feedbackTexts.push({ text, startAge: 0 });
+        }
+      }
+    }
+    for (const ft of this.feedbackTexts) {
+      ft.startAge += dt;
+      const matchingFb = feedback.find((f) => f.text === ft.text.text);
+      if (matchingFb) {
+        const screenX = matchingFb.x - this.street.left + this.worldContainer.x;
+        const screenY = matchingFb.y - this.street.top + this.worldContainer.y - 100 - ft.startAge * 30;
+        ft.text.x = screenX;
+        ft.text.y = screenY;
+        ft.text.alpha = Math.max(0, 1 - ft.startAge / 1.5);
+      }
+    }
+
     this.updateChatBubbles(dt, remotePlayers);
 
     // Swoop transition — slide old street off-screen.
@@ -326,6 +475,13 @@ export class GameRenderer {
       bubble.text.destroy();
     }
     this.chatBubbles = [];
+    for (const [, sprite] of this.entitySprites) { sprite.destroy(); }
+    this.entitySprites.clear();
+    for (const [, sprite] of this.groundItemSprites) { sprite.destroy(); }
+    this.groundItemSprites.clear();
+    if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
+    for (const ft of this.feedbackTexts) { ft.text.destroy(); }
+    this.feedbackTexts = [];
     this.app.destroy(true);
   }
 }
