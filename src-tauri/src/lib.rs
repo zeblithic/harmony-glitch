@@ -262,10 +262,10 @@ fn drop_item(slot: usize, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn street_transition_ready(app: AppHandle) -> Result<(), String> {
+fn street_transition_ready(generation: u64, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    state.transition.mark_street_ready();
+    state.transition.mark_street_ready(generation);
     Ok(())
 }
 

@@ -42,6 +42,9 @@ pub struct TransitionFrame {
     pub progress: f64,
     pub direction: TransitionDirection,
     pub to_street: String,
+    /// Generation counter — the frontend passes this back to `streetTransitionReady`
+    /// so stale promises (from a timed-out swoop) don't mark a new swoop as ready.
+    pub generation: u64,
 }
 
 /// Data sent to the frontend each tick for rendering.
@@ -125,10 +128,12 @@ impl GameState {
     pub fn load_street(&mut self, street: StreetData, entities: Vec<WorldEntity>) {
         // During an in-flight transition, skip player repositioning — the
         // Complete handler will place the player at the return signpost.
-        // Without this guard, the player position jumps to center for 1+ ticks
-        // between load_street and Complete, which is masked by the swoop viewport
-        // offset but architecturally fragile.
-        let is_transitioning = !matches!(self.transition.phase, TransitionPhase::None);
+        // Only Swooping and Complete are actual in-flight phases; PreSubscribed
+        // just means the player is near a signpost (no swoop yet).
+        let is_transitioning = matches!(
+            self.transition.phase,
+            TransitionPhase::Swooping { .. } | TransitionPhase::Complete { .. }
+        );
         if !is_transitioning {
             let center_x = (street.left + street.right) / 2.0;
             self.player = PhysicsBody::new(center_x, street.ground_y);
@@ -379,6 +384,7 @@ impl GameState {
                             .get(to_street)
                             .cloned()
                             .unwrap_or_else(|| to_street.clone()),
+                        generation: self.transition.generation,
                     })
                 }
                 TransitionPhase::Complete { new_street, direction } => {
@@ -389,6 +395,7 @@ impl GameState {
                             .get(new_street)
                             .cloned()
                             .unwrap_or_else(|| new_street.clone()),
+                        generation: self.transition.generation,
                     })
                 }
                 _ => None,
@@ -793,7 +800,7 @@ mod tests {
         state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
         assert!(matches!(state.transition.phase, TransitionPhase::Swooping { .. }));
 
-        state.transition.mark_street_ready();
+        state.transition.mark_street_ready(state.transition.generation);
 
         let mut new_street = test_street();
         new_street.tsid = "LADEMO002".into();

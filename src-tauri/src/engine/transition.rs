@@ -45,12 +45,17 @@ pub enum TransitionDirection {
 /// Lifecycle: `None` -> `PreSubscribed` -> `Swooping` -> `Complete` -> `None` (via reset).
 pub struct TransitionState {
     pub phase: TransitionPhase,
+    /// Monotonically increasing counter, incremented each time a new swoop starts.
+    /// Used by the frontend to prevent stale promises from marking the wrong
+    /// transition as ready after a timeout/cancel.
+    pub generation: u64,
 }
 
 impl TransitionState {
     pub fn new() -> Self {
         Self {
             phase: TransitionPhase::None,
+            generation: 0,
         }
     }
 
@@ -104,6 +109,9 @@ impl TransitionState {
     }
 
     /// Begin the swoop animation. Only acts when phase is `PreSubscribed`.
+    ///
+    /// Increments the generation counter so stale `mark_street_ready` calls
+    /// (from promises that resolved after a previous swoop timed out) are rejected.
     pub fn trigger_swoop(&mut self) {
         if let TransitionPhase::PreSubscribed {
             target_street,
@@ -111,6 +119,7 @@ impl TransitionState {
             ..
         } = &self.phase
         {
+            self.generation += 1;
             self.phase = TransitionPhase::Swooping {
                 to_street: target_street.clone(),
                 direction: *direction,
@@ -124,9 +133,14 @@ impl TransitionState {
 
     /// Signal that the target street data has been loaded and is ready to display.
     ///
-    /// Only acts when phase is `Swooping`. Shrinks the remaining duration so the
-    /// animation completes promptly, but never faster than `MIN_SWOOP_SECS`.
-    pub fn mark_street_ready(&mut self) {
+    /// Only acts when phase is `Swooping` AND the generation matches. This prevents
+    /// stale promises (from a timed-out swoop) from marking a *new* swoop as ready.
+    /// Shrinks the remaining duration so the animation completes promptly, but never
+    /// faster than `MIN_SWOOP_SECS`.
+    pub fn mark_street_ready(&mut self, gen: u64) {
+        if self.generation != gen {
+            return;
+        }
         if let TransitionPhase::Swooping {
             elapsed,
             target_duration,
@@ -275,7 +289,7 @@ mod tests {
         }
 
         // Street data arrives at t=1.0s — shrinks remaining from 1.0 to 0.3
-        ts.mark_street_ready();
+        ts.mark_street_ready(ts.generation);
 
         // Tick another 30 frames (0.5s) — well past the 0.3s minimum remaining
         for _ in 0..30 {
@@ -362,6 +376,44 @@ mod tests {
     }
 
     #[test]
+    fn stale_generation_rejected() {
+        let mut ts = TransitionState::new();
+        let signposts = vec![make_signpost(1950.0, "LADEMO002")];
+
+        // Start first swoop
+        ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
+        ts.trigger_swoop();
+        let old_gen = ts.generation;
+
+        // Timeout: tick past MAX_SWOOP_SECS → cancels to None
+        for _ in 0..150 {
+            ts.tick(1.0 / 60.0);
+        }
+        assert_eq!(ts.phase, TransitionPhase::None);
+
+        // Start second swoop
+        ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
+        ts.trigger_swoop();
+        assert_ne!(ts.generation, old_gen);
+
+        // Stale mark_street_ready with old generation — should be ignored
+        ts.mark_street_ready(old_gen);
+        if let TransitionPhase::Swooping { street_ready, .. } = &ts.phase {
+            assert!(!street_ready, "Stale generation should not mark street ready");
+        } else {
+            panic!("Expected Swooping");
+        }
+
+        // Correct generation — should work
+        ts.mark_street_ready(ts.generation);
+        if let TransitionPhase::Swooping { street_ready, .. } = &ts.phase {
+            assert!(street_ready, "Current generation should mark street ready");
+        } else {
+            panic!("Expected Swooping");
+        }
+    }
+
+    #[test]
     fn minimum_swoop_duration_respected() {
         let mut ts = TransitionState::new();
         let signposts = vec![make_signpost(1950.0, "LADEMO002")];
@@ -369,7 +421,7 @@ mod tests {
         ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
         ts.trigger_swoop();
         // Mark ready immediately — target_duration should shrink to MIN_SWOOP_SECS (0.3)
-        ts.mark_street_ready();
+        ts.mark_street_ready(ts.generation);
 
         // Tick 6 times at 1/60s = 0.1 seconds (less than MIN_SWOOP_SECS=0.3)
         for _ in 0..6 {

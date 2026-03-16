@@ -48,13 +48,17 @@
     if (frame.transition && !transitionPending && transitionAttempts < MAX_TRANSITION_ATTEMPTS) {
       transitionPending = true;
       transitionAttempts++;
+      // Capture the generation at the time we start loading — if the swoop
+      // times out and a new one starts, the stale promise will pass the old
+      // generation, and the backend will ignore it.
+      const gen = frame.transition.generation;
       loadStreet(frame.transition.toStreet)
         .then((street) => {
           currentStreet = street;
           // streetTransitionReady failure is non-retryable — repeated
           // mark_street_ready calls push target_duration forward, stalling the
           // swoop. Let the backend timeout (MAX_SWOOP_SECS) handle recovery.
-          return streetTransitionReady().catch((e) => {
+          return streetTransitionReady(gen).catch((e) => {
             console.error('streetTransitionReady failed (backend will timeout):', e);
           });
         })

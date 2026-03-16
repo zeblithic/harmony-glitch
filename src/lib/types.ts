@@ -126,6 +126,7 @@ export interface TransitionInfo {
   progress: number;
   direction: 'left' | 'right';
   toStreet: string;
+  generation: number;
 }
 
 export interface RenderFrame {
