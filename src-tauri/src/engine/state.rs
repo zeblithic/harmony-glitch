@@ -133,8 +133,6 @@ impl GameState {
             let center_x = (street.left + street.right) / 2.0;
             self.player = PhysicsBody::new(center_x, street.ground_y);
         }
-        self.tsid_to_name
-            .insert(street.tsid.clone(), street.name.clone());
         self.street = Some(street);
         self.world_entities = entities;
         self.world_items.clear();
