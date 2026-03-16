@@ -116,6 +116,8 @@ pub struct InteractionResult {
 }
 
 /// Execute an interaction with the nearest interactable.
+/// Note: `cooldownSecs` on EntityDef is parsed but not enforced yet — cooldowns
+/// and entity state/depletion are deferred to a future phase.
 pub fn execute_interaction(
     nearest: &NearestInteractable,
     inventory: &mut Inventory,

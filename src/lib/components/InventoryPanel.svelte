@@ -9,9 +9,22 @@
   } = $props();
 
   let selectedSlot = $state<number | null>(null);
+  let panelEl: HTMLDivElement | undefined = $state();
+  let previousFocus: HTMLElement | null = null;
   let selectedItem = $derived.by(() => {
     if (selectedSlot === null || !inventory) return null;
     return inventory.slots[selectedSlot] ?? null;
+  });
+
+  $effect(() => {
+    if (visible && panelEl) {
+      previousFocus = document.activeElement as HTMLElement | null;
+      const firstSlot = panelEl.querySelector<HTMLElement>('.slot');
+      firstSlot?.focus();
+    } else if (!visible && previousFocus) {
+      previousFocus.focus();
+      previousFocus = null;
+    }
   });
 
   function handleSlotClick(index: number) {
@@ -30,6 +43,7 @@
 
   function handleKeyDown(e: KeyboardEvent) {
     if (!visible) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
 
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -69,7 +83,7 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 {#if visible}
-  <div class="inventory-panel" role="dialog" aria-label="Inventory">
+  <div class="inventory-panel" role="dialog" aria-label="Inventory" bind:this={panelEl}>
     <h3>Inventory</h3>
     <div class="slots" role="grid" aria-label="Inventory slots">
       {#each { length: Math.ceil((inventory?.capacity ?? 16) / 4) } as _, row}
