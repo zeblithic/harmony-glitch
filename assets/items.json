@@ -1,0 +1,44 @@
+{
+  "cherry": {
+    "name": "Cherry",
+    "description": "A plump, juicy cherry from a Fruit Tree.",
+    "category": "food",
+    "stackLimit": 50,
+    "icon": "cherry"
+  },
+  "grain": {
+    "name": "Grain",
+    "description": "Squeezed from a chicken. Don't ask.",
+    "category": "food",
+    "stackLimit": 50,
+    "icon": "grain"
+  },
+  "meat": {
+    "name": "Meat",
+    "description": "Nibbled off a friendly pig. It didn't seem to mind.",
+    "category": "food",
+    "stackLimit": 50,
+    "icon": "meat"
+  },
+  "milk": {
+    "name": "Milk",
+    "description": "Milked from a butterfly. Surprisingly creamy.",
+    "category": "food",
+    "stackLimit": 50,
+    "icon": "milk"
+  },
+  "bubble": {
+    "name": "Bubble",
+    "description": "A shimmering bubble harvested from a Bubble Tree.",
+    "category": "material",
+    "stackLimit": 50,
+    "icon": "bubble"
+  },
+  "wood": {
+    "name": "Wood",
+    "description": "A sturdy plank from a Wood Tree.",
+    "category": "material",
+    "stackLimit": 50,
+    "icon": "wood"
+  }
+}
