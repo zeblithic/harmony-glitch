@@ -53,3 +53,7 @@ export async function onChatMessage(
     callback(event.payload);
   });
 }
+
+export async function dropItem(slot: number): Promise<void> {
+  return invoke('drop_item', { slot });
+}

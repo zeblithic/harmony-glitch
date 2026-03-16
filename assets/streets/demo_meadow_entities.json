@@ -1,0 +1,8 @@
+[
+  { "id": "tree_1", "type": "fruit_tree", "x": -800, "y": -2 },
+  { "id": "tree_2", "type": "fruit_tree", "x": 1200, "y": -2 },
+  { "id": "chicken_1", "type": "chicken", "x": 200, "y": -2 },
+  { "id": "pig_1", "type": "pig", "x": -300, "y": -2 },
+  { "id": "butterfly_1", "type": "butterfly", "x": 600, "y": -80 },
+  { "id": "wood_tree_1", "type": "wood_tree", "x": -1400, "y": -2 }
+]

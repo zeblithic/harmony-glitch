@@ -4,10 +4,11 @@
   import { sendInput, onRenderFrame, onChatMessage, startGame } from '../ipc';
   import type { StreetData, InputState, RenderFrame } from '../types';
 
-  let { street, debugMode = false, chatFocused = false, onFrame }: {
+  let { street, debugMode = false, chatFocused = false, inventoryOpen = false, onFrame }: {
     street: StreetData | null;
     debugMode?: boolean;
     chatFocused?: boolean;
+    inventoryOpen?: boolean;
     onFrame?: (frame: RenderFrame) => void;
   } = $props();
 
@@ -15,20 +16,20 @@
   let renderer = $state<GameRenderer | null>(null);
 
   // Track key state
-  let keys = $state<InputState>({ left: false, right: false, jump: false });
+  let keys = $state<InputState>({ left: false, right: false, jump: false, interact: false });
 
   // Clear held keys when chat opens so the player stops moving while typing.
   // Pass the literal to sendInput to avoid reading `keys` (which would create
   // a reactive dependency and cause an infinite re-run loop).
   $effect(() => {
-    if (chatFocused) {
-      keys = { left: false, right: false, jump: false };
-      sendInput({ left: false, right: false, jump: false }).catch(console.error);
+    if (chatFocused || inventoryOpen) {
+      keys = { left: false, right: false, jump: false, interact: false };
+      sendInput({ left: false, right: false, jump: false, interact: false }).catch(console.error);
     }
   });
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (chatFocused) return;
+    if (chatFocused || inventoryOpen) return;
     let changed = false;
     if (e.key === 'ArrowLeft' || e.key === 'a') { keys.left = true; changed = true; }
     if (e.key === 'ArrowRight' || e.key === 'd') { keys.right = true; changed = true; }
@@ -37,15 +38,17 @@
       keys.jump = true;
       changed = true;
     }
+    if (e.key === 'e' || e.key === 'E') { keys.interact = true; changed = true; }
     if (changed) sendInput({ ...keys }).catch(console.error);
   }
 
   function handleKeyUp(e: KeyboardEvent) {
-    if (chatFocused) return;
+    if (chatFocused || inventoryOpen) return;
     let changed = false;
     if (e.key === 'ArrowLeft' || e.key === 'a') { keys.left = false; changed = true; }
     if (e.key === 'ArrowRight' || e.key === 'd') { keys.right = false; changed = true; }
     if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w') { keys.jump = false; changed = true; }
+    if (e.key === 'e' || e.key === 'E') { keys.interact = false; changed = true; }
     if (changed) sendInput({ ...keys }).catch(console.error);
   }
 
@@ -88,7 +91,7 @@
 <div
   class="canvas-container"
   role="application"
-  aria-label="Harmony Glitch game — use arrow keys or WASD to move, Space to jump, F3 for debug overlay"
+  aria-label="Harmony Glitch game — use arrow keys or WASD to move, Space to jump, E to interact, I for inventory, F3 for debug overlay"
 >
   <canvas bind:this={canvasEl}></canvas>
 </div>

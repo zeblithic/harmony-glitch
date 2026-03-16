@@ -39,6 +39,7 @@ pub struct InputState {
     pub left: bool,
     pub right: bool,
     pub jump: bool,
+    pub interact: bool,
 }
 
 impl PhysicsBody {

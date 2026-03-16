@@ -134,6 +134,11 @@ export interface RenderFrame {
   camera: CameraFrame;
   streetId: string;
   transition?: TransitionInfo | null;
+  inventory: InventoryFrame;
+  worldEntities: WorldEntityFrame[];
+  worldItems: WorldItemFrame[];
+  interactionPrompt: InteractionPrompt | null;
+  pickupFeedback: PickupFeedback[];
 }
 
 export interface NetworkStatus {
@@ -156,4 +161,54 @@ export interface InputState {
   left: boolean;
   right: boolean;
   jump: boolean;
+  interact: boolean;
+}
+
+export interface InventoryFrame {
+  slots: (ItemStackFrame | null)[];
+  capacity: number;
+}
+
+export interface ItemStackFrame {
+  itemId: string;
+  name: string;
+  description: string;
+  icon: string;
+  count: number;
+  stackLimit: number;
+}
+
+export interface WorldEntityFrame {
+  id: string;
+  entityType: string;
+  name: string;
+  spriteClass: string;
+  x: number;
+  y: number;
+}
+
+export interface WorldItemFrame {
+  id: string;
+  itemId: string;
+  name: string;
+  icon: string;
+  count: number;
+  x: number;
+  y: number;
+}
+
+export interface InteractionPrompt {
+  verb: string;
+  targetName: string;
+  targetX: number;
+  targetY: number;
+}
+
+export interface PickupFeedback {
+  id: number;
+  text: string;
+  success: boolean;
+  x: number;
+  y: number;
+  ageSecs: number;
 }

@@ -1,6 +1,7 @@
 pub mod avatar;
 pub mod engine;
 pub mod identity;
+pub mod item;
 pub mod network;
 pub mod physics;
 pub mod street;
@@ -61,12 +62,14 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
     // Load XML from bundled assets
     let xml = load_street_xml(&name)?;
     let street_data = parse_street(&xml)?;
+    let entity_json = load_entity_placement(&name)?;
+    let entities = item::loader::parse_entity_placements(&entity_json)?;
 
     // Update game state
     {
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-        state.load_street(street_data.clone());
+        state.load_street(street_data.clone(), entities);
     }
 
     // Update network state for the new street.
@@ -239,6 +242,26 @@ fn send_chat(message: String, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn drop_item(slot: usize, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    if let Some(stack) = state.inventory.drop_item(slot) {
+        let id = format!("drop_{}", state.next_item_id);
+        let x = state.player.x;
+        let y = state.player.y;
+        state.world_items.push(item::types::WorldItem {
+            id,
+            item_id: stack.item_id,
+            count: stack.count,
+            x,
+            y,
+        });
+        state.next_item_id += 1;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn get_network_status(app: AppHandle) -> Result<serde_json::Value, String> {
     let net = app.state::<NetworkWrapper>();
     let net_state = net.0.lock().map_err(|e| e.to_string())?;
@@ -332,7 +355,7 @@ fn game_loop(app: AppHandle) {
         let frame = {
             let state_wrapper = app.state::<GameStateWrapper>();
             let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
-            state.tick(dt, &input)
+            state.tick(dt, &input, &mut rng)
         };
 
         if let Some(mut frame) = frame {
@@ -391,10 +414,31 @@ fn load_street_xml(name: &str) -> Result<String, String> {
     }
 }
 
+fn load_entity_placement(name: &str) -> Result<String, String> {
+    match name {
+        "demo_meadow" | "LADEMO001" => {
+            Ok(include_str!("../../assets/streets/demo_meadow_entities.json").to_string())
+        }
+        "demo_heights" | "LADEMO002" => {
+            Ok(include_str!("../../assets/streets/demo_heights_entities.json").to_string())
+        }
+        _ => Ok("[]".to_string()), // Streets without entities get an empty list
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(MonotonicEpoch(Instant::now()))
-        .manage(GameStateWrapper(Mutex::new(GameState::new(1280.0, 720.0))))
+        .manage({
+            let item_defs = item::loader::parse_item_defs(include_str!("../../assets/items.json"))
+                .expect("Failed to parse items.json");
+            let entity_defs =
+                item::loader::parse_entity_defs(include_str!("../../assets/entities.json"))
+                    .expect("Failed to parse entities.json");
+            GameStateWrapper(Mutex::new(GameState::new(
+                1280.0, 720.0, item_defs, entity_defs,
+            )))
+        })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
         .manage(GameRunning(Mutex::new(false)))
         .manage(GameLoopHandle(Mutex::new(None)))
@@ -440,6 +484,7 @@ pub fn run() {
             get_identity,
             set_display_name,
             send_chat,
+            drop_item,
             get_network_status,
         ])
         .run(tauri::generate_context!())
