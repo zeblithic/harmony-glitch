@@ -198,98 +198,99 @@ impl GameState {
             self.transition.reset();
         }
 
+        // --- Task 4: freeze input/physics during swoop ---
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
         let interaction_prompt = if !is_swooping {
-        // Physics tick — walls are parsed from street data but not yet enforced
-        // in the collision system (Phase A scope: platforms only).
-        self.player
-            .tick(dt, input, street.platforms(), street.left, street.right);
+            // Physics tick — walls are parsed from street data but not yet enforced
+            // in the collision system (Phase A scope: platforms only).
+            self.player
+                .tick(dt, input, street.platforms(), street.left, street.right);
 
-        // --- Interaction system ---
-        // Age and cull pickup feedback
-        for fb in &mut self.pickup_feedback {
-            fb.age_secs += dt;
-        }
-        self.pickup_feedback.retain(|fb| fb.age_secs < 1.5);
+            // --- Interaction system ---
+            // Age and cull pickup feedback
+            for fb in &mut self.pickup_feedback {
+                fb.age_secs += dt;
+            }
+            self.pickup_feedback.retain(|fb| fb.age_secs < 1.5);
 
-        // Proximity scan
-        let nearest = interaction::proximity_scan(
-            self.player.x,
-            self.player.y,
-            &self.world_entities,
-            &self.entity_defs,
-            &self.world_items,
-        );
-
-        // Build prompt
-        let interaction_prompt = nearest.as_ref().map(|n| {
-            interaction::build_prompt(
-                n,
+            // Proximity scan
+            let nearest = interaction::proximity_scan(
+                self.player.x,
+                self.player.y,
                 &self.world_entities,
                 &self.entity_defs,
                 &self.world_items,
-                &self.item_defs,
-            )
-        });
+            );
 
-        // Rising edge detection for interact
-        let interact_pressed = input.interact && !self.prev_interact;
-        self.prev_interact = input.interact;
-
-        // Execute interaction on rising edge
-        let mut interacted = false;
-        if interact_pressed {
-            if let Some(nearest) = &nearest {
-                let result = interaction::execute_interaction(
-                    nearest,
-                    &mut self.inventory,
+            // Build prompt
+            let interaction_prompt = nearest.as_ref().map(|n| {
+                interaction::build_prompt(
+                    n,
                     &self.world_entities,
                     &self.entity_defs,
                     &self.world_items,
                     &self.item_defs,
-                    rng,
-                );
+                )
+            });
 
-                // Apply results — assign unique IDs to feedback
-                for mut fb in result.feedback {
-                    fb.id = self.next_feedback_id;
-                    self.next_feedback_id += 1;
-                    self.pickup_feedback.push(fb);
-                }
+            // Rising edge detection for interact
+            let interact_pressed = input.interact && !self.prev_interact;
+            self.prev_interact = input.interact;
 
-                // Remove or update ground items BEFORE appending overflow,
-                // so indices from execute_interaction remain valid.
-                if let Some(idx) = result.remove_ground_item {
-                    self.world_items.remove(idx);
-                } else if let Some((idx, new_count)) = result.update_ground_item {
-                    self.world_items[idx].count = new_count;
-                }
+            // Execute interaction on rising edge
+            let mut interacted = false;
+            if interact_pressed {
+                if let Some(nearest) = &nearest {
+                    let result = interaction::execute_interaction(
+                        nearest,
+                        &mut self.inventory,
+                        &self.world_entities,
+                        &self.entity_defs,
+                        &self.world_items,
+                        &self.item_defs,
+                        rng,
+                    );
 
-                // Spawn overflow items (after index-based ops above)
-                for (item_id, count, x, y) in result.spawned_items {
-                    self.world_items.push(WorldItem {
-                        id: format!("drop_{}", self.next_item_id),
-                        item_id,
-                        count,
-                        x,
-                        y,
-                    });
-                    self.next_item_id += 1;
-                }
+                    // Apply results — assign unique IDs to feedback
+                    for mut fb in result.feedback {
+                        fb.id = self.next_feedback_id;
+                        self.next_feedback_id += 1;
+                        self.pickup_feedback.push(fb);
+                    }
 
-                // Only blank prompt when the ground item target was removed.
-                // Entity targets persist after harvest — blanking would cause
-                // a one-frame flicker as the prompt rebuilds next tick.
-                if result.remove_ground_item.is_some() {
-                    interacted = true;
+                    // Remove or update ground items BEFORE appending overflow,
+                    // so indices from execute_interaction remain valid.
+                    if let Some(idx) = result.remove_ground_item {
+                        self.world_items.remove(idx);
+                    } else if let Some((idx, new_count)) = result.update_ground_item {
+                        self.world_items[idx].count = new_count;
+                    }
+
+                    // Spawn overflow items (after index-based ops above)
+                    for (item_id, count, x, y) in result.spawned_items {
+                        self.world_items.push(WorldItem {
+                            id: format!("drop_{}", self.next_item_id),
+                            item_id,
+                            count,
+                            x,
+                            y,
+                        });
+                        self.next_item_id += 1;
+                    }
+
+                    // Only blank prompt when the ground item target was removed.
+                    // Entity targets persist after harvest — blanking would cause
+                    // a one-frame flicker as the prompt rebuilds next tick.
+                    if result.remove_ground_item.is_some() {
+                        interacted = true;
+                    }
                 }
             }
-        }
 
-        // Clear prompt on the frame where a ground item was picked up — the
-        // target was removed, so the pre-interaction prompt is stale.
-        if interacted { None } else { interaction_prompt }
+            // Clear prompt on the frame where a ground item was picked up — the
+            // target was removed, so the pre-interaction prompt is stale.
+            if interacted { None } else { interaction_prompt }
         } else {
             self.prev_interact = input.interact;
             None
