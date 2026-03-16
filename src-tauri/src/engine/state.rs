@@ -199,12 +199,17 @@ impl GameState {
                     self.world_items[idx].count = new_count;
                 }
 
-                interacted = true;
+                // Only blank prompt when the ground item target was removed.
+                // Entity targets persist after harvest — blanking would cause
+                // a one-frame flicker as the prompt rebuilds next tick.
+                if result.remove_ground_item.is_some() {
+                    interacted = true;
+                }
             }
         }
 
-        // Clear prompt on the frame where interaction happened — the target
-        // may have been removed or changed, so the pre-interaction prompt is stale.
+        // Clear prompt on the frame where a ground item was picked up — the
+        // target was removed, so the pre-interaction prompt is stale.
         let interaction_prompt = if interacted { None } else { interaction_prompt };
 
         // Determine animation state
