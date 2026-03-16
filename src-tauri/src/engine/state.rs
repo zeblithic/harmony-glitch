@@ -2,7 +2,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::avatar::types::{AnimationState, Direction};
-use crate::engine::transition::TransitionDirection;
+use crate::engine::transition::{TransitionDirection, TransitionState};
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
@@ -28,6 +28,8 @@ pub struct GameState {
     pub next_item_id: u64,
     pub next_feedback_id: u64,
     pub pickup_feedback: Vec<PickupFeedback>,
+    pub transition: TransitionState,
+    pub tsid_to_name: std::collections::HashMap<String, String>,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -108,6 +110,11 @@ impl GameState {
             next_item_id: 0,
             next_feedback_id: 0,
             pickup_feedback: vec![],
+            transition: TransitionState::new(),
+            tsid_to_name: std::collections::HashMap::from([
+                ("LADEMO001".to_string(), "demo_meadow".to_string()),
+                ("LADEMO002".to_string(), "demo_heights".to_string()),
+            ]),
         }
     }
 
@@ -334,6 +341,7 @@ impl GameState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::transition::TransitionPhase;
     use crate::item::types::{EntityDefs, ItemDefs};
     use crate::street::types::*;
 
@@ -536,5 +544,11 @@ mod tests {
         let input = InputState::default();
         let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
         assert!(frame.transition.is_none());
+    }
+
+    #[test]
+    fn game_state_has_transition_state() {
+        let state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        assert_eq!(state.transition.phase, TransitionPhase::None);
     }
 }
