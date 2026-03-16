@@ -6,6 +6,7 @@
   import ChatInput from './lib/components/ChatInput.svelte';
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
+  import InventoryPanel from './lib/components/InventoryPanel.svelte';
   import { stopGame, loadStreet, getIdentity } from './lib/ipc';
   import type { StreetData, RenderFrame } from './lib/types';
   import { onMount } from 'svelte';
@@ -14,6 +15,7 @@
   let latestFrame = $state<RenderFrame | null>(null);
   let debugMode = $state(false);
   let chatFocused = $state(false);
+  let inventoryOpen = $state(false);
   let transitionPending = $state(false);
   let identityReady = $state(false);
   let checkingIdentity = $state(true);
@@ -55,7 +57,13 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }}} />
+<svelte:window onkeydown={(e) => {
+  if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
+  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused) {
+    e.preventDefault();
+    inventoryOpen = !inventoryOpen;
+  }
+}} />
 
 <main>
   {#if checkingIdentity}
@@ -63,10 +71,15 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
+    <InventoryPanel
+      inventory={latestFrame?.inventory ?? null}
+      visible={inventoryOpen}
+      onClose={() => { inventoryOpen = false; }}
+    />
     <button type="button" class="back-btn" onclick={async () => {
       try {
         await stopGame();
