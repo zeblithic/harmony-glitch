@@ -57,3 +57,7 @@ export async function onChatMessage(
 export async function dropItem(slot: number): Promise<void> {
   return invoke('drop_item', { slot });
 }
+
+export async function streetTransitionReady(): Promise<void> {
+  return invoke('street_transition_ready');
+}
