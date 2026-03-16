@@ -66,8 +66,9 @@
   }
 </script>
 
+<svelte:window onkeydown={handleKeyDown} />
+
 {#if visible}
-  <svelte:window onkeydown={handleKeyDown} />
   <div class="inventory-panel" role="dialog" aria-label="Inventory">
     <h3>Inventory</h3>
     <div class="slots" role="grid" aria-label="Inventory slots">
