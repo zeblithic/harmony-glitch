@@ -198,7 +198,6 @@ impl GameState {
             self.transition.reset();
         }
 
-        // --- Task 4: freeze input/physics during swoop ---
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
         let interaction_prompt = if !is_swooping {
