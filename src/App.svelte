@@ -48,9 +48,15 @@
       loadStreet(frame.transition.toStreet)
         .then((street) => {
           currentStreet = street;
-          return streetTransitionReady();
+          // streetTransitionReady failure is non-retryable — repeated
+          // mark_street_ready calls push target_duration forward, stalling the
+          // swoop. Let the backend timeout (MAX_SWOOP_SECS) handle recovery.
+          return streetTransitionReady().catch((e) => {
+            console.error('streetTransitionReady failed (backend will timeout):', e);
+          });
         })
         .catch((e) => {
+          // Only loadStreet failed — allow retry on next frame.
           console.error('Street transition failed:', e);
           transitionPending = false;
         });

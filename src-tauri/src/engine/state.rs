@@ -133,6 +133,8 @@ impl GameState {
             let center_x = (street.left + street.right) / 2.0;
             self.player = PhysicsBody::new(center_x, street.ground_y);
         }
+        self.tsid_to_name
+            .insert(street.tsid.clone(), street.name.clone());
         self.street = Some(street);
         self.world_entities = entities;
         self.world_items.clear();
@@ -204,6 +206,12 @@ impl GameState {
                     self.player.y = street.ground_y;
                     self.player.vx = 0.0;
                     self.player.vy = 0.0;
+                } else {
+                    // No return signpost found (data inconsistency) — center of street.
+                    self.player.x = (street.left + street.right) / 2.0;
+                    self.player.y = street.ground_y;
+                    self.player.vx = 0.0;
+                    self.player.vy = 0.0;
                 }
             }
 
@@ -212,9 +220,14 @@ impl GameState {
         }
 
         // Timeout path: Swooping → None without visiting Complete.
-        // Clear stale origin TSID so a late-arriving loadStreet doesn't
-        // see is_transitioning=false and mis-position the player.
-        if was_swooping && self.transition.phase == TransitionPhase::None {
+        // The Complete handler already clears transition_origin_tsid, so this
+        // only fires when Complete was never visited (timeout cancellation).
+        // Prevents a late-arriving loadStreet from seeing is_transitioning=false
+        // and mis-positioning the player.
+        if was_swooping
+            && self.transition.phase == TransitionPhase::None
+            && self.transition_origin_tsid.is_some()
+        {
             self.transition_origin_tsid = None;
         }
 
