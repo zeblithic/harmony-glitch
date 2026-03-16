@@ -17,7 +17,6 @@ pub enum TransitionPhase {
     },
     /// The swoop animation is in progress.
     Swooping {
-        from_street: String,
         to_street: String,
         direction: TransitionDirection,
         progress: f64,
@@ -103,7 +102,7 @@ impl TransitionState {
     }
 
     /// Begin the swoop animation. Only acts when phase is `PreSubscribed`.
-    pub fn trigger_swoop(&mut self, from_street: String) {
+    pub fn trigger_swoop(&mut self) {
         if let TransitionPhase::PreSubscribed {
             target_street,
             direction,
@@ -111,7 +110,6 @@ impl TransitionState {
         } = &self.phase
         {
             self.phase = TransitionPhase::Swooping {
-                from_street,
                 to_street: target_street.clone(),
                 direction: *direction,
                 progress: 0.0,
@@ -266,7 +264,7 @@ mod tests {
         let signposts = vec![make_signpost(1950.0, "LADEMO002")];
 
         ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
-        ts.trigger_swoop("LADEMO001".into());
+        ts.trigger_swoop();
 
         // Simulate network delay: tick for 1 second before street data arrives
         for _ in 0..60 {
@@ -295,7 +293,7 @@ mod tests {
         let signposts = vec![make_signpost(1950.0, "LADEMO002")];
 
         ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
-        ts.trigger_swoop("LADEMO001".into());
+        ts.trigger_swoop();
         // Do NOT mark street ready
 
         // Tick 60 times at 1/60s = 1 second (within MAX_SWOOP_SECS) — should stall at ≤0.9
@@ -348,7 +346,7 @@ mod tests {
         let signposts = vec![make_signpost(1950.0, "LADEMO002")];
 
         ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
-        ts.trigger_swoop("LADEMO001".into());
+        ts.trigger_swoop();
         // Do NOT mark street ready — simulate failed load
 
         // Tick past MAX_SWOOP_SECS (2.0s) — 150 frames at 1/60s = 2.5s
@@ -366,7 +364,7 @@ mod tests {
         let signposts = vec![make_signpost(1950.0, "LADEMO002")];
 
         ts.check_signposts(1500.0, &signposts, -2000.0, 2000.0);
-        ts.trigger_swoop("LADEMO001".into());
+        ts.trigger_swoop();
         // Mark ready immediately — target_duration should shrink to MIN_SWOOP_SECS (0.3)
         ts.mark_street_ready();
 

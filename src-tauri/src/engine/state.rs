@@ -181,10 +181,11 @@ impl GameState {
             };
             if crossed {
                 self.transition_origin_tsid = Some(street.tsid.clone());
-                self.transition.trigger_swoop(street.tsid.clone());
+                self.transition.trigger_swoop();
             }
         }
 
+        let was_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
         self.transition.tick(dt);
 
         // Handle transition completion — reposition player at return signpost
@@ -201,11 +202,20 @@ impl GameState {
                     let inward = if sp.x < street_mid { 1.0 } else { -1.0 };
                     self.player.x = sp.x + inward * (PRE_SUBSCRIBE_DISTANCE + 50.0);
                     self.player.y = street.ground_y;
+                    self.player.vx = 0.0;
+                    self.player.vy = 0.0;
                 }
             }
 
             self.transition_origin_tsid = None;
             self.transition.reset();
+        }
+
+        // Timeout path: Swooping → None without visiting Complete.
+        // Clear stale origin TSID so a late-arriving loadStreet doesn't
+        // see is_transitioning=false and mis-position the player.
+        if was_swooping && self.transition.phase == TransitionPhase::None {
+            self.transition_origin_tsid = None;
         }
 
         // Re-check swooping state after transition system may have changed it.

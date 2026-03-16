@@ -40,6 +40,9 @@
 
     // When a transition appears, pre-load the target street immediately.
     // The TransitionState stalls at progress 0.9 until we signal ready.
+    // transitionPending stays true until frame.transition disappears (swoop
+    // completes) — clearing it earlier causes repeated loadStreet/mark_street_ready
+    // calls that push target_duration forward indefinitely, stalling the swoop.
     if (frame.transition && !transitionPending) {
       transitionPending = true;
       loadStreet(frame.transition.toStreet)
@@ -47,13 +50,13 @@
           currentStreet = street;
           return streetTransitionReady();
         })
-        .then(() => {
-          transitionPending = false;
-        })
         .catch((e) => {
           console.error('Street transition failed:', e);
           transitionPending = false;
         });
+    }
+    if (!frame.transition && transitionPending) {
+      transitionPending = false;
     }
   }
 
