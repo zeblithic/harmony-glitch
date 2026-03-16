@@ -399,13 +399,13 @@ export class GameRenderer {
     }
     for (const ft of this.feedbackTexts) {
       ft.startAge += dt;
+      ft.text.alpha = Math.max(0, 1 - ft.startAge / 1.5);
       const matchingFb = feedback.find((f) => f.id === ft.feedbackId);
       if (matchingFb) {
         const screenX = matchingFb.x - this.street.left + this.worldContainer.x;
         const screenY = matchingFb.y - this.street.top + this.worldContainer.y - 100 - ft.startAge * 30;
         ft.text.x = screenX;
         ft.text.y = screenY;
-        ft.text.alpha = Math.max(0, 1 - ft.startAge / 1.5);
       }
     }
 

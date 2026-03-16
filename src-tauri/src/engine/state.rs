@@ -180,7 +180,15 @@ impl GameState {
                     self.pickup_feedback.push(fb);
                 }
 
-                // Spawn overflow items
+                // Remove or update ground items BEFORE appending overflow,
+                // so indices from execute_interaction remain valid.
+                if let Some(idx) = result.remove_ground_item {
+                    self.world_items.remove(idx);
+                } else if let Some((idx, new_count)) = result.update_ground_item {
+                    self.world_items[idx].count = new_count;
+                }
+
+                // Spawn overflow items (after index-based ops above)
                 for (item_id, count, x, y) in result.spawned_items {
                     self.world_items.push(WorldItem {
                         id: format!("drop_{}", self.next_item_id),
@@ -190,13 +198,6 @@ impl GameState {
                         y,
                     });
                     self.next_item_id += 1;
-                }
-
-                // Remove or update ground items
-                if let Some(idx) = result.remove_ground_item {
-                    self.world_items.remove(idx);
-                } else if let Some((idx, new_count)) = result.update_ground_item {
-                    self.world_items[idx].count = new_count;
                 }
 
                 // Only blank prompt when the ground item target was removed.
