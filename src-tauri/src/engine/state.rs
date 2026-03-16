@@ -25,6 +25,7 @@ pub struct GameState {
     pub entity_defs: EntityDefs,
     pub prev_interact: bool,
     pub next_item_id: u64,
+    pub next_feedback_id: u64,
     pub pickup_feedback: Vec<PickupFeedback>,
 }
 
@@ -94,6 +95,7 @@ impl GameState {
             entity_defs,
             prev_interact: false,
             next_item_id: 0,
+            next_feedback_id: 0,
             pickup_feedback: vec![],
         }
     }
@@ -170,8 +172,12 @@ impl GameState {
                     rng,
                 );
 
-                // Apply results
-                self.pickup_feedback.extend(result.feedback);
+                // Apply results — assign unique IDs to feedback
+                for mut fb in result.feedback {
+                    fb.id = self.next_feedback_id;
+                    self.next_feedback_id += 1;
+                    self.pickup_feedback.push(fb);
+                }
 
                 // Spawn overflow items
                 for (item_id, count, x, y) in result.spawned_items {

@@ -21,7 +21,7 @@ export class GameRenderer {
   private entitySprites: Map<string, Container> = new Map();
   private groundItemSprites: Map<string, Container> = new Map();
   private promptText: Text | null = null;
-  private feedbackTexts: { text: Text; startAge: number }[] = [];
+  private feedbackTexts: { text: Text; feedbackId: number; startAge: number }[] = [];
   private lastFrameTime = 0;
   private platformGraphics: Graphics | null = null;
   private avatarGraphics: Graphics | null = null;
@@ -384,7 +384,7 @@ export class GameRenderer {
     for (const fb of feedback) {
       if (fb.ageSecs < dt * 2) {
         const existing = this.feedbackTexts.find(
-          (ft) => ft.text.text === fb.text && ft.startAge < 0.1
+          (ft) => ft.feedbackId === fb.id
         );
         if (!existing) {
           const text = new Text({
@@ -393,13 +393,13 @@ export class GameRenderer {
           });
           text.anchor.set(0.5, 1);
           this.uiContainer.addChild(text);
-          this.feedbackTexts.push({ text, startAge: 0 });
+          this.feedbackTexts.push({ text, feedbackId: fb.id, startAge: 0 });
         }
       }
     }
     for (const ft of this.feedbackTexts) {
       ft.startAge += dt;
-      const matchingFb = feedback.find((f) => f.text === ft.text.text);
+      const matchingFb = feedback.find((f) => f.id === ft.feedbackId);
       if (matchingFb) {
         const screenX = matchingFb.x - this.street.left + this.worldContainer.x;
         const screenY = matchingFb.y - this.street.top + this.worldContainer.y - 100 - ft.startAge * 30;

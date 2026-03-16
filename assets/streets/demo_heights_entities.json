@@ -1,5 +1,6 @@
 [
   { "id": "btree_1", "type": "bubble_tree", "x": -500, "y": -2 },
   { "id": "chicken_2", "type": "chicken", "x": 400, "y": -2 },
-  { "id": "butterfly_2", "type": "butterfly", "x": -100, "y": -60 }
+  { "id": "butterfly_2", "type": "butterfly", "x": -100, "y": -60 },
+  { "id": "wood_tree_2", "type": "wood_tree", "x": 800, "y": -2 }
 ]

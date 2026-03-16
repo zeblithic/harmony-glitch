@@ -205,6 +205,7 @@ export interface InteractionPrompt {
 }
 
 export interface PickupFeedback {
+  id: number;
   text: string;
   success: boolean;
   x: number;

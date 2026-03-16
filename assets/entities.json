@@ -38,5 +38,13 @@
     "cooldownSecs": 0,
     "spriteClass": "tree_bubble",
     "interactRadius": 80
+  },
+  "wood_tree": {
+    "name": "Wood Tree",
+    "verb": "Chop",
+    "yields": [{ "item": "wood", "min": 1, "max": 2 }],
+    "cooldownSecs": 0,
+    "spriteClass": "tree_wood",
+    "interactRadius": 80
   }
 }

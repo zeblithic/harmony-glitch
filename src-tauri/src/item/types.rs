@@ -125,6 +125,7 @@ pub struct InteractionPrompt {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PickupFeedback {
+    pub id: u64,
     pub text: String,
     pub success: bool,
     pub x: f64,

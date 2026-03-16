@@ -99,12 +99,13 @@ mod tests {
     fn parse_bundled_entities_json() {
         let json = include_str!("../../../assets/entities.json");
         let defs = parse_entity_defs(json).unwrap();
-        assert_eq!(defs.len(), 5);
+        assert_eq!(defs.len(), 6);
         assert!(defs.contains_key("fruit_tree"));
         assert!(defs.contains_key("chicken"));
         assert!(defs.contains_key("pig"));
         assert!(defs.contains_key("butterfly"));
         assert!(defs.contains_key("bubble_tree"));
+        assert!(defs.contains_key("wood_tree"));
     }
 
     #[test]

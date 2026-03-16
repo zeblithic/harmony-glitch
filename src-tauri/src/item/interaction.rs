@@ -152,6 +152,7 @@ pub fn execute_interaction(
                         .map(|d| d.name.clone())
                         .unwrap_or_else(|| yield_entry.item.clone());
                     result.feedback.push(PickupFeedback {
+                        id: 0, // assigned by GameState
                         text: format!("+{} x{}", name, added),
                         success: true,
                         x: entity.x,
@@ -165,6 +166,7 @@ pub fn execute_interaction(
                         .spawned_items
                         .push((yield_entry.item.clone(), overflow, entity.x, entity.y));
                     result.feedback.push(PickupFeedback {
+                        id: 0, // assigned by GameState
                         text: "Inventory full!".into(),
                         success: false,
                         x: entity.x,
@@ -185,6 +187,7 @@ pub fn execute_interaction(
                     .map(|d| d.name.clone())
                     .unwrap_or_else(|| item.item_id.clone());
                 result.feedback.push(PickupFeedback {
+                    id: 0, // assigned by GameState
                     text: format!("+{} x{}", name, added),
                     success: true,
                     x: item.x,
@@ -199,6 +202,7 @@ pub fn execute_interaction(
                 result.update_ground_item = Some((*index, overflow));
             } else {
                 result.feedback.push(PickupFeedback {
+                    id: 0, // assigned by GameState
                     text: "Inventory full!".into(),
                     success: false,
                     x: item.x,

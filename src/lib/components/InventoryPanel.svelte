@@ -9,7 +9,7 @@
   } = $props();
 
   let selectedSlot = $state<number | null>(null);
-  let panelEl: HTMLDivElement | undefined = $state();
+  let dialogEl: HTMLDialogElement | undefined = $state();
   let previousFocus: HTMLElement | null = null;
   let selectedItem = $derived.by(() => {
     if (selectedSlot === null || !inventory) return null;
@@ -17,15 +17,23 @@
   });
 
   $effect(() => {
-    if (visible && panelEl) {
+    if (visible && dialogEl) {
       previousFocus = document.activeElement as HTMLElement | null;
-      const firstSlot = panelEl.querySelector<HTMLElement>('.slot');
+      if (!dialogEl.open) {
+        dialogEl.showModal();
+      }
+      const firstSlot = dialogEl.querySelector<HTMLElement>('.slot');
       firstSlot?.focus();
     } else if (!visible && previousFocus) {
       previousFocus.focus();
       previousFocus = null;
     }
   });
+
+  function handleCancel(e: Event) {
+    e.preventDefault();
+    onClose?.();
+  }
 
   function handleSlotClick(index: number) {
     selectedSlot = selectedSlot === index ? null : index;
@@ -42,14 +50,7 @@
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (!visible) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
-
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose?.();
-      return;
-    }
 
     if (e.key === 'd' || e.key === 'D') {
       handleDrop();
@@ -80,30 +81,35 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeyDown} />
-
 {#if visible}
-  <div class="inventory-panel" role="dialog" aria-label="Inventory" bind:this={panelEl}>
+  <dialog
+    class="inventory-panel"
+    aria-label="Inventory"
+    bind:this={dialogEl}
+    oncancel={handleCancel}
+    onkeydown={handleKeyDown}
+  >
     <h3>Inventory</h3>
     <div class="slots" role="grid" aria-label="Inventory slots">
       {#each { length: Math.ceil((inventory?.capacity ?? 16) / 4) } as _, row}
         <div role="row" class="slot-row">
           {#each inventory?.slots?.slice(row * 4, row * 4 + 4) ?? [] as slot, col}
             {@const i = row * 4 + col}
-            <button
-              type="button"
-              class="slot"
-              class:selected={selectedSlot === i}
-              class:filled={slot !== null}
-              role="gridcell"
-              aria-label={slot ? `${slot.name} x${slot.count}` : `Empty slot ${i + 1}`}
-              onclick={() => handleSlotClick(i)}
-            >
-              {#if slot}
-                <span class="slot-icon">{slot.icon.charAt(0).toUpperCase()}</span>
-                <span class="slot-count">{slot.count}</span>
-              {/if}
-            </button>
+            <div role="gridcell">
+              <button
+                type="button"
+                class="slot"
+                class:selected={selectedSlot === i}
+                class:filled={slot !== null}
+                aria-label={slot ? `${slot.name} x${slot.count}` : `Empty slot ${i + 1}`}
+                onclick={() => handleSlotClick(i)}
+              >
+                {#if slot}
+                  <span class="slot-icon">{slot.icon.charAt(0).toUpperCase()}</span>
+                  <span class="slot-count">{slot.count}</span>
+                {/if}
+              </button>
+            </div>
           {/each}
         </div>
       {/each}
@@ -119,7 +125,7 @@
         </button>
       </div>
     {/if}
-  </div>
+  </dialog>
 {/if}
 
 <style>
@@ -127,15 +133,24 @@
     position: fixed;
     top: 0;
     right: 0;
+    left: auto;
     width: 200px;
     height: 100%;
+    max-height: 100%;
+    max-width: 200px;
+    margin: 0;
     background: rgba(20, 20, 40, 0.92);
+    border: none;
     border-left: 1px solid #444;
     padding: 12px;
     z-index: 100;
     color: #e0e0e0;
     display: flex;
     flex-direction: column;
+  }
+
+  .inventory-panel::backdrop {
+    background: transparent;
   }
 
   h3 {
