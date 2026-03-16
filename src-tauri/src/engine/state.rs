@@ -160,6 +160,7 @@ impl GameState {
         self.prev_interact = input.interact;
 
         // Execute interaction on rising edge
+        let mut interacted = false;
         if interact_pressed {
             if let Some(nearest) = &nearest {
                 let result = interaction::execute_interaction(
@@ -197,8 +198,14 @@ impl GameState {
                 } else if let Some((idx, new_count)) = result.update_ground_item {
                     self.world_items[idx].count = new_count;
                 }
+
+                interacted = true;
             }
         }
+
+        // Clear prompt on the frame where interaction happened — the target
+        // may have been removed or changed, so the pre-interaction prompt is stale.
+        let interaction_prompt = if interacted { None } else { interaction_prompt };
 
         // Determine animation state
         let animation = if !self.player.on_ground {

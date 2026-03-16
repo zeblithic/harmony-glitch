@@ -22,8 +22,10 @@
       if (!dialogEl.open) {
         dialogEl.showModal();
       }
-      const firstSlot = dialogEl.querySelector<HTMLElement>('.slot');
-      firstSlot?.focus();
+      dialogEl.querySelector<HTMLElement>('.slot')?.focus();
+      return () => {
+        if (dialogEl?.open) dialogEl.close();
+      };
     } else if (!visible && previousFocus) {
       previousFocus.focus();
       previousFocus = null;
@@ -78,6 +80,13 @@
         handleSlotClick(selectedSlot);
       }
     }
+
+    // Move browser focus to match selectedSlot for screen readers
+    if (selectedSlot !== null) {
+      const buttons = (e.currentTarget as HTMLElement)
+        .querySelectorAll<HTMLElement>('button.slot');
+      buttons[selectedSlot]?.focus();
+    }
   }
 </script>
 
@@ -101,6 +110,7 @@
                 class="slot"
                 class:selected={selectedSlot === i}
                 class:filled={slot !== null}
+                tabindex={selectedSlot === i || (selectedSlot === null && i === 0) ? 0 : -1}
                 aria-label={slot ? `${slot.name} x${slot.count}` : `Empty slot ${i + 1}`}
                 onclick={() => handleSlotClick(i)}
               >

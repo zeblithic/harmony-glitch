@@ -17,6 +17,14 @@ pub fn parse_entity_defs(json: &str) -> Result<EntityDefs, String> {
         serde_json::from_str(json).map_err(|e| format!("Failed to parse entities.json: {e}"))?;
     for (key, def) in raw.iter_mut() {
         def.id = key.clone();
+        for y in &def.yields {
+            if y.min > y.max {
+                return Err(format!(
+                    "Entity '{}' has yield for '{}' with min ({}) > max ({})",
+                    key, y.item, y.min, y.max
+                ));
+            }
+        }
     }
     Ok(raw)
 }
@@ -80,6 +88,23 @@ mod tests {
         assert_eq!(entities.len(), 2);
         assert_eq!(entities[0].entity_type, "fruit_tree");
         assert_eq!(entities[1].entity_type, "chicken");
+    }
+
+    #[test]
+    fn parse_entity_defs_rejects_min_greater_than_max() {
+        let json = r#"{
+            "bad": {
+                "name": "Bad",
+                "verb": "Use",
+                "yields": [{ "item": "x", "min": 5, "max": 2 }],
+                "cooldownSecs": 0,
+                "spriteClass": "bad",
+                "interactRadius": 60
+            }
+        }"#;
+        let result = parse_entity_defs(json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("min (5) > max (2)"));
     }
 
     #[test]
