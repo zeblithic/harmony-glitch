@@ -1,6 +1,6 @@
 use crate::street::types::Signpost;
 
-const PRE_SUBSCRIBE_DISTANCE: f64 = 500.0;
+pub const PRE_SUBSCRIBE_DISTANCE: f64 = 500.0;
 const MIN_SWOOP_SECS: f64 = 0.3;
 const MAX_SWOOP_SECS: f64 = 2.0;
 
