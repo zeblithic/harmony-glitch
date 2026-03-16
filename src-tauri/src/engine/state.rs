@@ -2,6 +2,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::avatar::types::{AnimationState, Direction};
+use crate::engine::transition::TransitionDirection;
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
@@ -29,6 +30,15 @@ pub struct GameState {
     pub pickup_feedback: Vec<PickupFeedback>,
 }
 
+/// Transition animation data sent to the frontend during a swoop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransitionFrame {
+    pub progress: f64,
+    pub direction: TransitionDirection,
+    pub to_street: String,
+}
+
 /// Data sent to the frontend each tick for rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +52,7 @@ pub struct RenderFrame {
     pub world_items: Vec<WorldItemFrame>,
     pub interaction_prompt: Option<InteractionPrompt>,
     pub pickup_feedback: Vec<PickupFeedback>,
+    pub transition: Option<TransitionFrame>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,6 +267,7 @@ impl GameState {
             world_items: self.build_item_frames(),
             interaction_prompt,
             pickup_feedback: self.pickup_feedback.clone(),
+            transition: None,
         })
     }
 
@@ -515,5 +527,14 @@ mod tests {
 
         assert_eq!(frame.inventory.slots[0].as_ref().unwrap().item_id, "cherry");
         assert!(frame.pickup_feedback.iter().any(|f| f.success));
+    }
+
+    #[test]
+    fn render_frame_has_no_transition_by_default() {
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        state.load_street(test_street(), vec![]);
+        let input = InputState::default();
+        let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
+        assert!(frame.transition.is_none());
     }
 }
