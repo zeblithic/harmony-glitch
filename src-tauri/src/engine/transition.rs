@@ -25,8 +25,10 @@ pub enum TransitionPhase {
         street_ready: bool,
     },
     /// The transition is done; the caller should finalize the street swap.
+    /// Persists for one tick so the renderer sees `progress = 1.0` before teardown.
     Complete {
         new_street: String,
+        direction: TransitionDirection,
     },
 }
 
@@ -147,11 +149,11 @@ impl TransitionState {
         let next_phase = match &mut self.phase {
             TransitionPhase::Swooping {
                 to_street,
+                direction,
                 elapsed,
                 target_duration,
                 street_ready,
                 progress,
-                ..
             } => {
                 *elapsed += dt;
 
@@ -160,6 +162,7 @@ impl TransitionState {
                     if *progress >= 1.0 {
                         Some(TransitionPhase::Complete {
                             new_street: to_street.clone(),
+                            direction: *direction,
                         })
                     } else {
                         Option::None
@@ -280,7 +283,7 @@ mod tests {
         }
 
         match &ts.phase {
-            TransitionPhase::Complete { new_street } => {
+            TransitionPhase::Complete { new_street, .. } => {
                 assert_eq!(new_street, "LADEMO002");
             }
             other => panic!("Expected Complete, got {:?}", other),

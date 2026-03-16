@@ -17,6 +17,8 @@
   let chatFocused = $state(false);
   let inventoryOpen = $state(false);
   let transitionPending = $state(false);
+  let transitionAttempts = $state(0);
+  const MAX_TRANSITION_ATTEMPTS = 3;
   let identityReady = $state(false);
   let checkingIdentity = $state(true);
 
@@ -43,8 +45,9 @@
     // transitionPending stays true until frame.transition disappears (swoop
     // completes) — clearing it earlier causes repeated loadStreet/mark_street_ready
     // calls that push target_duration forward indefinitely, stalling the swoop.
-    if (frame.transition && !transitionPending) {
+    if (frame.transition && !transitionPending && transitionAttempts < MAX_TRANSITION_ATTEMPTS) {
       transitionPending = true;
+      transitionAttempts++;
       loadStreet(frame.transition.toStreet)
         .then((street) => {
           currentStreet = street;
@@ -56,13 +59,14 @@
           });
         })
         .catch((e) => {
-          // Only loadStreet failed — allow retry on next frame.
+          // Only loadStreet failed — allow retry up to MAX_TRANSITION_ATTEMPTS.
           console.error('Street transition failed:', e);
           transitionPending = false;
         });
     }
-    if (!frame.transition && transitionPending) {
+    if (!frame.transition) {
       transitionPending = false;
+      transitionAttempts = 0;
     }
   }
 

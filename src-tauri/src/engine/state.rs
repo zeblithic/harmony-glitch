@@ -188,16 +188,18 @@ impl GameState {
         let was_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
         self.transition.tick(dt);
 
-        // Handle transition completion — reposition player at return signpost
+        // Handle transition completion — two-tick lifecycle:
+        //   Tick 1 (origin_tsid is Some): reposition player, clear origin_tsid.
+        //          TransitionFrame builder emits progress=1.0 so the renderer
+        //          fully extends the viewport offset before teardown.
+        //   Tick 2 (origin_tsid is None): reset phase to None.
         if let TransitionPhase::Complete { .. } = &self.transition.phase {
-            if let Some(origin_tsid) = &self.transition_origin_tsid {
+            if self.transition_origin_tsid.is_some() {
+                let origin_tsid = self.transition_origin_tsid.take().unwrap();
                 let return_signpost = street.signposts.iter()
-                    .find(|s| s.connects.iter().any(|c| c.target_tsid == *origin_tsid));
+                    .find(|s| s.connects.iter().any(|c| c.target_tsid == origin_tsid));
 
                 if let Some(sp) = return_signpost {
-                    // Place the player just outside the pre-subscribe zone (inward
-                    // from the signpost) so the transition system resets cleanly and
-                    // the player must actively walk toward the signpost to re-trigger.
                     let street_mid = (street.left + street.right) / 2.0;
                     let inward = if sp.x < street_mid { 1.0 } else { -1.0 };
                     self.player.x = sp.x + inward * (PRE_SUBSCRIBE_DISTANCE + 50.0);
@@ -205,16 +207,14 @@ impl GameState {
                     self.player.vx = 0.0;
                     self.player.vy = 0.0;
                 } else {
-                    // No return signpost found (data inconsistency) — center of street.
                     self.player.x = (street.left + street.right) / 2.0;
                     self.player.y = street.ground_y;
                     self.player.vx = 0.0;
                     self.player.vy = 0.0;
                 }
+            } else {
+                self.transition.reset();
             }
-
-            self.transition_origin_tsid = None;
-            self.transition.reset();
         }
 
         // Timeout path: Swooping → None without visiting Complete.
@@ -370,20 +370,29 @@ impl GameState {
             world_items: self.build_item_frames(),
             interaction_prompt,
             pickup_feedback: self.pickup_feedback.clone(),
-            transition: self.transition.swoop_progress().map(|(progress, direction)| {
-                let to_street_tsid = match &self.transition.phase {
-                    TransitionPhase::Swooping { to_street, .. } => to_street.clone(),
-                    _ => String::new(),
-                };
-                TransitionFrame {
-                    progress,
-                    direction,
-                    to_street: self.tsid_to_name
-                        .get(&to_street_tsid)
-                        .cloned()
-                        .unwrap_or(to_street_tsid),
+            transition: match &self.transition.phase {
+                TransitionPhase::Swooping { progress, direction, to_street, .. } => {
+                    Some(TransitionFrame {
+                        progress: *progress,
+                        direction: *direction,
+                        to_street: self.tsid_to_name
+                            .get(to_street)
+                            .cloned()
+                            .unwrap_or_else(|| to_street.clone()),
+                    })
                 }
-            }),
+                TransitionPhase::Complete { new_street, direction } => {
+                    Some(TransitionFrame {
+                        progress: 1.0,
+                        direction: *direction,
+                        to_street: self.tsid_to_name
+                            .get(new_street)
+                            .cloned()
+                            .unwrap_or_else(|| new_street.clone()),
+                    })
+                }
+                _ => None,
+            },
         })
     }
 
