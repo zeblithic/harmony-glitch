@@ -31,7 +31,7 @@ Each tick, `GameState::tick()` calls `transition.check_signposts()`. When the pl
 - Right-edge signpost (`direction == Right`): trigger when `player_x >= signpost_x`
 - Left-edge signpost (`direction == Left`): trigger when `player_x <= signpost_x`
 
-During swoop, player input is frozen — no movement, interaction, or physics updates.
+During swoop, player input is frozen — no movement, interaction, or physics updates. Input freeze is gated on `phase == Swooping`, so it automatically lifts when the phase changes (whether to `Complete` or back to `None` on timeout). Once swooping starts, there is no retreat — the player cannot move, so the swoop either completes or times out.
 
 ## Data Flow
 
@@ -45,23 +45,26 @@ During swoop, player input is frozen — no movement, interaction, or physics up
    pub struct TransitionFrame {
        pub progress: f64,
        pub direction: TransitionDirection,
-       pub to_street: String,  // resolved name, not TSID
+       pub to_street: String,  // resolved street asset name, not TSID
    }
    ```
-5. TSID→name mapping (`HashMap<String, String>`) for resolving signpost targets to loadable street names
+5. TSID→name mapping (`HashMap<String, String>`) stored on `GameState` for resolving signpost target TSIDs to `load_street`-compatible asset names (e.g., `"LADEMO002"` → `"demo_heights"`). Populated during initialization from the same source as `list_streets`.
 6. New `street_transition_ready` command calls `transition.mark_street_ready()`
 7. On `Complete` phase: reposition player at target signpost X, reset transition state
 
+**Naming:** Rust struct is `TransitionFrame`, TypeScript type is `TransitionInfo` (already exists). The serialized field on `RenderFrame` is `transition` on both sides. Serde maps between the two — no renaming needed.
+
 ### Frontend Side
 
-1. App.svelte triggers `loadStreet` as soon as `frame.transition` appears (not at `progress >= 1.0`)
-2. `transitionPending` flag prevents duplicate loads
-3. After `loadStreet` returns → renderer rebuilds scene → call `streetTransitionReady()`
-4. Rust finishes swoop, new street revealed
+1. App.svelte triggers `loadStreet` as soon as `frame.transition` appears (not at `progress >= 1.0`). This is critical — the state machine stalls at progress 0.9 waiting for `mark_street_ready()`, so loading must start immediately, not at 1.0.
+2. `transitionPending` flag set synchronously before the async `loadStreet` call to prevent duplicate loads. Cleared only after both `loadStreet` AND `streetTransitionReady()` complete (not after `loadStreet` alone — a gap between the two could cause a duplicate trigger).
+3. After `loadStreet` returns → renderer rebuilds scene → call `streetTransitionReady()` → Rust calls `mark_street_ready()` → swoop finishes → new street revealed.
+
+**Error handling:** If `loadStreet` fails, `transitionPending` resets and the next frame retries. This retry loop continues until the swoop times out at `MAX_SWOOP_SECS` (2.0s), which resets the transition to `None` and unfreezes the player. The timeout IS the error recovery — no separate cancellation command needed.
 
 ### Spawn Positioning
 
-On `Complete`, find the destination street's signpost whose `target_tsid` matches the street we came from. Position player at that signpost's X coordinate, at ground level. Fallback to street center if no matching return signpost found.
+On `Complete`, find the destination street's signpost whose `target_tsid` matches the street we came from. Position player at that signpost's X coordinate, at ground level (Y=0). Fallback to street center if no matching return signpost found.
 
 ## Files Modified
 
