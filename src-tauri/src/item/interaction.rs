@@ -243,8 +243,10 @@ pub fn execute_interaction(
                 }
             }
 
-            // 3. Post-harvest state update
+            // 3. Post-harvest state update — always runs, even if yield overflowed to ground.
+            // Overflow items are recoverable, so the harvest "counts" regardless of inventory space.
             if def.max_harvests > 0 {
+                debug_assert!(state.harvests_remaining > 0, "harvests_remaining should never be 0 before decrement");
                 state.harvests_remaining -= 1;
                 if state.harvests_remaining == 0 {
                     state.depleted_until = game_time + def.respawn_secs;
