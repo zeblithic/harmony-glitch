@@ -22,3 +22,7 @@ Thumbs.db
 
 # Superpowers brainstorm mockups
 .superpowers/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
