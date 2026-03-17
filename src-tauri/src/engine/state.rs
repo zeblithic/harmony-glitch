@@ -273,6 +273,8 @@ impl GameState {
                     &self.entity_defs,
                     &self.world_items,
                     &self.item_defs,
+                    &self.entity_states,
+                    self.game_time,
                 )
             });
 

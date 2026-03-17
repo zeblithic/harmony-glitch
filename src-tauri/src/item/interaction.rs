@@ -71,11 +71,38 @@ pub fn build_prompt(
     entity_defs: &EntityDefs,
     world_items: &[WorldItem],
     item_defs: &ItemDefs,
+    entity_states: &HashMap<String, EntityInstanceState>,
+    game_time: f64,
 ) -> InteractionPrompt {
     match nearest {
         NearestInteractable::Entity { index, .. } => {
             let entity = &entities[*index];
             let def = entity_defs.get(&entity.entity_type);
+
+            // Check entity state for cooldown/depletion
+            if let Some(state) = entity_states.get(&entity.id) {
+                if state.depleted_until > game_time {
+                    let remaining = (state.depleted_until - game_time).ceil() as u32;
+                    return InteractionPrompt {
+                        verb: format!("Regrowing... ({}s)", remaining),
+                        target_name: String::new(),
+                        target_x: entity.x,
+                        target_y: entity.y,
+                        actionable: false,
+                    };
+                }
+                if state.cooldown_until > game_time {
+                    let remaining = (state.cooldown_until - game_time).ceil() as u32;
+                    return InteractionPrompt {
+                        verb: format!("Available in {}s", remaining),
+                        target_name: String::new(),
+                        target_x: entity.x,
+                        target_y: entity.y,
+                        actionable: false,
+                    };
+                }
+            }
+
             InteractionPrompt {
                 verb: def.map(|d| d.verb.clone()).unwrap_or_else(|| "Use".into()),
                 target_name: def
@@ -512,7 +539,8 @@ mod tests {
             index: 0,
             distance: 10.0,
         };
-        let prompt = build_prompt(&nearest, &entities, &entity_defs, &[], &item_defs);
+        let entity_states = HashMap::new();
+        let prompt = build_prompt(&nearest, &entities, &entity_defs, &[], &item_defs, &entity_states, 0.0);
         assert_eq!(prompt.verb, "Harvest");
         assert_eq!(prompt.target_name, "Fruit Tree");
     }
@@ -532,7 +560,8 @@ mod tests {
             index: 0,
             distance: 5.0,
         };
-        let prompt = build_prompt(&nearest, &[], &entity_defs, &items, &item_defs);
+        let entity_states = HashMap::new();
+        let prompt = build_prompt(&nearest, &[], &entity_defs, &items, &item_defs, &entity_states, 0.0);
         assert_eq!(prompt.verb, "Pick up");
         assert_eq!(prompt.target_name, "Cherry x3");
     }
@@ -746,6 +775,107 @@ mod tests {
 
         let state = entity_states.get("inf1").unwrap();
         assert_eq!(state.depleted_until, 0.0);
+    }
+
+    #[test]
+    fn build_prompt_shows_cooldown_status() {
+        let entity_defs = test_entity_defs();
+        let item_defs = test_item_defs();
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 100.0,
+            y: -2.0,
+        }];
+        let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+
+        let mut entity_states = HashMap::new();
+        entity_states.insert("t1".into(), EntityInstanceState {
+            harvests_remaining: 2,
+            cooldown_until: 5.0,
+            depleted_until: 0.0,
+        });
+
+        let prompt = build_prompt(
+            &nearest, &entities, &entity_defs, &[], &item_defs,
+            &entity_states, 2.0,
+        );
+        assert!(!prompt.actionable);
+        assert!(prompt.verb.contains("Available"));
+        assert!(prompt.verb.contains("3")); // ceil(5.0 - 2.0) = 3
+        assert!(prompt.target_name.is_empty());
+    }
+
+    #[test]
+    fn build_prompt_shows_depleted_status() {
+        let entity_defs = test_entity_defs();
+        let item_defs = test_item_defs();
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 100.0,
+            y: -2.0,
+        }];
+        let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+
+        let mut entity_states = HashMap::new();
+        entity_states.insert("t1".into(), EntityInstanceState {
+            harvests_remaining: 3,
+            cooldown_until: 0.0,
+            depleted_until: 40.0,
+        });
+
+        let prompt = build_prompt(
+            &nearest, &entities, &entity_defs, &[], &item_defs,
+            &entity_states, 12.0,
+        );
+        assert!(!prompt.actionable);
+        assert!(prompt.verb.contains("Regrowing"));
+        assert!(prompt.verb.contains("28")); // ceil(40.0 - 12.0) = 28
+    }
+
+    #[test]
+    fn build_prompt_ready_entity_is_actionable() {
+        let entity_defs = test_entity_defs();
+        let item_defs = test_item_defs();
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 100.0,
+            y: -2.0,
+        }];
+        let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+        let entity_states = HashMap::new();
+
+        let prompt = build_prompt(
+            &nearest, &entities, &entity_defs, &[], &item_defs,
+            &entity_states, 0.0,
+        );
+        assert!(prompt.actionable);
+        assert_eq!(prompt.verb, "Harvest");
+        assert_eq!(prompt.target_name, "Fruit Tree");
+    }
+
+    #[test]
+    fn build_prompt_ground_item_always_actionable() {
+        let entity_defs = test_entity_defs();
+        let item_defs = test_item_defs();
+        let items = vec![WorldItem {
+            id: "i1".into(),
+            item_id: "cherry".into(),
+            count: 1,
+            x: 50.0,
+            y: 0.0,
+        }];
+        let nearest = NearestInteractable::GroundItem { index: 0, distance: 5.0 };
+        let entity_states = HashMap::new();
+
+        let prompt = build_prompt(
+            &nearest, &[], &entity_defs, &items, &item_defs,
+            &entity_states, 0.0,
+        );
+        assert!(prompt.actionable);
+        assert_eq!(prompt.verb, "Pick up");
     }
 
     #[test]
