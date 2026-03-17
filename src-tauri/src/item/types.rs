@@ -32,6 +32,8 @@ pub struct EntityDef {
     pub verb: String,
     pub yields: Vec<YieldEntry>,
     pub cooldown_secs: f64,
+    pub max_harvests: u32,
+    pub respawn_secs: f64,
     pub sprite_class: String,
     pub interact_radius: f64,
 }
@@ -51,6 +53,28 @@ pub struct WorldEntity {
     pub entity_type: String,
     pub x: f64,
     pub y: f64,
+}
+
+/// Per-instance runtime state for a world entity.
+/// Stored in GameState::entity_states, keyed by entity instance ID.
+#[derive(Debug, Clone)]
+pub struct EntityInstanceState {
+    /// Harvests remaining before depletion. Initialized from EntityDef::max_harvests.
+    pub harvests_remaining: u32,
+    /// Game-time timestamp when cooldown expires. 0.0 = not on cooldown.
+    pub cooldown_until: f64,
+    /// Game-time timestamp when respawn completes. 0.0 = not depleted.
+    pub depleted_until: f64,
+}
+
+impl EntityInstanceState {
+    pub fn new(max_harvests: u32) -> Self {
+        Self {
+            harvests_remaining: max_harvests,
+            cooldown_until: 0.0,
+            depleted_until: 0.0,
+        }
+    }
 }
 
 /// An item sitting on the ground (runtime-created).
@@ -77,6 +101,8 @@ pub struct WorldEntityFrame {
     pub sprite_class: String,
     pub x: f64,
     pub y: f64,
+    pub cooldown_remaining: Option<f64>,
+    pub depleted: bool,
 }
 
 /// Data sent to frontend for rendering a ground item.
@@ -119,6 +145,7 @@ pub struct InteractionPrompt {
     pub target_name: String,
     pub target_x: f64,
     pub target_y: f64,
+    pub actionable: bool,
 }
 
 /// Floating feedback text after pickup.
@@ -154,6 +181,14 @@ mod tests {
         assert_eq!(entity.id, "tree_1");
         assert_eq!(entity.entity_type, "fruit_tree");
         assert!((entity.x - (-800.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn entity_instance_state_creation() {
+        let state = EntityInstanceState::new(3);
+        assert_eq!(state.harvests_remaining, 3);
+        assert_eq!(state.cooldown_until, 0.0);
+        assert_eq!(state.depleted_until, 0.0);
     }
 
     #[test]
