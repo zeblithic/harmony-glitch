@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::street::types::PlatformLine;
+use crate::street::types::{PlatformLine, Wall};
 
 /// Physics constants (tunable).
 pub const GRAVITY: f64 = 980.0; // px/s²
@@ -64,6 +64,7 @@ impl PhysicsBody {
         dt: f64,
         input: &InputState,
         platforms: &[PlatformLine],
+        walls: &[Wall],
         street_left: f64,
         street_right: f64,
     ) {
@@ -90,12 +91,40 @@ impl PhysicsBody {
             self.vy = self.vy.min(TERMINAL_VELOCITY);
         }
 
-        // Save pre-move Y for swept collision detection
+        // Save pre-move position for swept collision detection
+        let prev_x = self.x;
         let prev_y = self.y;
 
         // Move
         self.x += self.vx * dt;
         self.y += self.vy * dt;
+
+        // --- Wall collision ---
+        for wall in walls {
+            if matches!(wall.pc_perm, Some(0)) {
+                continue;
+            }
+            // Vertical overlap check
+            let player_top = self.y - self.height;
+            let player_bottom = self.y;
+            if player_bottom <= wall.y || player_top >= wall.bottom() {
+                continue;
+            }
+            // Horizontal sweep
+            if prev_x + self.half_width <= wall.x
+                && self.x + self.half_width > wall.x
+                && wall.blocks_from_left()
+            {
+                self.x = wall.x - self.half_width;
+                self.vx = 0.0;
+            } else if prev_x - self.half_width >= wall.x
+                && self.x - self.half_width < wall.x
+                && wall.blocks_from_right()
+            {
+                self.x = wall.x + self.half_width;
+                self.vx = 0.0;
+            }
+        }
 
         // Clamp to street bounds
         self.x = self
@@ -204,7 +233,7 @@ impl PhysicsBody {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::street::types::Point;
+    use crate::street::types::{Point, Wall};
 
     fn flat_ground() -> Vec<PlatformLine> {
         vec![PlatformLine {
@@ -216,13 +245,248 @@ mod tests {
         }]
     }
 
+    fn solid_wall(x: f64, y: f64, h: f64) -> Vec<Wall> {
+        vec![Wall {
+            id: "wall".into(), x, y, h,
+            pc_perm: None, item_perm: None,
+        }]
+    }
+
+    // --- Wall collision tests ---
+
+    #[test]
+    fn wall_blocks_movement_from_left() {
+        // Wall at x=100, spanning y=-400 to y=0 (full height).
+        // Player starts at x=80 on the ground (y=0), walks right into wall.
+        let mut body = PhysicsBody::new(80.0, 0.0);
+        body.on_ground = true;
+        let input = InputState { right: true, ..Default::default() };
+        let platforms = flat_ground();
+        let walls = solid_wall(100.0, -400.0, 400.0);
+
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+
+        assert!(
+            body.x <= 100.0 - body.half_width + 0.01,
+            "Player should be blocked by wall from left, x={}",
+            body.x
+        );
+    }
+
+    #[test]
+    fn wall_blocks_movement_from_right() {
+        // Wall at x=100, player starts at x=120, walks left into wall.
+        let mut body = PhysicsBody::new(120.0, 0.0);
+        body.on_ground = true;
+        let input = InputState { left: true, ..Default::default() };
+        let platforms = flat_ground();
+        let walls = solid_wall(100.0, -400.0, 400.0);
+
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+
+        assert!(
+            body.x >= 100.0 + body.half_width - 0.01,
+            "Player should be blocked by wall from right, x={}",
+            body.x
+        );
+    }
+
+    #[test]
+    fn wall_does_not_block_when_above() {
+        // Wall at y=-100, h=100 → spans -100 to 0.
+        // Player at y=-200 on a high platform — entirely above the wall's Y range.
+        let platforms = vec![PlatformLine {
+            id: "high".into(),
+            start: Point { x: -1000.0, y: -200.0 },
+            end: Point { x: 1000.0, y: -200.0 },
+            pc_perm: None,
+            item_perm: None,
+        }];
+        let walls = solid_wall(100.0, -100.0, 100.0);
+
+        let mut body = PhysicsBody::new(80.0, -200.0);
+        body.on_ground = true;
+        let input = InputState { right: true, ..Default::default() };
+
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+
+        // Should have walked past x=100 — wall does not block because player is above it
+        assert!(body.x > 100.0, "Player above wall should not be blocked, x={}", body.x);
+    }
+
+    #[test]
+    fn wall_does_not_block_when_below() {
+        // Wall at y=-400, h=100 → spans -400 to -300.
+        // Player at y=0 (feet), head at y=-60 — entirely below the wall's Y range.
+        let mut body = PhysicsBody::new(80.0, 0.0);
+        body.on_ground = true;
+        let input = InputState { right: true, ..Default::default() };
+        let platforms = flat_ground();
+        let walls = solid_wall(100.0, -400.0, 100.0);
+
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+
+        // Should have walked past x=100 — wall does not block because player is below it
+        assert!(body.x > 100.0, "Player below wall should not be blocked, x={}", body.x);
+    }
+
+    #[test]
+    fn wall_one_way_left_blocks_from_left_only() {
+        // pc_perm=-1: blocks from left (blocks_from_left=true), passes from right.
+        let walls = vec![Wall {
+            id: "wall".into(), x: 100.0, y: -400.0, h: 400.0,
+            pc_perm: Some(-1), item_perm: None,
+        }];
+
+        // From left: player at x=80 walks right → should be blocked
+        let mut body = PhysicsBody::new(80.0, 0.0);
+        body.on_ground = true;
+        let input = InputState { right: true, ..Default::default() };
+        let platforms = flat_ground();
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+        assert!(
+            body.x <= 100.0 - body.half_width + 0.01,
+            "One-way left wall should block from left, x={}",
+            body.x
+        );
+
+        // From right: player at x=120 walks left → should pass through
+        let mut body2 = PhysicsBody::new(120.0, 0.0);
+        body2.on_ground = true;
+        let input2 = InputState { left: true, ..Default::default() };
+        for _ in 0..60 {
+            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0);
+        }
+        assert!(
+            body2.x < 100.0 - body2.half_width,
+            "One-way left wall should pass from right, x={}",
+            body2.x
+        );
+    }
+
+    #[test]
+    fn wall_one_way_right_blocks_from_right_only() {
+        // pc_perm=1: blocks from right (blocks_from_right=true), passes from left.
+        let walls = vec![Wall {
+            id: "wall".into(), x: 100.0, y: -400.0, h: 400.0,
+            pc_perm: Some(1), item_perm: None,
+        }];
+        let platforms = flat_ground();
+
+        // From right: player at x=120 walks left → should be blocked
+        let mut body = PhysicsBody::new(120.0, 0.0);
+        body.on_ground = true;
+        let input = InputState { left: true, ..Default::default() };
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+        assert!(
+            body.x >= 100.0 + body.half_width - 0.01,
+            "One-way right wall should block from right, x={}",
+            body.x
+        );
+
+        // From left: player at x=80 walks right → should pass through
+        let mut body2 = PhysicsBody::new(80.0, 0.0);
+        body2.on_ground = true;
+        let input2 = InputState { right: true, ..Default::default() };
+        for _ in 0..60 {
+            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0);
+        }
+        assert!(
+            body2.x > 100.0 + body2.half_width,
+            "One-way right wall should pass from left, x={}",
+            body2.x
+        );
+    }
+
+    #[test]
+    fn wall_passthrough_allows_all() {
+        // pc_perm=0: pass-through — no blocking from either direction.
+        let walls = vec![Wall {
+            id: "wall".into(), x: 100.0, y: -400.0, h: 400.0,
+            pc_perm: Some(0), item_perm: None,
+        }];
+        let platforms = flat_ground();
+
+        // From left → should pass
+        let mut body = PhysicsBody::new(80.0, 0.0);
+        body.on_ground = true;
+        let input = InputState { right: true, ..Default::default() };
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+        assert!(body.x > 100.0 + body.half_width, "Passthrough wall should not block from left, x={}", body.x);
+
+        // From right → should pass
+        let mut body2 = PhysicsBody::new(120.0, 0.0);
+        body2.on_ground = true;
+        let input2 = InputState { left: true, ..Default::default() };
+        for _ in 0..60 {
+            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0);
+        }
+        assert!(body2.x < 100.0 - body2.half_width, "Passthrough wall should not block from right, x={}", body2.x);
+    }
+
+    #[test]
+    fn wall_does_not_push_player_already_past() {
+        // Player already past (right of) the wall with no input — should stay put.
+        let mut body = PhysicsBody::new(200.0, 0.0);
+        body.on_ground = true;
+        let input = InputState::default();
+        let platforms = flat_ground();
+        let walls = solid_wall(100.0, -400.0, 400.0);
+
+        for _ in 0..60 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        }
+
+        assert!(
+            (body.x - 200.0).abs() < 0.01,
+            "Player already past wall should not be moved, x={}",
+            body.x
+        );
+    }
+
+    #[test]
+    fn street_bounds_still_clamp_beyond_walls() {
+        // Street right=150, wall at x=100. Player should be clamped by street bound, not wall.
+        let mut body = PhysicsBody::new(80.0, 0.0);
+        body.on_ground = true;
+        let input = InputState { right: true, ..Default::default() };
+        let platforms = flat_ground();
+        // Wall is inside the street bounds — player can't reach street edge past the wall
+        // Use a wall at x=200 but street right=150, so street clamp applies first
+        let walls = solid_wall(200.0, -400.0, 400.0);
+
+        for _ in 0..120 {
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 150.0);
+        }
+
+        assert!(
+            body.x <= 150.0 - body.half_width + 0.01,
+            "Street bounds should clamp player, x={}",
+            body.x
+        );
+    }
+
     #[test]
     fn falls_with_gravity() {
         let mut body = PhysicsBody::new(0.0, -200.0); // High up
         let input = InputState::default();
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         // Should have moved downward (vy positive, y increased)
         assert!(body.vy > 0.0);
@@ -235,7 +499,7 @@ mod tests {
         let input = InputState::default();
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         assert!(body.on_ground);
         assert_eq!(body.y, 0.0);
@@ -252,7 +516,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         assert!(body.x > 0.0);
     }
@@ -267,7 +531,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         assert!(body.x < 0.0);
     }
@@ -282,7 +546,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         // Should have negative vy (going up) and moved up (negative y)
         assert!(body.vy < 0.0 || body.y < 0.0);
@@ -300,7 +564,7 @@ mod tests {
         let platforms = flat_ground();
 
         // First tick with jump pressed: should jump
-        body.tick(1.0 / 60.0, &jump_input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &jump_input, &platforms, &[], -1000.0, 1000.0);
         assert!(!body.on_ground, "Should jump on rising edge");
         assert!(body.vy < 0.0, "Should have upward velocity");
 
@@ -310,7 +574,7 @@ mod tests {
         body.on_ground = true;
 
         // Tick again with jump still held — should NOT re-jump
-        body.tick(1.0 / 60.0, &jump_input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &jump_input, &platforms, &[], -1000.0, 1000.0);
         assert!(body.on_ground, "Should NOT re-jump while key is held");
     }
 
@@ -325,7 +589,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         // vy should not have gotten the jump impulse
         // (it gets gravity instead)
@@ -344,7 +608,7 @@ mod tests {
 
         // Run many ticks to push past boundary
         for _ in 0..100 {
-            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
         }
 
         assert!(body.x <= 1000.0 - body.half_width);
@@ -371,7 +635,7 @@ mod tests {
         body.on_ground = false;
         let input = InputState::default();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         // Should land on slope via swept collision — y snapped to slope surface
         // slope y_at(100) = 0 + 0.5 * (-100) = -50
@@ -387,7 +651,7 @@ mod tests {
 
         // Fall for a long time
         for _ in 0..600 {
-            body.tick(1.0 / 60.0, &input, &platforms, -100000.0, 100000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -100000.0, 100000.0);
         }
 
         assert!(body.vy <= TERMINAL_VELOCITY);
@@ -414,7 +678,7 @@ mod tests {
 
         // Run several ticks with no input
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
         }
 
         // Player should not have slid — position essentially unchanged
@@ -459,7 +723,7 @@ mod tests {
         body.vy = 50.0; // Gentle fall
         let input = InputState::default();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         assert!(body.on_ground);
         // Should have landed on the higher platform (y = -50), not the lower one (y = 0)
@@ -490,7 +754,7 @@ mod tests {
 
         // Walk right for several frames
         for _ in 0..30 {
-            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
             assert!(
                 body.on_ground,
                 "Player fell off slope at x={}, y={}",
@@ -536,7 +800,7 @@ mod tests {
 
         // Walk right for enough frames to enter the slope region
         for _ in 0..120 {
-            body.tick(1.0 / 60.0, &input, &platforms, -1800.0, 1800.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1800.0, 1800.0);
         }
 
         // Player should have moved past x=400 and followed the slope upward
@@ -574,7 +838,7 @@ mod tests {
 
         // Jump — player should be blocked by the ceiling
         for _ in 0..30 {
-            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
         }
 
         // Player's head should not have passed above the ceiling platform
@@ -613,7 +877,7 @@ mod tests {
             ..Default::default()
         };
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         // Player should be jumping upward, not blocked
         assert!(body.vy < 0.0, "Player should be moving upward");
@@ -630,7 +894,7 @@ mod tests {
         let input = InputState::default();
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
 
         assert!(body.on_ground, "Player at terminal velocity should land, not tunnel through");
         assert_eq!(body.y, 0.0, "Player should snap to platform surface");
@@ -657,7 +921,7 @@ mod tests {
 
         // Walk right until past the platform edge
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
         }
 
         // Player should have walked past x=100 and started falling

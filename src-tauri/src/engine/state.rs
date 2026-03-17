@@ -244,10 +244,8 @@ impl GameState {
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
         let interaction_prompt = if !is_swooping {
-            // Physics tick — walls are parsed from street data but not yet enforced
-            // in the collision system (Phase A scope: platforms only).
             self.player
-                .tick(dt, input, street.platforms(), street.left, street.right);
+                .tick(dt, input, street.platforms(), street.walls(), street.left, street.right);
 
             // --- Interaction system ---
             // Age and cull pickup feedback
