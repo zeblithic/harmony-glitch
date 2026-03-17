@@ -439,6 +439,8 @@ impl GameState {
                     sprite_class: def.map(|d| d.sprite_class.clone()).unwrap_or_default(),
                     x: e.x,
                     y: e.y,
+                    cooldown_remaining: None,
+                    depleted: false,
                 }
             })
             .collect()
@@ -639,6 +641,8 @@ mod tests {
             verb: "Harvest".into(),
             yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
             cooldown_secs: 0.0,
+            max_harvests: 0,
+            respawn_secs: 0.0,
             sprite_class: "tree_fruit".into(),
             interact_radius: 80.0,
         });

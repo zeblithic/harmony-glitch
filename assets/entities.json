@@ -3,7 +3,9 @@
     "name": "Fruit Tree",
     "verb": "Harvest",
     "yields": [{ "item": "cherry", "min": 1, "max": 3 }],
-    "cooldownSecs": 0,
+    "cooldownSecs": 5.0,
+    "maxHarvests": 3,
+    "respawnSecs": 30.0,
     "spriteClass": "tree_fruit",
     "interactRadius": 80
   },
@@ -11,7 +13,9 @@
     "name": "Chicken",
     "verb": "Squeeze",
     "yields": [{ "item": "grain", "min": 1, "max": 2 }],
-    "cooldownSecs": 0,
+    "cooldownSecs": 8.0,
+    "maxHarvests": 2,
+    "respawnSecs": 45.0,
     "spriteClass": "npc_chicken",
     "interactRadius": 60
   },
@@ -19,7 +23,9 @@
     "name": "Pig",
     "verb": "Nibble",
     "yields": [{ "item": "meat", "min": 1, "max": 2 }],
-    "cooldownSecs": 0,
+    "cooldownSecs": 8.0,
+    "maxHarvests": 2,
+    "respawnSecs": 45.0,
     "spriteClass": "npc_pig",
     "interactRadius": 60
   },
@@ -27,7 +33,9 @@
     "name": "Butterfly",
     "verb": "Milk",
     "yields": [{ "item": "milk", "min": 1, "max": 1 }],
-    "cooldownSecs": 0,
+    "cooldownSecs": 0.0,
+    "maxHarvests": 1,
+    "respawnSecs": 20.0,
     "spriteClass": "npc_butterfly",
     "interactRadius": 90
   },
@@ -35,7 +43,9 @@
     "name": "Bubble Tree",
     "verb": "Harvest",
     "yields": [{ "item": "bubble", "min": 1, "max": 4 }],
-    "cooldownSecs": 0,
+    "cooldownSecs": 3.0,
+    "maxHarvests": 4,
+    "respawnSecs": 25.0,
     "spriteClass": "tree_bubble",
     "interactRadius": 80
   },
@@ -43,7 +53,9 @@
     "name": "Wood Tree",
     "verb": "Chop",
     "yields": [{ "item": "wood", "min": 1, "max": 2 }],
-    "cooldownSecs": 0,
+    "cooldownSecs": 6.0,
+    "maxHarvests": 3,
+    "respawnSecs": 35.0,
     "spriteClass": "tree_wood",
     "interactRadius": 80
   }

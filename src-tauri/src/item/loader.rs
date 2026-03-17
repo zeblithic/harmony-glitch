@@ -65,6 +65,8 @@ mod tests {
                 "verb": "Squeeze",
                 "yields": [{ "item": "grain", "min": 1, "max": 2 }],
                 "cooldownSecs": 0,
+                "maxHarvests": 2,
+                "respawnSecs": 45.0,
                 "spriteClass": "npc_chicken",
                 "interactRadius": 60
             }
@@ -98,6 +100,8 @@ mod tests {
                 "verb": "Use",
                 "yields": [{ "item": "x", "min": 5, "max": 2 }],
                 "cooldownSecs": 0,
+                "maxHarvests": 0,
+                "respawnSecs": 0.0,
                 "spriteClass": "bad",
                 "interactRadius": 60
             }

@@ -81,6 +81,7 @@ pub fn build_prompt(
                     .unwrap_or_else(|| "Unknown".into()),
                 target_x: entity.x,
                 target_y: entity.y,
+                actionable: true,
             }
         }
         NearestInteractable::GroundItem { index, .. } => {
@@ -99,6 +100,7 @@ pub fn build_prompt(
                 target_name,
                 target_x: item.x,
                 target_y: item.y,
+                actionable: true,
             }
         }
     }
@@ -252,7 +254,9 @@ mod tests {
                     min: 2,
                     max: 2, // Fixed for deterministic tests
                 }],
-                cooldown_secs: 0.0,
+                cooldown_secs: 5.0,
+                max_harvests: 3,
+                respawn_secs: 30.0,
                 sprite_class: "tree_fruit".into(),
                 interact_radius: 80.0,
             },
