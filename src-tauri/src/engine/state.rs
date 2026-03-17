@@ -292,6 +292,8 @@ impl GameState {
                         &self.world_items,
                         &self.item_defs,
                         rng,
+                        &mut self.entity_states,
+                        self.game_time,
                     );
 
                     // Apply results — assign unique IDs to feedback
