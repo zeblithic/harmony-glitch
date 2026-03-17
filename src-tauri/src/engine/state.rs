@@ -146,7 +146,7 @@ impl GameState {
         self.world_entities = entities;
         self.world_items.clear();
         self.pickup_feedback.clear();
-        self.entity_states.clear();
+        self.entity_states.clear(); // game_time intentionally NOT reset — it's session-global
     }
 
     /// Run one tick of the game loop.

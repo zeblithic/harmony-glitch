@@ -178,7 +178,8 @@ pub fn execute_interaction(
                 .entry(entity.id.clone())
                 .or_insert_with(|| EntityInstanceState::new(def.max_harvests));
 
-            // 1. Depletion check
+            // 1. Depletion check — uses strict `>` so that respawn_secs=0.0
+            //    (depleted_until == game_time) passes through immediately.
             if state.depleted_until > game_time {
                 let remaining = (state.depleted_until - game_time).ceil() as u32;
                 result.feedback.push(PickupFeedback {
@@ -247,6 +248,7 @@ pub fn execute_interaction(
                 state.harvests_remaining -= 1;
                 if state.harvests_remaining == 0 {
                     state.depleted_until = game_time + def.respawn_secs;
+                    state.cooldown_until = 0.0; // clear stale cooldown — depletion and cooldown are mutually exclusive
                     state.harvests_remaining = def.max_harvests;
                 } else {
                     state.cooldown_until = game_time + def.cooldown_secs;
