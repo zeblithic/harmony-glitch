@@ -8,8 +8,8 @@ use crate::engine::transition::{
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
-    EntityDefs, InteractionPrompt, InventoryFrame, ItemDefs, ItemStackFrame, PickupFeedback,
-    WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
+    EntityDefs, EntityInstanceState, InteractionPrompt, InventoryFrame, ItemDefs, ItemStackFrame,
+    PickupFeedback, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
 };
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
@@ -33,6 +33,8 @@ pub struct GameState {
     pub transition: TransitionState,
     pub transition_origin_tsid: Option<String>,
     pub tsid_to_name: std::collections::HashMap<String, String>,
+    pub entity_states: std::collections::HashMap<String, EntityInstanceState>,
+    pub game_time: f64,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -122,6 +124,8 @@ impl GameState {
                 ("LADEMO001".to_string(), "demo_meadow".to_string()),
                 ("LADEMO002".to_string(), "demo_heights".to_string()),
             ]),
+            entity_states: std::collections::HashMap::new(),
+            game_time: 0.0,
         }
     }
 
@@ -142,11 +146,13 @@ impl GameState {
         self.world_entities = entities;
         self.world_items.clear();
         self.pickup_feedback.clear();
+        self.entity_states.clear();
     }
 
     /// Run one tick of the game loop.
     pub fn tick(&mut self, dt: f64, input: &InputState, rng: &mut impl Rng) -> Option<RenderFrame> {
         let street = self.street.as_ref()?;
+        self.game_time += dt;
 
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
@@ -782,6 +788,31 @@ mod tests {
         let transition = frame.transition.unwrap();
         assert!(transition.progress > 0.0);
         assert_eq!(transition.to_street, "demo_heights");
+    }
+
+    #[test]
+    fn game_time_accumulates() {
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        state.load_street(test_street(), vec![]);
+        let input = InputState::default();
+
+        state.tick(0.5, &input, &mut rand::thread_rng());
+        assert!((state.game_time - 0.5).abs() < 0.001);
+
+        state.tick(0.25, &input, &mut rand::thread_rng());
+        assert!((state.game_time - 0.75).abs() < 0.001);
+    }
+
+    #[test]
+    fn entity_states_cleared_on_load_street() {
+        use crate::item::types::EntityInstanceState;
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        state.entity_states.insert("tree_1".into(), EntityInstanceState::new(3));
+        assert_eq!(state.entity_states.len(), 1);
+
+        state.load_street(test_street(), vec![]);
+        assert!(state.entity_states.is_empty());
     }
 
     #[test]
