@@ -442,6 +442,18 @@ impl GameState {
             .iter()
             .map(|e| {
                 let def = self.entity_defs.get(&e.entity_type);
+
+                let (cooldown_remaining, depleted) = if let Some(state) = self.entity_states.get(&e.id) {
+                    let remaining = (state.cooldown_until.max(state.depleted_until)) - self.game_time;
+                    if remaining > 0.0 {
+                        (Some(remaining), state.depleted_until > self.game_time)
+                    } else {
+                        (None, false)
+                    }
+                } else {
+                    (None, false)
+                };
+
                 WorldEntityFrame {
                     id: e.id.clone(),
                     entity_type: e.entity_type.clone(),
@@ -449,8 +461,8 @@ impl GameState {
                     sprite_class: def.map(|d| d.sprite_class.clone()).unwrap_or_default(),
                     x: e.x,
                     y: e.y,
-                    cooldown_remaining: None,
-                    depleted: false,
+                    cooldown_remaining,
+                    depleted,
                 }
             })
             .collect()
@@ -862,5 +874,168 @@ mod tests {
         let expected_x = -1900.0 + (PRE_SUBSCRIBE_DISTANCE + 50.0);
         assert!((state.player.x - expected_x).abs() < 1.0,
             "Player should be at x={} (just outside pre-subscribe zone), got {}", expected_x, state.player.x);
+    }
+
+    #[test]
+    fn entity_frame_includes_cooldown_remaining() {
+        use crate::item::types::{EntityDef, ItemDef, YieldEntry, WorldEntity};
+        use rand::SeedableRng;
+
+        let mut item_defs = ItemDefs::new();
+        item_defs.insert("cherry".into(), ItemDef {
+            id: "cherry".into(),
+            name: "Cherry".into(),
+            description: "".into(),
+            category: "food".into(),
+            stack_limit: 50,
+            icon: "cherry".into(),
+        });
+        let mut entity_defs = EntityDefs::new();
+        entity_defs.insert("fruit_tree".into(), EntityDef {
+            id: "fruit_tree".into(),
+            name: "Fruit Tree".into(),
+            verb: "Harvest".into(),
+            yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
+            cooldown_secs: 5.0,
+            max_harvests: 3,
+            respawn_secs: 30.0,
+            sprite_class: "tree_fruit".into(),
+            interact_radius: 80.0,
+        });
+
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 0.0,
+            y: 0.0,
+        }];
+        state.load_street(test_street(), entities);
+        state.player.x = 0.0;
+        state.player.on_ground = true;
+
+        // Harvest the entity
+        let input = InputState { interact: true, ..Default::default() };
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let frame = state.tick(1.0 / 60.0, &input, &mut rng).unwrap();
+
+        // After harvest, entity should have cooldown remaining
+        let entity_frame = &frame.world_entities[0];
+        assert!(entity_frame.cooldown_remaining.is_some());
+        assert!(!entity_frame.depleted);
+
+        // Advance past cooldown (tick with no interact)
+        let input = InputState::default();
+        let mut last_frame = None;
+        for _ in 0..400 {
+            last_frame = state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+        let frame = last_frame.unwrap();
+        let entity_frame = &frame.world_entities[0];
+        assert!(entity_frame.cooldown_remaining.is_none());
+        assert!(!entity_frame.depleted);
+    }
+
+    #[test]
+    fn entity_frame_shows_depleted() {
+        use crate::item::types::{EntityDef, ItemDef, YieldEntry, WorldEntity};
+        use rand::SeedableRng;
+
+        let mut item_defs = ItemDefs::new();
+        item_defs.insert("cherry".into(), ItemDef {
+            id: "cherry".into(),
+            name: "Cherry".into(),
+            description: "".into(),
+            category: "food".into(),
+            stack_limit: 50,
+            icon: "cherry".into(),
+        });
+        let mut entity_defs = EntityDefs::new();
+        entity_defs.insert("fruit_tree".into(), EntityDef {
+            id: "fruit_tree".into(),
+            name: "Fruit Tree".into(),
+            verb: "Harvest".into(),
+            yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
+            cooldown_secs: 0.0,
+            max_harvests: 1,
+            respawn_secs: 30.0,
+            sprite_class: "tree_fruit".into(),
+            interact_radius: 80.0,
+        });
+
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 0.0,
+            y: 0.0,
+        }];
+        state.load_street(test_street(), entities);
+        state.player.x = 0.0;
+        state.player.on_ground = true;
+
+        // Single harvest depletes (max_harvests=1)
+        let input = InputState { interact: true, ..Default::default() };
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        state.tick(1.0 / 60.0, &input, &mut rng);
+
+        // Next frame should show depleted
+        let input = InputState::default();
+        let frame = state.tick(1.0 / 60.0, &input, &mut rng).unwrap();
+        let entity_frame = &frame.world_entities[0];
+        assert!(entity_frame.cooldown_remaining.is_some());
+        assert!(entity_frame.depleted);
+    }
+
+    #[test]
+    fn prompt_shows_cooldown_text_through_tick() {
+        use crate::item::types::{EntityDef, ItemDef, YieldEntry, WorldEntity};
+        use rand::SeedableRng;
+
+        let mut item_defs = ItemDefs::new();
+        item_defs.insert("cherry".into(), ItemDef {
+            id: "cherry".into(),
+            name: "Cherry".into(),
+            description: "".into(),
+            category: "food".into(),
+            stack_limit: 50,
+            icon: "cherry".into(),
+        });
+        let mut entity_defs = EntityDefs::new();
+        entity_defs.insert("fruit_tree".into(), EntityDef {
+            id: "fruit_tree".into(),
+            name: "Fruit Tree".into(),
+            verb: "Harvest".into(),
+            yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
+            cooldown_secs: 5.0,
+            max_harvests: 3,
+            respawn_secs: 30.0,
+            sprite_class: "tree_fruit".into(),
+            interact_radius: 80.0,
+        });
+
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 0.0,
+            y: 0.0,
+        }];
+        state.load_street(test_street(), entities);
+        state.player.x = 0.0;
+        state.player.on_ground = true;
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Harvest on first tick
+        let input = InputState { interact: true, ..Default::default() };
+        state.tick(1.0 / 60.0, &input, &mut rng);
+
+        // Next tick: still near entity, prompt should show cooldown text
+        let input = InputState::default();
+        let frame = state.tick(1.0 / 60.0, &input, &mut rng).unwrap();
+        let prompt = frame.interaction_prompt.unwrap();
+        assert!(!prompt.actionable);
+        assert!(prompt.verb.contains("Available"));
     }
 }
