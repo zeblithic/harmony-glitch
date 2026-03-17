@@ -186,6 +186,8 @@ export interface WorldEntityFrame {
   spriteClass: string;
   x: number;
   y: number;
+  cooldownRemaining: number | null;
+  depleted: boolean;
 }
 
 export interface WorldItemFrame {
@@ -203,6 +205,7 @@ export interface InteractionPrompt {
   targetName: string;
   targetX: number;
   targetY: number;
+  actionable: boolean;
 }
 
 export interface PickupFeedback {

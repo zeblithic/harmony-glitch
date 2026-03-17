@@ -291,7 +291,7 @@ export class GameRenderer {
         const w = entity.spriteClass.startsWith('tree') ? 60 : 30;
         const h = entity.spriteClass.startsWith('tree') ? 80 : 30;
         body.rect(-w / 2, -h, w, h);
-        body.fill({ color, alpha: 0.8 });
+        body.fill({ color, alpha: 1.0 });
         sprite.addChild(body);
 
         const label = new Text({
@@ -307,6 +307,13 @@ export class GameRenderer {
       }
       sprite.x = entity.x - this.street.left;
       sprite.y = entity.y - this.street.top;
+
+      // Opacity based on entity state
+      if (entity.cooldownRemaining != null) {
+        sprite.alpha = entity.depleted ? 0.25 : 0.5;
+      } else {
+        sprite.alpha = 1.0;
+      }
     }
     for (const [id, sprite] of this.entitySprites) {
       if (!seenEntities.has(id)) {
@@ -361,7 +368,9 @@ export class GameRenderer {
     // Interaction prompt (in uiContainer, screen-fixed)
     if (frame.interactionPrompt && this.promptText) {
       const p = frame.interactionPrompt;
-      this.promptText.text = `[E] ${p.verb} ${p.targetName}`;
+      this.promptText.text = p.actionable
+        ? `[E] ${p.verb} ${p.targetName}`
+        : p.verb;
       const screenX = p.targetX - this.street.left + this.worldContainer.x;
       const screenY = p.targetY - this.street.top + this.worldContainer.y - 90;
       this.promptText.x = screenX;
