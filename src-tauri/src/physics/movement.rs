@@ -100,31 +100,33 @@ impl PhysicsBody {
         self.y += self.vy * dt;
 
         // --- Wall collision ---
+        // Horizontal sweep only — vertical overlap uses post-move Y without Y-axis sweep.
+        // At terminal velocity (600 px/s → 10 px/frame) vs typical wall heights (400 px),
+        // a player cannot fall through a wall's vertical extent in one frame.
         let mut wall_prev_x = prev_x;
         for wall in walls {
             if matches!(wall.pc_perm, Some(0)) {
                 continue;
             }
-            // Vertical overlap check
+            // Vertical overlap check (post-move Y only, no Y sweep)
             let player_top = self.y - self.height;
             let player_bottom = self.y;
             if player_bottom <= wall.y || player_top >= wall.bottom() {
                 continue;
             }
-            // Horizontal sweep
+            // Horizontal sweep — vx is intentionally preserved so the animation
+            // system shows Walking (not Idle) while pushing against a wall.
             if wall_prev_x + self.half_width <= wall.x
                 && self.x + self.half_width > wall.x
                 && wall.blocks_from_left()
             {
                 self.x = wall.x - self.half_width;
-                self.vx = 0.0;
                 wall_prev_x = self.x;
             } else if wall_prev_x - self.half_width >= wall.x
                 && self.x - self.half_width < wall.x
                 && wall.blocks_from_right()
             {
                 self.x = wall.x + self.half_width;
-                self.vx = 0.0;
                 wall_prev_x = self.x;
             }
         }
