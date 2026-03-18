@@ -5,9 +5,8 @@ import {
   Graphics,
   Sprite,
   Text,
-  Texture,
 } from 'pixi.js';
-import type { Spritesheet } from 'pixi.js';
+import type { Spritesheet, Texture } from 'pixi.js';
 import type {
   AnimationState,
   Deco,
@@ -165,10 +164,12 @@ export class SpriteManager {
 
     if (texture) {
       const isTree = entity.spriteClass.startsWith('tree');
+      const w = isTree ? 60 : 30;
+      const h = isTree ? 80 : 30;
       const sprite = new Sprite(texture);
       sprite.anchor.set(0.5, 1);
-      sprite.width = isTree ? 60 : 30;
-      sprite.height = isTree ? 80 : 30;
+      sprite.width = w;
+      sprite.height = h;
       container.addChild(sprite);
 
       const label = new Text({
@@ -176,7 +177,7 @@ export class SpriteManager {
         style: { fontSize: 10, fill: 0xffffff, align: 'center' },
       });
       label.anchor.set(0.5, 1);
-      label.y = -(isTree ? 80 : 30) - 4;
+      label.y = -h - 4;
       container.addChild(label);
       return container;
     }
