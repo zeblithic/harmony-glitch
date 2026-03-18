@@ -11,6 +11,13 @@ export class GameRenderer {
   private static REMOTE_COLOR = 0x4488ff;
   private static CHAT_DURATION = 5.0;
 
+  private static formatStreetName(raw: string): string {
+    return raw
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+
   app: Application;
   private parallaxContainer: Container;
   private worldContainer: Container;
@@ -28,12 +35,18 @@ export class GameRenderer {
   private bgGraphics: Graphics | null = null;
   private street: StreetData | null = null;
   private debugMode = false;
+  private transitionContainer: Container;
+  private transitionBg: Graphics | null = null;
+  private streetNameText: Text | null = null;
+  private lastTransitionGen = -1;
 
   constructor() {
     this.app = new Application();
     this.parallaxContainer = new Container();
     this.worldContainer = new Container();
     this.uiContainer = new Container();
+    this.transitionContainer = new Container();
+    this.transitionContainer.visible = false;
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
@@ -47,6 +60,18 @@ export class GameRenderer {
     this.app.stage.addChild(this.parallaxContainer);
     this.app.stage.addChild(this.worldContainer);
     this.app.stage.addChild(this.uiContainer);
+    this.app.stage.addChild(this.transitionContainer);
+
+    this.transitionBg = new Graphics();
+    this.transitionContainer.addChild(this.transitionBg);
+
+    this.streetNameText = new Text({
+      text: '',
+      style: { fontSize: 28, fill: 0xffffff, fontFamily: 'sans-serif' },
+    });
+    this.streetNameText.anchor.set(0.5, 0.5);
+    this.streetNameText.visible = false;
+    this.transitionContainer.addChild(this.streetNameText);
 
     this.app.renderer.on('resize', () => {
       if (this.street) this.drawBackground(this.street);
@@ -420,22 +445,7 @@ export class GameRenderer {
 
     this.updateChatBubbles(dt, remotePlayers);
 
-    // Swoop transition — slide old street off-screen.
-    // Only shift parallax layers here; the middleground is a child of worldContainer
-    // and inherits its offset automatically.
-    if (frame.transition) {
-      const { progress, direction } = frame.transition;
-      const viewportWidth = this.app.canvas.width;
-      const offset = direction === 'right'
-        ? -progress * viewportWidth
-        : progress * viewportWidth;
-      this.worldContainer.x += offset;
-      for (const [name, container] of this.layerContainers) {
-        const layer = this.street.layers.find(l => l.name === name);
-        if (layer?.isMiddleground) continue;
-        container.x += offset;
-      }
-    }
+    this.updateTransition(frame);
   }
 
   addChatBubble(addressHash: string, message: string): void {
@@ -475,6 +485,76 @@ export class GameRenderer {
     });
   }
 
+  private updateTransition(frame: RenderFrame): void {
+    if (!frame.transition) {
+      this.transitionContainer.visible = false;
+      return;
+    }
+
+    this.transitionContainer.visible = true;
+    const { progress, toStreet, generation } = frame.transition;
+    const screenW = this.app.screen.width;
+    const screenH = this.app.screen.height;
+    const maxRadius = Math.hypot(screenW, screenH);
+
+    // Update street name text on new transition
+    if (generation !== this.lastTransitionGen) {
+      this.lastTransitionGen = generation;
+      if (this.streetNameText) {
+        this.streetNameText.text = GameRenderer.formatStreetName(toStreet);
+      }
+    }
+
+    // Compute iris radius: closing (0→0.5) then opening (0.5→1)
+    let radius: number;
+    let centerX: number;
+    let centerY: number;
+
+    if (progress <= 0.5) {
+      // Closing: shrink from maxRadius to 0, centered on player
+      radius = maxRadius * (1 - progress * 2);
+      centerX = (this.avatarGraphics?.x ?? 0) + this.worldContainer.x;
+      centerY = (this.avatarGraphics?.y ?? 0) + this.worldContainer.y;
+    } else {
+      // Opening: grow from 0 to maxRadius, centered on viewport
+      radius = maxRadius * ((progress - 0.5) * 2);
+      centerX = screenW / 2;
+      centerY = screenH / 2;
+    }
+
+    // Draw background with iris hole
+    if (this.transitionBg) {
+      this.transitionBg.clear();
+      this.transitionBg.rect(0, 0, screenW, screenH);
+      this.transitionBg.fill({ color: 0x0d0d2b });
+
+      if (radius > 0) {
+        this.transitionBg.circle(centerX, centerY, radius);
+        this.transitionBg.cut();
+      }
+    }
+
+    // Street name alpha
+    if (this.streetNameText) {
+      this.streetNameText.x = screenW / 2;
+      this.streetNameText.y = screenH / 2;
+
+      let alpha: number;
+      if (progress < 0.48) {
+        alpha = 0;
+      } else if (progress < 0.52) {
+        alpha = (progress - 0.48) / 0.04; // fade in over 0.48→0.52
+      } else if (progress < 0.8) {
+        alpha = 1;
+      } else {
+        alpha = 1 - (progress - 0.8) / 0.2; // fade out over 0.8→1.0
+      }
+
+      this.streetNameText.alpha = alpha;
+      this.streetNameText.visible = alpha > 0;
+    }
+  }
+
   destroy(): void {
     for (const [, sprite] of this.remoteSprites) {
       sprite.destroy();
@@ -491,6 +571,9 @@ export class GameRenderer {
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];
+    if (this.transitionBg) { this.transitionBg.destroy(); this.transitionBg = null; }
+    if (this.streetNameText) { this.streetNameText.destroy(); this.streetNameText = null; }
+    this.transitionContainer.destroy({ children: true });
     this.app.destroy(true);
   }
 }
