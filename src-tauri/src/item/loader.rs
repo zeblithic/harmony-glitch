@@ -1,4 +1,6 @@
-use crate::item::types::{EntityDefs, ItemDefs, RecipeDefs, WorldEntity};
+use serde::Deserialize;
+
+use crate::item::types::{EntityDefs, ItemDefs, RecipeDefs, WorldEntity, WorldItem};
 
 /// Parse item definitions from JSON string.
 /// The JSON is a map of id → ItemDef. We set each ItemDef.id from its map key.
@@ -29,9 +31,39 @@ pub fn parse_entity_defs(json: &str) -> Result<EntityDefs, String> {
     Ok(raw)
 }
 
-/// Parse entity placements from JSON string.
-pub fn parse_entity_placements(json: &str) -> Result<Vec<WorldEntity>, String> {
-    serde_json::from_str(json).map_err(|e| format!("Failed to parse entity placements: {e}"))
+/// Placement data parsed from a street's entity/item JSON file.
+pub struct PlacementData {
+    pub entities: Vec<WorldEntity>,
+    pub ground_items: Vec<WorldItem>,
+}
+
+/// Parse entity and ground item placements from JSON string.
+/// Supports both array format (legacy, entities only) and object format
+/// (with optional groundItems field).
+pub fn parse_entity_placements(json: &str) -> Result<PlacementData, String> {
+    // Try object format first
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct PlacementJson {
+        entities: Vec<WorldEntity>,
+        #[serde(default)]
+        ground_items: Vec<WorldItem>,
+    }
+
+    if let Ok(data) = serde_json::from_str::<PlacementJson>(json) {
+        return Ok(PlacementData {
+            entities: data.entities,
+            ground_items: data.ground_items,
+        });
+    }
+
+    // Fall back to legacy array format (entities only)
+    let entities: Vec<WorldEntity> =
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse entity placements: {e}"))?;
+    Ok(PlacementData {
+        entities,
+        ground_items: vec![],
+    })
 }
 
 /// Parse recipe definitions from JSON string.
@@ -96,10 +128,10 @@ mod tests {
             { "id": "tree_1", "type": "fruit_tree", "x": -800, "y": -2 },
             { "id": "chicken_1", "type": "chicken", "x": 200, "y": -2 }
         ]"#;
-        let entities = parse_entity_placements(json).unwrap();
-        assert_eq!(entities.len(), 2);
-        assert_eq!(entities[0].entity_type, "fruit_tree");
-        assert_eq!(entities[1].entity_type, "chicken");
+        let data = parse_entity_placements(json).unwrap();
+        assert_eq!(data.entities.len(), 2);
+        assert_eq!(data.entities[0].entity_type, "fruit_tree");
+        assert_eq!(data.entities[1].entity_type, "chicken");
     }
 
     #[test]
@@ -153,15 +185,24 @@ mod tests {
     #[test]
     fn parse_bundled_meadow_entities() {
         let json = include_str!("../../../assets/streets/demo_meadow_entities.json");
-        let entities = parse_entity_placements(json).unwrap();
-        assert!(entities.len() >= 3);
+        let data = parse_entity_placements(json).unwrap();
+        assert!(data.entities.len() >= 3);
     }
 
     #[test]
     fn parse_bundled_heights_entities() {
         let json = include_str!("../../../assets/streets/demo_heights_entities.json");
-        let entities = parse_entity_placements(json).unwrap();
-        assert!(entities.len() >= 2);
+        let data = parse_entity_placements(json).unwrap();
+        assert!(data.entities.len() >= 2);
+    }
+
+    #[test]
+    fn parse_bundled_meadow_has_ground_items() {
+        let json = include_str!("../../../assets/streets/demo_meadow_entities.json");
+        let data = parse_entity_placements(json).unwrap();
+        assert!(data.entities.len() >= 3);
+        assert_eq!(data.ground_items.len(), 1);
+        assert_eq!(data.ground_items[0].item_id, "pot");
     }
 
     #[test]

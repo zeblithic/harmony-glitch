@@ -132,7 +132,12 @@ impl GameState {
         }
     }
 
-    pub fn load_street(&mut self, street: StreetData, entities: Vec<WorldEntity>) {
+    pub fn load_street(
+        &mut self,
+        street: StreetData,
+        entities: Vec<WorldEntity>,
+        ground_items: Vec<WorldItem>,
+    ) {
         // During an in-flight transition, skip player repositioning — the
         // Complete handler will place the player at the return signpost.
         // Only Swooping and Complete are actual in-flight phases; PreSubscribed
@@ -147,7 +152,9 @@ impl GameState {
         }
         self.street = Some(street);
         self.world_entities = entities;
-        self.world_items.clear();
+        self.world_items = ground_items;
+        // Set next_item_id past loaded ground items to avoid ID collisions
+        self.next_item_id = self.world_items.len().max(self.next_item_id as usize) as u64;
         self.pickup_feedback.clear();
         self.entity_states.clear(); // game_time intentionally NOT reset — it's session-global
     }
@@ -679,7 +686,7 @@ mod tests {
     #[test]
     fn tick_produces_render_frame() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
         let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
         assert!(frame.is_some());
@@ -697,7 +704,7 @@ mod tests {
     #[test]
     fn facing_updates_from_input() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
 
         let input = InputState {
             left: true,
@@ -717,7 +724,7 @@ mod tests {
     #[test]
     fn animation_idle_on_ground() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
         state.player.y = 0.0;
         state.player.vy = 0.0;
@@ -732,7 +739,7 @@ mod tests {
     #[test]
     fn animation_walking() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
         state.player.y = 0.0;
 
@@ -779,7 +786,7 @@ mod tests {
             }],
             signposts: vec![],
         };
-        state.load_street(small_street, vec![]);
+        state.load_street(small_street, vec![], vec![]);
 
         // Should not panic — camera clamp handles min > max gracefully
         let input = InputState::default();
@@ -790,7 +797,7 @@ mod tests {
     #[test]
     fn load_street_places_player() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         // Player should be at center of street
         assert!((state.player.x - 0.0).abs() < 1.0);
     }
@@ -844,7 +851,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(street, entities);
+        state.load_street(street, entities, vec![]);
 
         // Stand next to tree and press interact
         let input = InputState {
@@ -861,7 +868,7 @@ mod tests {
     #[test]
     fn render_frame_has_no_transition_by_default() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
         let frame = state
             .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
@@ -890,7 +897,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1500.0;
         state.player.on_ground = true;
 
@@ -918,7 +925,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
 
@@ -948,7 +955,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
         let input = InputState::default();
@@ -988,7 +995,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
         let input = InputState::default();
@@ -1005,7 +1012,7 @@ mod tests {
     #[test]
     fn game_time_accumulates() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
 
         state.tick(0.5, &input, &mut rand::thread_rng());
@@ -1025,7 +1032,7 @@ mod tests {
             .insert("tree_1".into(), EntityInstanceState::new(3));
         assert_eq!(state.entity_states.len(), 1);
 
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         assert!(state.entity_states.is_empty());
     }
 
@@ -1045,7 +1052,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
         let input = InputState::default();
@@ -1070,7 +1077,7 @@ mod tests {
                 target_label: "Back to Meadow".into(),
             }],
         }];
-        state.load_street(new_street, vec![]);
+        state.load_street(new_street, vec![], vec![]);
 
         for _ in 0..30 {
             state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
@@ -1137,7 +1144,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
         state.player.x = 0.0;
         state.player.on_ground = true;
 
@@ -1214,7 +1221,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
         state.player.x = 0.0;
         state.player.on_ground = true;
 
@@ -1289,7 +1296,7 @@ mod tests {
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1320,7 +1327,7 @@ mod tests {
             x: -800.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1349,7 +1356,7 @@ mod tests {
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1381,7 +1388,7 @@ mod tests {
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1432,7 +1439,7 @@ mod tests {
             x: 0.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1468,7 +1475,7 @@ mod tests {
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1504,7 +1511,7 @@ mod tests {
                 x: 200.0,
                 y: -2.0,
             }];
-            state.load_street(test_street(), entities);
+            state.load_street(test_street(), entities, vec![]);
             let input = InputState::default();
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             state.tick(1.0 / 60.0, &input, &mut rng);
@@ -1534,7 +1541,7 @@ mod tests {
             x: -800.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1592,7 +1599,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
         state.player.x = 0.0;
         state.player.on_ground = true;
 
@@ -1638,7 +1645,7 @@ mod tests {
         let entities = vec![
             WorldEntity { id: "b1".into(), entity_type: "butterfly".into(), x: 600.0, y: -80.0 },
         ];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1668,7 +1675,7 @@ mod tests {
         let entities = vec![
             WorldEntity { id: "c1".into(), entity_type: "chicken".into(), x: 200.0, y: -2.0 },
         ];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);

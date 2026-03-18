@@ -63,13 +63,13 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
     let xml = load_street_xml(&name)?;
     let street_data = parse_street(&xml)?;
     let entity_json = load_entity_placement(&name)?;
-    let entities = item::loader::parse_entity_placements(&entity_json)?;
+    let placement = item::loader::parse_entity_placements(&entity_json)?;
 
     // Update game state
     {
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-        state.load_street(street_data.clone(), entities);
+        state.load_street(street_data.clone(), placement.entities, placement.ground_items);
     }
 
     // Update network state for the new street.
@@ -258,6 +258,21 @@ fn drop_item(slot: usize, app: AppHandle) -> Result<(), String> {
         });
         state.next_item_id += 1;
     }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_recipes(app: AppHandle) -> Result<Vec<item::types::RecipeDef>, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    Ok(state.recipe_defs.values().cloned().collect())
+}
+
+#[tauri::command]
+fn craft_recipe(recipe_id: String, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.craft_recipe(&recipe_id).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -500,6 +515,8 @@ pub fn run() {
             set_display_name,
             send_chat,
             drop_item,
+            get_recipes,
+            craft_recipe,
             street_transition_ready,
             get_network_status,
         ])
