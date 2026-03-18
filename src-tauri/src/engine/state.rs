@@ -151,7 +151,13 @@ impl GameState {
 
     /// Run one tick of the game loop.
     pub fn tick(&mut self, dt: f64, input: &InputState, rng: &mut impl Rng) -> Option<RenderFrame> {
-        let street = self.street.as_ref()?;
+        // Early return if no street loaded. Use is_none() check + unwrap pattern
+        // so the immutable borrow doesn't span the entire function (tick_entities
+        // needs &mut self).
+        #[allow(clippy::question_mark)]
+        if self.street.is_none() {
+            return None;
+        }
         self.game_time += dt;
 
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
@@ -167,32 +173,35 @@ impl GameState {
         }
 
         // --- Street transition system ---
-        self.transition.check_signposts(
-            self.player.x,
-            &street.signposts,
-            street.left,
-            street.right,
-        );
-
-        // Trigger swoop when player crosses the signpost X coordinate.
-        // IMPORTANT: Copy values out of the pattern match BEFORE calling trigger_swoop,
-        // because the if-let borrows self.transition immutably while
-        // trigger_swoop needs &mut self.transition.
-        if let TransitionPhase::PreSubscribed {
-            signpost_x,
-            direction,
-            ..
-        } = &self.transition.phase
         {
-            let signpost_x = *signpost_x;
-            let direction = *direction;
-            let crossed = match direction {
-                TransitionDirection::Right => self.player.x >= signpost_x,
-                TransitionDirection::Left => self.player.x <= signpost_x,
-            };
-            if crossed {
-                self.transition_origin_tsid = Some(street.tsid.clone());
-                self.transition.trigger_swoop();
+            let street = self.street.as_ref().unwrap();
+            self.transition.check_signposts(
+                self.player.x,
+                &street.signposts,
+                street.left,
+                street.right,
+            );
+
+            // Trigger swoop when player crosses the signpost X coordinate.
+            // IMPORTANT: Copy values out of the pattern match BEFORE calling trigger_swoop,
+            // because the if-let borrows self.transition immutably while
+            // trigger_swoop needs &mut self.transition.
+            if let TransitionPhase::PreSubscribed {
+                signpost_x,
+                direction,
+                ..
+            } = &self.transition.phase
+            {
+                let signpost_x = *signpost_x;
+                let direction = *direction;
+                let crossed = match direction {
+                    TransitionDirection::Right => self.player.x >= signpost_x,
+                    TransitionDirection::Left => self.player.x <= signpost_x,
+                };
+                if crossed {
+                    self.transition_origin_tsid = Some(street.tsid.clone());
+                    self.transition.trigger_swoop();
+                }
             }
         }
 
@@ -207,7 +216,10 @@ impl GameState {
         if let TransitionPhase::Complete { .. } = &self.transition.phase {
             if self.transition_origin_tsid.is_some() {
                 let origin_tsid = self.transition_origin_tsid.take().unwrap();
-                let return_signpost = street.signposts.iter()
+                let street = self.street.as_ref().unwrap();
+                let return_signpost = street
+                    .signposts
+                    .iter()
                     .find(|s| s.connects.iter().any(|c| c.target_tsid == origin_tsid));
 
                 if let Some(sp) = return_signpost {
@@ -243,9 +255,22 @@ impl GameState {
         // Re-check swooping state after transition system may have changed it.
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
+        // Tick entity movement — runs even during swoops so NPCs keep wandering.
+        // Must run BEFORE the interaction block so that lazy-init of movement
+        // state happens before execute_interaction can create a partial state.
+        self.tick_entities(dt, rng);
+
+        let street = self.street.as_ref().unwrap();
+
         let interaction_prompt = if !is_swooping {
-            self.player
-                .tick(dt, input, street.platforms(), street.walls(), street.left, street.right);
+            self.player.tick(
+                dt,
+                input,
+                street.platforms(),
+                street.walls(),
+                street.left,
+                street.right,
+            );
 
             // --- Interaction system ---
             // Age and cull pickup feedback
@@ -334,7 +359,11 @@ impl GameState {
 
             // Clear prompt on the frame where a ground item was picked up — the
             // target was removed, so the pre-interaction prompt is stale.
-            if interacted { None } else { interaction_prompt }
+            if interacted {
+                None
+            } else {
+                interaction_prompt
+            }
         } else {
             self.prev_interact = input.interact;
             None
@@ -384,31 +413,106 @@ impl GameState {
             interaction_prompt,
             pickup_feedback: self.pickup_feedback.clone(),
             transition: match &self.transition.phase {
-                TransitionPhase::Swooping { progress, direction, to_street, .. } => {
-                    Some(TransitionFrame {
-                        progress: *progress,
-                        direction: *direction,
-                        to_street: self.tsid_to_name
-                            .get(to_street)
-                            .cloned()
-                            .unwrap_or_else(|| to_street.clone()),
-                        generation: self.transition.generation,
-                    })
-                }
-                TransitionPhase::Complete { new_street, direction } => {
-                    Some(TransitionFrame {
-                        progress: 1.0,
-                        direction: *direction,
-                        to_street: self.tsid_to_name
-                            .get(new_street)
-                            .cloned()
-                            .unwrap_or_else(|| new_street.clone()),
-                        generation: self.transition.generation,
-                    })
-                }
+                TransitionPhase::Swooping {
+                    progress,
+                    direction,
+                    to_street,
+                    ..
+                } => Some(TransitionFrame {
+                    progress: *progress,
+                    direction: *direction,
+                    to_street: self
+                        .tsid_to_name
+                        .get(to_street)
+                        .cloned()
+                        .unwrap_or_else(|| to_street.clone()),
+                    generation: self.transition.generation,
+                }),
+                TransitionPhase::Complete {
+                    new_street,
+                    direction,
+                } => Some(TransitionFrame {
+                    progress: 1.0,
+                    direction: *direction,
+                    to_street: self
+                        .tsid_to_name
+                        .get(new_street)
+                        .cloned()
+                        .unwrap_or_else(|| new_street.clone()),
+                    generation: self.transition.generation,
+                }),
                 _ => None,
             },
         })
+    }
+
+    fn tick_entities(&mut self, dt: f64, rng: &mut impl Rng) {
+        for i in 0..self.world_entities.len() {
+            let entity_type = self.world_entities[i].entity_type.clone();
+            let entity_id = self.world_entities[i].id.clone();
+            let entity_x = self.world_entities[i].x;
+
+            let def = match self.entity_defs.get(&entity_type) {
+                Some(d) => d,
+                None => continue,
+            };
+
+            let (walk_speed, wander_radius, max_harvests) =
+                match (def.walk_speed, def.wander_radius) {
+                    (Some(ws), Some(wr)) => (ws, wr, def.max_harvests),
+                    _ => continue,
+                };
+
+            let game_time = self.game_time;
+            let state = self.entity_states.entry(entity_id).or_insert_with(|| {
+                let mut s = EntityInstanceState::new(max_harvests);
+                s.current_x = entity_x;
+                s.wander_origin = entity_x;
+                s.facing = if rng.gen::<bool>() {
+                    Direction::Right
+                } else {
+                    Direction::Left
+                };
+                s.idle_until = game_time + rng.gen_range(0.0..2.0);
+                s
+            });
+
+            // Idle check
+            if game_time < state.idle_until {
+                state.velocity_x = 0.0;
+                self.world_entities[i].x = state.current_x;
+                continue;
+            }
+
+            // Boundary check — only when moving
+            if state.velocity_x != 0.0
+                && (state.current_x - state.wander_origin).abs() >= wander_radius
+            {
+                if state.current_x > state.wander_origin {
+                    state.current_x = state.wander_origin + wander_radius;
+                } else {
+                    state.current_x = state.wander_origin - wander_radius;
+                }
+                state.facing = match state.facing {
+                    Direction::Right => Direction::Left,
+                    Direction::Left => Direction::Right,
+                };
+                state.velocity_x = 0.0;
+                state.idle_until = game_time + rng.gen_range(1.0..3.0);
+                self.world_entities[i].x = state.current_x;
+                continue;
+            }
+
+            // Apply movement
+            let direction_sign = if state.facing == Direction::Right {
+                1.0
+            } else {
+                -1.0
+            };
+            state.velocity_x = walk_speed * direction_sign;
+            state.current_x += state.velocity_x * dt;
+            self.world_entities[i].x = state.current_x;
+        }
     }
 
     fn build_inventory_frame(&self) -> InventoryFrame {
@@ -441,18 +545,21 @@ impl GameState {
             .map(|e| {
                 let def = self.entity_defs.get(&e.entity_type);
 
-                let (cooldown_remaining, depleted) = if let Some(state) = self.entity_states.get(&e.id) {
-                    let remaining = (state.cooldown_until.max(state.depleted_until)) - self.game_time;
-                    if remaining > 0.0 {
-                        (Some(remaining), state.depleted_until > self.game_time)
+                let (cooldown_remaining, depleted) =
+                    if let Some(state) = self.entity_states.get(&e.id) {
+                        let remaining =
+                            (state.cooldown_until.max(state.depleted_until)) - self.game_time;
+                        if remaining > 0.0 {
+                            (Some(remaining), state.depleted_until > self.game_time)
+                        } else {
+                            (None, false)
+                        }
                     } else {
                         (None, false)
-                    }
-                } else {
-                    (None, false)
-                };
+                    };
 
-                let facing = self.entity_states
+                let facing = self
+                    .entity_states
                     .get(&e.id)
                     .map(|s| s.facing)
                     .unwrap_or(Direction::Right);
@@ -517,10 +624,7 @@ mod tests {
                 decos: vec![],
                 platform_lines: vec![PlatformLine {
                     id: "ground".into(),
-                    start: Point {
-                        x: -2800.0,
-                        y: 0.0,
-                    },
+                    start: Point { x: -2800.0, y: 0.0 },
                     end: Point { x: 2800.0, y: 0.0 },
                     pc_perm: None,
                     item_perm: None,
@@ -546,7 +650,9 @@ mod tests {
     fn tick_returns_none_without_street() {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
         let input = InputState::default();
-        assert!(state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).is_none());
+        assert!(state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .is_none());
     }
 
     #[test]
@@ -578,7 +684,9 @@ mod tests {
         state.player.vy = 0.0;
 
         let input = InputState::default();
-        let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
         assert_eq!(frame.player.animation, AnimationState::Idle);
     }
 
@@ -593,7 +701,9 @@ mod tests {
             right: true,
             ..Default::default()
         };
-        let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
         assert_eq!(frame.player.animation, AnimationState::Walking);
     }
 
@@ -648,34 +758,44 @@ mod tests {
 
     #[test]
     fn interaction_adds_to_inventory() {
-        use crate::item::types::{EntityDef, ItemDef, YieldEntry, WorldEntity};
+        use crate::item::types::{EntityDef, ItemDef, WorldEntity, YieldEntry};
         use rand::SeedableRng;
 
         let mut item_defs = ItemDefs::new();
-        item_defs.insert("cherry".into(), ItemDef {
-            id: "cherry".into(),
-            name: "Cherry".into(),
-            description: "".into(),
-            category: "food".into(),
-            stack_limit: 50,
-            icon: "cherry".into(),
-        });
+        item_defs.insert(
+            "cherry".into(),
+            ItemDef {
+                id: "cherry".into(),
+                name: "Cherry".into(),
+                description: "".into(),
+                category: "food".into(),
+                stack_limit: 50,
+                icon: "cherry".into(),
+            },
+        );
         let mut entity_defs = EntityDefs::new();
-        entity_defs.insert("fruit_tree".into(), EntityDef {
-            id: "fruit_tree".into(),
-            name: "Fruit Tree".into(),
-            verb: "Harvest".into(),
-            yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
-            cooldown_secs: 0.0,
-            max_harvests: 0,
-            respawn_secs: 0.0,
-            sprite_class: "tree_fruit".into(),
-            interact_radius: 80.0,
-            walk_speed: None,
-            wander_radius: None,
-            bob_amplitude: None,
-            bob_frequency: None,
-        });
+        entity_defs.insert(
+            "fruit_tree".into(),
+            EntityDef {
+                id: "fruit_tree".into(),
+                name: "Fruit Tree".into(),
+                verb: "Harvest".into(),
+                yields: vec![YieldEntry {
+                    item: "cherry".into(),
+                    min: 1,
+                    max: 1,
+                }],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "tree_fruit".into(),
+                interact_radius: 80.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
+            },
+        );
 
         let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
         let street = test_street();
@@ -688,7 +808,10 @@ mod tests {
         state.load_street(street, entities);
 
         // Stand next to tree and press interact
-        let input = InputState { interact: true, ..Default::default() };
+        let input = InputState {
+            interact: true,
+            ..Default::default()
+        };
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let frame = state.tick(1.0 / 60.0, &input, &mut rng).unwrap();
 
@@ -701,7 +824,9 @@ mod tests {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
         state.load_street(test_street(), vec![]);
         let input = InputState::default();
-        let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
         assert!(frame.transition.is_none());
     }
 
@@ -733,7 +858,10 @@ mod tests {
         let input = InputState::default();
         state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
 
-        assert!(matches!(state.transition.phase, TransitionPhase::PreSubscribed { .. }));
+        assert!(matches!(
+            state.transition.phase,
+            TransitionPhase::PreSubscribed { .. }
+        ));
     }
 
     #[test]
@@ -760,7 +888,10 @@ mod tests {
 
         // check_signposts puts us in PreSubscribed, then the crossing
         // check triggers the swoop — both happen in the same tick.
-        assert!(matches!(state.transition.phase, TransitionPhase::Swooping { .. }));
+        assert!(matches!(
+            state.transition.phase,
+            TransitionPhase::Swooping { .. }
+        ));
     }
 
     #[test]
@@ -770,9 +901,12 @@ mod tests {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
         let mut street = test_street();
         street.signposts = vec![Signpost {
-            id: "sign_right".into(), x: 1900.0, y: 0.0,
+            id: "sign_right".into(),
+            x: 1900.0,
+            y: 0.0,
             connects: vec![SignpostConnection {
-                target_tsid: "LADEMO002".into(), target_label: "To the Heights".into(),
+                target_tsid: "LADEMO002".into(),
+                target_label: "To the Heights".into(),
             }],
         }];
         state.load_street(street, vec![]);
@@ -780,14 +914,24 @@ mod tests {
         state.player.on_ground = true;
         let input = InputState::default();
         state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
-        assert!(matches!(state.transition.phase, TransitionPhase::Swooping { .. }));
+        assert!(matches!(
+            state.transition.phase,
+            TransitionPhase::Swooping { .. }
+        ));
 
         let pos_before = state.player.x;
-        let input = InputState { left: true, ..Default::default() };
+        let input = InputState {
+            left: true,
+            ..Default::default()
+        };
         state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
 
-        assert!((state.player.x - pos_before).abs() < 0.01,
-            "Player moved during swoop: {} -> {}", pos_before, state.player.x);
+        assert!(
+            (state.player.x - pos_before).abs() < 0.01,
+            "Player moved during swoop: {} -> {}",
+            pos_before,
+            state.player.x
+        );
     }
 
     #[test]
@@ -797,9 +941,12 @@ mod tests {
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
         let mut street = test_street();
         street.signposts = vec![Signpost {
-            id: "sign_right".into(), x: 1900.0, y: 0.0,
+            id: "sign_right".into(),
+            x: 1900.0,
+            y: 0.0,
             connects: vec![SignpostConnection {
-                target_tsid: "LADEMO002".into(), target_label: "To the Heights".into(),
+                target_tsid: "LADEMO002".into(),
+                target_label: "To the Heights".into(),
             }],
         }];
         state.load_street(street, vec![]);
@@ -808,7 +955,9 @@ mod tests {
         let input = InputState::default();
         state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
 
-        let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()).unwrap();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
         let transition = frame.transition.unwrap();
         assert!(transition.progress > 0.0);
         assert_eq!(transition.to_street, "demo_heights");
@@ -832,7 +981,9 @@ mod tests {
         use crate::item::types::EntityInstanceState;
 
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.entity_states.insert("tree_1".into(), EntityInstanceState::new(3));
+        state
+            .entity_states
+            .insert("tree_1".into(), EntityInstanceState::new(3));
         assert_eq!(state.entity_states.len(), 1);
 
         state.load_street(test_street(), vec![]);
@@ -847,9 +998,12 @@ mod tests {
         let mut street = test_street();
         street.tsid = "LADEMO001".into();
         street.signposts = vec![Signpost {
-            id: "sign_right".into(), x: 1900.0, y: 0.0,
+            id: "sign_right".into(),
+            x: 1900.0,
+            y: 0.0,
             connects: vec![SignpostConnection {
-                target_tsid: "LADEMO002".into(), target_label: "To the Heights".into(),
+                target_tsid: "LADEMO002".into(),
+                target_label: "To the Heights".into(),
             }],
         }];
         state.load_street(street, vec![]);
@@ -857,16 +1011,24 @@ mod tests {
         state.player.on_ground = true;
         let input = InputState::default();
         state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
-        assert!(matches!(state.transition.phase, TransitionPhase::Swooping { .. }));
+        assert!(matches!(
+            state.transition.phase,
+            TransitionPhase::Swooping { .. }
+        ));
 
-        state.transition.mark_street_ready(state.transition.generation);
+        state
+            .transition
+            .mark_street_ready(state.transition.generation);
 
         let mut new_street = test_street();
         new_street.tsid = "LADEMO002".into();
         new_street.signposts = vec![Signpost {
-            id: "sign_left".into(), x: -1900.0, y: 0.0,
+            id: "sign_left".into(),
+            x: -1900.0,
+            y: 0.0,
             connects: vec![SignpostConnection {
-                target_tsid: "LADEMO001".into(), target_label: "Back to Meadow".into(),
+                target_tsid: "LADEMO001".into(),
+                target_label: "Back to Meadow".into(),
             }],
         }];
         state.load_street(new_street, vec![]);
@@ -880,40 +1042,54 @@ mod tests {
         // Player is placed PRE_SUBSCRIBE_DISTANCE + 50px inward from the return
         // signpost (x=-1900), i.e. at x=-1350, so signpost detection resets cleanly.
         let expected_x = -1900.0 + (PRE_SUBSCRIBE_DISTANCE + 50.0);
-        assert!((state.player.x - expected_x).abs() < 1.0,
-            "Player should be at x={} (just outside pre-subscribe zone), got {}", expected_x, state.player.x);
+        assert!(
+            (state.player.x - expected_x).abs() < 1.0,
+            "Player should be at x={} (just outside pre-subscribe zone), got {}",
+            expected_x,
+            state.player.x
+        );
     }
 
     #[test]
     fn entity_frame_includes_cooldown_remaining() {
-        use crate::item::types::{EntityDef, ItemDef, YieldEntry, WorldEntity};
+        use crate::item::types::{EntityDef, ItemDef, WorldEntity, YieldEntry};
         use rand::SeedableRng;
 
         let mut item_defs = ItemDefs::new();
-        item_defs.insert("cherry".into(), ItemDef {
-            id: "cherry".into(),
-            name: "Cherry".into(),
-            description: "".into(),
-            category: "food".into(),
-            stack_limit: 50,
-            icon: "cherry".into(),
-        });
+        item_defs.insert(
+            "cherry".into(),
+            ItemDef {
+                id: "cherry".into(),
+                name: "Cherry".into(),
+                description: "".into(),
+                category: "food".into(),
+                stack_limit: 50,
+                icon: "cherry".into(),
+            },
+        );
         let mut entity_defs = EntityDefs::new();
-        entity_defs.insert("fruit_tree".into(), EntityDef {
-            id: "fruit_tree".into(),
-            name: "Fruit Tree".into(),
-            verb: "Harvest".into(),
-            yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
-            cooldown_secs: 5.0,
-            max_harvests: 3,
-            respawn_secs: 30.0,
-            sprite_class: "tree_fruit".into(),
-            interact_radius: 80.0,
-            walk_speed: None,
-            wander_radius: None,
-            bob_amplitude: None,
-            bob_frequency: None,
-        });
+        entity_defs.insert(
+            "fruit_tree".into(),
+            EntityDef {
+                id: "fruit_tree".into(),
+                name: "Fruit Tree".into(),
+                verb: "Harvest".into(),
+                yields: vec![YieldEntry {
+                    item: "cherry".into(),
+                    min: 1,
+                    max: 1,
+                }],
+                cooldown_secs: 5.0,
+                max_harvests: 3,
+                respawn_secs: 30.0,
+                sprite_class: "tree_fruit".into(),
+                interact_radius: 80.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
+            },
+        );
 
         let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
         let entities = vec![WorldEntity {
@@ -927,7 +1103,10 @@ mod tests {
         state.player.on_ground = true;
 
         // Harvest the entity
-        let input = InputState { interact: true, ..Default::default() };
+        let input = InputState {
+            interact: true,
+            ..Default::default()
+        };
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let frame = state.tick(1.0 / 60.0, &input, &mut rng).unwrap();
 
@@ -950,34 +1129,44 @@ mod tests {
 
     #[test]
     fn entity_frame_shows_depleted() {
-        use crate::item::types::{EntityDef, ItemDef, YieldEntry, WorldEntity};
+        use crate::item::types::{EntityDef, ItemDef, WorldEntity, YieldEntry};
         use rand::SeedableRng;
 
         let mut item_defs = ItemDefs::new();
-        item_defs.insert("cherry".into(), ItemDef {
-            id: "cherry".into(),
-            name: "Cherry".into(),
-            description: "".into(),
-            category: "food".into(),
-            stack_limit: 50,
-            icon: "cherry".into(),
-        });
+        item_defs.insert(
+            "cherry".into(),
+            ItemDef {
+                id: "cherry".into(),
+                name: "Cherry".into(),
+                description: "".into(),
+                category: "food".into(),
+                stack_limit: 50,
+                icon: "cherry".into(),
+            },
+        );
         let mut entity_defs = EntityDefs::new();
-        entity_defs.insert("fruit_tree".into(), EntityDef {
-            id: "fruit_tree".into(),
-            name: "Fruit Tree".into(),
-            verb: "Harvest".into(),
-            yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
-            cooldown_secs: 0.0,
-            max_harvests: 1,
-            respawn_secs: 30.0,
-            sprite_class: "tree_fruit".into(),
-            interact_radius: 80.0,
-            walk_speed: None,
-            wander_radius: None,
-            bob_amplitude: None,
-            bob_frequency: None,
-        });
+        entity_defs.insert(
+            "fruit_tree".into(),
+            EntityDef {
+                id: "fruit_tree".into(),
+                name: "Fruit Tree".into(),
+                verb: "Harvest".into(),
+                yields: vec![YieldEntry {
+                    item: "cherry".into(),
+                    min: 1,
+                    max: 1,
+                }],
+                cooldown_secs: 0.0,
+                max_harvests: 1,
+                respawn_secs: 30.0,
+                sprite_class: "tree_fruit".into(),
+                interact_radius: 80.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
+            },
+        );
 
         let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
         let entities = vec![WorldEntity {
@@ -991,7 +1180,10 @@ mod tests {
         state.player.on_ground = true;
 
         // Single harvest depletes (max_harvests=1)
-        let input = InputState { interact: true, ..Default::default() };
+        let input = InputState {
+            interact: true,
+            ..Default::default()
+        };
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         state.tick(1.0 / 60.0, &input, &mut rng);
 
@@ -1003,36 +1195,349 @@ mod tests {
         assert!(entity_frame.depleted);
     }
 
+    fn movable_entity_defs() -> EntityDefs {
+        use crate::item::types::EntityDef;
+
+        let mut defs = EntityDefs::new();
+        defs.insert(
+            "chicken".into(),
+            EntityDef {
+                id: "chicken".into(),
+                name: "Chicken".into(),
+                verb: "Squeeze".into(),
+                yields: vec![],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "npc_chicken".into(),
+                interact_radius: 60.0,
+                walk_speed: Some(40.0),
+                wander_radius: Some(120.0),
+                bob_amplitude: None,
+                bob_frequency: None,
+            },
+        );
+        defs.insert(
+            "fruit_tree".into(),
+            EntityDef {
+                id: "fruit_tree".into(),
+                name: "Fruit Tree".into(),
+                verb: "Harvest".into(),
+                yields: vec![],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "tree_fruit".into(),
+                interact_radius: 80.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
+            },
+        );
+        defs
+    }
+
+    #[test]
+    fn tick_entities_moves_movable_entity() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs();
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![WorldEntity {
+            id: "c1".into(),
+            entity_type: "chicken".into(),
+            x: 200.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Tick several times to get past initial idle
+        for _ in 0..200 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        // Entity should have moved from spawn
+        let chicken = &state.world_entities[0];
+        assert!(
+            (chicken.x - 200.0).abs() > 1.0,
+            "Chicken should have moved from spawn x=200, got x={}",
+            chicken.x
+        );
+    }
+
+    #[test]
+    fn tick_entities_static_entity_stays_put() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs();
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: -800.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        for _ in 0..200 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        let tree = &state.world_entities[0];
+        assert!(
+            (tree.x - (-800.0)).abs() < 0.01,
+            "Tree should stay at x=-800, got x={}",
+            tree.x
+        );
+    }
+
+    #[test]
+    fn tick_entities_respects_wander_radius() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs();
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![WorldEntity {
+            id: "c1".into(),
+            entity_type: "chicken".into(),
+            x: 200.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Tick many times — entity should never exceed wander_radius (120) from spawn (200)
+        for _ in 0..2000 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        let chicken = &state.world_entities[0];
+        let distance = (chicken.x - 200.0).abs();
+        assert!(
+            distance <= 121.0, // 1px tolerance for float
+            "Chicken at x={} is {}px from spawn (max 120)",
+            chicken.x,
+            distance
+        );
+    }
+
+    #[test]
+    fn tick_entities_facing_matches_direction() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs();
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![WorldEntity {
+            id: "c1".into(),
+            entity_type: "chicken".into(),
+            x: 200.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Tick until entity is moving (past initial idle)
+        for _ in 0..200 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        let entity_state = state.entity_states.get("c1").unwrap();
+        if entity_state.velocity_x > 0.0 {
+            assert_eq!(entity_state.facing, Direction::Right);
+        } else if entity_state.velocity_x < 0.0 {
+            assert_eq!(entity_state.facing, Direction::Left);
+        }
+        // velocity_x == 0 means idle — facing can be either, don't assert
+    }
+
+    #[test]
+    fn tick_entities_idle_pause_at_boundary() {
+        use crate::item::types::EntityDef;
+        use rand::SeedableRng;
+
+        let mut defs = EntityDefs::new();
+        defs.insert(
+            "fast_npc".into(),
+            EntityDef {
+                id: "fast_npc".into(),
+                name: "Fast".into(),
+                verb: "Poke".into(),
+                yields: vec![],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "npc_fast".into(),
+                interact_radius: 60.0,
+                walk_speed: Some(200.0), // Very fast so it reaches boundary quickly
+                wander_radius: Some(20.0), // Very small radius
+                bob_amplitude: None,
+                bob_frequency: None,
+            },
+        );
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![WorldEntity {
+            id: "f1".into(),
+            entity_type: "fast_npc".into(),
+            x: 0.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Tick past initial idle and long enough to reach boundary
+        for _ in 0..300 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        // After hitting boundary, entity should have had at least one idle pause
+        let entity_state = state.entity_states.get("f1").unwrap();
+        // Entity must be within wander radius
+        let dist = (entity_state.current_x - entity_state.wander_origin).abs();
+        assert!(dist <= 21.0, "Entity outside wander radius: dist={}", dist);
+    }
+
+    #[test]
+    fn tick_entities_write_back_to_world_entity() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs();
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![WorldEntity {
+            id: "c1".into(),
+            entity_type: "chicken".into(),
+            x: 200.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        for _ in 0..200 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        // WorldEntity.x should match the movement state's current_x
+        let entity_state = state.entity_states.get("c1").unwrap();
+        let world_entity = &state.world_entities[0];
+        assert!(
+            (world_entity.x - entity_state.current_x).abs() < 0.01,
+            "WorldEntity.x ({}) should match current_x ({})",
+            world_entity.x,
+            entity_state.current_x
+        );
+    }
+
+    #[test]
+    fn tick_entities_initial_direction_varies_with_seed() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs();
+
+        // Run with two different seeds and collect initial facing
+        let mut facings = Vec::new();
+        for seed in [1u64, 2, 3, 4, 5, 6, 7, 8] {
+            let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone());
+            let entities = vec![WorldEntity {
+                id: "c1".into(),
+                entity_type: "chicken".into(),
+                x: 200.0,
+                y: -2.0,
+            }];
+            state.load_street(test_street(), entities);
+            let input = InputState::default();
+            let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+            state.tick(1.0 / 60.0, &input, &mut rng);
+            let entity_state = state.entity_states.get("c1").unwrap();
+            facings.push(entity_state.facing);
+        }
+
+        // With 8 different seeds, we should see both Left and Right
+        let has_left = facings.iter().any(|f| *f == Direction::Left);
+        let has_right = facings.iter().any(|f| *f == Direction::Right);
+        assert!(
+            has_left && has_right,
+            "Expected both Left and Right facings across seeds, got {:?}",
+            facings
+        );
+    }
+
+    #[test]
+    fn build_entity_frames_defaults_facing_right_for_static() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs();
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: -800.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let frame = state.tick(1.0 / 60.0, &input, &mut rng).unwrap();
+
+        // Static entity (tree) should default to facing Right
+        assert_eq!(frame.world_entities[0].facing, Direction::Right);
+    }
+
     #[test]
     fn prompt_shows_cooldown_text_through_tick() {
-        use crate::item::types::{EntityDef, ItemDef, YieldEntry, WorldEntity};
+        use crate::item::types::{EntityDef, ItemDef, WorldEntity, YieldEntry};
         use rand::SeedableRng;
 
         let mut item_defs = ItemDefs::new();
-        item_defs.insert("cherry".into(), ItemDef {
-            id: "cherry".into(),
-            name: "Cherry".into(),
-            description: "".into(),
-            category: "food".into(),
-            stack_limit: 50,
-            icon: "cherry".into(),
-        });
+        item_defs.insert(
+            "cherry".into(),
+            ItemDef {
+                id: "cherry".into(),
+                name: "Cherry".into(),
+                description: "".into(),
+                category: "food".into(),
+                stack_limit: 50,
+                icon: "cherry".into(),
+            },
+        );
         let mut entity_defs = EntityDefs::new();
-        entity_defs.insert("fruit_tree".into(), EntityDef {
-            id: "fruit_tree".into(),
-            name: "Fruit Tree".into(),
-            verb: "Harvest".into(),
-            yields: vec![YieldEntry { item: "cherry".into(), min: 1, max: 1 }],
-            cooldown_secs: 5.0,
-            max_harvests: 3,
-            respawn_secs: 30.0,
-            sprite_class: "tree_fruit".into(),
-            interact_radius: 80.0,
-            walk_speed: None,
-            wander_radius: None,
-            bob_amplitude: None,
-            bob_frequency: None,
-        });
+        entity_defs.insert(
+            "fruit_tree".into(),
+            EntityDef {
+                id: "fruit_tree".into(),
+                name: "Fruit Tree".into(),
+                verb: "Harvest".into(),
+                yields: vec![YieldEntry {
+                    item: "cherry".into(),
+                    min: 1,
+                    max: 1,
+                }],
+                cooldown_secs: 5.0,
+                max_harvests: 3,
+                respawn_secs: 30.0,
+                sprite_class: "tree_fruit".into(),
+                interact_radius: 80.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
+            },
+        );
 
         let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
         let entities = vec![WorldEntity {
@@ -1048,7 +1553,10 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Harvest on first tick
-        let input = InputState { interact: true, ..Default::default() };
+        let input = InputState {
+            interact: true,
+            ..Default::default()
+        };
         state.tick(1.0 / 60.0, &input, &mut rng);
 
         // Next tick: still near entity, prompt should show cooldown text
