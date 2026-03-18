@@ -328,6 +328,13 @@ export class GameRenderer {
     for (const entity of worldEntities) {
       seenEntities.add(entity.id);
       let sprite = this.entitySprites.get(entity.id);
+      // Upgrade fallback to real sprite once async texture load completes
+      if (sprite?.label === 'fallback' && this.spriteManager.hasEntityTexture(entity.spriteClass)) {
+        this.worldContainer.removeChild(sprite);
+        sprite.destroy();
+        sprite = undefined;
+        this.entitySprites.delete(entity.id);
+      }
       if (!sprite) {
         sprite = this.spriteManager.createEntity(entity);
         this.worldContainer.addChild(sprite);
@@ -357,6 +364,13 @@ export class GameRenderer {
     for (const item of groundItems) {
       seenItems.add(item.id);
       let sprite = this.groundItemSprites.get(item.id);
+      // Upgrade fallback to real sprite once async texture load completes
+      if (sprite?.label === 'fallback' && this.spriteManager.hasItemTexture(item.icon)) {
+        this.worldContainer.removeChild(sprite);
+        sprite.destroy();
+        sprite = undefined;
+        this.groundItemSprites.delete(item.id);
+      }
       if (!sprite) {
         sprite = this.spriteManager.createGroundItem(item);
         this.worldContainer.addChild(sprite);

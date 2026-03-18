@@ -70,6 +70,16 @@ export class SpriteManager {
     return this.textureCache.has(`deco:${spriteClass}`);
   }
 
+  /** Check if an entity texture has been async-loaded into cache. */
+  hasEntityTexture(spriteClass: string): boolean {
+    return this.textureCache.has(`entity:${spriteClass}`);
+  }
+
+  /** Check if an item texture has been async-loaded into cache. */
+  hasItemTexture(icon: string): boolean {
+    return this.textureCache.has(`item:${icon}`);
+  }
+
   createAvatar(): Container {
     const container = new Container();
 
@@ -162,7 +172,8 @@ export class SpriteManager {
       return container;
     }
 
-    // Fallback: colored rect
+    // Fallback: colored rect (label marks it for upgrade once texture loads)
+    container.label = 'fallback';
     const body = new Graphics();
     const isTree = entity.spriteClass.startsWith('tree');
     const color = isTree ? 0x2d8a4e : 0xc4a35a;
@@ -204,7 +215,8 @@ export class SpriteManager {
       return container;
     }
 
-    // Fallback: gold circle
+    // Fallback: gold circle (label marks it for upgrade once texture loads)
+    container.label = 'fallback';
     const body = new Graphics();
     body.circle(0, -8, 8);
     body.fill({ color: 0xe8c170, alpha: 0.9 });
