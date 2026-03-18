@@ -39,10 +39,8 @@ export class GameRenderer {
   private transitionBg: Graphics | null = null;
   private streetNameText: Text | null = null;
   private lastTransitionGen = -1;
-  private starGraphics: Graphics[] = [];
-  private swirlGraphics: Graphics[] = [];
-  private starPositions: { nx: number; ny: number }[] = [];
-  private swirlPositions: { nx: number; ny: number }[] = [];
+  private starData: { nx: number; ny: number; size: number; alpha: number }[] = [];
+  private swirlData: { nx: number; ny: number; radius: number; alpha: number; startAngle: number }[] = [];
 
   constructor() {
     this.app = new Application();
@@ -115,7 +113,6 @@ export class GameRenderer {
    */
   buildScene(street: StreetData): void {
     this.street = street;
-    this.lastTransitionGen = -1;
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
@@ -528,26 +525,34 @@ export class GameRenderer {
       centerY = screenH / 2;
     }
 
-    // Draw background with iris hole
+    // Draw background, decorations, and iris hole into a single Graphics.
+    // Stars/swirls are drawn before .cut() so the iris hole clips them too.
     if (this.transitionBg) {
       this.transitionBg.clear();
       this.transitionBg.rect(0, 0, screenW, screenH);
       this.transitionBg.fill({ color: 0x0d0d2b });
 
+      for (const star of this.starData) {
+        const sx = star.nx * screenW;
+        const sy = star.ny * screenH;
+        this.transitionBg.moveTo(sx - star.size, sy);
+        this.transitionBg.lineTo(sx + star.size, sy);
+        this.transitionBg.moveTo(sx, sy - star.size);
+        this.transitionBg.lineTo(sx, sy + star.size);
+        this.transitionBg.stroke({ color: 0xffffff, alpha: star.alpha, width: 1 });
+      }
+
+      for (const swirl of this.swirlData) {
+        const sx = swirl.nx * screenW;
+        const sy = swirl.ny * screenH;
+        this.transitionBg.arc(sx, sy, swirl.radius, swirl.startAngle, swirl.startAngle + Math.PI / 2);
+        this.transitionBg.stroke({ color: 0xffffff, alpha: swirl.alpha, width: 1.5 });
+      }
+
       if (radius > 0) {
         this.transitionBg.circle(centerX, centerY, radius);
         this.transitionBg.cut();
       }
-    }
-
-    // Reposition stars/swirls from normalized coords (resize-safe)
-    for (let i = 0; i < this.starGraphics.length; i++) {
-      this.starGraphics[i].x = this.starPositions[i].nx * screenW;
-      this.starGraphics[i].y = this.starPositions[i].ny * screenH;
-    }
-    for (let i = 0; i < this.swirlGraphics.length; i++) {
-      this.swirlGraphics[i].x = this.swirlPositions[i].nx * screenW;
-      this.swirlGraphics[i].y = this.swirlPositions[i].ny * screenH;
     }
 
     // Street name alpha
@@ -572,58 +577,22 @@ export class GameRenderer {
   }
 
   private generateStarsAndSwirls(): void {
-    // Remove old graphics
-    for (const g of this.starGraphics) { this.transitionContainer.removeChild(g); g.destroy(); }
-    for (const g of this.swirlGraphics) { this.transitionContainer.removeChild(g); g.destroy(); }
-    this.starGraphics = [];
-    this.swirlGraphics = [];
-
-    // Generate normalized positions
     const starCount = 25 + Math.floor(Math.random() * 11); // 25-35
-    this.starPositions = Array.from({ length: starCount }, () => ({
+    this.starData = Array.from({ length: starCount }, () => ({
       nx: Math.random(),
       ny: Math.random(),
+      size: 2 + Math.random() * 4, // 2-6px
+      alpha: 0.2 + Math.random() * 0.3, // 0.2-0.5
     }));
 
     const swirlCount = 3 + Math.floor(Math.random() * 3); // 3-5
-    this.swirlPositions = Array.from({ length: swirlCount }, () => ({
+    this.swirlData = Array.from({ length: swirlCount }, () => ({
       nx: Math.random(),
       ny: Math.random(),
+      radius: 30 + Math.random() * 50, // 30-80px
+      alpha: 0.1 + Math.random() * 0.1, // 0.1-0.2
+      startAngle: Math.random() * Math.PI * 2,
     }));
-
-    // Draw stars at local origin (positioned via g.x/g.y for resize safety)
-    for (const pos of this.starPositions) {
-      const g = new Graphics();
-      const size = 2 + Math.random() * 4; // 2-6px
-      const alpha = 0.2 + Math.random() * 0.3; // 0.2-0.5
-
-      // Draw centered at local origin
-      g.moveTo(-size, 0);
-      g.lineTo(size, 0);
-      g.moveTo(0, -size);
-      g.lineTo(0, size);
-      g.stroke({ color: 0xffffff, alpha, width: 1 });
-
-      this.starGraphics.push(g);
-      // Insert before streetNameText (last child) so text renders on top
-      const insertIdx = this.transitionContainer.children.length - 1;
-      this.transitionContainer.addChildAt(g, insertIdx);
-    }
-
-    // Draw swirls at local origin
-    for (const pos of this.swirlPositions) {
-      const g = new Graphics();
-      const radius = 30 + Math.random() * 50; // 30-80px
-      const alpha = 0.1 + Math.random() * 0.1; // 0.1-0.2
-      const startAngle = Math.random() * Math.PI * 2;
-
-      g.arc(0, 0, radius, startAngle, startAngle + Math.PI / 2);
-      g.stroke({ color: 0xffffff, alpha, width: 1.5 });
-
-      this.swirlGraphics.push(g);
-      const insertIdx = this.transitionContainer.children.length - 1;
-      this.transitionContainer.addChildAt(g, insertIdx);
-    }
   }
 
   destroy(): void {
@@ -642,10 +611,10 @@ export class GameRenderer {
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];
-    this.starGraphics = [];
-    this.swirlGraphics = [];
-    this.transitionBg = null;
-    this.streetNameText = null;
+    this.starData = [];
+    this.swirlData = [];
+    if (this.transitionBg) { this.transitionBg.destroy(); this.transitionBg = null; }
+    if (this.streetNameText) { this.streetNameText.destroy(); this.streetNameText = null; }
     this.transitionContainer.destroy({ children: true });
     this.app.destroy(true);
   }
