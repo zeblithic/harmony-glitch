@@ -48,11 +48,12 @@ pub fn craft(
     let mut outputs = Vec::new();
     for output in &recipe.outputs {
         let overflow = inventory.add(&output.item, output.count, item_defs);
-        debug_assert_eq!(
-            overflow, 0,
-            "inventory.add overflowed for '{}' despite room check — recipe has conflicting outputs",
-            output.item
-        );
+        if overflow > 0 {
+            eprintln!(
+                "[crafting] BUG: inventory.add overflowed {} items for '{}' despite room check",
+                overflow, output.item
+            );
+        }
         let name = item_defs
             .get(&output.item)
             .map(|d| d.name.clone())

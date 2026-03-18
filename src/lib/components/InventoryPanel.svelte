@@ -34,13 +34,20 @@
     }, 0);
   }
 
-  function hasAnyEmptySlot(): boolean {
+  function hasRoomForOutput(recipe: RecipeDef): boolean {
     if (!inventory) return false;
-    return inventory.slots.some(s => s === null);
+    const emptySlots = inventory.slots.filter(s => s === null).length;
+    for (const output of recipe.outputs) {
+      const matching = inventory.slots.filter(s => s && s.itemId === output.item);
+      const stackLimit = matching[0]?.stackLimit ?? 1;
+      const existingRoom = matching.reduce((sum, s) => sum + (stackLimit - (s?.count ?? 0)), 0);
+      if (existingRoom + emptySlots * stackLimit < output.count) return false;
+    }
+    return true;
   }
 
   function isRecipeCraftable(recipe: RecipeDef): boolean {
-    if (!hasAnyEmptySlot()) return false;
+    if (!hasRoomForOutput(recipe)) return false;
     for (const input of recipe.inputs) {
       if (countItem(input.item) < input.count) return false;
     }
