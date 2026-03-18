@@ -93,6 +93,58 @@ impl Inventory {
                 .is_some_and(|stack| stack.item_id == item_id && stack.count < stack_limit)
         })
     }
+
+    /// Count total quantity of an item across all inventory slots.
+    pub fn count_item(&self, item_id: &str) -> u32 {
+        self.slots
+            .iter()
+            .filter_map(|s| s.as_ref())
+            .filter(|stack| stack.item_id == item_id)
+            .map(|stack| stack.count)
+            .sum()
+    }
+
+    /// Check if `count` items of this type can fit in the inventory.
+    /// More precise than `has_room_for` (which only checks for 1 item).
+    /// Counts available room across existing stacks + empty slots.
+    pub fn has_room_for_count(&self, item_id: &str, count: u32, defs: &ItemDefs) -> bool {
+        let stack_limit = defs.get(item_id).map(|d| d.stack_limit).unwrap_or(1);
+        let mut room: u32 = 0;
+        for slot in &self.slots {
+            match slot {
+                Some(stack) if stack.item_id == item_id => {
+                    room += stack_limit - stack.count;
+                }
+                None => {
+                    room += stack_limit;
+                }
+                _ => {}
+            }
+            if room >= count {
+                return true;
+            }
+        }
+        room >= count
+    }
+
+    /// Remove `count` items of the given item_id across inventory slots.
+    /// Caller must verify sufficient quantity exists first via `count_item`.
+    pub fn remove_item(&mut self, item_id: &str, mut count: u32) {
+        for slot in 0..self.capacity {
+            if count == 0 {
+                break;
+            }
+            let matches = self.slots[slot]
+                .as_ref()
+                .is_some_and(|s| s.item_id == item_id);
+            if matches {
+                let available = self.slots[slot].as_ref().unwrap().count;
+                let to_remove = count.min(available);
+                self.remove(slot, to_remove);
+                count -= to_remove;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -260,5 +312,96 @@ mod tests {
         inv.add("cherry", 5, &defs);
         assert!(!inv.has_room_for("cherry", &defs));
         assert!(!inv.has_room_for("grain", &defs));
+    }
+
+    #[test]
+    fn count_item_empty_inventory() {
+        let inv = Inventory::new(4);
+        assert_eq!(inv.count_item("cherry"), 0);
+    }
+
+    #[test]
+    fn count_item_single_slot() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(4);
+        inv.add("cherry", 3, &defs);
+        assert_eq!(inv.count_item("cherry"), 3);
+        assert_eq!(inv.count_item("grain"), 0);
+    }
+
+    #[test]
+    fn count_item_across_multiple_slots() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(4);
+        inv.add("cherry", 5, &defs); // fills slot 0 (stack_limit=5)
+        inv.add("cherry", 3, &defs); // goes to slot 1
+        assert_eq!(inv.count_item("cherry"), 8);
+    }
+
+    #[test]
+    fn has_room_for_count_empty_inventory() {
+        let defs = test_defs();
+        let inv = Inventory::new(4);
+        assert!(inv.has_room_for_count("cherry", 10, &defs)); // 4 slots * 5 limit = 20 room
+        assert!(!inv.has_room_for_count("cherry", 21, &defs));
+    }
+
+    #[test]
+    fn has_room_for_count_partial_stack() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(2);
+        inv.add("cherry", 4, &defs); // slot 0: 4/5
+        // Room: 1 in slot 0 + 5 in slot 1 = 6
+        assert!(inv.has_room_for_count("cherry", 6, &defs));
+        assert!(!inv.has_room_for_count("cherry", 7, &defs));
+    }
+
+    #[test]
+    fn has_room_for_count_full_inventory() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(1);
+        inv.add("cherry", 5, &defs); // slot 0: full
+        assert!(!inv.has_room_for_count("cherry", 1, &defs));
+    }
+
+    #[test]
+    fn remove_item_by_id_single_slot() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(4);
+        inv.add("cherry", 5, &defs);
+        inv.remove_item("cherry", 3);
+        assert_eq!(inv.count_item("cherry"), 2);
+    }
+
+    #[test]
+    fn remove_item_by_id_across_slots() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(4);
+        inv.add("cherry", 5, &defs); // slot 0: 5
+        inv.add("cherry", 3, &defs); // slot 1: 3
+        inv.remove_item("cherry", 7); // removes 5 from slot 0, 2 from slot 1
+        assert_eq!(inv.count_item("cherry"), 1);
+        assert!(inv.slots[0].is_none()); // slot 0 fully consumed
+        assert_eq!(inv.slots[1].as_ref().unwrap().count, 1);
+    }
+
+    #[test]
+    fn remove_item_clears_empty_slots() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(4);
+        inv.add("cherry", 3, &defs);
+        inv.remove_item("cherry", 3);
+        assert!(inv.slots[0].is_none());
+        assert_eq!(inv.count_item("cherry"), 0);
+    }
+
+    #[test]
+    fn remove_item_does_not_touch_other_items() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(4);
+        inv.add("cherry", 3, &defs);
+        inv.add("grain", 5, &defs);
+        inv.remove_item("cherry", 3);
+        assert_eq!(inv.count_item("grain"), 5);
     }
 }
