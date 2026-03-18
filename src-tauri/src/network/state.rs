@@ -231,7 +231,9 @@ impl NetworkState {
         }
 
         // Timer tick for path expiry, scheduled announces, etc.
-        let tick_actions = self.node.handle_event(NodeEvent::TimerTick { now: now_secs_u64 });
+        let tick_actions = self
+            .node
+            .handle_event(NodeEvent::TimerTick { now: now_secs_u64 });
         self.process_node_actions(tick_actions, now_secs_u64, now_secs, rng, &mut actions);
 
         // Tick all active sessions and process their actions.
@@ -462,9 +464,7 @@ impl NetworkState {
         if !same_street {
             // If we had this peer before and they changed streets, treat as leave.
             if self.peers.remove(&addr).is_some() {
-                let event = PresenceEvent::Left {
-                    address_hash: addr,
-                };
+                let event = PresenceEvent::Left { address_hash: addr };
                 self.registry.handle_presence(&event, now_secs_f64);
                 out.push(NetworkAction::PresenceChange(event));
             }
@@ -653,10 +653,8 @@ fn decode_app_data(data: &[u8]) -> (String, Option<String>) {
     // Strip NUL bytes from decoded values to be robust against peers
     // running pre-fix clients or sending non-sanitized app_data.
     if let Some(sep_pos) = data.iter().position(|&b| b == APP_DATA_SEPARATOR) {
-        let name = String::from_utf8_lossy(&data[..sep_pos])
-            .replace('\0', "");
-        let street = String::from_utf8_lossy(&data[sep_pos + 1..])
-            .replace('\0', "");
+        let name = String::from_utf8_lossy(&data[..sep_pos]).replace('\0', "");
+        let street = String::from_utf8_lossy(&data[sep_pos + 1..]).replace('\0', "");
         (name, Some(street))
     } else {
         let name = String::from_utf8_lossy(data).replace('\0', "");
@@ -825,7 +823,9 @@ mod tests {
         let mut rng = OsRng;
 
         // Rename should produce SendPacket actions (the immediate re-announce).
-        let actions = state.set_display_name("NewName".to_string(), 10.0, &mut rng).unwrap();
+        let actions = state
+            .set_display_name("NewName".to_string(), 10.0, &mut rng)
+            .unwrap();
         assert_eq!(state.display_name, "NewName");
 
         let send_count = actions

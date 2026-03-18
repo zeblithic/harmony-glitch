@@ -66,19 +66,14 @@ fn try_load_profile(path: &Path) -> Result<(PrivateIdentity, String, bool), Stri
 /// Load or create a player profile. Creates directory and new identity if none exists.
 /// If an existing profile is corrupted, logs the error and generates a fresh identity.
 /// Returns (identity, display_name, setup_complete).
-pub fn load_or_create_profile(
-    data_dir: &Path,
-) -> Result<(PrivateIdentity, String, bool), String> {
+pub fn load_or_create_profile(data_dir: &Path) -> Result<(PrivateIdentity, String, bool), String> {
     let profile_path = data_dir.join("profile.json");
 
     if profile_path.exists() {
         match try_load_profile(&profile_path) {
             Ok(result) => return Ok(result),
             Err(e) => {
-                eprintln!(
-                    "[identity] Failed to load profile ({}); regenerating.",
-                    e
-                );
+                eprintln!("[identity] Failed to load profile ({}); regenerating.", e);
                 // Fall through to generate a fresh profile.
             }
         }
@@ -126,7 +121,11 @@ mod tests {
         load_or_create_profile(dir.path()).unwrap();
         let metadata = std::fs::metadata(dir.path().join("profile.json")).unwrap();
         let mode = std::os::unix::fs::PermissionsExt::mode(&metadata.permissions());
-        assert_eq!(mode & 0o777, 0o600, "profile.json should be owner-only (0600)");
+        assert_eq!(
+            mode & 0o777,
+            0o600,
+            "profile.json should be owner-only (0600)"
+        );
     }
 
     #[test]

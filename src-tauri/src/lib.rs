@@ -444,7 +444,10 @@ pub fn run() {
                 item::loader::parse_entity_defs(include_str!("../../assets/entities.json"))
                     .expect("Failed to parse entities.json");
             GameStateWrapper(Mutex::new(GameState::new(
-                1280.0, 720.0, item_defs, entity_defs,
+                1280.0,
+                720.0,
+                item_defs,
+                entity_defs,
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))

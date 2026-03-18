@@ -239,7 +239,10 @@ mod tests {
         let p = PlatformLine {
             id: "test".into(),
             start: Point { x: 0.0, y: -100.0 },
-            end: Point { x: 200.0, y: -100.0 },
+            end: Point {
+                x: 200.0,
+                y: -100.0,
+            },
             pc_perm: None,
             item_perm: None,
         };
@@ -251,7 +254,10 @@ mod tests {
         let p = PlatformLine {
             id: "test".into(),
             start: Point { x: 0.0, y: -100.0 },
-            end: Point { x: 200.0, y: -200.0 },
+            end: Point {
+                x: 200.0,
+                y: -200.0,
+            },
             pc_perm: None,
             item_perm: None,
         };
@@ -361,48 +367,139 @@ mod tests {
 
     #[test]
     fn wall_blocks_from_left() {
-        let solid = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: None, item_perm: None };
+        let solid = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: None,
+            item_perm: None,
+        };
         assert!(solid.blocks_from_left());
-        let left_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(-1), item_perm: None };
+        let left_only = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: Some(-1),
+            item_perm: None,
+        };
         assert!(left_only.blocks_from_left());
-        let right_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(1), item_perm: None };
+        let right_only = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: Some(1),
+            item_perm: None,
+        };
         assert!(!right_only.blocks_from_left());
-        let passthrough = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(0), item_perm: None };
+        let passthrough = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: Some(0),
+            item_perm: None,
+        };
         assert!(!passthrough.blocks_from_left());
     }
 
     #[test]
     fn wall_blocks_from_right() {
-        let solid = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: None, item_perm: None };
+        let solid = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: None,
+            item_perm: None,
+        };
         assert!(solid.blocks_from_right());
-        let right_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(1), item_perm: None };
+        let right_only = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: Some(1),
+            item_perm: None,
+        };
         assert!(right_only.blocks_from_right());
-        let left_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(-1), item_perm: None };
+        let left_only = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: Some(-1),
+            item_perm: None,
+        };
         assert!(!left_only.blocks_from_right());
-        let passthrough = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(0), item_perm: None };
+        let passthrough = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -100.0,
+            h: 100.0,
+            pc_perm: Some(0),
+            item_perm: None,
+        };
         assert!(!passthrough.blocks_from_right());
     }
 
     #[test]
     fn wall_bottom_extent() {
-        let wall = Wall { id: "w".into(), x: 0.0, y: -400.0, h: 400.0, pc_perm: None, item_perm: None };
+        let wall = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -400.0,
+            h: 400.0,
+            pc_perm: None,
+            item_perm: None,
+        };
         assert!((wall.bottom() - 0.0).abs() < 0.001);
-        let wall2 = Wall { id: "w".into(), x: 0.0, y: -200.0, h: 100.0, pc_perm: None, item_perm: None };
+        let wall2 = Wall {
+            id: "w".into(),
+            x: 0.0,
+            y: -200.0,
+            h: 100.0,
+            pc_perm: None,
+            item_perm: None,
+        };
         assert!((wall2.bottom() - (-100.0)).abs() < 0.001);
     }
 
     #[test]
     fn walls_accessor_returns_middleground_walls() {
-        let wall = Wall { id: "w1".into(), x: -100.0, y: -50.0, h: 50.0, pc_perm: None, item_perm: None };
+        let wall = Wall {
+            id: "w1".into(),
+            x: -100.0,
+            y: -50.0,
+            h: 50.0,
+            pc_perm: None,
+            item_perm: None,
+        };
         let mg = Layer {
-            name: "middleground".into(), z: 0, w: 200.0, h: 50.0,
-            is_middleground: true, decos: vec![], platform_lines: vec![],
-            walls: vec![wall.clone()], ladders: vec![], filters: None,
+            name: "middleground".into(),
+            z: 0,
+            w: 200.0,
+            h: 50.0,
+            is_middleground: true,
+            decos: vec![],
+            platform_lines: vec![],
+            walls: vec![wall.clone()],
+            ladders: vec![],
+            filters: None,
         };
         let s = StreetData {
-            tsid: "test".into(), name: "Test".into(),
-            left: -100.0, right: 100.0, top: -50.0, bottom: 0.0, ground_y: 0.0,
-            gradient: None, layers: vec![mg], signposts: vec![],
+            tsid: "test".into(),
+            name: "Test".into(),
+            left: -100.0,
+            right: 100.0,
+            top: -50.0,
+            bottom: 0.0,
+            ground_y: 0.0,
+            gradient: None,
+            layers: vec![mg],
+            signposts: vec![],
         };
         assert_eq!(s.walls().len(), 1);
         assert_eq!(s.walls()[0].id, "w1");

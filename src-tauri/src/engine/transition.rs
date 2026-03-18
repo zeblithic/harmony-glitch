@@ -399,7 +399,10 @@ mod tests {
         // Stale mark_street_ready with old generation — should be ignored
         ts.mark_street_ready(old_gen);
         if let TransitionPhase::Swooping { street_ready, .. } = &ts.phase {
-            assert!(!street_ready, "Stale generation should not mark street ready");
+            assert!(
+                !street_ready,
+                "Stale generation should not mark street ready"
+            );
         } else {
             panic!("Expected Swooping");
         }

@@ -18,10 +18,7 @@ impl Inventory {
     /// Try to add items. Returns the count that couldn't fit.
     /// First stacks onto existing matching slots, then fills empty slots.
     pub fn add(&mut self, item_id: &str, mut count: u32, defs: &ItemDefs) -> u32 {
-        let stack_limit = defs
-            .get(item_id)
-            .map(|d| d.stack_limit)
-            .unwrap_or(1);
+        let stack_limit = defs.get(item_id).map(|d| d.stack_limit).unwrap_or(1);
 
         // Phase 1: stack onto existing slots with the same item
         for slot in self.slots.iter_mut() {
@@ -83,10 +80,7 @@ impl Inventory {
 
     /// Check if any room exists for this item type.
     pub fn has_room_for(&self, item_id: &str, defs: &ItemDefs) -> bool {
-        let stack_limit = defs
-            .get(item_id)
-            .map(|d| d.stack_limit)
-            .unwrap_or(1);
+        let stack_limit = defs.get(item_id).map(|d| d.stack_limit).unwrap_or(1);
 
         // Any empty slot?
         if self.slots.iter().any(|s| s.is_none()) {

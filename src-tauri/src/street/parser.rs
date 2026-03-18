@@ -8,12 +8,14 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
     // The actual data is nested under "dynamic" in the game_object
     let dynamic = root.get("dynamic").unwrap_or(&root);
 
-    let tsid = dynamic.get("tsid")
+    let tsid = dynamic
+        .get("tsid")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown")
         .to_string();
 
-    let name = dynamic.get("label")
+    let name = dynamic
+        .get("label")
         .and_then(|v| v.as_str())
         .unwrap_or("Unnamed Street")
         .to_string();
@@ -22,7 +24,10 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
     let right = dynamic.get("r").and_then(|v| v.as_f64()).unwrap_or(3000.0);
     let top = dynamic.get("t").and_then(|v| v.as_f64()).unwrap_or(-1000.0);
     let bottom = dynamic.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let ground_y = dynamic.get("ground_y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let ground_y = dynamic
+        .get("ground_y")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
 
     let gradient = dynamic.get("gradient").and_then(|g| {
         Some(Gradient {
@@ -67,7 +72,8 @@ fn parse_layers(dynamic: &XmlValue) -> Result<Vec<Layer>, String> {
         let z = layer_val.get("z").and_then(|v| v.as_int()).unwrap_or(0) as i32;
         let w = layer_val.get("w").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let h = layer_val.get("h").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let name = layer_val.get("name")
+        let name = layer_val
+            .get("name")
             .and_then(|v| v.as_str())
             .unwrap_or(layer_id)
             .to_string();
@@ -110,11 +116,20 @@ fn parse_decos(layer: &XmlValue) -> Vec<Deco> {
         None => return vec![],
     };
 
-    let mut decos: Vec<Deco> = decos_obj.iter().map(|(deco_id, d)| {
-        Deco {
+    let mut decos: Vec<Deco> = decos_obj
+        .iter()
+        .map(|(deco_id, d)| Deco {
             id: deco_id.clone(),
-            name: d.get("name").and_then(|v| v.as_str()).unwrap_or(deco_id).to_string(),
-            sprite_class: d.get("sprite_class").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            name: d
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(deco_id)
+                .to_string(),
+            sprite_class: d
+                .get("sprite_class")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             x: d.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
             y: d.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
             w: d.get("w").and_then(|v| v.as_f64()).unwrap_or(0.0),
@@ -122,8 +137,8 @@ fn parse_decos(layer: &XmlValue) -> Vec<Deco> {
             z: d.get("z").and_then(|v| v.as_int()).unwrap_or(0) as i32,
             r: d.get("r").and_then(|v| v.as_f64()).unwrap_or(0.0),
             h_flip: d.get("h_flip").and_then(|v| v.as_bool()).unwrap_or(false),
-        }
-    }).collect();
+        })
+        .collect();
 
     // Sort by z for deterministic back-to-front rendering (HashMap has no guaranteed order)
     decos.sort_by_key(|d| d.z);
@@ -136,31 +151,51 @@ fn parse_platform_lines(layer: &XmlValue) -> Vec<PlatformLine> {
         None => return vec![],
     };
 
-    let mut result: Vec<PlatformLine> = plats.iter().map(|(plat_id, p)| {
-        let start = p.get("start").map(|s| Point {
-            x: s.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            y: s.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
-        }).unwrap_or(Point { x: 0.0, y: 0.0 });
+    let mut result: Vec<PlatformLine> = plats
+        .iter()
+        .map(|(plat_id, p)| {
+            let start = p
+                .get("start")
+                .map(|s| Point {
+                    x: s.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    y: s.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                })
+                .unwrap_or(Point { x: 0.0, y: 0.0 });
 
-        let end = p.get("end").map(|e| Point {
-            x: e.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            y: e.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
-        }).unwrap_or(Point { x: 0.0, y: 0.0 });
+            let end = p
+                .get("end")
+                .map(|e| Point {
+                    x: e.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    y: e.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                })
+                .unwrap_or(Point { x: 0.0, y: 0.0 });
 
-        let pc_perm = p.get("platform_pc_perm").and_then(|v| v.as_int()).map(|v| v as i32);
-        let item_perm = p.get("platform_item_perm").and_then(|v| v.as_int()).map(|v| v as i32);
+            let pc_perm = p
+                .get("platform_pc_perm")
+                .and_then(|v| v.as_int())
+                .map(|v| v as i32);
+            let item_perm = p
+                .get("platform_item_perm")
+                .and_then(|v| v.as_int())
+                .map(|v| v as i32);
 
-        PlatformLine {
-            id: plat_id.clone(),
-            start,
-            end,
-            pc_perm,
-            item_perm,
-        }
-    }).collect();
+            PlatformLine {
+                id: plat_id.clone(),
+                start,
+                end,
+                pc_perm,
+                item_perm,
+            }
+        })
+        .collect();
 
     // Sort by start.x for deterministic collision order (HashMap has no guaranteed order)
-    result.sort_by(|a, b| a.start.x.partial_cmp(&b.start.x).unwrap_or(std::cmp::Ordering::Equal));
+    result.sort_by(|a, b| {
+        a.start
+            .x
+            .partial_cmp(&b.start.x)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     result
 }
 
@@ -170,16 +205,20 @@ fn parse_walls(layer: &XmlValue) -> Vec<Wall> {
         None => return vec![],
     };
 
-    walls.iter().map(|(wall_id, w)| {
-        Wall {
+    walls
+        .iter()
+        .map(|(wall_id, w)| Wall {
             id: wall_id.clone(),
             x: w.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
             y: w.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
             h: w.get("h").and_then(|v| v.as_f64()).unwrap_or(0.0),
             pc_perm: w.get("pc_perm").and_then(|v| v.as_int()).map(|v| v as i32),
-            item_perm: w.get("item_perm").and_then(|v| v.as_int()).map(|v| v as i32),
-        }
-    }).collect()
+            item_perm: w
+                .get("item_perm")
+                .and_then(|v| v.as_int())
+                .map(|v| v as i32),
+        })
+        .collect()
 }
 
 fn parse_ladders(layer: &XmlValue) -> Vec<Ladder> {
@@ -188,26 +227,51 @@ fn parse_ladders(layer: &XmlValue) -> Vec<Ladder> {
         None => return vec![],
     };
 
-    ladders.iter().map(|(ladder_id, l)| {
-        Ladder {
+    ladders
+        .iter()
+        .map(|(ladder_id, l)| Ladder {
             id: ladder_id.clone(),
             x: l.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
             y: l.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
             w: l.get("w").and_then(|v| v.as_f64()).unwrap_or(0.0),
             h: l.get("h").and_then(|v| v.as_f64()).unwrap_or(0.0),
-        }
-    }).collect()
+        })
+        .collect()
 }
 
 fn parse_filters(layer: &XmlValue) -> Option<LayerFilters> {
     let f = layer.get("filtersNEW")?.as_object()?;
     Some(LayerFilters {
-        brightness: f.get("brightness").and_then(|v| v.get("value")).and_then(|v| v.as_int()).map(|v| v as i32),
-        contrast: f.get("contrast").and_then(|v| v.get("value")).and_then(|v| v.as_int()).map(|v| v as i32),
-        saturation: f.get("saturation").and_then(|v| v.get("value")).and_then(|v| v.as_int()).map(|v| v as i32),
-        blur: f.get("blur").and_then(|v| v.get("value")).and_then(|v| v.as_int()).map(|v| v as i32),
-        tint_color: f.get("tintColor").and_then(|v| v.get("value")).and_then(|v| v.as_int()).map(|v| v as i32),
-        tint_amount: f.get("tintAmount").and_then(|v| v.get("value")).and_then(|v| v.as_int()).map(|v| v as i32),
+        brightness: f
+            .get("brightness")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_int())
+            .map(|v| v as i32),
+        contrast: f
+            .get("contrast")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_int())
+            .map(|v| v as i32),
+        saturation: f
+            .get("saturation")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_int())
+            .map(|v| v as i32),
+        blur: f
+            .get("blur")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_int())
+            .map(|v| v as i32),
+        tint_color: f
+            .get("tintColor")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_int())
+            .map(|v| v as i32),
+        tint_amount: f
+            .get("tintAmount")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_int())
+            .map(|v| v as i32),
     })
 }
 
@@ -217,29 +281,33 @@ fn parse_signposts(dynamic: &XmlValue) -> Vec<Signpost> {
         None => return vec![],
     };
 
-    sps.iter().map(|(sp_id, s)| {
-        let connects = s.get("connects")
-            .and_then(|v| v.as_object())
-            .map(|conns| {
-                conns.values().filter_map(|c| {
-                    match c.get("target") {
-                        Some(XmlValue::ObjRef { tsid, label }) => Some(SignpostConnection {
-                            target_tsid: tsid.clone(),
-                            target_label: label.clone(),
-                        }),
-                        _ => None,
-                    }
-                }).collect()
-            })
-            .unwrap_or_default();
+    sps.iter()
+        .map(|(sp_id, s)| {
+            let connects = s
+                .get("connects")
+                .and_then(|v| v.as_object())
+                .map(|conns| {
+                    conns
+                        .values()
+                        .filter_map(|c| match c.get("target") {
+                            Some(XmlValue::ObjRef { tsid, label }) => Some(SignpostConnection {
+                                target_tsid: tsid.clone(),
+                                target_label: label.clone(),
+                            }),
+                            _ => None,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
 
-        Signpost {
-            id: sp_id.clone(),
-            x: s.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            y: s.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            connects,
-        }
-    }).collect()
+            Signpost {
+                id: sp_id.clone(),
+                x: s.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                y: s.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                connects,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -545,7 +613,10 @@ mod tests {
         let street = parse_street(xml).unwrap();
         assert_eq!(street.tsid, "LADEMO002");
         assert_eq!(street.name, "Demo Heights");
-        assert!(street.signposts.len() >= 1, "demo_heights should have at least 1 signpost");
+        assert!(
+            street.signposts.len() >= 1,
+            "demo_heights should have at least 1 signpost"
+        );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO001");
     }
 
@@ -553,7 +624,10 @@ mod tests {
     fn demo_meadow_has_signpost_to_heights() {
         let xml = include_str!("../../../assets/streets/demo_meadow.xml");
         let street = parse_street(xml).unwrap();
-        assert!(street.signposts.len() >= 1, "demo_meadow should have signpost");
+        assert!(
+            street.signposts.len() >= 1,
+            "demo_meadow should have signpost"
+        );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO002");
     }
 

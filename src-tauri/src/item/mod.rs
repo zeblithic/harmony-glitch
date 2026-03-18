@@ -1,4 +1,4 @@
-pub mod inventory;
 pub mod interaction;
+pub mod inventory;
 pub mod loader;
 pub mod types;
