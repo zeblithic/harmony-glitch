@@ -443,11 +443,15 @@ pub fn run() {
             let entity_defs =
                 item::loader::parse_entity_defs(include_str!("../../assets/entities.json"))
                     .expect("Failed to parse entities.json");
+            let recipe_defs =
+                item::loader::parse_recipe_defs(include_str!("../../assets/recipes.json"))
+                    .expect("Failed to parse recipes.json");
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,
                 item_defs,
                 entity_defs,
+                recipe_defs,
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
