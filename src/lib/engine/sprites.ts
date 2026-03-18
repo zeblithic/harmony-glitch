@@ -48,11 +48,11 @@ export class SpriteManager {
     }
 
     const missing: string[] = [];
-    const toLoad = [...decoClasses].filter(c => !this.textureCache.has(c));
+    const toLoad = [...decoClasses].filter(c => !this.textureCache.has(`deco:${c}`));
     await Promise.all(toLoad.map(async (spriteClass) => {
       try {
         const texture = await Assets.load(`sprites/decos/${spriteClass}.png`);
-        this.textureCache.set(spriteClass, texture);
+        this.textureCache.set(`deco:${spriteClass}`, texture);
       } catch {
         missing.push(spriteClass);
       }
@@ -60,14 +60,14 @@ export class SpriteManager {
 
     if (missing.length > 0) {
       console.warn(
-        `[SpriteManager] Missing deco textures for street "${street.name}":\n  ${missing.join(', ')}`
+        `[SpriteManager] Missing deco textures for street "${street.name}":\n  ${missing.sort().join(', ')}`
       );
     }
   }
 
   /** Check if a deco spriteClass has a cached texture (used for deco positioning logic). */
   hasTexture(spriteClass: string): boolean {
-    return this.textureCache.has(spriteClass);
+    return this.textureCache.has(`deco:${spriteClass}`);
   }
 
   createAvatar(): Container {
@@ -116,7 +116,7 @@ export class SpriteManager {
   }
 
   createDeco(deco: Deco): Container {
-    const texture = this.textureCache.get(deco.spriteClass);
+    const texture = this.textureCache.get(`deco:${deco.spriteClass}`);
     if (texture) {
       const sprite = new Sprite(texture);
       sprite.anchor.set(0.5, 1);
@@ -126,7 +126,7 @@ export class SpriteManager {
         sprite.scale.x *= -1;
       }
       sprite.rotation = deco.r;
-      return sprite as unknown as Container;
+      return sprite;
     }
 
     // Fallback: green rect
@@ -137,7 +137,7 @@ export class SpriteManager {
       g.scale.x = -1;
     }
     g.rotation = deco.r;
-    return g as unknown as Container;
+    return g;
   }
 
   createEntity(entity: WorldEntityFrame): Container {
@@ -222,14 +222,15 @@ export class SpriteManager {
   }
 
   private tryLoadEntityTexture(spriteClass: string): Texture | null {
-    if (this.textureCache.has(spriteClass)) {
-      return this.textureCache.get(spriteClass)!;
+    const cacheKey = `entity:${spriteClass}`;
+    if (this.textureCache.has(cacheKey)) {
+      return this.textureCache.get(cacheKey)!;
     }
     // Fire-and-forget async load — returns null now, cached for next encounter
-    if (!this.warnedMissing.has(`entity:${spriteClass}`)) {
-      this.warnedMissing.add(`entity:${spriteClass}`);
+    if (!this.warnedMissing.has(cacheKey)) {
+      this.warnedMissing.add(cacheKey);
       Assets.load(`sprites/entities/${spriteClass}.png`)
-        .then((texture: Texture) => { this.textureCache.set(spriteClass, texture); })
+        .then((texture: Texture) => { this.textureCache.set(cacheKey, texture); })
         .catch(() => {
           console.warn(`[SpriteManager] Missing entity texture: ${spriteClass}`);
         });
