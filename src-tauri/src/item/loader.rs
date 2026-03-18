@@ -1,4 +1,4 @@
-use crate::item::types::{EntityDefs, ItemDefs, WorldEntity};
+use crate::item::types::{EntityDefs, ItemDefs, RecipeDefs, WorldEntity};
 
 /// Parse item definitions from JSON string.
 /// The JSON is a map of id → ItemDef. We set each ItemDef.id from its map key.
@@ -32,6 +32,16 @@ pub fn parse_entity_defs(json: &str) -> Result<EntityDefs, String> {
 /// Parse entity placements from JSON string.
 pub fn parse_entity_placements(json: &str) -> Result<Vec<WorldEntity>, String> {
     serde_json::from_str(json).map_err(|e| format!("Failed to parse entity placements: {e}"))
+}
+
+/// Parse recipe definitions from JSON string.
+pub fn parse_recipe_defs(json: &str) -> Result<RecipeDefs, String> {
+    let mut raw: RecipeDefs =
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse recipes.json: {e}"))?;
+    for (key, def) in raw.iter_mut() {
+        def.id = key.clone();
+    }
+    Ok(raw)
 }
 
 #[cfg(test)]
@@ -115,13 +125,16 @@ mod tests {
     fn parse_bundled_items_json() {
         let json = include_str!("../../../assets/items.json");
         let defs = parse_item_defs(json).unwrap();
-        assert_eq!(defs.len(), 6);
+        assert_eq!(defs.len(), 13);
         assert!(defs.contains_key("cherry"));
         assert!(defs.contains_key("grain"));
         assert!(defs.contains_key("meat"));
         assert!(defs.contains_key("milk"));
         assert!(defs.contains_key("bubble"));
         assert!(defs.contains_key("wood"));
+        assert!(defs.contains_key("cherry_pie"));
+        assert!(defs.contains_key("pot"));
+        assert!(defs.contains_key("plank"));
     }
 
     #[test]
@@ -149,6 +162,45 @@ mod tests {
         let json = include_str!("../../../assets/streets/demo_heights_entities.json");
         let entities = parse_entity_placements(json).unwrap();
         assert!(entities.len() >= 2);
+    }
+
+    #[test]
+    fn parse_recipe_defs_from_json() {
+        let json = r#"{
+            "bread": {
+                "name": "Bread",
+                "description": "Simple bread.",
+                "inputs": [{ "item": "grain", "count": 4 }],
+                "tools": [{ "item": "pot", "count": 1 }],
+                "outputs": [{ "item": "bread", "count": 1 }],
+                "durationSecs": 8.0,
+                "category": "food"
+            }
+        }"#;
+        let defs = parse_recipe_defs(json).unwrap();
+        assert_eq!(defs.len(), 1);
+        let bread = &defs["bread"];
+        assert_eq!(bread.id, "bread");
+        assert_eq!(bread.name, "Bread");
+        assert_eq!(bread.inputs.len(), 1);
+        assert_eq!(bread.inputs[0].item, "grain");
+        assert_eq!(bread.tools.len(), 1);
+        assert_eq!(bread.tools[0].item, "pot");
+    }
+
+    #[test]
+    fn parse_bundled_recipes_json() {
+        let json = include_str!("../../../assets/recipes.json");
+        let defs = parse_recipe_defs(json).unwrap();
+        assert_eq!(defs.len(), 6);
+        assert!(defs.contains_key("cherry_pie"));
+        assert!(defs.contains_key("bread"));
+        assert!(defs.contains_key("plank"));
+        // Verify tools field parsed correctly
+        assert_eq!(defs["cherry_pie"].tools.len(), 1);
+        assert_eq!(defs["cherry_pie"].tools[0].item, "pot");
+        // Verify no-tool recipe
+        assert!(defs["plank"].tools.is_empty());
     }
 
     #[test]
