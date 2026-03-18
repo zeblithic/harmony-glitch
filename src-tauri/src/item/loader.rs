@@ -41,29 +41,30 @@ pub struct PlacementData {
 /// Supports both array format (legacy, entities only) and object format
 /// (with optional groundItems field).
 pub fn parse_entity_placements(json: &str) -> Result<PlacementData, String> {
-    // Try object format first
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct PlacementJson {
-        entities: Vec<WorldEntity>,
-        #[serde(default)]
-        ground_items: Vec<WorldItem>,
-    }
+    let is_object = json.trim_start().starts_with('{');
 
-    if let Ok(data) = serde_json::from_str::<PlacementJson>(json) {
-        return Ok(PlacementData {
+    if is_object {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PlacementJson {
+            entities: Vec<WorldEntity>,
+            #[serde(default)]
+            ground_items: Vec<WorldItem>,
+        }
+        let data: PlacementJson = serde_json::from_str(json)
+            .map_err(|e| format!("Failed to parse entity placements (object format): {e}"))?;
+        Ok(PlacementData {
             entities: data.entities,
             ground_items: data.ground_items,
-        });
+        })
+    } else {
+        let entities: Vec<WorldEntity> = serde_json::from_str(json)
+            .map_err(|e| format!("Failed to parse entity placements (array format): {e}"))?;
+        Ok(PlacementData {
+            entities,
+            ground_items: vec![],
+        })
     }
-
-    // Fall back to legacy array format (entities only)
-    let entities: Vec<WorldEntity> = serde_json::from_str(json)
-        .map_err(|e| format!("Failed to parse entity placements: {e}"))?;
-    Ok(PlacementData {
-        entities,
-        ground_items: vec![],
-    })
 }
 
 /// Parse recipe definitions from JSON string.

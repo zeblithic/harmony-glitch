@@ -467,6 +467,30 @@ pub fn run() {
             let recipe_defs =
                 item::loader::parse_recipe_defs(include_str!("../../assets/recipes.json"))
                     .expect("Failed to parse recipes.json");
+            // Validate all recipe item references exist in item_defs
+            for (recipe_id, recipe) in &recipe_defs {
+                for input in &recipe.inputs {
+                    assert!(
+                        item_defs.contains_key(&input.item),
+                        "Recipe '{recipe_id}' references unknown input item '{}'",
+                        input.item
+                    );
+                }
+                for tool in &recipe.tools {
+                    assert!(
+                        item_defs.contains_key(&tool.item),
+                        "Recipe '{recipe_id}' references unknown tool item '{}'",
+                        tool.item
+                    );
+                }
+                for output in &recipe.outputs {
+                    assert!(
+                        item_defs.contains_key(&output.item),
+                        "Recipe '{recipe_id}' references unknown output item '{}'",
+                        output.item
+                    );
+                }
+            }
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,

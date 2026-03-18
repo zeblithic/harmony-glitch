@@ -41,6 +41,7 @@ function makeRecipes(): RecipeDef[] {
       inputs: [{ item: 'grain', count: 4 }],
       tools: [{ item: 'pot', count: 1 }],
       outputs: [{ item: 'bread', count: 1 }],
+      durationSecs: 8.0,
       category: 'food',
     },
     {
@@ -50,6 +51,7 @@ function makeRecipes(): RecipeDef[] {
       inputs: [{ item: 'wood', count: 3 }],
       tools: [],
       outputs: [{ item: 'plank', count: 2 }],
+      durationSecs: 4.0,
       category: 'material',
     },
   ];
