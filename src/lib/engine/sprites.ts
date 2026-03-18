@@ -81,6 +81,15 @@ export class SpriteManager {
   }
 
   createAvatar(): Container {
+    // Stop and destroy previous AnimatedSprite to unsubscribe from PixiJS Ticker.
+    // removeChildren() detaches from scene graph but Ticker holds a strong ref.
+    if (this.avatarAnimatedSprite) {
+      this.avatarAnimatedSprite.stop();
+      this.avatarAnimatedSprite.destroy();
+      this.avatarAnimatedSprite = null;
+      this.currentAvatarAnimation = null;
+    }
+
     const container = new Container();
 
     if (this.avatarSheet) {

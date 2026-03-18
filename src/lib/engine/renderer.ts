@@ -47,6 +47,7 @@ export class GameRenderer {
   private starPositions: { nx: number; ny: number }[] = [];
   private swirlPositions: { nx: number; ny: number }[] = [];
   private spriteManager: SpriteManager;
+  private destroyed = false;
 
   constructor() {
     this.app = new Application();
@@ -134,6 +135,7 @@ export class GameRenderer {
     // any updateFrame() calls from requestAnimationFrame use consistent
     // coordinates for the still-visible old scene graph.
     await this.spriteManager.loadStreetAssets(street);
+    if (this.destroyed) return;
     this.street = street;
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
@@ -633,6 +635,7 @@ export class GameRenderer {
   }
 
   destroy(): void {
+    this.destroyed = true;
     for (const [, sprite] of this.remoteSprites) {
       sprite.destroy();
     }
