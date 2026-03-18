@@ -72,6 +72,7 @@ export class GameRenderer {
     this.transitionContainer.addChild(this.transitionBg);
 
     this.irisMask = new Graphics();
+    this.irisMask.renderable = false;
     this.transitionContainer.addChild(this.irisMask);
 
     this.decorationContainer = new Container();
@@ -657,6 +658,7 @@ export class GameRenderer {
     this.starGraphics = [];
     for (const g of this.swirlGraphics) { g.destroy(); }
     this.swirlGraphics = [];
+    if (this.decorationContainer) { this.decorationContainer.mask = null; }
     if (this.irisMask) { this.irisMask.destroy(); this.irisMask = null; }
     if (this.decorationContainer) { this.decorationContainer.destroy(); this.decorationContainer = null; }
     if (this.transitionBg) { this.transitionBg.destroy(); this.transitionBg = null; }
