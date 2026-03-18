@@ -162,9 +162,7 @@ mod tests {
     #[test]
     fn presence_left_round_trip() {
         let hash = [0x99; 16];
-        let msg = NetMessage::Presence(PresenceEvent::Left {
-            address_hash: hash,
-        });
+        let msg = NetMessage::Presence(PresenceEvent::Left { address_hash: hash });
         let bytes = serde_json::to_vec(&msg).unwrap();
         let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
         match decoded {

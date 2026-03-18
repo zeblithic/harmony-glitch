@@ -262,7 +262,9 @@ mod tests {
         </object>"#;
         let val = parse_glitch_xml(xml).unwrap();
         // Self-closing <object id="decos"/> should be an empty object, not dropped
-        let decos = val.get("decos").expect("self-closing object should not be dropped");
+        let decos = val
+            .get("decos")
+            .expect("self-closing object should not be dropped");
         assert!(decos.as_object().unwrap().is_empty());
         // Subsequent elements should still parse
         assert_eq!(val.get("count").unwrap().as_int(), Some(5));

@@ -17,7 +17,9 @@
     "maxHarvests": 2,
     "respawnSecs": 45.0,
     "spriteClass": "npc_chicken",
-    "interactRadius": 60
+    "interactRadius": 60,
+    "walkSpeed": 40.0,
+    "wanderRadius": 120.0
   },
   "pig": {
     "name": "Pig",
@@ -27,7 +29,9 @@
     "maxHarvests": 2,
     "respawnSecs": 45.0,
     "spriteClass": "npc_pig",
-    "interactRadius": 60
+    "interactRadius": 60,
+    "walkSpeed": 35.0,
+    "wanderRadius": 100.0
   },
   "butterfly": {
     "name": "Butterfly",
@@ -37,7 +41,11 @@
     "maxHarvests": 1,
     "respawnSecs": 20.0,
     "spriteClass": "npc_butterfly",
-    "interactRadius": 90
+    "interactRadius": 90,
+    "walkSpeed": 25.0,
+    "wanderRadius": 150.0,
+    "bobAmplitude": 15.0,
+    "bobFrequency": 1.5
   },
   "bubble_tree": {
     "name": "Bubble Tree",

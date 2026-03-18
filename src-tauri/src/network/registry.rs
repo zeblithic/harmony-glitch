@@ -108,11 +108,7 @@ impl RemotePlayerRegistry {
             .players
             .values()
             .map(|p| {
-                let facing = if p.state.facing == 0 {
-                    "left"
-                } else {
-                    "right"
-                };
+                let facing = if p.state.facing == 0 { "left" } else { "right" };
                 RemotePlayerFrame {
                     address_hash: hex::encode(p.address_hash),
                     display_name: p.display_name.clone(),
@@ -317,7 +313,11 @@ mod tests {
         // At t=12, player would be stale relative to join time (1.0)
         // but liveness was refreshed at 8.0 — only 4s ago, within timeout.
         reg.purge_stale(12.0);
-        assert_eq!(reg.count(), 1, "Should survive purge after liveness refresh");
+        assert_eq!(
+            reg.count(),
+            1,
+            "Should survive purge after liveness refresh"
+        );
 
         // At t=19, 11s since last refresh — should be purged.
         reg.purge_stale(19.0);

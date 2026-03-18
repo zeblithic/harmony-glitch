@@ -188,6 +188,7 @@ export interface WorldEntityFrame {
   y: number;
   cooldownRemaining: number | null;
   depleted: boolean;
+  facing: Direction;
 }
 
 export interface WorldItemFrame {
