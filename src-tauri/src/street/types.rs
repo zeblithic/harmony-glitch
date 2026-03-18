@@ -76,8 +76,28 @@ pub struct Wall {
     pub x: f64,
     pub y: f64,
     pub h: f64,
+    /// Wall permeability for players: None = solid (blocks both directions),
+    /// Some(-1) = one-way from left, Some(1) = one-way from right, Some(0) = pass-through.
     pub pc_perm: Option<i32>,
     pub item_perm: Option<i32>,
+}
+
+impl Wall {
+    /// Whether this wall blocks movement from the left.
+    /// Same bit-pattern as PlatformLine::solid_from_top but for horizontal direction.
+    pub fn blocks_from_left(&self) -> bool {
+        !matches!(self.pc_perm, Some(1) | Some(0))
+    }
+
+    /// Whether this wall blocks movement from the right.
+    pub fn blocks_from_right(&self) -> bool {
+        !matches!(self.pc_perm, Some(-1) | Some(0))
+    }
+
+    /// Bottom Y extent of the wall (y + h).
+    pub fn bottom(&self) -> f64 {
+        self.y + self.h
+    }
 }
 
 /// A climbable ladder zone.
@@ -156,6 +176,13 @@ impl StreetData {
     pub fn platforms(&self) -> &[PlatformLine] {
         self.middleground()
             .map(|l| l.platform_lines.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// All walls from the middleground layer.
+    pub fn walls(&self) -> &[Wall] {
+        self.middleground()
+            .map(|l| l.walls.as_slice())
             .unwrap_or(&[])
     }
 
@@ -330,5 +357,54 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         assert!(json.contains("pcPerm"));
         assert!(json.contains("itemPerm"));
+    }
+
+    #[test]
+    fn wall_blocks_from_left() {
+        let solid = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: None, item_perm: None };
+        assert!(solid.blocks_from_left());
+        let left_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(-1), item_perm: None };
+        assert!(left_only.blocks_from_left());
+        let right_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(1), item_perm: None };
+        assert!(!right_only.blocks_from_left());
+        let passthrough = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(0), item_perm: None };
+        assert!(!passthrough.blocks_from_left());
+    }
+
+    #[test]
+    fn wall_blocks_from_right() {
+        let solid = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: None, item_perm: None };
+        assert!(solid.blocks_from_right());
+        let right_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(1), item_perm: None };
+        assert!(right_only.blocks_from_right());
+        let left_only = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(-1), item_perm: None };
+        assert!(!left_only.blocks_from_right());
+        let passthrough = Wall { id: "w".into(), x: 0.0, y: -100.0, h: 100.0, pc_perm: Some(0), item_perm: None };
+        assert!(!passthrough.blocks_from_right());
+    }
+
+    #[test]
+    fn wall_bottom_extent() {
+        let wall = Wall { id: "w".into(), x: 0.0, y: -400.0, h: 400.0, pc_perm: None, item_perm: None };
+        assert!((wall.bottom() - 0.0).abs() < 0.001);
+        let wall2 = Wall { id: "w".into(), x: 0.0, y: -200.0, h: 100.0, pc_perm: None, item_perm: None };
+        assert!((wall2.bottom() - (-100.0)).abs() < 0.001);
+    }
+
+    #[test]
+    fn walls_accessor_returns_middleground_walls() {
+        let wall = Wall { id: "w1".into(), x: -100.0, y: -50.0, h: 50.0, pc_perm: None, item_perm: None };
+        let mg = Layer {
+            name: "middleground".into(), z: 0, w: 200.0, h: 50.0,
+            is_middleground: true, decos: vec![], platform_lines: vec![],
+            walls: vec![wall.clone()], ladders: vec![], filters: None,
+        };
+        let s = StreetData {
+            tsid: "test".into(), name: "Test".into(),
+            left: -100.0, right: 100.0, top: -50.0, bottom: 0.0, ground_y: 0.0,
+            gradient: None, layers: vec![mg], signposts: vec![],
+        };
+        assert_eq!(s.walls().len(), 1);
+        assert_eq!(s.walls()[0].id, "w1");
     }
 }
