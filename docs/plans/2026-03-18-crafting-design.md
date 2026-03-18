@@ -37,7 +37,7 @@ command. The frontend availability check is a convenience for UI display only.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecipeDef {
-    #[serde(skip)]
+    #[serde(skip_deserializing)]
     pub id: String,
     pub name: String,
     pub description: String,
@@ -181,12 +181,13 @@ Steps:
    `inventory.count_item(input.item) >= input.count`. Fail with
    `CraftError::MissingInput` if not.
 3. **Validate output room**: For each output in recipe.outputs, check
-   `inventory.has_room_for(output.item)`. Fail with `CraftError::NoRoom` if
-   not. (This is a conservative check — it may reject edge cases where
-   stacking would actually fit, but erring on the side of not losing items is
-   correct.)
-4. **Consume inputs**: For each input, remove the required count from
-   inventory. Tools are NOT removed.
+   `inventory.has_room_for(output.item, item_defs)`. Fail with
+   `CraftError::NoRoom` if not. (This is a conservative check — it may reject
+   edge cases where stacking would actually fit, but erring on the side of not
+   losing items is correct.)
+4. **Consume inputs**: For each input, call
+   `inventory.remove_item(input.item, input.count)` to remove the required
+   count across inventory slots. Tools are NOT removed.
 5. **Add outputs**: For each output, add to inventory.
 6. **Return outputs**: Return `Vec<CraftOutput>` describing what was produced
    (for feedback display).
@@ -216,7 +217,7 @@ pub struct CraftOutput {
 
 ### Inventory additions
 
-The `Inventory` struct needs a new method:
+The `Inventory` struct needs two new methods:
 
 ```rust
 pub fn count_item(&self, item_id: &str) -> u32
@@ -224,6 +225,16 @@ pub fn count_item(&self, item_id: &str) -> u32
 
 Returns total count of an item across all inventory slots. Used by craft
 validation and by the frontend availability check pattern.
+
+```rust
+pub fn remove_item(&mut self, item_id: &str, mut count: u32)
+```
+
+Removes `count` items of the given item_id across inventory slots. Iterates
+slots, removing from each until the total is satisfied. The existing
+`remove(slot, count)` method operates on a single slot by index; this new
+method wraps it to remove by item_id across multiple slots. Caller must
+verify sufficient quantity exists first (via `count_item`).
 
 ### Recipe availability (for frontend)
 
@@ -393,13 +404,11 @@ The pot ground item is placed in the demo meadow. Ground items currently spawn
 at runtime (harvest overflow, player drop). To place a pot at street load time,
 the street loading code needs to support initial ground items.
 
-Two approaches:
-- Add a `ground_items` field to the street entity placement JSON
-- Create a separate `demo_meadow_items.json` file
-
-The simpler approach: extend the `load_street()` call to accept an optional
-`Vec<WorldItem>` for initial ground items, alongside the existing
-`Vec<WorldEntity>`. The placement JSON can include a `groundItems` array.
+Approach: add a `groundItems` array to the existing street entity placement
+JSON (`assets/streets/demo_meadow.json` or equivalent). The `load_street()`
+method already parses this file for `Vec<WorldEntity>`; extend it to also
+parse an optional `groundItems` array as `Vec<WorldItem>` and add them to
+the street's ground items list at load time. No separate file needed.
 
 ## Testing Strategy
 
@@ -420,6 +429,8 @@ The simpler approach: extend the `load_street()` call to accept an optional
 
 - **Recipe loading**: Parse bundled recipes.json, verify fields including tools
 - **Recipe item validation**: Verify all recipe item references exist in item_defs
+- **Update existing item count test**: The existing `parse_bundled_items_json`
+  test asserts `defs.len() == 6`; must update to 13 after adding 7 new items
 
 ### Frontend tests
 
@@ -440,7 +451,7 @@ inventory with feedback text.
 - `src-tauri/src/item/types.rs` — RecipeDef, RecipeItem, CraftError,
   CraftOutput, RecipeAvailability, IngredientStatus structs
 - `src-tauri/src/item/crafting.rs` — **new**, craft() + check_recipe_availability()
-- `src-tauri/src/item/inventory.rs` — add count_item() method
+- `src-tauri/src/item/inventory.rs` — add count_item() and remove_item() methods
 - `src-tauri/src/item/loader.rs` — parse_recipe_defs()
 - `src-tauri/src/item/mod.rs` — add crafting module
 - `src-tauri/src/engine/state.rs` — add recipe_defs to GameState, craft_recipe
@@ -458,4 +469,5 @@ inventory with feedback text.
 - `assets/recipes.json` — **new**, 6 recipes
 - `assets/items.json` — 7 new items (cherry_pie, bread, steak, butter,
   bubble_wand, plank, pot)
-- `assets/streets/demo_meadow_items.json` — **new**, pot ground item placement
+- `assets/streets/demo_meadow.json` (or equivalent) — add `groundItems` array
+  with pot placement
