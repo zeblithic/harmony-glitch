@@ -141,6 +141,41 @@ describe('SpriteManager', () => {
     });
   });
 
+  describe('fallback upgrade path', () => {
+    it('hasEntityTexture returns true after async load resolves', async () => {
+      const { Assets } = await import('pixi.js');
+      const mockTexture = { width: 60, height: 80 };
+      vi.mocked(Assets.load).mockResolvedValueOnce(mockTexture);
+
+      const entity = {
+        id: 'e1', entityType: 'tree', name: 'Fruit Tree',
+        spriteClass: 'tree_fruit', x: 0, y: 0,
+        cooldownRemaining: null, depleted: false,
+      };
+      manager.createEntity(entity);
+      expect(manager.hasEntityTexture('tree_fruit')).toBe(false);
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(manager.hasEntityTexture('tree_fruit')).toBe(true);
+    });
+
+    it('hasItemTexture returns true after async load resolves', async () => {
+      const { Assets } = await import('pixi.js');
+      const mockTexture = { width: 16, height: 16 };
+      vi.mocked(Assets.load).mockResolvedValueOnce(mockTexture);
+
+      const item = {
+        id: 'i1', itemId: 'cherry', name: 'Cherry',
+        icon: 'cherry', count: 1, x: 0, y: 0,
+      };
+      manager.createGroundItem(item);
+      expect(manager.hasItemTexture('cherry')).toBe(false);
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(manager.hasItemTexture('cherry')).toBe(true);
+    });
+  });
+
   describe('missing texture dedup', () => {
     it('logs missing entity texture only once per spriteClass', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});

@@ -129,8 +129,12 @@ export class GameRenderer {
    *   Ground(glitchY=0)    → screenY=800  (bottom of screen)
    */
   async buildScene(street: StreetData): Promise<void> {
-    this.street = street;
+    // Pre-load deco textures before tearing down the old scene.
+    // this.street stays pointing at the old street during the await so that
+    // any updateFrame() calls from requestAnimationFrame use consistent
+    // coordinates for the still-visible old scene graph.
     await this.spriteManager.loadStreetAssets(street);
+    this.street = street;
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
