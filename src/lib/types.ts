@@ -217,3 +217,18 @@ export interface PickupFeedback {
   y: number;
   ageSecs: number;
 }
+
+export interface RecipeDef {
+  id: string;
+  name: string;
+  description: string;
+  inputs: RecipeItem[];
+  tools: RecipeItem[];
+  outputs: RecipeItem[];
+  category: string;
+}
+
+export interface RecipeItem {
+  item: string;
+  count: number;
+}
