@@ -100,6 +100,7 @@ impl PhysicsBody {
         self.y += self.vy * dt;
 
         // --- Wall collision ---
+        let mut wall_prev_x = prev_x;
         for wall in walls {
             if matches!(wall.pc_perm, Some(0)) {
                 continue;
@@ -111,18 +112,20 @@ impl PhysicsBody {
                 continue;
             }
             // Horizontal sweep
-            if prev_x + self.half_width <= wall.x
+            if wall_prev_x + self.half_width <= wall.x
                 && self.x + self.half_width > wall.x
                 && wall.blocks_from_left()
             {
                 self.x = wall.x - self.half_width;
                 self.vx = 0.0;
-            } else if prev_x - self.half_width >= wall.x
+                wall_prev_x = self.x;
+            } else if wall_prev_x - self.half_width >= wall.x
                 && self.x - self.half_width < wall.x
                 && wall.blocks_from_right()
             {
                 self.x = wall.x + self.half_width;
                 self.vx = 0.0;
+                wall_prev_x = self.x;
             }
         }
 
@@ -455,6 +458,35 @@ mod tests {
             (body.x - 200.0).abs() < 0.01,
             "Player already past wall should not be moved, x={}",
             body.x
+        );
+    }
+
+    #[test]
+    fn wall_correction_updates_prev_x_for_subsequent_walls() {
+        // Two walls close together processed in order: wall_a at x=100, wall_b at x=99.
+        // Player walks right; at WALK_SPEED a single frame sweeps ~3.3px. Position the
+        // player so right-edge (x + half_width) crosses both walls in one frame.
+        // Wall A should stop the player. Wall B should NOT fire because the corrected
+        // position never crossed wall B from the left.
+        let half = 15.0; // default half_width
+        // Start just left of wall_b: right-edge at 98.5, one frame moves to ~101.8
+        let start_x = 99.0 - half - 0.5; // 83.5 → right-edge 98.5
+        let mut body = PhysicsBody::new(start_x, 0.0);
+        body.on_ground = true;
+        let walls = vec![
+            Wall { id: "a".into(), x: 100.0, y: -400.0, h: 400.0, pc_perm: None, item_perm: None },
+            Wall { id: "b".into(), x: 99.0, y: -400.0, h: 400.0, pc_perm: None, item_perm: None },
+        ];
+        let input = InputState { right: true, ..Default::default() };
+        let platforms = flat_ground();
+        body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+
+        // Player should stop at wall_a (the first wall hit), not wall_b
+        let expected = 100.0 - half;
+        assert!(
+            (body.x - expected).abs() < 0.01,
+            "Player should stop at wall_a (x={}), not be pushed further back by wall_b, x={}",
+            expected, body.x
         );
     }
 

@@ -76,6 +76,8 @@ pub struct Wall {
     pub x: f64,
     pub y: f64,
     pub h: f64,
+    /// Wall permeability for players: None = solid (blocks both directions),
+    /// Some(-1) = one-way from left, Some(1) = one-way from right, Some(0) = pass-through.
     pub pc_perm: Option<i32>,
     pub item_perm: Option<i32>,
 }
