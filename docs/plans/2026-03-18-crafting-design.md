@@ -181,10 +181,9 @@ Steps:
    `inventory.count_item(input.item) >= input.count`. Fail with
    `CraftError::MissingInput` if not.
 3. **Validate output room**: For each output in recipe.outputs, check
-   `inventory.has_room_for(output.item, item_defs)`. Fail with
-   `CraftError::NoRoom` if not. (This is a conservative check — it may reject
-   edge cases where stacking would actually fit, but erring on the side of not
-   losing items is correct.)
+   `inventory.has_room_for_count(output.item, output.count, item_defs)`. Fail
+   with `CraftError::NoRoom` if not. Uses count-aware room check to prevent
+   silent item loss from multi-output recipes (e.g. plank x2).
 4. **Consume inputs**: For each input, call
    `inventory.remove_item(input.item, input.count)` to remove the required
    count across inventory slots. Tools are NOT removed.
