@@ -71,7 +71,7 @@
     cleanupFns.push(unlisten, unlistenChat, () => r.destroy());
 
     if (street) {
-      r.buildScene(street);
+      await r.buildScene(street);
       startGame().catch(console.error);
     }
   });
