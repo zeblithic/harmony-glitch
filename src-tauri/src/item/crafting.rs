@@ -1,5 +1,5 @@
 use crate::item::inventory::Inventory;
-use crate::item::types::{CraftError, CraftOutput, ItemDefs, RecipeDef, RecipeItem};
+use crate::item::types::{CraftError, CraftOutput, ItemDefs, RecipeDef};
 
 /// Execute a crafting recipe against the player's inventory.
 ///
@@ -90,8 +90,8 @@ pub fn check_recipe_availability(
         })
         .collect();
 
-    let craftable = inputs.iter().all(|i| i.have >= i.need)
-        && tools.iter().all(|t| t.have >= t.need);
+    let craftable =
+        inputs.iter().all(|i| i.have >= i.need) && tools.iter().all(|t| t.have >= t.need);
 
     RecipeAvailability {
         craftable,
@@ -103,7 +103,7 @@ pub fn check_recipe_availability(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::item::types::ItemDef;
+    use crate::item::types::{ItemDef, RecipeItem};
 
     fn test_defs() -> ItemDefs {
         let mut defs = ItemDefs::new();
@@ -136,11 +136,23 @@ mod tests {
             name: "Cherry Pie".into(),
             description: "".into(),
             inputs: vec![
-                RecipeItem { item: "cherry".into(), count: 5 },
-                RecipeItem { item: "grain".into(), count: 2 },
+                RecipeItem {
+                    item: "cherry".into(),
+                    count: 5,
+                },
+                RecipeItem {
+                    item: "grain".into(),
+                    count: 2,
+                },
             ],
-            tools: vec![RecipeItem { item: "pot".into(), count: 1 }],
-            outputs: vec![RecipeItem { item: "cherry_pie".into(), count: 1 }],
+            tools: vec![RecipeItem {
+                item: "pot".into(),
+                count: 1,
+            }],
+            outputs: vec![RecipeItem {
+                item: "cherry_pie".into(),
+                count: 1,
+            }],
             duration_secs: 10.0,
             category: "food".into(),
         }
@@ -151,9 +163,15 @@ mod tests {
             id: "plank".into(),
             name: "Plank".into(),
             description: "".into(),
-            inputs: vec![RecipeItem { item: "wood".into(), count: 3 }],
+            inputs: vec![RecipeItem {
+                item: "wood".into(),
+                count: 3,
+            }],
             tools: vec![],
-            outputs: vec![RecipeItem { item: "plank".into(), count: 2 }],
+            outputs: vec![RecipeItem {
+                item: "plank".into(),
+                count: 2,
+            }],
             duration_secs: 4.0,
             category: "material".into(),
         }

@@ -351,7 +351,7 @@ mod tests {
         let defs = test_defs();
         let mut inv = Inventory::new(2);
         inv.add("cherry", 4, &defs); // slot 0: 4/5
-        // Room: 1 in slot 0 + 5 in slot 1 = 6
+                                     // Room: 1 in slot 0 + 5 in slot 1 = 6
         assert!(inv.has_room_for_count("cherry", 6, &defs));
         assert!(!inv.has_room_for_count("cherry", 7, &defs));
     }

@@ -685,7 +685,13 @@ mod tests {
 
     #[test]
     fn tick_produces_render_frame() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
         let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
@@ -694,7 +700,13 @@ mod tests {
 
     #[test]
     fn tick_returns_none_without_street() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let input = InputState::default();
         assert!(state
             .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
@@ -703,7 +715,13 @@ mod tests {
 
     #[test]
     fn facing_updates_from_input() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state.load_street(test_street(), vec![], vec![]);
 
         let input = InputState {
@@ -723,7 +741,13 @@ mod tests {
 
     #[test]
     fn animation_idle_on_ground() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
         state.player.y = 0.0;
@@ -738,7 +762,13 @@ mod tests {
 
     #[test]
     fn animation_walking() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
         state.player.y = 0.0;
@@ -756,7 +786,13 @@ mod tests {
     #[test]
     fn camera_does_not_panic_on_small_street() {
         // Street smaller than viewport (600px wide, 400px tall vs 1280x720 viewport)
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let small_street = StreetData {
             tsid: "small".into(),
             name: "Tiny".into(),
@@ -796,7 +832,13 @@ mod tests {
 
     #[test]
     fn load_street_places_player() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state.load_street(test_street(), vec![], vec![]);
         // Player should be at center of street
         assert!((state.player.x - 0.0).abs() < 1.0);
@@ -867,7 +909,13 @@ mod tests {
 
     #[test]
     fn render_frame_has_no_transition_by_default() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
         let frame = state
@@ -878,7 +926,13 @@ mod tests {
 
     #[test]
     fn game_state_has_transition_state() {
-        let state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         assert_eq!(state.transition.phase, TransitionPhase::None);
     }
 
@@ -886,7 +940,13 @@ mod tests {
     fn tick_detects_signpost_pre_subscribe() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -914,7 +974,13 @@ mod tests {
     fn tick_triggers_swoop_on_crossing_signpost() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -944,7 +1010,13 @@ mod tests {
     fn tick_freezes_input_during_swoop() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -984,7 +1056,13 @@ mod tests {
     fn render_frame_contains_transition_during_swoop() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -1011,7 +1089,13 @@ mod tests {
 
     #[test]
     fn game_time_accumulates() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
 
@@ -1026,7 +1110,13 @@ mod tests {
     fn entity_states_cleared_on_load_street() {
         use crate::item::types::EntityInstanceState;
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state
             .entity_states
             .insert("tree_1".into(), EntityInstanceState::new(3));
@@ -1040,7 +1130,13 @@ mod tests {
     fn transition_complete_repositions_player() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new(), HashMap::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.tsid = "LADEMO001".into();
         street.signposts = vec![Signpost {
@@ -1504,7 +1600,8 @@ mod tests {
         // Run with two different seeds and collect initial facing
         let mut facings = Vec::new();
         for seed in [1u64, 2, 3, 4, 5, 6, 7, 8] {
-            let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone(), HashMap::new());
+            let mut state =
+                GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone(), HashMap::new());
             let entities = vec![WorldEntity {
                 id: "c1".into(),
                 entity_type: "chicken".into(),
@@ -1625,26 +1722,32 @@ mod tests {
         use rand::SeedableRng;
 
         let mut defs = EntityDefs::new();
-        defs.insert("butterfly".into(), crate::item::types::EntityDef {
-            id: "butterfly".into(),
-            name: "Butterfly".into(),
-            verb: "Milk".into(),
-            yields: vec![],
-            cooldown_secs: 0.0,
-            max_harvests: 0,
-            respawn_secs: 0.0,
-            sprite_class: "npc_butterfly".into(),
-            interact_radius: 90.0,
-            walk_speed: Some(25.0),
-            wander_radius: Some(150.0),
-            bob_amplitude: Some(15.0),
-            bob_frequency: Some(1.5),
-        });
+        defs.insert(
+            "butterfly".into(),
+            crate::item::types::EntityDef {
+                id: "butterfly".into(),
+                name: "Butterfly".into(),
+                verb: "Milk".into(),
+                yields: vec![],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "npc_butterfly".into(),
+                interact_radius: 90.0,
+                walk_speed: Some(25.0),
+                wander_radius: Some(150.0),
+                bob_amplitude: Some(15.0),
+                bob_frequency: Some(1.5),
+            },
+        );
 
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
-        let entities = vec![
-            WorldEntity { id: "b1".into(), entity_type: "butterfly".into(), x: 600.0, y: -80.0 },
-        ];
+        let entities = vec![WorldEntity {
+            id: "b1".into(),
+            entity_type: "butterfly".into(),
+            x: 600.0,
+            y: -80.0,
+        }];
         state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
@@ -1662,8 +1765,11 @@ mod tests {
         let max_y = y_values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let y_range = max_y - min_y;
 
-        assert!(y_range > 1.0,
-            "Butterfly y should oscillate due to bob, but range was only {}", y_range);
+        assert!(
+            y_range > 1.0,
+            "Butterfly y should oscillate due to bob, but range was only {}",
+            y_range
+        );
     }
 
     #[test]
@@ -1672,9 +1778,12 @@ mod tests {
 
         let defs = movable_entity_defs(); // chicken + fruit_tree, no bob fields
         let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
-        let entities = vec![
-            WorldEntity { id: "c1".into(), entity_type: "chicken".into(), x: 200.0, y: -2.0 },
-        ];
+        let entities = vec![WorldEntity {
+            id: "c1".into(),
+            entity_type: "chicken".into(),
+            x: 200.0,
+            y: -2.0,
+        }];
         state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
@@ -1690,8 +1799,13 @@ mod tests {
 
         let first_y = y_values[0];
         for (i, &y) in y_values.iter().enumerate() {
-            assert!((y - first_y).abs() < 0.01,
-                "Chicken y should not bob, but frame {} had y={} vs first y={}", i, y, first_y);
+            assert!(
+                (y - first_y).abs() < 0.01,
+                "Chicken y should not bob, but frame {} had y={} vs first y={}",
+                i,
+                y,
+                first_y
+            );
         }
     }
 

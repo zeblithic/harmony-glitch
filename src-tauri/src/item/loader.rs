@@ -58,8 +58,8 @@ pub fn parse_entity_placements(json: &str) -> Result<PlacementData, String> {
     }
 
     // Fall back to legacy array format (entities only)
-    let entities: Vec<WorldEntity> =
-        serde_json::from_str(json).map_err(|e| format!("Failed to parse entity placements: {e}"))?;
+    let entities: Vec<WorldEntity> = serde_json::from_str(json)
+        .map_err(|e| format!("Failed to parse entity placements: {e}"))?;
     Ok(PlacementData {
         entities,
         ground_items: vec![],

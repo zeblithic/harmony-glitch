@@ -69,7 +69,11 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
     {
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-        state.load_street(street_data.clone(), placement.entities, placement.ground_items);
+        state.load_street(
+            street_data.clone(),
+            placement.entities,
+            placement.ground_items,
+        );
     }
 
     // Update network state for the new street.

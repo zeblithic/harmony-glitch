@@ -402,9 +402,15 @@ mod tests {
             id: "cherry_pie".into(),
             name: "Cherry Pie".into(),
             description: "A delicious pie.".into(),
-            inputs: vec![RecipeItem { item: "cherry".into(), count: 5 }],
+            inputs: vec![RecipeItem {
+                item: "cherry".into(),
+                count: 5,
+            }],
             tools: vec![],
-            outputs: vec![RecipeItem { item: "cherry_pie".into(), count: 1 }],
+            outputs: vec![RecipeItem {
+                item: "cherry_pie".into(),
+                count: 1,
+            }],
             duration_secs: 10.0,
             category: "food".into(),
         };
