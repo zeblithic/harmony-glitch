@@ -452,6 +452,11 @@ impl GameState {
                     (None, false)
                 };
 
+                let facing = self.entity_states
+                    .get(&e.id)
+                    .map(|s| s.facing)
+                    .unwrap_or(Direction::Right);
+
                 WorldEntityFrame {
                     id: e.id.clone(),
                     entity_type: e.entity_type.clone(),
@@ -461,6 +466,7 @@ impl GameState {
                     y: e.y,
                     cooldown_remaining,
                     depleted,
+                    facing,
                 }
             })
             .collect()

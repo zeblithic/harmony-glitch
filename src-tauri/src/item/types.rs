@@ -123,6 +123,7 @@ pub struct WorldEntityFrame {
     pub y: f64,
     pub cooldown_remaining: Option<f64>,
     pub depleted: bool,
+    pub facing: Direction,
 }
 
 /// Data sent to frontend for rendering a ground item.
@@ -282,6 +283,25 @@ mod tests {
         assert_eq!(state.wander_origin, 0.0);
         assert_eq!(state.idle_until, 0.0);
         assert!(matches!(state.facing, Direction::Right));
+    }
+
+    #[test]
+    fn world_entity_frame_serializes_facing() {
+        use crate::avatar::types::Direction;
+
+        let frame = WorldEntityFrame {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            name: "Fruit Tree".into(),
+            sprite_class: "tree_fruit".into(),
+            x: 100.0,
+            y: -2.0,
+            cooldown_remaining: None,
+            depleted: false,
+            facing: Direction::Left,
+        };
+        let json = serde_json::to_string(&frame).unwrap();
+        assert!(json.contains(r#""facing":"left""#));
     }
 
     #[test]
