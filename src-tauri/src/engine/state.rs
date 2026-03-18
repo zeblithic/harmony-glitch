@@ -564,13 +564,25 @@ impl GameState {
                     .map(|s| s.facing)
                     .unwrap_or(Direction::Right);
 
+                // Apply vertical bob for entities with bob config
+                let y = if let Some(d) = def {
+                    match (d.bob_amplitude, d.bob_frequency) {
+                        (Some(amp), Some(freq)) => {
+                            e.y + (self.game_time * freq * std::f64::consts::TAU).sin() * amp
+                        }
+                        _ => e.y,
+                    }
+                } else {
+                    e.y
+                };
+
                 WorldEntityFrame {
                     id: e.id.clone(),
                     entity_type: e.entity_type.clone(),
                     name: def.map(|d| d.name.clone()).unwrap_or_default(),
                     sprite_class: def.map(|d| d.sprite_class.clone()).unwrap_or_default(),
                     x: e.x,
-                    y: e.y,
+                    y,
                     cooldown_remaining,
                     depleted,
                     facing,
@@ -1565,5 +1577,80 @@ mod tests {
         let prompt = frame.interaction_prompt.unwrap();
         assert!(!prompt.actionable);
         assert!(prompt.verb.contains("Available"));
+    }
+
+    #[test]
+    fn build_entity_frames_applies_bob_offset() {
+        use rand::SeedableRng;
+
+        let mut defs = EntityDefs::new();
+        defs.insert("butterfly".into(), crate::item::types::EntityDef {
+            id: "butterfly".into(),
+            name: "Butterfly".into(),
+            verb: "Milk".into(),
+            yields: vec![],
+            cooldown_secs: 0.0,
+            max_harvests: 0,
+            respawn_secs: 0.0,
+            sprite_class: "npc_butterfly".into(),
+            interact_radius: 90.0,
+            walk_speed: Some(25.0),
+            wander_radius: Some(150.0),
+            bob_amplitude: Some(15.0),
+            bob_frequency: Some(1.5),
+        });
+
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![
+            WorldEntity { id: "b1".into(), entity_type: "butterfly".into(), x: 600.0, y: -80.0 },
+        ];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Collect y values over several ticks — should vary due to sine bob
+        let mut y_values: Vec<f64> = Vec::new();
+        for _ in 0..120 {
+            if let Some(frame) = state.tick(1.0 / 60.0, &input, &mut rng) {
+                y_values.push(frame.world_entities[0].y);
+            }
+        }
+
+        let min_y = y_values.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max_y = y_values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let y_range = max_y - min_y;
+
+        assert!(y_range > 1.0,
+            "Butterfly y should oscillate due to bob, but range was only {}", y_range);
+    }
+
+    #[test]
+    fn build_entity_frames_no_bob_for_ground_entity() {
+        use rand::SeedableRng;
+
+        let defs = movable_entity_defs(); // chicken + fruit_tree, no bob fields
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let entities = vec![
+            WorldEntity { id: "c1".into(), entity_type: "chicken".into(), x: 200.0, y: -2.0 },
+        ];
+        state.load_street(test_street(), entities);
+
+        let input = InputState::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // All y values should be the same (no bob)
+        let mut y_values: Vec<f64> = Vec::new();
+        for _ in 0..120 {
+            if let Some(frame) = state.tick(1.0 / 60.0, &input, &mut rng) {
+                y_values.push(frame.world_entities[0].y);
+            }
+        }
+
+        let first_y = y_values[0];
+        for (i, &y) in y_values.iter().enumerate() {
+            assert!((y - first_y).abs() < 0.01,
+                "Chicken y should not bob, but frame {} had y={} vs first y={}", i, y, first_y);
+        }
     }
 }
