@@ -34,7 +34,13 @@
     }, 0);
   }
 
+  function hasAnyEmptySlot(): boolean {
+    if (!inventory) return false;
+    return inventory.slots.some(s => s === null);
+  }
+
   function isRecipeCraftable(recipe: RecipeDef): boolean {
+    if (!hasAnyEmptySlot()) return false;
     for (const input of recipe.inputs) {
       if (countItem(input.item) < input.count) return false;
     }

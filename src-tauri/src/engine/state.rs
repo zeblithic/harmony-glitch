@@ -153,8 +153,17 @@ impl GameState {
         self.street = Some(street);
         self.world_entities = entities;
         self.world_items = ground_items;
-        // Set next_item_id past loaded ground items to avoid ID collisions
-        self.next_item_id = self.world_items.len().max(self.next_item_id as usize) as u64;
+        // Set next_item_id past any numeric IDs in loaded ground items to avoid collisions.
+        // Loaded items use string IDs (e.g. "pot_1"), dynamic items use numeric IDs from
+        // next_item_id (e.g. "drop_0"). Parse numeric IDs to find the max.
+        let max_loaded_numeric_id = self
+            .world_items
+            .iter()
+            .filter_map(|item| item.id.parse::<u64>().ok())
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(0);
+        self.next_item_id = max_loaded_numeric_id.max(self.next_item_id);
         self.pickup_feedback.clear();
         self.entity_states.clear(); // game_time intentionally NOT reset — it's session-global
     }
