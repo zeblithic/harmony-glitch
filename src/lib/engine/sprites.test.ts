@@ -107,6 +107,7 @@ describe('SpriteManager', () => {
         id: 'e1', entityType: 'tree', name: 'Fruit Tree',
         spriteClass: 'tree_fruit', x: 100, y: 0,
         cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
       };
       const result = manager.createEntity(entity);
       expect(result).toBeDefined();
@@ -117,6 +118,7 @@ describe('SpriteManager', () => {
         id: 'e2', entityType: 'npc', name: 'Chicken',
         spriteClass: 'npc_chicken', x: 200, y: 0,
         cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
       };
       const result = manager.createEntity(entity);
       expect(result).toBeDefined();
@@ -151,6 +153,7 @@ describe('SpriteManager', () => {
         id: 'e1', entityType: 'tree', name: 'Fruit Tree',
         spriteClass: 'tree_fruit', x: 0, y: 0,
         cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
       };
       manager.createEntity(entity);
       expect(manager.hasEntityTexture('tree_fruit')).toBe(false);
@@ -183,6 +186,7 @@ describe('SpriteManager', () => {
         id: 'e1', entityType: 'npc', name: 'Chicken',
         spriteClass: 'npc_chicken', x: 0, y: 0,
         cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
       };
       manager.createEntity(entity);
       manager.createEntity({ ...entity, id: 'e2' });

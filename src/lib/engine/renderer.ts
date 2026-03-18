@@ -348,6 +348,7 @@ export class GameRenderer {
       }
       sprite.x = entity.x - this.street.left;
       sprite.y = entity.y - this.street.top;
+      sprite.scale.x = entity.facing === 'right' ? 1 : -1;
 
       // Opacity based on entity state
       if (entity.cooldownRemaining != null) {
