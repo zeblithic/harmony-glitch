@@ -15,6 +15,7 @@
   let dialogEl: HTMLDialogElement | undefined = $state();
   let previousFocus: HTMLElement | null = null;
   let craftError = $state<string | null>(null);
+  let isCrafting = $state(false);
 
   let selectedItem = $derived.by(() => {
     if (selectedSlot === null || !inventory) return null;
@@ -90,12 +91,15 @@
   }
 
   async function handleCraft() {
-    if (!selectedRecipeId) return;
+    if (!selectedRecipeId || isCrafting) return;
     craftError = null;
+    isCrafting = true;
     try {
       await craftRecipe(selectedRecipeId);
     } catch (e) {
       craftError = String(e);
+    } finally {
+      isCrafting = false;
     }
   }
 
@@ -150,6 +154,24 @@
         .querySelectorAll<HTMLElement>('button.slot');
       buttons[selectedSlot]?.focus();
     }
+  }
+
+  function handleRecipeListKeyDown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const options = (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="option"]');
+    if (options.length === 0) return;
+    const ids = sortedRecipes.map(r => r.id);
+    const currentIdx = selectedRecipeId ? ids.indexOf(selectedRecipeId) : -1;
+    let nextIdx: number;
+    if (e.key === 'ArrowDown') {
+      nextIdx = currentIdx < ids.length - 1 ? currentIdx + 1 : 0;
+    } else {
+      nextIdx = currentIdx > 0 ? currentIdx - 1 : ids.length - 1;
+    }
+    selectedRecipeId = ids[nextIdx];
+    craftError = null;
+    options[nextIdx]?.focus();
   }
 
   function handleSpaceKey(e: KeyboardEvent) {
@@ -242,7 +264,7 @@
         role="tabpanel"
         aria-labelledby="tab-recipes"
       >
-        <div class="recipe-list" role="listbox" aria-label="Recipes">
+        <div class="recipe-list" role="listbox" aria-label="Recipes" onkeydown={handleRecipeListKeyDown}>
           {#each sortedRecipes as recipe (recipe.id)}
             {@const craftable = isRecipeCraftable(recipe)}
             <button
@@ -310,7 +332,7 @@
             <button
               type="button"
               class="craft-btn"
-              disabled={!isRecipeCraftable(selectedRecipe)}
+              disabled={!isRecipeCraftable(selectedRecipe) || isCrafting}
               onclick={handleCraft}
               onkeydown={handleSpaceKey}
             >

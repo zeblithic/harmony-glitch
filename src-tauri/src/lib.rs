@@ -269,7 +269,9 @@ fn drop_item(slot: usize, app: AppHandle) -> Result<(), String> {
 fn get_recipes(app: AppHandle) -> Result<Vec<item::types::RecipeDef>, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    Ok(state.recipe_defs.values().cloned().collect())
+    let mut recipes: Vec<_> = state.recipe_defs.values().cloned().collect();
+    recipes.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(recipes)
 }
 
 #[tauri::command]

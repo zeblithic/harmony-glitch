@@ -225,6 +225,7 @@ export interface RecipeDef {
   inputs: RecipeItem[];
   tools: RecipeItem[];
   outputs: RecipeItem[];
+  durationSecs: number;
   category: string;
 }
 
