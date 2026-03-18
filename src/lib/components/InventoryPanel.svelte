@@ -22,6 +22,10 @@
     return inventory.slots[selectedSlot] ?? null;
   });
 
+  function displayName(itemId: string): string {
+    return itemId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
   function countItem(itemId: string): number {
     if (!inventory) return 0;
     return inventory.slots.reduce((sum, slot) => {
@@ -298,9 +302,9 @@
                   <div
                     class="ingredient"
                     class:sufficient={have >= input.count}
-                    aria-label="{input.item}: have {have}, need {input.count}"
+                    aria-label="{displayName(input.item)}: have {have}, need {input.count}"
                   >
-                    {input.item} {have}/{input.count}
+                    {displayName(input.item)} {have}/{input.count}
                   </div>
                 {/each}
               </div>
@@ -314,9 +318,9 @@
                   <div
                     class="ingredient"
                     class:sufficient={have >= tool.count}
-                    aria-label="{tool.item}: have {have}, need {tool.count}"
+                    aria-label="{displayName(tool.item)}: have {have}, need {tool.count}"
                   >
-                    {tool.item} {have >= tool.count ? '✓' : '✗'}
+                    {displayName(tool.item)} {have >= tool.count ? '✓' : '✗'}
                   </div>
                 {/each}
               </div>
@@ -325,7 +329,7 @@
             <div class="ingredient-section">
               <div class="ingredient-label">Produces:</div>
               {#each selectedRecipe.outputs as output}
-                <div class="ingredient">{output.item} x{output.count}</div>
+                <div class="ingredient">{displayName(output.item)} x{output.count}</div>
               {/each}
             </div>
 
