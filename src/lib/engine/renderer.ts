@@ -11,6 +11,13 @@ export class GameRenderer {
   private static REMOTE_COLOR = 0x4488ff;
   private static CHAT_DURATION = 5.0;
 
+  private static formatStreetName(raw: string): string {
+    return raw
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+
   app: Application;
   private parallaxContainer: Container;
   private worldContainer: Container;
@@ -28,12 +35,24 @@ export class GameRenderer {
   private bgGraphics: Graphics | null = null;
   private street: StreetData | null = null;
   private debugMode = false;
+  private transitionContainer: Container;
+  private transitionBg: Graphics | null = null;
+  private streetNameText: Text | null = null;
+  private lastTransitionGen = -1;
+  private irisMask: Graphics | null = null;
+  private decorationContainer: Container | null = null;
+  private starGraphics: Graphics[] = [];
+  private swirlGraphics: Graphics[] = [];
+  private starPositions: { nx: number; ny: number }[] = [];
+  private swirlPositions: { nx: number; ny: number }[] = [];
 
   constructor() {
     this.app = new Application();
     this.parallaxContainer = new Container();
     this.worldContainer = new Container();
     this.uiContainer = new Container();
+    this.transitionContainer = new Container();
+    this.transitionContainer.visible = false;
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
@@ -47,6 +66,26 @@ export class GameRenderer {
     this.app.stage.addChild(this.parallaxContainer);
     this.app.stage.addChild(this.worldContainer);
     this.app.stage.addChild(this.uiContainer);
+    this.app.stage.addChild(this.transitionContainer);
+
+    this.transitionBg = new Graphics();
+    this.transitionContainer.addChild(this.transitionBg);
+
+    this.irisMask = new Graphics();
+    this.irisMask.renderable = false;
+    this.transitionContainer.addChild(this.irisMask);
+
+    this.decorationContainer = new Container();
+    this.decorationContainer.mask = this.irisMask;
+    this.transitionContainer.addChild(this.decorationContainer);
+
+    this.streetNameText = new Text({
+      text: '',
+      style: { fontSize: 28, fill: 0xffffff, fontFamily: 'sans-serif' },
+    });
+    this.streetNameText.anchor.set(0.5, 0.5);
+    this.streetNameText.visible = false;
+    this.transitionContainer.addChild(this.streetNameText);
 
     this.app.renderer.on('resize', () => {
       if (this.street) this.drawBackground(this.street);
@@ -420,22 +459,7 @@ export class GameRenderer {
 
     this.updateChatBubbles(dt, remotePlayers);
 
-    // Swoop transition — slide old street off-screen.
-    // Only shift parallax layers here; the middleground is a child of worldContainer
-    // and inherits its offset automatically.
-    if (frame.transition) {
-      const { progress, direction } = frame.transition;
-      const viewportWidth = this.app.canvas.width;
-      const offset = direction === 'right'
-        ? -progress * viewportWidth
-        : progress * viewportWidth;
-      this.worldContainer.x += offset;
-      for (const [name, container] of this.layerContainers) {
-        const layer = this.street.layers.find(l => l.name === name);
-        if (layer?.isMiddleground) continue;
-        container.x += offset;
-      }
-    }
+    this.updateTransition(frame);
   }
 
   addChatBubble(addressHash: string, message: string): void {
@@ -475,6 +499,145 @@ export class GameRenderer {
     });
   }
 
+  private updateTransition(frame: RenderFrame): void {
+    if (!frame.transition) {
+      this.transitionContainer.visible = false;
+      return;
+    }
+
+    this.transitionContainer.visible = true;
+    const { progress, toStreet, generation } = frame.transition;
+    const screenW = this.app.screen.width;
+    const screenH = this.app.screen.height;
+    const maxRadius = Math.hypot(screenW, screenH);
+
+    // Update street name text and decorations on new transition
+    if (generation !== this.lastTransitionGen) {
+      this.lastTransitionGen = generation;
+      if (this.streetNameText) {
+        this.streetNameText.text = GameRenderer.formatStreetName(toStreet);
+      }
+      this.generateStarsAndSwirls();
+    }
+
+    // Compute iris radius: closing (0→0.5) then opening (0.5→1)
+    let radius: number;
+    let centerX: number;
+    let centerY: number;
+
+    if (progress <= 0.5) {
+      // Closing: shrink from maxRadius to 0, centered on player
+      radius = maxRadius * (1 - progress * 2);
+      centerX = (this.avatarGraphics?.x ?? 0) + this.worldContainer.x;
+      centerY = (this.avatarGraphics?.y ?? 0) + this.worldContainer.y;
+    } else {
+      // Opening: grow from 0 to maxRadius, centered on viewport
+      radius = maxRadius * ((progress - 0.5) * 2);
+      centerX = screenW / 2;
+      centerY = screenH / 2;
+    }
+
+    // Draw background with iris hole (fill-only — .cut() operates on fills)
+    if (this.transitionBg) {
+      this.transitionBg.clear();
+      this.transitionBg.rect(0, 0, screenW, screenH);
+      this.transitionBg.fill({ color: 0x0d0d2b });
+
+      if (radius > 0) {
+        this.transitionBg.circle(centerX, centerY, radius);
+        this.transitionBg.cut();
+      }
+    }
+
+    // Update decoration mask (same iris shape — clips stars/swirls to dark region)
+    if (this.irisMask) {
+      this.irisMask.clear();
+      this.irisMask.rect(0, 0, screenW, screenH);
+      this.irisMask.fill({ color: 0xffffff });
+
+      if (radius > 0) {
+        this.irisMask.circle(centerX, centerY, radius);
+        this.irisMask.cut();
+      }
+    }
+
+    // Reposition stars/swirls from normalized coords (resize-safe)
+    for (let i = 0; i < this.starGraphics.length; i++) {
+      this.starGraphics[i].x = this.starPositions[i].nx * screenW;
+      this.starGraphics[i].y = this.starPositions[i].ny * screenH;
+    }
+    for (let i = 0; i < this.swirlGraphics.length; i++) {
+      this.swirlGraphics[i].x = this.swirlPositions[i].nx * screenW;
+      this.swirlGraphics[i].y = this.swirlPositions[i].ny * screenH;
+    }
+
+    // Street name alpha
+    if (this.streetNameText) {
+      this.streetNameText.x = screenW / 2;
+      this.streetNameText.y = screenH / 2;
+
+      let alpha: number;
+      if (progress < 0.48) {
+        alpha = 0;
+      } else if (progress < 0.52) {
+        alpha = (progress - 0.48) / 0.04; // fade in over 0.48→0.52
+      } else if (progress < 0.8) {
+        alpha = 1;
+      } else {
+        alpha = 1 - (progress - 0.8) / 0.2; // fade out over 0.8→1.0
+      }
+
+      this.streetNameText.alpha = alpha;
+      this.streetNameText.visible = alpha > 0;
+    }
+  }
+
+  private generateStarsAndSwirls(): void {
+    // Destroy old graphics (auto-removes from parent)
+    for (const g of this.starGraphics) { g.destroy(); }
+    for (const g of this.swirlGraphics) { g.destroy(); }
+    this.starGraphics = [];
+    this.swirlGraphics = [];
+
+    const starCount = 25 + Math.floor(Math.random() * 11); // 25-35
+    this.starPositions = Array.from({ length: starCount }, () => ({
+      nx: Math.random(),
+      ny: Math.random(),
+    }));
+
+    const swirlCount = 3 + Math.floor(Math.random() * 3); // 3-5
+    this.swirlPositions = Array.from({ length: swirlCount }, () => ({
+      nx: Math.random(),
+      ny: Math.random(),
+    }));
+
+    // Stars: drawn once at local origin, repositioned per frame
+    for (let i = 0; i < starCount; i++) {
+      const g = new Graphics();
+      const size = 2 + Math.random() * 4; // 2-6px
+      const alpha = 0.2 + Math.random() * 0.3; // 0.2-0.5
+      g.moveTo(-size, 0);
+      g.lineTo(size, 0);
+      g.moveTo(0, -size);
+      g.lineTo(0, size);
+      g.stroke({ color: 0xffffff, alpha, width: 1 });
+      this.starGraphics.push(g);
+      this.decorationContainer?.addChild(g);
+    }
+
+    // Swirls: quarter-circle arcs at local origin
+    for (let i = 0; i < swirlCount; i++) {
+      const g = new Graphics();
+      const radius = 30 + Math.random() * 50; // 30-80px
+      const alpha = 0.1 + Math.random() * 0.1; // 0.1-0.2
+      const startAngle = Math.random() * Math.PI * 2;
+      g.arc(0, 0, radius, startAngle, startAngle + Math.PI / 2);
+      g.stroke({ color: 0xffffff, alpha, width: 1.5 });
+      this.swirlGraphics.push(g);
+      this.decorationContainer?.addChild(g);
+    }
+  }
+
   destroy(): void {
     for (const [, sprite] of this.remoteSprites) {
       sprite.destroy();
@@ -491,6 +654,16 @@ export class GameRenderer {
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];
+    for (const g of this.starGraphics) { g.destroy(); }
+    this.starGraphics = [];
+    for (const g of this.swirlGraphics) { g.destroy(); }
+    this.swirlGraphics = [];
+    if (this.decorationContainer) { this.decorationContainer.mask = null; }
+    if (this.irisMask) { this.irisMask.destroy(); this.irisMask = null; }
+    if (this.decorationContainer) { this.decorationContainer.destroy(); this.decorationContainer = null; }
+    if (this.transitionBg) { this.transitionBg.destroy(); this.transitionBg = null; }
+    if (this.streetNameText) { this.streetNameText.destroy(); this.streetNameText = null; }
+    this.transitionContainer.destroy();
     this.app.destroy(true);
   }
 }
