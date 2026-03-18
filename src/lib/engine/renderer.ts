@@ -1,5 +1,6 @@
 import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
 import type { StreetData, RenderFrame, RemotePlayerFrame } from '../types';
+import { SpriteManager } from './sprites';
 
 interface ChatBubble {
   text: Text;
@@ -31,7 +32,7 @@ export class GameRenderer {
   private feedbackTexts: { text: Text; feedbackId: number; startAge: number }[] = [];
   private lastFrameTime = 0;
   private platformGraphics: Graphics | null = null;
-  private avatarGraphics: Graphics | null = null;
+  private avatarContainer: Container | null = null;
   private bgGraphics: Graphics | null = null;
   private street: StreetData | null = null;
   private debugMode = false;
@@ -45,6 +46,7 @@ export class GameRenderer {
   private swirlGraphics: Graphics[] = [];
   private starPositions: { nx: number; ny: number }[] = [];
   private swirlPositions: { nx: number; ny: number }[] = [];
+  private spriteManager: SpriteManager;
 
   constructor() {
     this.app = new Application();
@@ -53,6 +55,7 @@ export class GameRenderer {
     this.uiContainer = new Container();
     this.transitionContainer = new Container();
     this.transitionContainer.visible = false;
+    this.spriteManager = new SpriteManager();
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
@@ -90,6 +93,8 @@ export class GameRenderer {
     this.app.renderer.on('resize', () => {
       if (this.street) this.drawBackground(this.street);
     });
+
+    await this.spriteManager.init();
   }
 
   setDebugMode(enabled: boolean): void {
@@ -123,8 +128,9 @@ export class GameRenderer {
    *   Sky   (glitchY=-800) → screenY=0    (top of screen)
    *   Ground(glitchY=0)    → screenY=800  (bottom of screen)
    */
-  buildScene(street: StreetData): void {
+  async buildScene(street: StreetData): Promise<void> {
     this.street = street;
+    await this.spriteManager.loadStreetAssets(street);
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
@@ -154,21 +160,22 @@ export class GameRenderer {
       const container = new Container();
       container.label = layer.name;
 
-      // Draw decos as placeholder rectangles (until real art assets are available).
-      // Rect drawn at local origin so g.rotation pivots around the deco's anchor.
       for (const deco of layer.decos) {
-        const g = new Graphics();
+        const decoDisplay = this.spriteManager.createDeco(deco);
         const screenY = deco.y - street.top;
-        g.rect(0, -deco.h, deco.w, deco.h);
-        g.fill({ color: 0x4a6741, alpha: 0.3 });
-        g.x = deco.x - street.left;
-        g.y = screenY;
-        if (deco.hFlip) {
-          g.scale.x = -1;
-          g.x += deco.w;
+        if (this.spriteManager.hasTexture(deco.spriteClass)) {
+          // Sprite with center-bottom anchor: offset x by half-width
+          decoDisplay.x = deco.x - street.left + deco.w / 2;
+          decoDisplay.y = screenY;
+        } else {
+          // Fallback Graphics: positioned same as original code
+          decoDisplay.x = deco.x - street.left;
+          decoDisplay.y = screenY;
+          if (deco.hFlip) {
+            decoDisplay.x += deco.w;
+          }
         }
-        g.rotation = deco.r;
-        container.addChild(g);
+        container.addChild(decoDisplay);
       }
 
       if (layer.isMiddleground) {
@@ -184,11 +191,9 @@ export class GameRenderer {
     this.worldContainer.addChild(this.platformGraphics);
     this.drawPlatforms(street);
 
-    // Create avatar placeholder
-    this.avatarGraphics = new Graphics();
-    this.avatarGraphics.rect(-15, -60, 30, 60);
-    this.avatarGraphics.fill(0x5865f2);
-    this.worldContainer.addChild(this.avatarGraphics);
+    // Create avatar (AnimatedSprite or fallback rectangle)
+    this.avatarContainer = this.spriteManager.createAvatar();
+    this.worldContainer.addChild(this.avatarContainer);
 
     // Create interaction prompt text (screen-fixed, in uiContainer)
     this.promptText = new Text({ text: '', style: { fontSize: 14, fill: 0xffffff } });
@@ -235,7 +240,7 @@ export class GameRenderer {
    * Update the scene from a RenderFrame.
    */
   updateFrame(frame: RenderFrame): void {
-    if (!this.street || !this.avatarGraphics) return;
+    if (!this.street || !this.avatarContainer) return;
 
     const mg = this.street.layers.find(l => l.isMiddleground);
     const mgWidth = mg?.w ?? this.street.right - this.street.left;
@@ -243,9 +248,9 @@ export class GameRenderer {
     // Update avatar position — pure translation from Glitch to screen coords
     const avatarScreenX = frame.player.x - this.street.left;
     const avatarScreenY = frame.player.y - this.street.top;
-    this.avatarGraphics.x = avatarScreenX;
-    this.avatarGraphics.y = avatarScreenY;
-    this.avatarGraphics.scale.x = frame.player.facing === 'right' ? 1 : -1;
+    this.avatarContainer.x = avatarScreenX;
+    this.avatarContainer.y = avatarScreenY;
+    this.spriteManager.updateAvatar(this.avatarContainer, frame.player.animation, frame.player.facing);
 
     // Update camera — shift world container so the camera region is visible.
     // camera.y is the Glitch Y of the viewport's top edge.
@@ -324,23 +329,7 @@ export class GameRenderer {
       seenEntities.add(entity.id);
       let sprite = this.entitySprites.get(entity.id);
       if (!sprite) {
-        sprite = new Container();
-        const body = new Graphics();
-        const color = entity.spriteClass.startsWith('tree') ? 0x2d8a4e : 0xc4a35a;
-        const w = entity.spriteClass.startsWith('tree') ? 60 : 30;
-        const h = entity.spriteClass.startsWith('tree') ? 80 : 30;
-        body.rect(-w / 2, -h, w, h);
-        body.fill({ color, alpha: 1.0 });
-        sprite.addChild(body);
-
-        const label = new Text({
-          text: entity.name,
-          style: { fontSize: 10, fill: 0xffffff, align: 'center' },
-        });
-        label.anchor.set(0.5, 1);
-        label.y = -h - 4;
-        sprite.addChild(label);
-
+        sprite = this.spriteManager.createEntity(entity);
         this.worldContainer.addChild(sprite);
         this.entitySprites.set(entity.id, sprite);
       }
@@ -369,20 +358,7 @@ export class GameRenderer {
       seenItems.add(item.id);
       let sprite = this.groundItemSprites.get(item.id);
       if (!sprite) {
-        sprite = new Container();
-        const body = new Graphics();
-        body.circle(0, -8, 8);
-        body.fill({ color: 0xe8c170, alpha: 0.9 });
-        sprite.addChild(body);
-
-        const label = new Text({
-          text: item.count > 1 ? `${item.name} x${item.count}` : item.name,
-          style: { fontSize: 9, fill: 0xffffff, align: 'center' },
-        });
-        label.anchor.set(0.5, 1);
-        label.y = -18;
-        sprite.addChild(label);
-
+        sprite = this.spriteManager.createGroundItem(item);
         this.worldContainer.addChild(sprite);
         this.groundItemSprites.set(item.id, sprite);
       } else {
@@ -489,10 +465,10 @@ export class GameRenderer {
       if (player && this.street) {
         bubble.text.x = player.x - this.street.left;
         bubble.text.y = player.y - this.street.top - 75;
-      } else if (this.avatarGraphics) {
+      } else if (this.avatarContainer) {
         // Local player's bubble — position above local avatar.
-        bubble.text.x = this.avatarGraphics.x;
-        bubble.text.y = this.avatarGraphics.y - 75;
+        bubble.text.x = this.avatarContainer.x;
+        bubble.text.y = this.avatarContainer.y - 75;
       }
       bubble.text.alpha = Math.min(1, GameRenderer.CHAT_DURATION - bubble.age);
       return true;
@@ -528,8 +504,8 @@ export class GameRenderer {
     if (progress <= 0.5) {
       // Closing: shrink from maxRadius to 0, centered on player
       radius = maxRadius * (1 - progress * 2);
-      centerX = (this.avatarGraphics?.x ?? 0) + this.worldContainer.x;
-      centerY = (this.avatarGraphics?.y ?? 0) + this.worldContainer.y;
+      centerX = (this.avatarContainer?.x ?? 0) + this.worldContainer.x;
+      centerY = (this.avatarContainer?.y ?? 0) + this.worldContainer.y;
     } else {
       // Opening: grow from 0 to maxRadius, centered on viewport
       radius = maxRadius * ((progress - 0.5) * 2);
@@ -664,6 +640,7 @@ export class GameRenderer {
     if (this.transitionBg) { this.transitionBg.destroy(); this.transitionBg = null; }
     if (this.streetNameText) { this.streetNameText.destroy(); this.streetNameText = null; }
     this.transitionContainer.destroy();
+    this.spriteManager.destroy();
     this.app.destroy(true);
   }
 }
