@@ -150,4 +150,23 @@ mod tests {
         let entities = parse_entity_placements(json).unwrap();
         assert!(entities.len() >= 2);
     }
+
+    #[test]
+    fn parse_bundled_entities_has_movement_fields() {
+        let json = include_str!("../../../assets/entities.json");
+        let defs = parse_entity_defs(json).unwrap();
+
+        let chicken = &defs["chicken"];
+        assert!((chicken.walk_speed.unwrap() - 40.0).abs() < 0.01);
+        assert!((chicken.wander_radius.unwrap() - 120.0).abs() < 0.01);
+        assert!(chicken.bob_amplitude.is_none());
+
+        let butterfly = &defs["butterfly"];
+        assert!((butterfly.bob_amplitude.unwrap() - 15.0).abs() < 0.01);
+        assert!((butterfly.bob_frequency.unwrap() - 1.5).abs() < 0.01);
+
+        let fruit_tree = &defs["fruit_tree"];
+        assert!(fruit_tree.walk_speed.is_none());
+        assert!(fruit_tree.wander_radius.is_none());
+    }
 }
