@@ -545,24 +545,22 @@ impl GameState {
             .map(|e| {
                 let def = self.entity_defs.get(&e.entity_type);
 
-                let (cooldown_remaining, depleted) =
+                let (cooldown_remaining, depleted, facing) =
                     if let Some(state) = self.entity_states.get(&e.id) {
                         let remaining =
                             (state.cooldown_until.max(state.depleted_until)) - self.game_time;
                         if remaining > 0.0 {
-                            (Some(remaining), state.depleted_until > self.game_time)
+                            (
+                                Some(remaining),
+                                state.depleted_until > self.game_time,
+                                state.facing,
+                            )
                         } else {
-                            (None, false)
+                            (None, false, state.facing)
                         }
                     } else {
-                        (None, false)
+                        (None, false, Direction::Right)
                     };
-
-                let facing = self
-                    .entity_states
-                    .get(&e.id)
-                    .map(|s| s.facing)
-                    .unwrap_or(Direction::Right);
 
                 // Apply vertical bob for entities with bob config
                 let y = if let Some(d) = def {
@@ -1419,7 +1417,14 @@ mod tests {
         let entity_state = state.entity_states.get("f1").unwrap();
         // Entity must be within wander radius
         let dist = (entity_state.current_x - entity_state.wander_origin).abs();
-        assert!(dist <= 21.0, "Entity outside wander radius: dist={}", dist);
+        // Overshoot can be up to one tick of movement (200 * 1/60 ≈ 3.33px)
+        // because boundary check fires on the next tick after the overshoot.
+        let max_overshoot = 200.0 * (1.0 / 60.0);
+        assert!(
+            dist <= 20.0 + max_overshoot + 0.01,
+            "Entity outside wander radius: dist={}",
+            dist
+        );
     }
 
     #[test]
