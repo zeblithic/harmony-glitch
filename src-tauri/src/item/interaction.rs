@@ -342,6 +342,10 @@ mod tests {
                 respawn_secs: 30.0,
                 sprite_class: "tree_fruit".into(),
                 interact_radius: 80.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
             },
         );
         defs
@@ -756,6 +760,10 @@ mod tests {
             respawn_secs: 0.0,
             sprite_class: "test".into(),
             interact_radius: 80.0,
+            walk_speed: None,
+            wander_radius: None,
+            bob_amplitude: None,
+            bob_frequency: None,
         });
         let mut inv = Inventory::new(16);
         let mut rng = StdRng::seed_from_u64(42);
@@ -896,6 +904,10 @@ mod tests {
             respawn_secs: 0.0,
             sprite_class: "test".into(),
             interact_radius: 80.0,
+            walk_speed: None,
+            wander_radius: None,
+            bob_amplitude: None,
+            bob_frequency: None,
         });
         let mut inv = Inventory::new(16);
         let mut rng = StdRng::seed_from_u64(42);

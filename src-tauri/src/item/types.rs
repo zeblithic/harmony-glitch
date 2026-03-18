@@ -36,6 +36,10 @@ pub struct EntityDef {
     pub respawn_secs: f64,
     pub sprite_class: String,
     pub interact_radius: f64,
+    pub walk_speed: Option<f64>,
+    pub wander_radius: Option<f64>,
+    pub bob_amplitude: Option<f64>,
+    pub bob_frequency: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,6 +193,67 @@ mod tests {
         assert_eq!(state.harvests_remaining, 3);
         assert_eq!(state.cooldown_until, 0.0);
         assert_eq!(state.depleted_until, 0.0);
+    }
+
+    #[test]
+    fn entity_def_deserializes_movement_fields() {
+        let json = r#"{
+            "name": "Chicken",
+            "verb": "Squeeze",
+            "yields": [{ "item": "grain", "min": 1, "max": 2 }],
+            "cooldownSecs": 8.0,
+            "maxHarvests": 2,
+            "respawnSecs": 45.0,
+            "spriteClass": "npc_chicken",
+            "interactRadius": 60,
+            "walkSpeed": 40.0,
+            "wanderRadius": 120.0
+        }"#;
+        let def: EntityDef = serde_json::from_str(json).unwrap();
+        assert!((def.walk_speed.unwrap() - 40.0).abs() < 0.01);
+        assert!((def.wander_radius.unwrap() - 120.0).abs() < 0.01);
+        assert!(def.bob_amplitude.is_none());
+        assert!(def.bob_frequency.is_none());
+    }
+
+    #[test]
+    fn entity_def_deserializes_bob_fields() {
+        let json = r#"{
+            "name": "Butterfly",
+            "verb": "Milk",
+            "yields": [{ "item": "milk", "min": 1, "max": 1 }],
+            "cooldownSecs": 0.0,
+            "maxHarvests": 1,
+            "respawnSecs": 20.0,
+            "spriteClass": "npc_butterfly",
+            "interactRadius": 90,
+            "walkSpeed": 25.0,
+            "wanderRadius": 150.0,
+            "bobAmplitude": 15.0,
+            "bobFrequency": 1.5
+        }"#;
+        let def: EntityDef = serde_json::from_str(json).unwrap();
+        assert!((def.bob_amplitude.unwrap() - 15.0).abs() < 0.01);
+        assert!((def.bob_frequency.unwrap() - 1.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn entity_def_omits_movement_fields_for_static() {
+        let json = r#"{
+            "name": "Fruit Tree",
+            "verb": "Harvest",
+            "yields": [{ "item": "cherry", "min": 1, "max": 3 }],
+            "cooldownSecs": 5.0,
+            "maxHarvests": 3,
+            "respawnSecs": 30.0,
+            "spriteClass": "tree_fruit",
+            "interactRadius": 80
+        }"#;
+        let def: EntityDef = serde_json::from_str(json).unwrap();
+        assert!(def.walk_speed.is_none());
+        assert!(def.wander_radius.is_none());
+        assert!(def.bob_amplitude.is_none());
+        assert!(def.bob_frequency.is_none());
     }
 
     #[test]
