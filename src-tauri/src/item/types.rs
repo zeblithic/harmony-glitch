@@ -1,3 +1,4 @@
+use crate::avatar::types::Direction;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -69,6 +70,16 @@ pub struct EntityInstanceState {
     pub cooldown_until: f64,
     /// Game-time timestamp when respawn completes. 0.0 = not depleted.
     pub depleted_until: f64,
+    /// Current X position in world space (may differ from spawn X for wandering entities).
+    pub current_x: f64,
+    /// Current horizontal velocity in pixels per second.
+    pub velocity_x: f64,
+    /// Direction the entity is currently facing.
+    pub facing: Direction,
+    /// X position the entity wanders around (set to spawn X on load).
+    pub wander_origin: f64,
+    /// Game-time timestamp until which the entity idles before moving again.
+    pub idle_until: f64,
 }
 
 impl EntityInstanceState {
@@ -77,6 +88,11 @@ impl EntityInstanceState {
             harvests_remaining: max_harvests,
             cooldown_until: 0.0,
             depleted_until: 0.0,
+            current_x: 0.0,
+            velocity_x: 0.0,
+            facing: Direction::Right,
+            wander_origin: 0.0,
+            idle_until: 0.0,
         }
     }
 }
@@ -254,6 +270,18 @@ mod tests {
         assert!(def.wander_radius.is_none());
         assert!(def.bob_amplitude.is_none());
         assert!(def.bob_frequency.is_none());
+    }
+
+    #[test]
+    fn entity_instance_state_has_movement_fields() {
+        use crate::avatar::types::Direction;
+
+        let state = EntityInstanceState::new(3);
+        assert_eq!(state.current_x, 0.0);
+        assert_eq!(state.velocity_x, 0.0);
+        assert_eq!(state.wander_origin, 0.0);
+        assert_eq!(state.idle_until, 0.0);
+        assert!(matches!(state.facing, Direction::Right));
     }
 
     #[test]

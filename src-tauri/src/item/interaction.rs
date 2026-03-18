@@ -806,6 +806,7 @@ mod tests {
             harvests_remaining: 2,
             cooldown_until: 5.0,
             depleted_until: 0.0,
+            ..EntityInstanceState::new(0)
         });
 
         let prompt = build_prompt(
@@ -835,6 +836,7 @@ mod tests {
             harvests_remaining: 3,
             cooldown_until: 0.0,
             depleted_until: 40.0,
+            ..EntityInstanceState::new(0)
         });
 
         let prompt = build_prompt(
