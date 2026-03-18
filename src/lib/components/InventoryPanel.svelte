@@ -37,11 +37,18 @@
   function hasRoomForOutput(recipe: RecipeDef): boolean {
     if (!inventory) return false;
     const emptySlots = inventory.slots.filter(s => s === null).length;
+    let emptySlotsUsed = 0;
     for (const output of recipe.outputs) {
       const matching = inventory.slots.filter(s => s && s.itemId === output.item);
-      const stackLimit = matching[0]?.stackLimit ?? 1;
+      // Use stackLimit from existing stack, or assume output.count fits one fresh slot
+      const stackLimit = matching[0]?.stackLimit ?? output.count;
       const existingRoom = matching.reduce((sum, s) => sum + (stackLimit - (s?.count ?? 0)), 0);
-      if (existingRoom + emptySlots * stackLimit < output.count) return false;
+      let needed = output.count - existingRoom;
+      if (needed > 0) {
+        const slotsNeeded = Math.ceil(needed / stackLimit);
+        if (emptySlotsUsed + slotsNeeded > emptySlots) return false;
+        emptySlotsUsed += slotsNeeded;
+      }
     }
     return true;
   }
