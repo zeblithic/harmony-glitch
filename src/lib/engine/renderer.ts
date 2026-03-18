@@ -115,6 +115,7 @@ export class GameRenderer {
    */
   buildScene(street: StreetData): void {
     this.street = street;
+    this.lastTransitionGen = -1;
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
@@ -571,9 +572,6 @@ export class GameRenderer {
   }
 
   private generateStarsAndSwirls(): void {
-    const screenW = this.app.screen.width;
-    const screenH = this.app.screen.height;
-
     // Remove old graphics
     for (const g of this.starGraphics) { this.transitionContainer.removeChild(g); g.destroy(); }
     for (const g of this.swirlGraphics) { this.transitionContainer.removeChild(g); g.destroy(); }
@@ -606,10 +604,6 @@ export class GameRenderer {
       g.lineTo(0, size);
       g.stroke({ color: 0xffffff, alpha, width: 1 });
 
-      // Position from normalized coords (updated each frame in updateTransition)
-      g.x = pos.nx * screenW;
-      g.y = pos.ny * screenH;
-
       this.starGraphics.push(g);
       // Insert before streetNameText (last child) so text renders on top
       const insertIdx = this.transitionContainer.children.length - 1;
@@ -625,9 +619,6 @@ export class GameRenderer {
 
       g.arc(0, 0, radius, startAngle, startAngle + Math.PI / 2);
       g.stroke({ color: 0xffffff, alpha, width: 1.5 });
-
-      g.x = pos.nx * screenW;
-      g.y = pos.ny * screenH;
 
       this.swirlGraphics.push(g);
       const insertIdx = this.transitionContainer.children.length - 1;
@@ -651,12 +642,10 @@ export class GameRenderer {
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];
-    for (const g of this.starGraphics) { g.destroy(); }
     this.starGraphics = [];
-    for (const g of this.swirlGraphics) { g.destroy(); }
     this.swirlGraphics = [];
-    if (this.transitionBg) { this.transitionBg.destroy(); this.transitionBg = null; }
-    if (this.streetNameText) { this.streetNameText.destroy(); this.streetNameText = null; }
+    this.transitionBg = null;
+    this.streetNameText = null;
     this.transitionContainer.destroy({ children: true });
     this.app.destroy(true);
   }
