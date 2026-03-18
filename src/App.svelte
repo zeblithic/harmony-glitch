@@ -7,8 +7,8 @@
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady } from './lib/ipc';
-  import type { StreetData, RenderFrame } from './lib/types';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
   import { onMount } from 'svelte';
 
   let currentStreet = $state<StreetData | null>(null);
@@ -21,6 +21,7 @@
   const MAX_TRANSITION_ATTEMPTS = 3;
   let identityReady = $state(false);
   let checkingIdentity = $state(true);
+  let recipes = $state<RecipeDef[]>([]);
 
   onMount(async () => {
     try {
@@ -30,6 +31,13 @@
       identityReady = false;
     } finally {
       checkingIdentity = false;
+    }
+
+    // Load recipes once at startup
+    try {
+      recipes = await getRecipes();
+    } catch (e) {
+      console.error('Failed to load recipes:', e);
     }
   });
 
@@ -99,6 +107,7 @@
     <NetworkStatus />
     <InventoryPanel
       inventory={latestFrame?.inventory ?? null}
+      {recipes}
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
     />
