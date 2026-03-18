@@ -663,7 +663,7 @@ export class GameRenderer {
     if (this.decorationContainer) { this.decorationContainer.destroy(); this.decorationContainer = null; }
     if (this.transitionBg) { this.transitionBg.destroy(); this.transitionBg = null; }
     if (this.streetNameText) { this.streetNameText.destroy(); this.streetNameText = null; }
-    this.transitionContainer.destroy({ children: true });
+    this.transitionContainer.destroy();
     this.app.destroy(true);
   }
 }
