@@ -13,6 +13,7 @@
   "dependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@tauri-apps/api": "^2.10.1",
+    "howler": "^2.2.4",
     "pixi.js": "^8.16.0",
     "svelte": "^5.53.7",
     "typescript": "^5.9.3",
@@ -22,6 +23,7 @@
     "@tauri-apps/cli": "^2.10.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
+    "@types/howler": "^2.2.12",
     "jsdom": "^28.1.0",
     "vitest": "^4.0.18"
   }

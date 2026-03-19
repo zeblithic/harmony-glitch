@@ -140,6 +140,7 @@ export interface RenderFrame {
   worldItems: WorldItemFrame[];
   interactionPrompt: InteractionPrompt | null;
   pickupFeedback: PickupFeedback[];
+  audioEvents: AudioEvent[];
 }
 
 export interface NetworkStatus {
@@ -233,3 +234,14 @@ export interface RecipeItem {
   item: string;
   count: number;
 }
+
+export type AudioEvent =
+  | { type: 'itemPickup'; itemId: string }
+  | { type: 'craftSuccess'; recipeId: string }
+  | { type: 'actionFailed' }
+  | { type: 'jump' }
+  | { type: 'land' }
+  | { type: 'transitionStart' }
+  | { type: 'transitionComplete' }
+  | { type: 'entityInteract'; entityType: string }
+  | { type: 'streetChanged'; streetId: string };
