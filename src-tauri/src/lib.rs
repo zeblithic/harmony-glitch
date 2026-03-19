@@ -467,26 +467,44 @@ pub fn run() {
             let recipe_defs =
                 item::loader::parse_recipe_defs(include_str!("../../assets/recipes.json"))
                     .expect("Failed to parse recipes.json");
-            // Validate all recipe item references exist in item_defs
+            // Validate all recipe item references and reject duplicate entries
             for (recipe_id, recipe) in &recipe_defs {
+                let mut seen_inputs = std::collections::HashSet::new();
                 for input in &recipe.inputs {
                     assert!(
                         item_defs.contains_key(&input.item),
                         "Recipe '{recipe_id}' references unknown input item '{}'",
                         input.item
                     );
+                    assert!(
+                        seen_inputs.insert(&input.item),
+                        "Recipe '{recipe_id}' has duplicate input item '{}'",
+                        input.item
+                    );
                 }
+                let mut seen_tools = std::collections::HashSet::new();
                 for tool in &recipe.tools {
                     assert!(
                         item_defs.contains_key(&tool.item),
                         "Recipe '{recipe_id}' references unknown tool item '{}'",
                         tool.item
                     );
+                    assert!(
+                        seen_tools.insert(&tool.item),
+                        "Recipe '{recipe_id}' has duplicate tool item '{}'",
+                        tool.item
+                    );
                 }
+                let mut seen_outputs = std::collections::HashSet::new();
                 for output in &recipe.outputs {
                     assert!(
                         item_defs.contains_key(&output.item),
                         "Recipe '{recipe_id}' references unknown output item '{}'",
+                        output.item
+                    );
+                    assert!(
+                        seen_outputs.insert(&output.item),
+                        "Recipe '{recipe_id}' has duplicate output item '{}'",
                         output.item
                     );
                 }

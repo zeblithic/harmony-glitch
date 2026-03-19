@@ -143,13 +143,35 @@ pub enum CraftError {
     UnknownRecipe,
 }
 
+/// Convert an item ID like "cherry_pie" to "Cherry Pie" for display.
+fn title_case(s: &str) -> String {
+    s.split('_')
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                None => String::new(),
+                Some(f) => f.to_uppercase().to_string() + c.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 impl std::fmt::Display for CraftError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CraftError::MissingInput { item, need, have } => {
-                write!(f, "Need {} {} but only have {}", need, item, have)
+                write!(
+                    f,
+                    "Need {} {} but only have {}",
+                    need,
+                    title_case(item),
+                    have
+                )
             }
-            CraftError::MissingTool { item } => write!(f, "Missing tool: {}", item),
+            CraftError::MissingTool { item } => {
+                write!(f, "Missing tool: {}", title_case(item))
+            }
             CraftError::NoRoom => write!(f, "Inventory full"),
             CraftError::UnknownRecipe => write!(f, "Unknown recipe"),
         }
