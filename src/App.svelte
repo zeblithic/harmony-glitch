@@ -44,7 +44,8 @@
   });
 
   async function handleStreetLoaded(street: StreetData) {
-    currentStreet = street;
+    // Initialize audio before setting currentStreet to avoid race where
+    // the game canvas mounts and ticks before audioManager is ready
     if (!audioManager) {
       try {
         const kit = await loadSoundKit('/assets/audio/');
@@ -53,6 +54,7 @@
         console.error('Failed to initialize audio:', e);
       }
     }
+    currentStreet = street;
   }
 
   function handleFrame(frame: RenderFrame) {

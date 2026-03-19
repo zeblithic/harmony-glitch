@@ -37,7 +37,6 @@ pub struct GameState {
     pub tsid_to_name: std::collections::HashMap<String, String>,
     pub entity_states: std::collections::HashMap<String, EntityInstanceState>,
     pub game_time: f64,
-    pub audio_events: Vec<AudioEvent>,
     pub pending_audio_events: Vec<AudioEvent>,
     pub prev_on_ground: bool,
 }
@@ -134,7 +133,6 @@ impl GameState {
             ]),
             entity_states: std::collections::HashMap::new(),
             game_time: 0.0,
-            audio_events: vec![],
             pending_audio_events: vec![],
             prev_on_ground: true,
         }
@@ -232,6 +230,11 @@ impl GameState {
             }
         }
 
+        // Capture swooping state BEFORE signpost check — trigger_swoop() changes
+        // the phase to Swooping, so capturing after would miss the TransitionStart edge.
+        let was_swooping_before_signposts =
+            matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+
         // --- Street transition system ---
         {
             let street = self.street.as_ref().unwrap();
@@ -265,7 +268,8 @@ impl GameState {
             }
         }
 
-        let was_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+        let was_swooping_before_tick =
+            matches!(self.transition.phase, TransitionPhase::Swooping { .. });
         self.transition.tick(dt);
 
         // Handle transition completion — two-tick lifecycle:
@@ -305,7 +309,7 @@ impl GameState {
         // only fires when Complete was never visited (timeout cancellation).
         // Prevents a late-arriving loadStreet from seeing is_transitioning=false
         // and mis-positioning the player.
-        if was_swooping
+        if was_swooping_before_tick
             && self.transition.phase == TransitionPhase::None
             && self.transition_origin_tsid.is_some()
         {
@@ -315,11 +319,12 @@ impl GameState {
         // Re-check swooping state after transition system may have changed it.
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
-        // Transition audio events
-        if !was_swooping && is_swooping {
+        // Transition audio events — use pre-signpost capture for start detection
+        // (trigger_swoop changes phase before was_swooping_before_tick is captured)
+        if !was_swooping_before_signposts && is_swooping {
             audio_events.push(AudioEvent::TransitionStart);
         }
-        if was_swooping && !is_swooping {
+        if was_swooping_before_tick && !is_swooping {
             audio_events.push(AudioEvent::TransitionComplete);
         }
 

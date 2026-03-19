@@ -22,7 +22,6 @@ export class AudioManager {
   private sfxVolume: number;
   private ambientVolume: number;
   private audioBasePath: string;
-  private contextResumed = false;
   private fadingOut = false;
 
   constructor(kit: SoundKit, audioBasePath: string) {
@@ -64,11 +63,9 @@ export class AudioManager {
   }
 
   processEvents(events: AudioEvent[]): void {
-    if (!this.contextResumed) {
-      this.contextResumed = true;
-      if (Howler.ctx?.state === 'suspended') {
-        Howler.ctx.resume();
-      }
+    // Resume audio context if suspended (browser autoplay policy, tab switch, etc.)
+    if (Howler.ctx?.state === 'suspended') {
+      Howler.ctx.resume();
     }
 
     for (const event of events) {
