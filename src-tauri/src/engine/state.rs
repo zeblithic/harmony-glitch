@@ -159,6 +159,9 @@ impl GameState {
             self.player = PhysicsBody::new(center_x, street.ground_y);
         }
         self.street = Some(street);
+        self.pending_audio_events.push(AudioEvent::StreetChanged {
+            street_id: self.street.as_ref().unwrap().tsid.clone(),
+        });
         self.world_entities = entities;
         self.world_items = ground_items;
         // Set next_item_id past any numeric IDs in loaded ground items to avoid collisions.
@@ -198,6 +201,9 @@ impl GameState {
             });
             self.next_feedback_id += 1;
         }
+        self.pending_audio_events.push(AudioEvent::CraftSuccess {
+            recipe_id: recipe.id.clone(),
+        });
         Ok(result)
     }
 
@@ -309,6 +315,14 @@ impl GameState {
         // Re-check swooping state after transition system may have changed it.
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
+        // Transition audio events
+        if !was_swooping && is_swooping {
+            audio_events.push(AudioEvent::TransitionStart);
+        }
+        if was_swooping && !is_swooping {
+            audio_events.push(AudioEvent::TransitionComplete);
+        }
+
         // Tick entity movement — runs even during swoops so NPCs keep wandering.
         // Must run BEFORE the interaction block so that lazy-init of movement
         // state happens before execute_interaction can create a partial state.
@@ -372,6 +386,14 @@ impl GameState {
             let mut interacted = false;
             if interact_pressed {
                 if let Some(nearest) = &nearest {
+                    // Capture entity type before the call for audio lookup
+                    let nearest_entity_type = match nearest {
+                        interaction::NearestInteractable::Entity { index, .. } => {
+                            Some(self.world_entities[*index].entity_type.clone())
+                        }
+                        _ => None,
+                    };
+
                     let result = interaction::execute_interaction(
                         nearest,
                         &mut self.inventory,
@@ -409,6 +431,34 @@ impl GameState {
                             y,
                         });
                         self.next_item_id += 1;
+                    }
+
+                    // Emit audio events from interaction
+                    match &result.interaction_type {
+                        Some(interaction::InteractionType::Entity { entity_type }) => {
+                            audio_events.push(AudioEvent::EntityInteract {
+                                entity_type: entity_type.clone(),
+                            });
+                            // Emit ItemPickup for the first yield item
+                            if let Some(et) = &nearest_entity_type {
+                                if let Some(def) = self.entity_defs.get(et) {
+                                    if let Some(first_yield) = def.yields.first() {
+                                        audio_events.push(AudioEvent::ItemPickup {
+                                            item_id: first_yield.item.clone(),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        Some(interaction::InteractionType::GroundItem { item_id }) => {
+                            audio_events.push(AudioEvent::ItemPickup {
+                                item_id: item_id.clone(),
+                            });
+                        }
+                        Some(interaction::InteractionType::Rejected) => {
+                            audio_events.push(AudioEvent::ActionFailed);
+                        }
+                        None => {}
                     }
 
                     // Only blank prompt when the ground item target was removed.
@@ -1896,6 +1946,9 @@ mod tests {
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
+        // First tick drains the StreetChanged event from load_street
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        // Second tick should have no audio events
         let frame = state
             .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
             .unwrap();
@@ -1914,12 +1967,15 @@ mod tests {
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
 
-        // First tick: on ground, no events
+        // First tick: on ground, no Jump event (StreetChanged is drained but no Jump)
         let input = InputState::default();
         let frame = state
             .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
             .unwrap();
-        assert!(frame.audio_events.is_empty());
+        assert!(!frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Jump)));
 
         // Simulate jump: player leaves ground with upward velocity
         state.player.on_ground = false;
@@ -1985,5 +2041,66 @@ mod tests {
             .audio_events
             .iter()
             .any(|e| matches!(e, AudioEvent::Land)));
+    }
+
+    #[test]
+    fn audio_event_craft_success_drains_next_tick() {
+        let item_defs =
+            crate::item::loader::parse_item_defs(include_str!("../../../assets/items.json"))
+                .unwrap();
+        let entity_defs =
+            crate::item::loader::parse_entity_defs(include_str!("../../../assets/entities.json"))
+                .unwrap();
+        let recipe_defs =
+            crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
+                .unwrap();
+
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        state.load_street(test_street(), vec![], vec![]);
+        // Clear the StreetChanged event from load_street
+        state.pending_audio_events.clear();
+
+        state.inventory.add("wood", 3, &state.item_defs);
+        state.craft_recipe("plank").unwrap();
+
+        assert!(state
+            .pending_audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+
+        let input = InputState::default();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+
+        // Next tick should NOT have CraftSuccess
+        let frame2 = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(!frame2
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+    }
+
+    #[test]
+    fn audio_event_street_changed_on_load() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        assert!(state
+            .pending_audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::StreetChanged { .. })));
     }
 }
