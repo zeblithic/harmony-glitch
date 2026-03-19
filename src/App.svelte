@@ -10,7 +10,9 @@
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
   import { onMount } from 'svelte';
+  import { AudioManager, loadSoundKit } from './lib/engine/audio';
 
+  let audioManager = $state<AudioManager | null>(null);
   let currentStreet = $state<StreetData | null>(null);
   let latestFrame = $state<RenderFrame | null>(null);
   let debugMode = $state(false);
@@ -41,8 +43,16 @@
     }
   });
 
-  function handleStreetLoaded(street: StreetData) {
+  async function handleStreetLoaded(street: StreetData) {
     currentStreet = street;
+    if (!audioManager) {
+      try {
+        const kit = await loadSoundKit('/assets/audio/');
+        audioManager = new AudioManager(kit, '/assets/audio/');
+      } catch (e) {
+        console.error('Failed to initialize audio:', e);
+      }
+    }
   }
 
   function handleFrame(frame: RenderFrame) {
@@ -79,6 +89,11 @@
     if (!frame.transition) {
       transitionPending = false;
       transitionAttempts = 0;
+    }
+
+    // Process audio events
+    if (frame.audioEvents?.length && audioManager) {
+      audioManager.processEvents(frame.audioEvents);
     }
   }
 
@@ -117,6 +132,8 @@
       } catch (e) {
         console.error('stopGame failed:', e);
       } finally {
+        audioManager?.dispose();
+        audioManager = null;
         currentStreet = null;
         latestFrame = null;
       }
