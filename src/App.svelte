@@ -41,19 +41,18 @@
     } catch (e) {
       console.error('Failed to load recipes:', e);
     }
+
+    // Initialize audio eagerly so handleStreetLoaded stays synchronous
+    // (avoids race where StreetPicker re-enables before currentStreet is set)
+    try {
+      const kit = await loadSoundKit('/assets/audio/');
+      audioManager = new AudioManager(kit, '/assets/audio/');
+    } catch (e) {
+      console.error('Failed to initialize audio:', e);
+    }
   });
 
-  async function handleStreetLoaded(street: StreetData) {
-    // Initialize audio before setting currentStreet to avoid race where
-    // the game canvas mounts and ticks before audioManager is ready
-    if (!audioManager) {
-      try {
-        const kit = await loadSoundKit('/assets/audio/');
-        audioManager = new AudioManager(kit, '/assets/audio/');
-      } catch (e) {
-        console.error('Failed to initialize audio:', e);
-      }
-    }
+  function handleStreetLoaded(street: StreetData) {
     currentStreet = street;
   }
 
