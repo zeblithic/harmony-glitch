@@ -87,13 +87,34 @@ pub enum AudioEvent {
 - `ActionFailed` has no payload — visual feedback already distinguishes the
   reason; audio just signals "nope."
 
-### RenderFrame Addition
+### GameState Fields
 
+```rust
+/// Events emitted during the current tick. Drained into RenderFrame.
+audio_events: Vec<AudioEvent>,
+
+/// Events from IPC commands (craft_recipe, load_street) that execute outside
+/// tick(). Drained into audio_events at the start of each tick.
+pending_audio_events: Vec<AudioEvent>,
+```
+
+RenderFrame gets:
 ```rust
 pub audio_events: Vec<AudioEvent>,
 ```
 
-Built fresh each tick (not accumulated across ticks).
+### Drain Mechanism
+
+At the start of `tick()`, before any event emission:
+```rust
+let mut audio_events = std::mem::take(&mut self.pending_audio_events);
+```
+
+Events emitted during `tick()` are pushed to this local `audio_events` vec.
+At the end of `tick()`, it's moved into the RenderFrame. This ensures:
+- IPC-originated events (CraftSuccess, StreetChanged) arrive in the next frame
+- Tick-originated events (Jump, Land, etc.) arrive in the same frame
+- Nothing accumulates across ticks
 
 ### Emission Points
 
@@ -101,18 +122,13 @@ Built fresh each tick (not accumulated across ticks).
 |-------|--------------|-------------------|
 | `Jump` | `tick()` physics block | `on_ground` was true, now false, vy < 0 |
 | `Land` | `tick()` physics block | `on_ground` was false, now true |
-| `ItemPickup` | `tick()` interaction result | Successful ground item pickup or entity harvest |
+| `ItemPickup` | `tick()` interaction result | Successful ground item pickup or entity harvest (one event per interaction, not per yield entry) |
 | `EntityInteract` | `tick()` interaction result | Player interacts with entity |
-| `ActionFailed` | `tick()` interaction result | Inventory full, cooldown, depletion |
-| `CraftSuccess` | `craft_recipe()` method | Successful craft |
-| `TransitionStart` | `tick()` transition block | Swoop phase begins |
-| `TransitionComplete` | `tick()` transition block | Swoop phase ends |
-| `StreetChanged` | `load_street()` method | New street loaded |
-
-Note: `CraftSuccess` is emitted from the `craft_recipe` IPC command handler,
-not from `tick()`. The event needs to be stored on GameState and drained into
-the next tick's RenderFrame, since `craft_recipe` executes outside the tick
-loop.
+| `ActionFailed` | `tick()` interaction result | Total rejection only: cooldown active, entity depleted, or ground item pickup with zero items added. NOT emitted for partial overflow (harvest succeeds, excess spawns on ground). |
+| `CraftSuccess` | `craft_recipe()` → `pending_audio_events` | Successful craft (drained next tick) |
+| `TransitionStart` | `tick()` transition block | `was_swooping` false → `is_swooping` true |
+| `TransitionComplete` | `tick()` transition block | `was_swooping` true → `is_swooping` false |
+| `StreetChanged` | `load_street()` → `pending_audio_events` | New street loaded (drained next tick) |
 
 ## Sound Kit Manifest
 
@@ -178,7 +194,7 @@ File: `assets/audio/default-kit.json`
 
 ### Default Kit Audio Sources
 
-Curate ~15 files from `tinyspeck/glitch-sounds/` (CC0). Exact file selection
+Curate ~12 files from `tinyspeck/glitch-sounds/` (CC0). Exact file selection
 is best-effort from naming — swap later if sounds don't fit. Organize as:
 
 ```
@@ -226,13 +242,25 @@ class AudioManager {
 
 - **Construction** — parses manifest, pre-loads all referenced audio files via
   Howler. Howler handles lazy decoding and browser audio context setup.
+  If a referenced audio file fails to load, log a warning and map it to
+  silence (skip playback for that event). This is non-fatal — a partial kit
+  is better than a crash, especially for user-provided custom kits.
+- **Browser autoplay policy** — Tauri v2 uses a webview that enforces browser
+  autoplay restrictions. Audio cannot play until after a user gesture. The
+  first `processEvents()` call should check if the Howler audio context is
+  suspended and call `Howler.ctx.resume()` if needed. In practice, the user
+  clicks a street in StreetPicker before any audio plays, so the gesture
+  requirement is naturally satisfied — but the explicit resume handles edge
+  cases.
 - **`processEvents()`** — called once per frame from `handleFrame()` in
   App.svelte. Iterates events, resolves each to a sound file (check variant
   first, fall back to default), plays via Howler.
 - **Ambient management** — on `TransitionStart`, begin fade-out of current
-  ambient (~1s). On `StreetChanged`, load new ambient. On
-  `TransitionComplete`, fade in new ambient (~1s). For direct street loads
-  (no transition), start ambient immediately.
+  ambient (~1s). On `StreetChanged`, load new ambient (resolved from
+  `kit.ambient.variants[street_id]`, falling back to `kit.ambient.default`).
+  On `TransitionComplete`, fade in new ambient (~1s). For direct street loads
+  (no transition, `StreetChanged` without preceding `TransitionStart`), start
+  ambient immediately at full volume.
 - **Volume** — SFX and ambient have independent volume multipliers. Default:
   `sfxVolume: 1.0`, `ambientVolume: 0.5`. Exposed via `setVolume()` for
   future settings UI.
@@ -256,16 +284,19 @@ audioManager.dispose();
 
 ### TypeScript Types
 
+Discriminated union matching the Rust tagged enum's serialization:
+
 ```typescript
-interface AudioEvent {
-  type: 'itemPickup' | 'craftSuccess' | 'actionFailed' | 'jump' | 'land'
-    | 'transitionStart' | 'transitionComplete' | 'entityInteract'
-    | 'streetChanged';
-  itemId?: string;
-  recipeId?: string;
-  entityType?: string;
-  streetId?: string;
-}
+type AudioEvent =
+  | { type: 'itemPickup'; itemId: string }
+  | { type: 'craftSuccess'; recipeId: string }
+  | { type: 'actionFailed' }
+  | { type: 'jump' }
+  | { type: 'land' }
+  | { type: 'transitionStart' }
+  | { type: 'transitionComplete' }
+  | { type: 'entityInteract'; entityType: string }
+  | { type: 'streetChanged'; streetId: string };
 
 interface SoundKit {
   name: string;
@@ -296,25 +327,26 @@ interface SoundEntry {
 - Land event: `on_ground` false → true produces `Land`
 - No duplicate: staying on ground doesn't re-emit `Land`
 - Interaction events: successful harvest produces `ItemPickup` + `EntityInteract`
-- Failed interaction: inventory full produces `ActionFailed`
-- Craft success: `craft_recipe("bread")` produces `CraftSuccess`
+- Failed interaction: cooldown active produces `ActionFailed`
+- Partial overflow: harvest with inventory overflow does NOT produce
+  `ActionFailed` (items spawned on ground = success with spillover)
+- Craft success: `craft_recipe("bread")` produces `CraftSuccess` (drained
+  from `pending_audio_events` next tick)
 - `audio_events` is empty on ticks with no events
-- `audio_events` does not accumulate across ticks
-
-### Rust unit tests (loader / lib.rs)
-
-- Parse bundled `default-kit.json` validates as correct JSON
-- All audio file paths referenced in manifest exist on disk (compile-time
-  `include_bytes!` or runtime check)
+- Pending events drain: events pushed to `pending_audio_events` appear in
+  next tick's RenderFrame then are gone
 
 ### Frontend tests (vitest, mocked Howler)
 
-- Event→sound mapping: `itemPickup` with `item_id: "cherry"` resolves to
+- Event→sound mapping: `itemPickup` with `itemId: "cherry"` resolves to
   variant if present, falls back to default
 - Ambient crossfade: `TransitionStart` triggers fade-out, `StreetChanged` +
   `TransitionComplete` triggers fade-in of new ambient
 - Volume: `setVolume('sfx', 0.5)` adjusts SFX but not ambient
 - Dispose: stops all active sounds
+- Missing sound file: logs warning, does not throw
+- Kit manifest loading: parse bundled `default-kit.json`, verify all event
+  types have default entries
 
 ### Integration
 
