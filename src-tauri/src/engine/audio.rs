@@ -6,18 +6,26 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AudioEvent {
     #[serde(rename_all = "camelCase")]
-    ItemPickup { item_id: String },
+    ItemPickup {
+        item_id: String,
+    },
     #[serde(rename_all = "camelCase")]
-    CraftSuccess { recipe_id: String },
+    CraftSuccess {
+        recipe_id: String,
+    },
     ActionFailed,
     Jump,
     Land,
     TransitionStart,
     TransitionComplete,
     #[serde(rename_all = "camelCase")]
-    EntityInteract { entity_type: String },
+    EntityInteract {
+        entity_type: String,
+    },
     #[serde(rename_all = "camelCase")]
-    StreetChanged { street_id: String },
+    StreetChanged {
+        street_id: String,
+    },
 }
 
 #[cfg(test)]
@@ -26,7 +34,9 @@ mod tests {
 
     #[test]
     fn serialize_item_pickup() {
-        let event = AudioEvent::ItemPickup { item_id: "cherry".into() };
+        let event = AudioEvent::ItemPickup {
+            item_id: "cherry".into(),
+        };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"itemPickup""#));
         assert!(json.contains(r#""itemId":"cherry""#));
@@ -48,7 +58,9 @@ mod tests {
 
     #[test]
     fn serialize_street_changed() {
-        let event = AudioEvent::StreetChanged { street_id: "LADEMO001".into() };
+        let event = AudioEvent::StreetChanged {
+            street_id: "LADEMO001".into(),
+        };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"streetChanged""#));
         assert!(json.contains(r#""streetId":"LADEMO001""#));
@@ -56,7 +68,9 @@ mod tests {
 
     #[test]
     fn serialize_entity_interact() {
-        let event = AudioEvent::EntityInteract { entity_type: "fruit_tree".into() };
+        let event = AudioEvent::EntityInteract {
+            entity_type: "fruit_tree".into(),
+        };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"entityInteract""#));
         assert!(json.contains(r#""entityType":"fruit_tree""#));
@@ -64,7 +78,9 @@ mod tests {
 
     #[test]
     fn serialize_craft_success() {
-        let event = AudioEvent::CraftSuccess { recipe_id: "cherry_pie".into() };
+        let event = AudioEvent::CraftSuccess {
+            recipe_id: "cherry_pie".into(),
+        };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"craftSuccess""#));
         assert!(json.contains(r#""recipeId":"cherry_pie""#));
@@ -73,15 +89,23 @@ mod tests {
     #[test]
     fn roundtrip_all_variants() {
         let events = vec![
-            AudioEvent::ItemPickup { item_id: "cherry".into() },
-            AudioEvent::CraftSuccess { recipe_id: "bread".into() },
+            AudioEvent::ItemPickup {
+                item_id: "cherry".into(),
+            },
+            AudioEvent::CraftSuccess {
+                recipe_id: "bread".into(),
+            },
             AudioEvent::ActionFailed,
             AudioEvent::Jump,
             AudioEvent::Land,
             AudioEvent::TransitionStart,
             AudioEvent::TransitionComplete,
-            AudioEvent::EntityInteract { entity_type: "chicken".into() },
-            AudioEvent::StreetChanged { street_id: "demo_meadow".into() },
+            AudioEvent::EntityInteract {
+                entity_type: "chicken".into(),
+            },
+            AudioEvent::StreetChanged {
+                street_id: "demo_meadow".into(),
+            },
         ];
         for event in events {
             let json = serde_json::to_string(&event).unwrap();

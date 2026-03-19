@@ -2,6 +2,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::avatar::types::{AnimationState, Direction};
+use crate::engine::audio::AudioEvent;
 use crate::engine::transition::{
     TransitionDirection, TransitionPhase, TransitionState, PRE_SUBSCRIBE_DISTANCE,
 };
@@ -11,7 +12,6 @@ use crate::item::types::{
     EntityDefs, EntityInstanceState, InteractionPrompt, InventoryFrame, ItemDefs, ItemStackFrame,
     PickupFeedback, RecipeDefs, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
 };
-use crate::engine::audio::AudioEvent;
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
 
