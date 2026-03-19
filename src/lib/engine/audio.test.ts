@@ -8,7 +8,7 @@ vi.mock('howler', () => {
       play: vi.fn(),
       stop: vi.fn(),
       fade: vi.fn(),
-      volume: vi.fn(),
+      volume: vi.fn().mockReturnValue(1.0),
       loop: vi.fn(),
       unload: vi.fn(),
     };
@@ -174,6 +174,42 @@ describe('AudioManager', () => {
     expect(meadowHowl).toBeDefined();
     // stop() should have been called on the previous ambient
     expect(meadowHowl!.stop).toHaveBeenCalled();
+  });
+
+  it('does not stop ambient when switching to street with same audio file', () => {
+    const manager = new AudioManager(makeKit(), '/audio/');
+    // Start with an unknown street (falls back to default ambient)
+    manager.processEvents([{ type: 'streetChanged', streetId: 'UNKNOWN_A' }]);
+    const defaultHowl = findHowlBySrc('ambient/default');
+    expect(defaultHowl).toBeDefined();
+    expect(defaultHowl!.play).toHaveBeenCalledTimes(1);
+
+    // Switch to another unknown street (also falls back to default ambient — same Howl)
+    manager.processEvents([{ type: 'streetChanged', streetId: 'UNKNOWN_B' }]);
+
+    // Same Howl instance — stop() should NOT have been called, play() not called again
+    expect(defaultHowl!.stop).not.toHaveBeenCalled();
+    expect(defaultHowl!.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels fade-out when transitioning to street with same ambient', () => {
+    const manager = new AudioManager(makeKit(), '/audio/');
+    // Start ambient
+    manager.processEvents([{ type: 'streetChanged', streetId: 'UNKNOWN_A' }]);
+
+    // Start transition (fade out)
+    manager.processEvents([{ type: 'transitionStart' }]);
+
+    const defaultHowl = findHowlBySrc('ambient/default');
+    expect(defaultHowl!.fade).toHaveBeenCalledTimes(1); // fade out
+
+    // Switch to another street with same ambient during transition
+    manager.processEvents([{ type: 'streetChanged', streetId: 'UNKNOWN_B' }]);
+
+    // Should NOT have called stop() — same Howl instance
+    expect(defaultHowl!.stop).not.toHaveBeenCalled();
+    // Should have called fade again (recovery fade back to ambient volume)
+    expect(defaultHowl!.fade).toHaveBeenCalledTimes(2);
   });
 
   it('resumes audio context on first processEvents call', () => {

@@ -299,6 +299,9 @@ impl GameState {
                     self.player.vx = 0.0;
                     self.player.vy = 0.0;
                 }
+                // Player placed on ground — sync prev_on_ground to prevent
+                // spurious Land audio event on the first post-swoop tick.
+                self.prev_on_ground = true;
             } else {
                 self.transition.reset();
             }
@@ -2090,6 +2093,78 @@ mod tests {
             .audio_events
             .iter()
             .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+    }
+
+    #[test]
+    fn no_spurious_land_after_transition() {
+        use crate::street::types::{Signpost, SignpostConnection};
+
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        let mut street = test_street();
+        street.tsid = "LADEMO001".into();
+        street.signposts = vec![Signpost {
+            id: "sign_right".into(),
+            x: 1900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO002".into(),
+                target_label: "To the Heights".into(),
+            }],
+        }];
+        state.load_street(street, vec![], vec![]);
+
+        // Player is airborne near the signpost when swoop triggers
+        state.player.x = 1950.0;
+        state.player.on_ground = false;
+        state.player.vy = -100.0;
+        state.prev_on_ground = false;
+
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        assert!(matches!(
+            state.transition.phase,
+            TransitionPhase::Swooping { .. }
+        ));
+
+        state
+            .transition
+            .mark_street_ready(state.transition.generation);
+
+        let mut new_street = test_street();
+        new_street.tsid = "LADEMO002".into();
+        new_street.signposts = vec![Signpost {
+            id: "sign_left".into(),
+            x: -1900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO001".into(),
+                target_label: "Back to Meadow".into(),
+            }],
+        }];
+        state.load_street(new_street, vec![], vec![]);
+
+        // Tick through swoop to completion and reset
+        let mut frames = vec![];
+        for _ in 0..60 {
+            if let Some(frame) = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()) {
+                frames.push(frame);
+            }
+        }
+
+        // No frame should contain a spurious Land event
+        let has_land = frames
+            .iter()
+            .any(|f| f.audio_events.iter().any(|e| matches!(e, AudioEvent::Land)));
+        assert!(
+            !has_land,
+            "Expected no spurious Land event after transition"
+        );
     }
 
     #[test]

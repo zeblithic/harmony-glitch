@@ -123,6 +123,15 @@ export class AudioManager {
     const howl = this.sounds.get(path);
     if (!howl) return;
 
+    // Same ambient file — no stop/restart needed (avoids audible gap)
+    if (this.currentAmbient === howl) {
+      if (this.fadingOut) {
+        this.fadingOut = false;
+        howl.fade(howl.volume(), this.ambientVolume, 500);
+      }
+      return;
+    }
+
     if (this.fadingOut) {
       if (this.currentAmbient) {
         this.currentAmbient.stop();
@@ -146,7 +155,7 @@ export class AudioManager {
   private fadeOutAmbient(): void {
     this.fadingOut = true;
     if (this.currentAmbient) {
-      this.currentAmbient.fade(this.ambientVolume, 0, 1000);
+      this.currentAmbient.fade(this.currentAmbient.volume(), 0, 1000);
     }
   }
 
