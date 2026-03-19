@@ -1,3 +1,4 @@
+pub mod crafting;
 pub mod interaction;
 pub mod inventory;
 pub mod loader;

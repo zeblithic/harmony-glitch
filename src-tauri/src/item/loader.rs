@@ -1,4 +1,6 @@
-use crate::item::types::{EntityDefs, ItemDefs, WorldEntity};
+use serde::Deserialize;
+
+use crate::item::types::{EntityDefs, ItemDefs, RecipeDefs, WorldEntity, WorldItem};
 
 /// Parse item definitions from JSON string.
 /// The JSON is a map of id → ItemDef. We set each ItemDef.id from its map key.
@@ -29,9 +31,50 @@ pub fn parse_entity_defs(json: &str) -> Result<EntityDefs, String> {
     Ok(raw)
 }
 
-/// Parse entity placements from JSON string.
-pub fn parse_entity_placements(json: &str) -> Result<Vec<WorldEntity>, String> {
-    serde_json::from_str(json).map_err(|e| format!("Failed to parse entity placements: {e}"))
+/// Placement data parsed from a street's entity/item JSON file.
+pub struct PlacementData {
+    pub entities: Vec<WorldEntity>,
+    pub ground_items: Vec<WorldItem>,
+}
+
+/// Parse entity and ground item placements from JSON string.
+/// Supports both array format (legacy, entities only) and object format
+/// (with optional groundItems field).
+pub fn parse_entity_placements(json: &str) -> Result<PlacementData, String> {
+    let is_object = json.trim_start().starts_with('{');
+
+    if is_object {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PlacementJson {
+            entities: Vec<WorldEntity>,
+            #[serde(default)]
+            ground_items: Vec<WorldItem>,
+        }
+        let data: PlacementJson = serde_json::from_str(json)
+            .map_err(|e| format!("Failed to parse entity placements (object format): {e}"))?;
+        Ok(PlacementData {
+            entities: data.entities,
+            ground_items: data.ground_items,
+        })
+    } else {
+        let entities: Vec<WorldEntity> = serde_json::from_str(json)
+            .map_err(|e| format!("Failed to parse entity placements (array format): {e}"))?;
+        Ok(PlacementData {
+            entities,
+            ground_items: vec![],
+        })
+    }
+}
+
+/// Parse recipe definitions from JSON string.
+pub fn parse_recipe_defs(json: &str) -> Result<RecipeDefs, String> {
+    let mut raw: RecipeDefs =
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse recipes.json: {e}"))?;
+    for (key, def) in raw.iter_mut() {
+        def.id = key.clone();
+    }
+    Ok(raw)
 }
 
 #[cfg(test)]
@@ -86,10 +129,10 @@ mod tests {
             { "id": "tree_1", "type": "fruit_tree", "x": -800, "y": -2 },
             { "id": "chicken_1", "type": "chicken", "x": 200, "y": -2 }
         ]"#;
-        let entities = parse_entity_placements(json).unwrap();
-        assert_eq!(entities.len(), 2);
-        assert_eq!(entities[0].entity_type, "fruit_tree");
-        assert_eq!(entities[1].entity_type, "chicken");
+        let data = parse_entity_placements(json).unwrap();
+        assert_eq!(data.entities.len(), 2);
+        assert_eq!(data.entities[0].entity_type, "fruit_tree");
+        assert_eq!(data.entities[1].entity_type, "chicken");
     }
 
     #[test]
@@ -115,13 +158,16 @@ mod tests {
     fn parse_bundled_items_json() {
         let json = include_str!("../../../assets/items.json");
         let defs = parse_item_defs(json).unwrap();
-        assert_eq!(defs.len(), 6);
+        assert_eq!(defs.len(), 13);
         assert!(defs.contains_key("cherry"));
         assert!(defs.contains_key("grain"));
         assert!(defs.contains_key("meat"));
         assert!(defs.contains_key("milk"));
         assert!(defs.contains_key("bubble"));
         assert!(defs.contains_key("wood"));
+        assert!(defs.contains_key("cherry_pie"));
+        assert!(defs.contains_key("pot"));
+        assert!(defs.contains_key("plank"));
     }
 
     #[test]
@@ -140,15 +186,63 @@ mod tests {
     #[test]
     fn parse_bundled_meadow_entities() {
         let json = include_str!("../../../assets/streets/demo_meadow_entities.json");
-        let entities = parse_entity_placements(json).unwrap();
-        assert!(entities.len() >= 3);
+        let data = parse_entity_placements(json).unwrap();
+        assert!(data.entities.len() >= 3);
     }
 
     #[test]
     fn parse_bundled_heights_entities() {
         let json = include_str!("../../../assets/streets/demo_heights_entities.json");
-        let entities = parse_entity_placements(json).unwrap();
-        assert!(entities.len() >= 2);
+        let data = parse_entity_placements(json).unwrap();
+        assert!(data.entities.len() >= 2);
+    }
+
+    #[test]
+    fn parse_bundled_meadow_has_ground_items() {
+        let json = include_str!("../../../assets/streets/demo_meadow_entities.json");
+        let data = parse_entity_placements(json).unwrap();
+        assert!(data.entities.len() >= 3);
+        assert_eq!(data.ground_items.len(), 1);
+        assert_eq!(data.ground_items[0].item_id, "pot");
+    }
+
+    #[test]
+    fn parse_recipe_defs_from_json() {
+        let json = r#"{
+            "bread": {
+                "name": "Bread",
+                "description": "Simple bread.",
+                "inputs": [{ "item": "grain", "count": 4 }],
+                "tools": [{ "item": "pot", "count": 1 }],
+                "outputs": [{ "item": "bread", "count": 1 }],
+                "durationSecs": 8.0,
+                "category": "food"
+            }
+        }"#;
+        let defs = parse_recipe_defs(json).unwrap();
+        assert_eq!(defs.len(), 1);
+        let bread = &defs["bread"];
+        assert_eq!(bread.id, "bread");
+        assert_eq!(bread.name, "Bread");
+        assert_eq!(bread.inputs.len(), 1);
+        assert_eq!(bread.inputs[0].item, "grain");
+        assert_eq!(bread.tools.len(), 1);
+        assert_eq!(bread.tools[0].item, "pot");
+    }
+
+    #[test]
+    fn parse_bundled_recipes_json() {
+        let json = include_str!("../../../assets/recipes.json");
+        let defs = parse_recipe_defs(json).unwrap();
+        assert_eq!(defs.len(), 6);
+        assert!(defs.contains_key("cherry_pie"));
+        assert!(defs.contains_key("bread"));
+        assert!(defs.contains_key("plank"));
+        // Verify tools field parsed correctly
+        assert_eq!(defs["cherry_pie"].tools.len(), 1);
+        assert_eq!(defs["cherry_pie"].tools[0].item, "pot");
+        // Verify no-tool recipe
+        assert!(defs["plank"].tools.is_empty());
     }
 
     #[test]

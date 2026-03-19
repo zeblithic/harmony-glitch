@@ -63,13 +63,17 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
     let xml = load_street_xml(&name)?;
     let street_data = parse_street(&xml)?;
     let entity_json = load_entity_placement(&name)?;
-    let entities = item::loader::parse_entity_placements(&entity_json)?;
+    let placement = item::loader::parse_entity_placements(&entity_json)?;
 
     // Update game state
     {
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-        state.load_street(street_data.clone(), entities);
+        state.load_street(
+            street_data.clone(),
+            placement.entities,
+            placement.ground_items,
+        );
     }
 
     // Update network state for the new street.
@@ -262,6 +266,23 @@ fn drop_item(slot: usize, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_recipes(app: AppHandle) -> Result<Vec<item::types::RecipeDef>, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    let mut recipes: Vec<_> = state.recipe_defs.values().cloned().collect();
+    recipes.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(recipes)
+}
+
+#[tauri::command]
+fn craft_recipe(recipe_id: String, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.craft_recipe(&recipe_id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn street_transition_ready(generation: u64, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
@@ -443,11 +464,57 @@ pub fn run() {
             let entity_defs =
                 item::loader::parse_entity_defs(include_str!("../../assets/entities.json"))
                     .expect("Failed to parse entities.json");
+            let recipe_defs =
+                item::loader::parse_recipe_defs(include_str!("../../assets/recipes.json"))
+                    .expect("Failed to parse recipes.json");
+            // Validate all recipe item references and reject duplicate entries
+            for (recipe_id, recipe) in &recipe_defs {
+                let mut seen_inputs = std::collections::HashSet::new();
+                for input in &recipe.inputs {
+                    assert!(
+                        item_defs.contains_key(&input.item),
+                        "Recipe '{recipe_id}' references unknown input item '{}'",
+                        input.item
+                    );
+                    assert!(
+                        seen_inputs.insert(&input.item),
+                        "Recipe '{recipe_id}' has duplicate input item '{}'",
+                        input.item
+                    );
+                }
+                let mut seen_tools = std::collections::HashSet::new();
+                for tool in &recipe.tools {
+                    assert!(
+                        item_defs.contains_key(&tool.item),
+                        "Recipe '{recipe_id}' references unknown tool item '{}'",
+                        tool.item
+                    );
+                    assert!(
+                        seen_tools.insert(&tool.item),
+                        "Recipe '{recipe_id}' has duplicate tool item '{}'",
+                        tool.item
+                    );
+                }
+                let mut seen_outputs = std::collections::HashSet::new();
+                for output in &recipe.outputs {
+                    assert!(
+                        item_defs.contains_key(&output.item),
+                        "Recipe '{recipe_id}' references unknown output item '{}'",
+                        output.item
+                    );
+                    assert!(
+                        seen_outputs.insert(&output.item),
+                        "Recipe '{recipe_id}' has duplicate output item '{}'",
+                        output.item
+                    );
+                }
+            }
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,
                 item_defs,
                 entity_defs,
+                recipe_defs,
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
@@ -496,6 +563,8 @@ pub fn run() {
             set_display_name,
             send_chat,
             drop_item,
+            get_recipes,
+            craft_recipe,
             street_transition_ready,
             get_network_status,
         ])

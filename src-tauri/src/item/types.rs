@@ -111,6 +111,97 @@ pub struct WorldItem {
 pub type ItemDefs = HashMap<String, ItemDef>;
 pub type EntityDefs = HashMap<String, EntityDef>;
 
+/// Recipe definition (loaded from JSON at startup).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeDef {
+    #[serde(skip_deserializing)]
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub inputs: Vec<RecipeItem>,
+    pub tools: Vec<RecipeItem>,
+    pub outputs: Vec<RecipeItem>,
+    pub duration_secs: f64,
+    pub category: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecipeItem {
+    pub item: String,
+    pub count: u32,
+}
+
+pub type RecipeDefs = HashMap<String, RecipeDef>;
+
+/// Error from a crafting attempt.
+#[derive(Debug, Clone)]
+pub enum CraftError {
+    MissingInput { item: String, need: u32, have: u32 },
+    MissingTool { item: String },
+    NoRoom,
+    UnknownRecipe,
+}
+
+/// Convert an item ID like "cherry_pie" to "Cherry Pie" for display.
+fn title_case(s: &str) -> String {
+    s.split('_')
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                None => String::new(),
+                Some(f) => f.to_uppercase().to_string() + c.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+impl std::fmt::Display for CraftError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CraftError::MissingInput { item, need, have } => {
+                write!(
+                    f,
+                    "Need {} {} but only have {}",
+                    need,
+                    title_case(item),
+                    have
+                )
+            }
+            CraftError::MissingTool { item } => {
+                write!(f, "Missing tool: {}", title_case(item))
+            }
+            CraftError::NoRoom => write!(f, "Inventory full"),
+            CraftError::UnknownRecipe => write!(f, "Unknown recipe"),
+        }
+    }
+}
+
+/// Result of a successful craft — one entry per output item.
+#[derive(Debug, Clone)]
+pub struct CraftOutput {
+    pub item_id: String,
+    pub name: String,
+    pub count: u32,
+}
+
+/// Per-ingredient availability status (for frontend display).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IngredientStatus {
+    pub item: String,
+    pub need: u32,
+    pub have: u32,
+}
+
+/// Whether a recipe can be crafted given current inventory.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecipeAvailability {
+    pub craftable: bool,
+    pub inputs: Vec<IngredientStatus>,
+    pub tools: Vec<IngredientStatus>,
+}
+
 /// Data sent to frontend for rendering an entity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -302,6 +393,52 @@ mod tests {
         };
         let json = serde_json::to_string(&frame).unwrap();
         assert!(json.contains(r#""facing":"left""#));
+    }
+
+    #[test]
+    fn recipe_def_deserializes_from_json() {
+        let json = r#"{
+            "name": "Cherry Pie",
+            "description": "A delicious pie.",
+            "inputs": [{ "item": "cherry", "count": 5 }],
+            "tools": [{ "item": "pot", "count": 1 }],
+            "outputs": [{ "item": "cherry_pie", "count": 1 }],
+            "durationSecs": 10.0,
+            "category": "food"
+        }"#;
+        let def: RecipeDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.name, "Cherry Pie");
+        assert_eq!(def.inputs.len(), 1);
+        assert_eq!(def.inputs[0].item, "cherry");
+        assert_eq!(def.inputs[0].count, 5);
+        assert_eq!(def.tools.len(), 1);
+        assert_eq!(def.tools[0].item, "pot");
+        assert_eq!(def.outputs.len(), 1);
+        assert_eq!(def.outputs[0].item, "cherry_pie");
+        assert_eq!(def.id, ""); // id is skip_deserializing
+    }
+
+    #[test]
+    fn recipe_def_serializes_id() {
+        let def = RecipeDef {
+            id: "cherry_pie".into(),
+            name: "Cherry Pie".into(),
+            description: "A delicious pie.".into(),
+            inputs: vec![RecipeItem {
+                item: "cherry".into(),
+                count: 5,
+            }],
+            tools: vec![],
+            outputs: vec![RecipeItem {
+                item: "cherry_pie".into(),
+                count: 1,
+            }],
+            duration_secs: 10.0,
+            category: "food".into(),
+        };
+        let json = serde_json::to_string(&def).unwrap();
+        assert!(json.contains(r#""id":"cherry_pie""#));
+        assert!(json.contains("durationSecs"));
     }
 
     #[test]

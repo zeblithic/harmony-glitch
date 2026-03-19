@@ -1,0 +1,56 @@
+{
+  "cherry_pie": {
+    "name": "Cherry Pie",
+    "description": "A delicious pie.",
+    "inputs": [{ "item": "cherry", "count": 5 }, { "item": "grain", "count": 2 }],
+    "tools": [{ "item": "pot", "count": 1 }],
+    "outputs": [{ "item": "cherry_pie", "count": 1 }],
+    "durationSecs": 10.0,
+    "category": "food"
+  },
+  "bread": {
+    "name": "Bread",
+    "description": "Simple baked bread.",
+    "inputs": [{ "item": "grain", "count": 4 }],
+    "tools": [{ "item": "pot", "count": 1 }],
+    "outputs": [{ "item": "bread", "count": 1 }],
+    "durationSecs": 8.0,
+    "category": "food"
+  },
+  "steak": {
+    "name": "Steak",
+    "description": "Grilled meat on a wood fire.",
+    "inputs": [{ "item": "meat", "count": 2 }, { "item": "wood", "count": 1 }],
+    "tools": [{ "item": "pot", "count": 1 }],
+    "outputs": [{ "item": "steak", "count": 1 }],
+    "durationSecs": 12.0,
+    "category": "food"
+  },
+  "butter": {
+    "name": "Butter",
+    "description": "Churned from fresh milk.",
+    "inputs": [{ "item": "milk", "count": 3 }],
+    "tools": [{ "item": "pot", "count": 1 }],
+    "outputs": [{ "item": "butter", "count": 1 }],
+    "durationSecs": 6.0,
+    "category": "food"
+  },
+  "bubble_wand": {
+    "name": "Bubble Wand",
+    "description": "A wand for blowing bubbles.",
+    "inputs": [{ "item": "bubble", "count": 3 }, { "item": "wood", "count": 2 }],
+    "tools": [],
+    "outputs": [{ "item": "bubble_wand", "count": 1 }],
+    "durationSecs": 5.0,
+    "category": "tool"
+  },
+  "plank": {
+    "name": "Plank",
+    "description": "Processed lumber.",
+    "inputs": [{ "item": "wood", "count": 3 }],
+    "tools": [],
+    "outputs": [{ "item": "plank", "count": 2 }],
+    "durationSecs": 4.0,
+    "category": "material"
+  }
+}

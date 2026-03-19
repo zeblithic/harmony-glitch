@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef } from './types';
 
 export async function listStreets(): Promise<string[]> {
   return invoke<string[]>('list_streets');
@@ -60,4 +60,12 @@ export async function dropItem(slot: number): Promise<void> {
 
 export async function streetTransitionReady(generation: number): Promise<void> {
   return invoke('street_transition_ready', { generation });
+}
+
+export async function getRecipes(): Promise<RecipeDef[]> {
+  return invoke<RecipeDef[]>('get_recipes');
+}
+
+export async function craftRecipe(recipeId: string): Promise<void> {
+  return invoke('craft_recipe', { recipeId });
 }

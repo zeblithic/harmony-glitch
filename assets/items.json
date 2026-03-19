@@ -40,5 +40,54 @@
     "category": "material",
     "stackLimit": 50,
     "icon": "wood"
+  },
+  "cherry_pie": {
+    "name": "Cherry Pie",
+    "description": "A delicious pie baked with fresh cherries.",
+    "category": "food",
+    "stackLimit": 10,
+    "icon": "cherry_pie"
+  },
+  "bread": {
+    "name": "Bread",
+    "description": "Simple baked bread. Hearty and filling.",
+    "category": "food",
+    "stackLimit": 20,
+    "icon": "bread"
+  },
+  "steak": {
+    "name": "Steak",
+    "description": "Grilled meat on a wood fire. Savory.",
+    "category": "food",
+    "stackLimit": 10,
+    "icon": "steak"
+  },
+  "butter": {
+    "name": "Butter",
+    "description": "Churned from fresh butterfly milk.",
+    "category": "food",
+    "stackLimit": 20,
+    "icon": "butter"
+  },
+  "bubble_wand": {
+    "name": "Bubble Wand",
+    "description": "A wand for blowing iridescent bubbles.",
+    "category": "tool",
+    "stackLimit": 1,
+    "icon": "bubble_wand"
+  },
+  "plank": {
+    "name": "Plank",
+    "description": "Processed lumber. Useful for building.",
+    "category": "material",
+    "stackLimit": 50,
+    "icon": "plank"
+  },
+  "pot": {
+    "name": "Pot",
+    "description": "A sturdy cooking pot. Required for most recipes.",
+    "category": "tool",
+    "stackLimit": 1,
+    "icon": "pot"
   }
 }

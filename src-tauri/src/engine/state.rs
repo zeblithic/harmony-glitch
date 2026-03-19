@@ -9,7 +9,7 @@ use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
     EntityDefs, EntityInstanceState, InteractionPrompt, InventoryFrame, ItemDefs, ItemStackFrame,
-    PickupFeedback, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
+    PickupFeedback, RecipeDefs, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
 };
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
@@ -26,6 +26,7 @@ pub struct GameState {
     pub world_items: Vec<WorldItem>,
     pub item_defs: ItemDefs,
     pub entity_defs: EntityDefs,
+    pub recipe_defs: RecipeDefs,
     pub prev_interact: bool,
     pub next_item_id: u64,
     pub next_feedback_id: u64,
@@ -102,6 +103,7 @@ impl GameState {
         viewport_height: f64,
         item_defs: ItemDefs,
         entity_defs: EntityDefs,
+        recipe_defs: RecipeDefs,
     ) -> Self {
         Self {
             player: PhysicsBody::new(0.0, -100.0),
@@ -114,6 +116,7 @@ impl GameState {
             world_items: vec![],
             item_defs,
             entity_defs,
+            recipe_defs,
             prev_interact: false,
             next_item_id: 0,
             next_feedback_id: 0,
@@ -129,7 +132,12 @@ impl GameState {
         }
     }
 
-    pub fn load_street(&mut self, street: StreetData, entities: Vec<WorldEntity>) {
+    pub fn load_street(
+        &mut self,
+        street: StreetData,
+        entities: Vec<WorldEntity>,
+        ground_items: Vec<WorldItem>,
+    ) {
         // During an in-flight transition, skip player repositioning — the
         // Complete handler will place the player at the return signpost.
         // Only Swooping and Complete are actual in-flight phases; PreSubscribed
@@ -144,9 +152,45 @@ impl GameState {
         }
         self.street = Some(street);
         self.world_entities = entities;
-        self.world_items.clear();
+        self.world_items = ground_items;
+        // Set next_item_id past any numeric IDs in loaded ground items to avoid collisions.
+        // Loaded items use string IDs (e.g. "pot_1"), dynamic items use numeric IDs from
+        // next_item_id (e.g. "drop_0"). Parse numeric IDs to find the max.
+        let max_loaded_numeric_id = self
+            .world_items
+            .iter()
+            .filter_map(|item| item.id.parse::<u64>().ok())
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(0);
+        self.next_item_id = max_loaded_numeric_id.max(self.next_item_id);
         self.pickup_feedback.clear();
         self.entity_states.clear(); // game_time intentionally NOT reset — it's session-global
+    }
+
+    /// Execute a crafting recipe. On success, generates pickup feedback.
+    pub fn craft_recipe(
+        &mut self,
+        recipe_id: &str,
+    ) -> Result<Vec<crate::item::types::CraftOutput>, crate::item::types::CraftError> {
+        let recipe = self
+            .recipe_defs
+            .get(recipe_id)
+            .ok_or(crate::item::types::CraftError::UnknownRecipe)?
+            .clone();
+        let result = crate::item::crafting::craft(&recipe, &mut self.inventory, &self.item_defs)?;
+        for output in &result {
+            self.pickup_feedback.push(PickupFeedback {
+                id: self.next_feedback_id,
+                text: format!("+{} x{}", output.name, output.count),
+                success: true,
+                x: self.player.x,
+                y: self.player.y,
+                age_secs: 0.0,
+            });
+            self.next_feedback_id += 1;
+        }
+        Ok(result)
     }
 
     /// Run one tick of the game loop.
@@ -614,6 +658,7 @@ mod tests {
     use crate::engine::transition::TransitionPhase;
     use crate::item::types::{EntityDefs, ItemDefs};
     use crate::street::types::*;
+    use std::collections::HashMap;
 
     fn test_street() -> StreetData {
         StreetData {
@@ -649,8 +694,14 @@ mod tests {
 
     #[test]
     fn tick_produces_render_frame() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.load_street(test_street(), vec![]);
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
         let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
         assert!(frame.is_some());
@@ -658,7 +709,13 @@ mod tests {
 
     #[test]
     fn tick_returns_none_without_street() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let input = InputState::default();
         assert!(state
             .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
@@ -667,8 +724,14 @@ mod tests {
 
     #[test]
     fn facing_updates_from_input() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.load_street(test_street(), vec![]);
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
 
         let input = InputState {
             left: true,
@@ -687,8 +750,14 @@ mod tests {
 
     #[test]
     fn animation_idle_on_ground() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.load_street(test_street(), vec![]);
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
         state.player.y = 0.0;
         state.player.vy = 0.0;
@@ -702,8 +771,14 @@ mod tests {
 
     #[test]
     fn animation_walking() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.load_street(test_street(), vec![]);
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
         state.player.y = 0.0;
 
@@ -720,7 +795,13 @@ mod tests {
     #[test]
     fn camera_does_not_panic_on_small_street() {
         // Street smaller than viewport (600px wide, 400px tall vs 1280x720 viewport)
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let small_street = StreetData {
             tsid: "small".into(),
             name: "Tiny".into(),
@@ -750,7 +831,7 @@ mod tests {
             }],
             signposts: vec![],
         };
-        state.load_street(small_street, vec![]);
+        state.load_street(small_street, vec![], vec![]);
 
         // Should not panic — camera clamp handles min > max gracefully
         let input = InputState::default();
@@ -760,8 +841,14 @@ mod tests {
 
     #[test]
     fn load_street_places_player() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.load_street(test_street(), vec![]);
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
         // Player should be at center of street
         assert!((state.player.x - 0.0).abs() < 1.0);
     }
@@ -807,7 +894,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
         let street = test_street();
         let entities = vec![WorldEntity {
             id: "t1".into(),
@@ -815,7 +902,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(street, entities);
+        state.load_street(street, entities, vec![]);
 
         // Stand next to tree and press interact
         let input = InputState {
@@ -831,8 +918,14 @@ mod tests {
 
     #[test]
     fn render_frame_has_no_transition_by_default() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.load_street(test_street(), vec![]);
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
         let frame = state
             .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
@@ -842,7 +935,13 @@ mod tests {
 
     #[test]
     fn game_state_has_transition_state() {
-        let state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         assert_eq!(state.transition.phase, TransitionPhase::None);
     }
 
@@ -850,7 +949,13 @@ mod tests {
     fn tick_detects_signpost_pre_subscribe() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -861,7 +966,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1500.0;
         state.player.on_ground = true;
 
@@ -878,7 +983,13 @@ mod tests {
     fn tick_triggers_swoop_on_crossing_signpost() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -889,7 +1000,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
 
@@ -908,7 +1019,13 @@ mod tests {
     fn tick_freezes_input_during_swoop() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -919,7 +1036,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
         let input = InputState::default();
@@ -948,7 +1065,13 @@ mod tests {
     fn render_frame_contains_transition_during_swoop() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.signposts = vec![Signpost {
             id: "sign_right".into(),
@@ -959,7 +1082,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
         let input = InputState::default();
@@ -975,8 +1098,14 @@ mod tests {
 
     #[test]
     fn game_time_accumulates() {
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
-        state.load_street(test_street(), vec![]);
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
 
         state.tick(0.5, &input, &mut rand::thread_rng());
@@ -990,13 +1119,19 @@ mod tests {
     fn entity_states_cleared_on_load_street() {
         use crate::item::types::EntityInstanceState;
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         state
             .entity_states
             .insert("tree_1".into(), EntityInstanceState::new(3));
         assert_eq!(state.entity_states.len(), 1);
 
-        state.load_street(test_street(), vec![]);
+        state.load_street(test_street(), vec![], vec![]);
         assert!(state.entity_states.is_empty());
     }
 
@@ -1004,7 +1139,13 @@ mod tests {
     fn transition_complete_repositions_player() {
         use crate::street::types::{Signpost, SignpostConnection};
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), EntityDefs::new());
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
         let mut street = test_street();
         street.tsid = "LADEMO001".into();
         street.signposts = vec![Signpost {
@@ -1016,7 +1157,7 @@ mod tests {
                 target_label: "To the Heights".into(),
             }],
         }];
-        state.load_street(street, vec![]);
+        state.load_street(street, vec![], vec![]);
         state.player.x = 1950.0;
         state.player.on_ground = true;
         let input = InputState::default();
@@ -1041,7 +1182,7 @@ mod tests {
                 target_label: "Back to Meadow".into(),
             }],
         }];
-        state.load_street(new_street, vec![]);
+        state.load_street(new_street, vec![], vec![]);
 
         for _ in 0..30 {
             state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
@@ -1101,14 +1242,14 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
         state.player.x = 0.0;
         state.player.on_ground = true;
 
@@ -1178,14 +1319,14 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
         state.player.x = 0.0;
         state.player.on_ground = true;
 
@@ -1253,14 +1394,14 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1284,14 +1425,14 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
             x: -800.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1313,14 +1454,14 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1345,14 +1486,14 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1396,14 +1537,14 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "f1".into(),
             entity_type: "fast_npc".into(),
             x: 0.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1432,14 +1573,14 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
             x: 200.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1468,14 +1609,15 @@ mod tests {
         // Run with two different seeds and collect initial facing
         let mut facings = Vec::new();
         for seed in [1u64, 2, 3, 4, 5, 6, 7, 8] {
-            let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone());
+            let mut state =
+                GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone(), HashMap::new());
             let entities = vec![WorldEntity {
                 id: "c1".into(),
                 entity_type: "chicken".into(),
                 x: 200.0,
                 y: -2.0,
             }];
-            state.load_street(test_street(), entities);
+            state.load_street(test_street(), entities, vec![]);
             let input = InputState::default();
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             state.tick(1.0 / 60.0, &input, &mut rng);
@@ -1498,14 +1640,14 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
             x: -800.0,
             y: -2.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1556,14 +1698,14 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
             x: 0.0,
             y: 0.0,
         }];
-        state.load_street(test_street(), entities);
+        state.load_street(test_street(), entities, vec![]);
         state.player.x = 0.0;
         state.player.on_ground = true;
 
@@ -1589,27 +1731,33 @@ mod tests {
         use rand::SeedableRng;
 
         let mut defs = EntityDefs::new();
-        defs.insert("butterfly".into(), crate::item::types::EntityDef {
-            id: "butterfly".into(),
-            name: "Butterfly".into(),
-            verb: "Milk".into(),
-            yields: vec![],
-            cooldown_secs: 0.0,
-            max_harvests: 0,
-            respawn_secs: 0.0,
-            sprite_class: "npc_butterfly".into(),
-            interact_radius: 90.0,
-            walk_speed: Some(25.0),
-            wander_radius: Some(150.0),
-            bob_amplitude: Some(15.0),
-            bob_frequency: Some(1.5),
-        });
+        defs.insert(
+            "butterfly".into(),
+            crate::item::types::EntityDef {
+                id: "butterfly".into(),
+                name: "Butterfly".into(),
+                verb: "Milk".into(),
+                yields: vec![],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "npc_butterfly".into(),
+                interact_radius: 90.0,
+                walk_speed: Some(25.0),
+                wander_radius: Some(150.0),
+                bob_amplitude: Some(15.0),
+                bob_frequency: Some(1.5),
+            },
+        );
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
-        let entities = vec![
-            WorldEntity { id: "b1".into(), entity_type: "butterfly".into(), x: 600.0, y: -80.0 },
-        ];
-        state.load_street(test_street(), entities);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let entities = vec![WorldEntity {
+            id: "b1".into(),
+            entity_type: "butterfly".into(),
+            x: 600.0,
+            y: -80.0,
+        }];
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1626,8 +1774,11 @@ mod tests {
         let max_y = y_values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let y_range = max_y - min_y;
 
-        assert!(y_range > 1.0,
-            "Butterfly y should oscillate due to bob, but range was only {}", y_range);
+        assert!(
+            y_range > 1.0,
+            "Butterfly y should oscillate due to bob, but range was only {}",
+            y_range
+        );
     }
 
     #[test]
@@ -1635,11 +1786,14 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs(); // chicken + fruit_tree, no bob fields
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs);
-        let entities = vec![
-            WorldEntity { id: "c1".into(), entity_type: "chicken".into(), x: 200.0, y: -2.0 },
-        ];
-        state.load_street(test_street(), entities);
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let entities = vec![WorldEntity {
+            id: "c1".into(),
+            entity_type: "chicken".into(),
+            x: 200.0,
+            y: -2.0,
+        }];
+        state.load_street(test_street(), entities, vec![]);
 
         let input = InputState::default();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -1654,8 +1808,60 @@ mod tests {
 
         let first_y = y_values[0];
         for (i, &y) in y_values.iter().enumerate() {
-            assert!((y - first_y).abs() < 0.01,
-                "Chicken y should not bob, but frame {} had y={} vs first y={}", i, y, first_y);
+            assert!(
+                (y - first_y).abs() < 0.01,
+                "Chicken y should not bob, but frame {} had y={} vs first y={}",
+                i,
+                y,
+                first_y
+            );
         }
+    }
+
+    #[test]
+    fn craft_recipe_success_creates_feedback() {
+        let item_defs =
+            crate::item::loader::parse_item_defs(include_str!("../../../assets/items.json"))
+                .unwrap();
+        let entity_defs =
+            crate::item::loader::parse_entity_defs(include_str!("../../../assets/entities.json"))
+                .unwrap();
+        let recipe_defs =
+            crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
+                .unwrap();
+
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        state.inventory.add("cherry", 10, &state.item_defs);
+        state.inventory.add("grain", 5, &state.item_defs);
+        state.inventory.add("pot", 1, &state.item_defs);
+
+        let result = state.craft_recipe("cherry_pie");
+        assert!(result.is_ok());
+
+        assert_eq!(state.pickup_feedback.len(), 1);
+        assert!(state.pickup_feedback[0].text.contains("Cherry Pie"));
+        assert!(state.pickup_feedback[0].success);
+
+        assert_eq!(state.inventory.count_item("cherry_pie"), 1);
+        assert_eq!(state.inventory.count_item("cherry"), 5);
+        assert_eq!(state.inventory.count_item("pot"), 1);
+    }
+
+    #[test]
+    fn craft_recipe_unknown_returns_error() {
+        let item_defs =
+            crate::item::loader::parse_item_defs(include_str!("../../../assets/items.json"))
+                .unwrap();
+        let entity_defs =
+            crate::item::loader::parse_entity_defs(include_str!("../../../assets/entities.json"))
+                .unwrap();
+        let recipe_defs =
+            crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
+                .unwrap();
+
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+
+        let result = state.craft_recipe("nonexistent");
+        assert!(result.is_err());
     }
 }
