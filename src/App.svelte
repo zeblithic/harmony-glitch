@@ -56,7 +56,11 @@
   function handleStreetLoaded(street: StreetData) {
     // Recreate AudioManager if it was disposed (Back button)
     if (!audioManager && cachedKit) {
-      audioManager = new AudioManager(cachedKit, '/assets/audio/');
+      try {
+        audioManager = new AudioManager(cachedKit, '/assets/audio/');
+      } catch (e) {
+        console.error('Failed to recreate audio:', e);
+      }
     }
     currentStreet = street;
   }
