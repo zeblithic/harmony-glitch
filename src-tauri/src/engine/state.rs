@@ -39,6 +39,7 @@ pub struct GameState {
     pub game_time: f64,
     pub audio_events: Vec<AudioEvent>,
     pub pending_audio_events: Vec<AudioEvent>,
+    pub prev_on_ground: bool,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -135,6 +136,7 @@ impl GameState {
             game_time: 0.0,
             audio_events: vec![],
             pending_audio_events: vec![],
+            prev_on_ground: true,
         }
     }
 
@@ -210,7 +212,7 @@ impl GameState {
         }
         self.game_time += dt;
         // Drain pending audio events from IPC commands (craft_recipe, load_street)
-        let audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
+        let mut audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
 
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
@@ -323,6 +325,15 @@ impl GameState {
                 street.left,
                 street.right,
             );
+
+            // Jump/Land audio detection
+            if self.prev_on_ground && !self.player.on_ground && self.player.vy < 0.0 {
+                audio_events.push(AudioEvent::Jump);
+            }
+            if !self.prev_on_ground && self.player.on_ground {
+                audio_events.push(AudioEvent::Land);
+            }
+            self.prev_on_ground = self.player.on_ground;
 
             // --- Interaction system ---
             // Age and cull pickup feedback
@@ -1889,5 +1900,90 @@ mod tests {
             .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
             .unwrap();
         assert!(frame.audio_events.is_empty());
+    }
+
+    #[test]
+    fn audio_event_jump() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.player.on_ground = true;
+
+        // First tick: on ground, no events
+        let input = InputState::default();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame.audio_events.is_empty());
+
+        // Simulate jump: player leaves ground with upward velocity
+        state.player.on_ground = false;
+        state.player.vy = -200.0;
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Jump)));
+    }
+
+    #[test]
+    fn audio_event_land() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        // Position player high above ground so physics keeps them airborne
+        state.player.y = -500.0;
+        state.player.on_ground = false;
+        let input = InputState::default();
+        // Tick while airborne — establishes prev_on_ground = false
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        // Now simulate landing: snap player to ground
+        state.player.y = 0.0;
+        state.player.on_ground = true;
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Land)));
+    }
+
+    #[test]
+    fn audio_event_no_duplicate_land() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.player.on_ground = true;
+
+        let input = InputState::default();
+        // Two ticks on ground — no Land event
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(!frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Land)));
     }
 }
