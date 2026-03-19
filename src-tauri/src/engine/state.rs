@@ -11,6 +11,7 @@ use crate::item::types::{
     EntityDefs, EntityInstanceState, InteractionPrompt, InventoryFrame, ItemDefs, ItemStackFrame,
     PickupFeedback, RecipeDefs, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
 };
+use crate::engine::audio::AudioEvent;
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
 
@@ -36,6 +37,8 @@ pub struct GameState {
     pub tsid_to_name: std::collections::HashMap<String, String>,
     pub entity_states: std::collections::HashMap<String, EntityInstanceState>,
     pub game_time: f64,
+    pub audio_events: Vec<AudioEvent>,
+    pub pending_audio_events: Vec<AudioEvent>,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -64,6 +67,7 @@ pub struct RenderFrame {
     pub interaction_prompt: Option<InteractionPrompt>,
     pub pickup_feedback: Vec<PickupFeedback>,
     pub transition: Option<TransitionFrame>,
+    pub audio_events: Vec<AudioEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,6 +133,8 @@ impl GameState {
             ]),
             entity_states: std::collections::HashMap::new(),
             game_time: 0.0,
+            audio_events: vec![],
+            pending_audio_events: vec![],
         }
     }
 
@@ -203,6 +209,8 @@ impl GameState {
             return None;
         }
         self.game_time += dt;
+        // Drain pending audio events from IPC commands (craft_recipe, load_street)
+        let audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
 
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
@@ -487,6 +495,7 @@ impl GameState {
                 }),
                 _ => None,
             },
+            audio_events,
         })
     }
 
@@ -1863,5 +1872,22 @@ mod tests {
 
         let result = state.craft_recipe("nonexistent");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn audio_events_empty_by_default() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        let input = InputState::default();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame.audio_events.is_empty());
     }
 }
