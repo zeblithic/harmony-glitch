@@ -10,7 +10,10 @@
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
   import { onMount } from 'svelte';
+  import { AudioManager, loadSoundKit, type SoundKit } from './lib/engine/audio';
 
+  let audioManager = $state<AudioManager | null>(null);
+  let cachedKit: SoundKit | null = null;
   let currentStreet = $state<StreetData | null>(null);
   let latestFrame = $state<RenderFrame | null>(null);
   let debugMode = $state(false);
@@ -39,9 +42,26 @@
     } catch (e) {
       console.error('Failed to load recipes:', e);
     }
+
+    // Initialize audio eagerly so handleStreetLoaded stays synchronous
+    // (avoids race where StreetPicker re-enables before currentStreet is set)
+    try {
+      cachedKit = await loadSoundKit('/assets/audio/');
+      audioManager = new AudioManager(cachedKit, '/assets/audio/');
+    } catch (e) {
+      console.error('Failed to initialize audio:', e);
+    }
   });
 
   function handleStreetLoaded(street: StreetData) {
+    // Recreate AudioManager if it was disposed (Back button)
+    if (!audioManager && cachedKit) {
+      try {
+        audioManager = new AudioManager(cachedKit, '/assets/audio/');
+      } catch (e) {
+        console.error('Failed to recreate audio:', e);
+      }
+    }
     currentStreet = street;
   }
 
@@ -80,6 +100,11 @@
       transitionPending = false;
       transitionAttempts = 0;
     }
+
+    // Process audio events
+    if (frame.audioEvents?.length && audioManager) {
+      audioManager.processEvents(frame.audioEvents);
+    }
   }
 
   function toggleDebug() {
@@ -117,6 +142,8 @@
       } catch (e) {
         console.error('stopGame failed:', e);
       } finally {
+        audioManager?.dispose();
+        audioManager = null;
         currentStreet = null;
         latestFrame = null;
       }

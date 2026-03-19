@@ -2,6 +2,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::avatar::types::{AnimationState, Direction};
+use crate::engine::audio::AudioEvent;
 use crate::engine::transition::{
     TransitionDirection, TransitionPhase, TransitionState, PRE_SUBSCRIBE_DISTANCE,
 };
@@ -36,6 +37,8 @@ pub struct GameState {
     pub tsid_to_name: std::collections::HashMap<String, String>,
     pub entity_states: std::collections::HashMap<String, EntityInstanceState>,
     pub game_time: f64,
+    pub pending_audio_events: Vec<AudioEvent>,
+    pub prev_on_ground: bool,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -64,6 +67,7 @@ pub struct RenderFrame {
     pub interaction_prompt: Option<InteractionPrompt>,
     pub pickup_feedback: Vec<PickupFeedback>,
     pub transition: Option<TransitionFrame>,
+    pub audio_events: Vec<AudioEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,6 +133,8 @@ impl GameState {
             ]),
             entity_states: std::collections::HashMap::new(),
             game_time: 0.0,
+            pending_audio_events: vec![],
+            prev_on_ground: true,
         }
     }
 
@@ -151,6 +157,9 @@ impl GameState {
             self.player = PhysicsBody::new(center_x, street.ground_y);
         }
         self.street = Some(street);
+        self.pending_audio_events.push(AudioEvent::StreetChanged {
+            street_id: self.street.as_ref().unwrap().tsid.clone(),
+        });
         self.world_entities = entities;
         self.world_items = ground_items;
         // Set next_item_id past any numeric IDs in loaded ground items to avoid collisions.
@@ -190,6 +199,9 @@ impl GameState {
             });
             self.next_feedback_id += 1;
         }
+        self.pending_audio_events.push(AudioEvent::CraftSuccess {
+            recipe_id: recipe.id.clone(),
+        });
         Ok(result)
     }
 
@@ -203,6 +215,8 @@ impl GameState {
             return None;
         }
         self.game_time += dt;
+        // Drain pending audio events from IPC commands (craft_recipe, load_street)
+        let mut audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
 
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
@@ -215,6 +229,11 @@ impl GameState {
                 self.facing = Direction::Right;
             }
         }
+
+        // Capture swooping state BEFORE signpost check — trigger_swoop() changes
+        // the phase to Swooping, so capturing after would miss the TransitionStart edge.
+        let was_swooping_before_signposts =
+            matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
         // --- Street transition system ---
         {
@@ -249,7 +268,8 @@ impl GameState {
             }
         }
 
-        let was_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+        let was_swooping_before_tick =
+            matches!(self.transition.phase, TransitionPhase::Swooping { .. });
         self.transition.tick(dt);
 
         // Handle transition completion — two-tick lifecycle:
@@ -279,6 +299,9 @@ impl GameState {
                     self.player.vx = 0.0;
                     self.player.vy = 0.0;
                 }
+                // Player placed on ground — sync prev_on_ground to prevent
+                // spurious Land audio event on the first post-swoop tick.
+                self.prev_on_ground = true;
             } else {
                 self.transition.reset();
             }
@@ -289,7 +312,7 @@ impl GameState {
         // only fires when Complete was never visited (timeout cancellation).
         // Prevents a late-arriving loadStreet from seeing is_transitioning=false
         // and mis-positioning the player.
-        if was_swooping
+        if was_swooping_before_tick
             && self.transition.phase == TransitionPhase::None
             && self.transition_origin_tsid.is_some()
         {
@@ -298,6 +321,15 @@ impl GameState {
 
         // Re-check swooping state after transition system may have changed it.
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
+
+        // Transition audio events — use pre-signpost capture for start detection
+        // (trigger_swoop changes phase before was_swooping_before_tick is captured)
+        if !was_swooping_before_signposts && is_swooping {
+            audio_events.push(AudioEvent::TransitionStart);
+        }
+        if was_swooping_before_tick && !is_swooping {
+            audio_events.push(AudioEvent::TransitionComplete);
+        }
 
         // Tick entity movement — runs even during swoops so NPCs keep wandering.
         // Must run BEFORE the interaction block so that lazy-init of movement
@@ -315,6 +347,15 @@ impl GameState {
                 street.left,
                 street.right,
             );
+
+            // Jump/Land audio detection
+            if self.prev_on_ground && !self.player.on_ground && self.player.vy < 0.0 {
+                audio_events.push(AudioEvent::Jump);
+            }
+            if !self.prev_on_ground && self.player.on_ground {
+                audio_events.push(AudioEvent::Land);
+            }
+            self.prev_on_ground = self.player.on_ground;
 
             // --- Interaction system ---
             // Age and cull pickup feedback
@@ -353,6 +394,14 @@ impl GameState {
             let mut interacted = false;
             if interact_pressed {
                 if let Some(nearest) = &nearest {
+                    // Capture entity type before the call for audio lookup
+                    let nearest_entity_type = match nearest {
+                        interaction::NearestInteractable::Entity { index, .. } => {
+                            Some(self.world_entities[*index].entity_type.clone())
+                        }
+                        _ => None,
+                    };
+
                     let result = interaction::execute_interaction(
                         nearest,
                         &mut self.inventory,
@@ -390,6 +439,34 @@ impl GameState {
                             y,
                         });
                         self.next_item_id += 1;
+                    }
+
+                    // Emit audio events from interaction
+                    match &result.interaction_type {
+                        Some(interaction::InteractionType::Entity { entity_type }) => {
+                            audio_events.push(AudioEvent::EntityInteract {
+                                entity_type: entity_type.clone(),
+                            });
+                            // Emit ItemPickup for the first yield item
+                            if let Some(et) = &nearest_entity_type {
+                                if let Some(def) = self.entity_defs.get(et) {
+                                    if let Some(first_yield) = def.yields.first() {
+                                        audio_events.push(AudioEvent::ItemPickup {
+                                            item_id: first_yield.item.clone(),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        Some(interaction::InteractionType::GroundItem { item_id }) => {
+                            audio_events.push(AudioEvent::ItemPickup {
+                                item_id: item_id.clone(),
+                            });
+                        }
+                        Some(interaction::InteractionType::Rejected) => {
+                            audio_events.push(AudioEvent::ActionFailed);
+                        }
+                        None => {}
                     }
 
                     // Only blank prompt when the ground item target was removed.
@@ -487,6 +564,7 @@ impl GameState {
                 }),
                 _ => None,
             },
+            audio_events,
         })
     }
 
@@ -1863,5 +1941,246 @@ mod tests {
 
         let result = state.craft_recipe("nonexistent");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn audio_events_empty_by_default() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        let input = InputState::default();
+        // First tick drains the StreetChanged event from load_street
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        // Second tick should have no audio events
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame.audio_events.is_empty());
+    }
+
+    #[test]
+    fn audio_event_jump() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.player.on_ground = true;
+
+        // First tick: on ground, no Jump event (StreetChanged is drained but no Jump)
+        let input = InputState::default();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(!frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Jump)));
+
+        // Simulate jump: player leaves ground with upward velocity
+        state.player.on_ground = false;
+        state.player.vy = -200.0;
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Jump)));
+    }
+
+    #[test]
+    fn audio_event_land() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        // Position player high above ground so physics keeps them airborne
+        state.player.y = -500.0;
+        state.player.on_ground = false;
+        let input = InputState::default();
+        // Tick while airborne — establishes prev_on_ground = false
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        // Now simulate landing: snap player to ground
+        state.player.y = 0.0;
+        state.player.on_ground = true;
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Land)));
+    }
+
+    #[test]
+    fn audio_event_no_duplicate_land() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.player.on_ground = true;
+
+        let input = InputState::default();
+        // Two ticks on ground — no Land event
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(!frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::Land)));
+    }
+
+    #[test]
+    fn audio_event_craft_success_drains_next_tick() {
+        let item_defs =
+            crate::item::loader::parse_item_defs(include_str!("../../../assets/items.json"))
+                .unwrap();
+        let entity_defs =
+            crate::item::loader::parse_entity_defs(include_str!("../../../assets/entities.json"))
+                .unwrap();
+        let recipe_defs =
+            crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
+                .unwrap();
+
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        state.load_street(test_street(), vec![], vec![]);
+        // Clear the StreetChanged event from load_street
+        state.pending_audio_events.clear();
+
+        state.inventory.add("wood", 3, &state.item_defs);
+        state.craft_recipe("plank").unwrap();
+
+        assert!(state
+            .pending_audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+
+        let input = InputState::default();
+        let frame = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(frame
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+
+        // Next tick should NOT have CraftSuccess
+        let frame2 = state
+            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .unwrap();
+        assert!(!frame2
+            .audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+    }
+
+    #[test]
+    fn no_spurious_land_after_transition() {
+        use crate::street::types::{Signpost, SignpostConnection};
+
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        let mut street = test_street();
+        street.tsid = "LADEMO001".into();
+        street.signposts = vec![Signpost {
+            id: "sign_right".into(),
+            x: 1900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO002".into(),
+                target_label: "To the Heights".into(),
+            }],
+        }];
+        state.load_street(street, vec![], vec![]);
+
+        // Player is airborne near the signpost when swoop triggers
+        state.player.x = 1950.0;
+        state.player.on_ground = false;
+        state.player.vy = -100.0;
+        state.prev_on_ground = false;
+
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        assert!(matches!(
+            state.transition.phase,
+            TransitionPhase::Swooping { .. }
+        ));
+
+        state
+            .transition
+            .mark_street_ready(state.transition.generation);
+
+        let mut new_street = test_street();
+        new_street.tsid = "LADEMO002".into();
+        new_street.signposts = vec![Signpost {
+            id: "sign_left".into(),
+            x: -1900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "LADEMO001".into(),
+                target_label: "Back to Meadow".into(),
+            }],
+        }];
+        state.load_street(new_street, vec![], vec![]);
+
+        // Tick through swoop to completion and reset
+        let mut frames = vec![];
+        for _ in 0..60 {
+            if let Some(frame) = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()) {
+                frames.push(frame);
+            }
+        }
+
+        // No frame should contain a spurious Land event
+        let has_land = frames
+            .iter()
+            .any(|f| f.audio_events.iter().any(|e| matches!(e, AudioEvent::Land)));
+        assert!(
+            !has_land,
+            "Expected no spurious Land event after transition"
+        );
+    }
+
+    #[test]
+    fn audio_event_street_changed_on_load() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        assert!(state
+            .pending_audio_events
+            .iter()
+            .any(|e| matches!(e, AudioEvent::StreetChanged { .. })));
     }
 }

@@ -1,0 +1,43 @@
+{
+  "name": "Default",
+  "version": 1,
+  "sfxVolume": 1.0,
+  "ambientVolume": 0.5,
+  "events": {
+    "itemPickup": {
+      "default": "sfx/pick-up.mp3"
+    },
+    "craftSuccess": {
+      "default": "sfx/craft-success.mp3"
+    },
+    "actionFailed": {
+      "default": "sfx/fail.mp3"
+    },
+    "jump": {
+      "default": "sfx/jump.mp3"
+    },
+    "land": {
+      "default": "sfx/land.mp3"
+    },
+    "transitionStart": {
+      "default": "sfx/transition-start.mp3"
+    },
+    "transitionComplete": {
+      "default": "sfx/transition-complete.mp3"
+    },
+    "entityInteract": {
+      "default": "sfx/interact.mp3",
+      "variants": {
+        "fruit_tree": "sfx/harvest-tree.mp3",
+        "wood_tree": "sfx/harvest-tree.mp3"
+      }
+    }
+  },
+  "ambient": {
+    "default": "ambient/meadow.mp3",
+    "variants": {
+      "LADEMO001": "ambient/meadow.mp3",
+      "LADEMO002": "ambient/heights.mp3"
+    }
+  }
+}

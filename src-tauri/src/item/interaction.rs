@@ -136,6 +136,14 @@ pub fn build_prompt(
     }
 }
 
+/// Classification of what happened during an interaction (for audio).
+#[derive(Debug)]
+pub enum InteractionType {
+    Entity { entity_type: String },
+    GroundItem { item_id: String },
+    Rejected,
+}
+
 /// Result of executing an interaction.
 pub struct InteractionResult {
     pub feedback: Vec<PickupFeedback>,
@@ -145,6 +153,8 @@ pub struct InteractionResult {
     pub remove_ground_item: Option<usize>,
     /// Updated count for ground item (if partially picked up).
     pub update_ground_item: Option<(usize, u32)>,
+    /// Audio classification of the interaction result.
+    pub interaction_type: Option<InteractionType>,
 }
 
 /// Execute an interaction with the nearest interactable.
@@ -165,6 +175,7 @@ pub fn execute_interaction(
         spawned_items: vec![],
         remove_ground_item: None,
         update_ground_item: None,
+        interaction_type: None,
     };
 
     match nearest {
@@ -191,6 +202,7 @@ pub fn execute_interaction(
                     y: entity.y,
                     age_secs: 0.0,
                 });
+                result.interaction_type = Some(InteractionType::Rejected);
                 return result;
             }
 
@@ -205,6 +217,7 @@ pub fn execute_interaction(
                     y: entity.y,
                     age_secs: 0.0,
                 });
+                result.interaction_type = Some(InteractionType::Rejected);
                 return result;
             }
 
@@ -246,6 +259,10 @@ pub fn execute_interaction(
                     });
                 }
             }
+
+            result.interaction_type = Some(InteractionType::Entity {
+                entity_type: entity.entity_type.clone(),
+            });
 
             // 3. Post-harvest state update — always runs, even if yield overflowed to ground.
             // Overflow items are recoverable, so the harvest "counts" regardless of inventory space.
@@ -289,8 +306,14 @@ pub fn execute_interaction(
 
             if overflow == 0 {
                 result.remove_ground_item = Some(*index);
+                result.interaction_type = Some(InteractionType::GroundItem {
+                    item_id: item.item_id.clone(),
+                });
             } else if added > 0 {
                 result.update_ground_item = Some((*index, overflow));
+                result.interaction_type = Some(InteractionType::GroundItem {
+                    item_id: item.item_id.clone(),
+                });
             } else {
                 result.feedback.push(PickupFeedback {
                     id: 0,
@@ -300,6 +323,7 @@ pub fn execute_interaction(
                     y: item.y,
                     age_secs: 0.0,
                 });
+                result.interaction_type = Some(InteractionType::Rejected);
             }
         }
     }
