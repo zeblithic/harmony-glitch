@@ -173,7 +173,7 @@ File: `assets/audio/default-kit.json`
     }
   },
   "ambient": {
-    "default": "ambient/outdoors.mp3",
+    "default": "ambient/meadow.mp3",
     "variants": {
       "demo_meadow": "ambient/meadow.mp3",
       "demo_heights": "ambient/heights.mp3"
@@ -211,7 +211,6 @@ assets/audio/
     interact.mp3
     harvest-tree.mp3
   ambient/
-    outdoors.mp3
     meadow.mp3
     heights.mp3
 ```
