@@ -18,8 +18,8 @@ use harmony_reticulum::{
     NodeEvent, Packet, PacketContext, PacketFlags, PacketHeader, PacketType, PropagationType,
 };
 use harmony_zenoh::{
-    PubSubRouter, PublisherId, Session, SessionAction, SessionConfig, SessionEvent, SessionState,
-    SubscriptionId,
+    ExprId, PubSubAction, PubSubEvent, PubSubRouter, PublisherId, Session, SessionAction,
+    SessionConfig, SessionEvent, SessionState, SubscriptionId,
 };
 use rand_core::CryptoRngCore;
 use zeroize::Zeroizing;
@@ -267,20 +267,24 @@ impl NetworkState {
     }
 
     /// Publish our player state to all active peers.
-    pub fn publish_player_state(&mut self, state: &PlayerNetState) -> Vec<NetworkAction> {
+    pub fn publish_player_state(
+        &mut self,
+        state: &PlayerNetState,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
         let msg = NetMessage::PlayerState(*state);
         let payload = match serde_json::to_vec(&msg) {
             Ok(p) => p,
             Err(_) => return Vec::new(),
         };
-        self.publish_to_all_peers(&payload)
+        self.publish_to_all_peers(&payload, rng)
     }
 
     /// Send a chat message to all active peers.
     /// Text is truncated to 200 UTF-8 bytes to stay within the Reticulum
     /// 500-byte MTU (worst case: 500 - 35 header - 33 Zenoh = 432 payload).
     /// Also emits a local `ChatReceived` so the sender sees their own bubble.
-    pub fn send_chat(&mut self, text: String) -> Vec<NetworkAction> {
+    pub fn send_chat(&mut self, text: String, rng: &mut impl CryptoRngCore) -> Vec<NetworkAction> {
         let truncated = truncate_to_bytes(&text, 200);
         let chat = ChatMessage {
             text: truncated,
@@ -293,7 +297,7 @@ impl NetworkState {
 
         let msg = NetMessage::Chat(chat);
         if let Ok(payload) = serde_json::to_vec(&msg) {
-            actions.extend(self.publish_to_all_peers(&payload));
+            actions.extend(self.publish_to_all_peers(&payload, rng));
         }
         actions
     }
@@ -697,7 +701,7 @@ impl NetworkState {
                     return;
                 }
 
-                // Active link data — decrypt and route to Session if applicable.
+                // Active link data — decrypt and route to Session/PubSub.
                 let peer_addr = self
                     .peers
                     .iter()
@@ -727,21 +731,33 @@ impl NetworkState {
 
                 // If the peer has a Session in Init state, treat the plaintext
                 // as a handshake proof (Ed25519 signature from the remote peer).
-                if let Some(ref mut session) = peer.session {
-                    if session.state() == SessionState::Init {
+                let session_state = peer.session.as_ref().map(|s| s.state());
+                if session_state == Some(SessionState::Init) {
+                    let mut opened = false;
+                    if let Some(ref mut session) = peer.session {
                         if let Ok(actions) =
                             session.handle_event(SessionEvent::HandshakeReceived {
                                 proof: plaintext,
                             })
                         {
-                            // Check for SessionOpened — session is now Active.
                             for action in &actions {
                                 if matches!(action, SessionAction::SessionOpened) {
-                                    // Session handshake complete.
+                                    opened = true;
                                 }
                             }
                         }
                     }
+                    if opened {
+                        // Session is now Active — set up the PubSubRouter.
+                        // (drops the mutable borrow on peer before calling setup_pubsub_router)
+                        self.setup_pubsub_router(&peer_addr, rng, out);
+                    }
+                    return;
+                }
+
+                // Session is Active — handle PubSub data and control messages.
+                if session_state == Some(SessionState::Active) {
+                    self.handle_inbound_pubsub(&peer_addr, &plaintext, now_secs as f64, rng, out);
                 }
             }
 
@@ -845,6 +861,234 @@ impl NetworkState {
         }
     }
 
+    // ── Internal: PubSub setup ─────────────────────────────────────────
+
+    /// Set up a PubSubRouter for a peer whose Session just became Active.
+    ///
+    /// Declares publishers for our topics, subscribes to the peer's topics,
+    /// and sends all resulting actions through the link.
+    fn setup_pubsub_router(
+        &mut self,
+        addr: &[u8; 16],
+        rng: &mut impl CryptoRngCore,
+        out: &mut Vec<NetworkAction>,
+    ) {
+        let street = match &self.current_street {
+            Some(s) => s.clone(),
+            None => return,
+        };
+
+        let our_addr_hex = hex::encode(self.public_identity.address_hash);
+        let peer_addr_hex = hex::encode(addr);
+
+        let mut router = PubSubRouter::new();
+
+        // We need the session mutably for declare_publisher.
+        let peer = match self.peers.get_mut(addr) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let session = match peer.session.as_mut() {
+            Some(s) if s.state() == SessionState::Active => s,
+            _ => return,
+        };
+
+        // Declare publishers for our topics.
+        let state_topic =
+            format!("harmony/glitch/street/{street}/player/{our_addr_hex}/state");
+        let chat_topic =
+            format!("harmony/glitch/street/{street}/player/{our_addr_hex}/chat");
+
+        let mut publisher_ids = Vec::new();
+        let mut all_pubsub_actions: Vec<PubSubAction> = Vec::new();
+
+        if let Ok((pub_id, actions)) = router.declare_publisher(state_topic, session) {
+            publisher_ids.push(pub_id);
+            all_pubsub_actions.extend(actions);
+        }
+        if let Ok((pub_id, actions)) = router.declare_publisher(chat_topic, session) {
+            publisher_ids.push(pub_id);
+            all_pubsub_actions.extend(actions);
+        }
+
+        // Subscribe to the peer's topics.
+        let peer_state_topic =
+            format!("harmony/glitch/street/{street}/player/{peer_addr_hex}/state");
+        let peer_chat_topic =
+            format!("harmony/glitch/street/{street}/player/{peer_addr_hex}/chat");
+
+        let mut subscription_ids = Vec::new();
+
+        if let Ok((sub_id, actions)) = router.subscribe(&peer_state_topic) {
+            subscription_ids.push(sub_id);
+            all_pubsub_actions.extend(actions);
+        }
+        if let Ok((sub_id, actions)) = router.subscribe(&peer_chat_topic) {
+            subscription_ids.push(sub_id);
+            all_pubsub_actions.extend(actions);
+        }
+
+        // Process all PubSubActions — send them through the link.
+        let link = match peer.link.as_ref() {
+            Some(l) if l.state() == LinkState::Active => l,
+            _ => return,
+        };
+
+        for action in &all_pubsub_actions {
+            match action {
+                PubSubAction::Session(SessionAction::SendResourceDeclare {
+                    expr_id,
+                    key_expr,
+                }) => {
+                    let msg = format!("RESDECL:{expr_id}:{key_expr}");
+                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                }
+                PubSubAction::SendSubscriberDeclare { key_expr } => {
+                    let msg = format!("SUB:{key_expr}");
+                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                }
+                _ => {}
+            }
+        }
+
+        // Store the router and IDs in the peer state.
+        peer.router = Some(router);
+        peer.publisher_ids = publisher_ids;
+        peer.subscription_ids = subscription_ids;
+    }
+
+    // ── Internal: Inbound PubSub routing ────────────────────────────────
+
+    /// Handle an inbound decrypted message from a peer with an Active session.
+    ///
+    /// Dispatches control messages (SUB:, RESDECL:) and PubSub data frames
+    /// to the appropriate handler.
+    fn handle_inbound_pubsub(
+        &mut self,
+        addr: &[u8; 16],
+        plaintext: &[u8],
+        now_secs_f64: f64,
+        rng: &mut impl CryptoRngCore,
+        out: &mut Vec<NetworkAction>,
+    ) {
+        // Check for text-tagged control messages.
+        if let Ok(text) = std::str::from_utf8(plaintext) {
+            if let Some(key_expr) = text.strip_prefix("SUB:") {
+                // Peer declared subscriber interest — feed to our router.
+                let peer = match self.peers.get_mut(addr) {
+                    Some(p) => p,
+                    None => return,
+                };
+                if let (Some(router), Some(session)) =
+                    (peer.router.as_mut(), peer.session.as_ref())
+                {
+                    let _ = router.handle_event(
+                        PubSubEvent::SubscriberDeclared {
+                            key_expr: key_expr.to_string(),
+                        },
+                        session,
+                    );
+                }
+                return;
+            }
+            if let Some(rest) = text.strip_prefix("RESDECL:") {
+                // Peer declared a resource — feed to our session.
+                if let Some(colon_pos) = rest.find(':') {
+                    if let Ok(expr_id) = rest[..colon_pos].parse::<ExprId>() {
+                        let key_expr = &rest[colon_pos + 1..];
+                        let peer = match self.peers.get_mut(addr) {
+                            Some(p) => p,
+                            None => return,
+                        };
+                        if let Some(session) = peer.session.as_mut() {
+                            let _ = session.handle_event(SessionEvent::ResourceDeclared {
+                                expr_id,
+                                key_expr: key_expr.to_string(),
+                            });
+                        }
+                    }
+                }
+                return;
+            }
+        }
+
+        // Binary PubSub data frame: [expr_id: 2 bytes BE][payload].
+        if plaintext.len() < 2 {
+            return;
+        }
+        let expr_id = u16::from_be_bytes([plaintext[0], plaintext[1]]) as ExprId;
+        let payload = plaintext[2..].to_vec();
+
+        let peer = match self.peers.get_mut(addr) {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Feed to router, get delivery actions.
+        let deliver_actions = {
+            let (router, session) = match (peer.router.as_mut(), peer.session.as_ref()) {
+                (Some(r), Some(s)) => (r, s),
+                _ => return,
+            };
+            match router.handle_event(
+                PubSubEvent::MessageReceived {
+                    expr_id,
+                    payload,
+                },
+                session,
+            ) {
+                Ok(actions) => actions,
+                Err(_) => return,
+            }
+        };
+
+        // Process delivery actions.
+        let link = match peer.link.as_ref() {
+            Some(l) if l.state() == LinkState::Active => l,
+            _ => return,
+        };
+
+        for action in deliver_actions {
+            match action {
+                PubSubAction::Deliver {
+                    key_expr: _, payload, ..
+                } => {
+                    // Deserialize the NetMessage and route it.
+                    if let Ok(msg) = serde_json::from_slice::<NetMessage>(&payload) {
+                        match msg {
+                            NetMessage::PlayerState(state) => {
+                                self.registry.update_state(addr, state, now_secs_f64);
+                                out.push(NetworkAction::RemotePlayerUpdate {
+                                    address_hash: *addr,
+                                    state,
+                                });
+                            }
+                            NetMessage::Chat(chat) => {
+                                out.push(NetworkAction::ChatReceived(chat));
+                            }
+                            NetMessage::Presence(event) => {
+                                out.push(NetworkAction::PresenceChange(event));
+                            }
+                        }
+                    }
+                }
+                PubSubAction::SendSubscriberDeclare { key_expr } => {
+                    let msg = format!("SUB:{key_expr}");
+                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                }
+                PubSubAction::Session(SessionAction::SendResourceDeclare {
+                    expr_id,
+                    key_expr,
+                }) => {
+                    let msg = format!("RESDECL:{expr_id}:{key_expr}");
+                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
     // ── Internal: Session ticking ────────────────────────────────────────
 
     /// Tick a single peer's session. Returns `true` if the peer should be
@@ -916,15 +1160,70 @@ impl NetworkState {
 
     /// Publish a payload to all peers with active sessions and routers.
     ///
-    /// Currently a no-op stub — PubSubRouter.publish() produces SendMessage
-    /// actions that need to be wrapped in Reticulum data packets and routed
-    /// through the Node. This requires the socket layer (Task 7) and game
-    /// loop integration (Task 8) to be in place. Once those are done, this
-    /// method will iterate peers, call router.publish(), and convert
-    /// SendMessage actions into NetworkAction::SendPacket.
-    fn publish_to_all_peers(&mut self, _payload: &[u8]) -> Vec<NetworkAction> {
-        // TODO: Wire up in Task 8 when link/session data routing is complete.
-        Vec::new()
+    /// For each peer: calls `router.publish(pub_id, payload, &session)` for
+    /// each publisher_id, then frames `SendMessage` actions as
+    /// `[expr_id: 2 bytes BE][payload]`, encrypts via link, and emits
+    /// `NetworkAction::SendPacket`.
+    fn publish_to_all_peers(
+        &mut self,
+        payload: &[u8],
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let mut out = Vec::new();
+        let peer_addrs: Vec<[u8; 16]> = self.peers.keys().copied().collect();
+
+        for addr in peer_addrs {
+            let peer = match self.peers.get(&addr) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            // Need router, session, and active link.
+            let (router, session, link) = match (
+                peer.router.as_ref(),
+                peer.session.as_ref(),
+                peer.link.as_ref(),
+            ) {
+                (Some(r), Some(s), Some(l)) if s.state() == SessionState::Active && l.state() == LinkState::Active => {
+                    (r, s, l)
+                }
+                _ => continue,
+            };
+
+            // Publish through each publisher_id (state topic is [0], chat is [1]).
+            // Use the first publisher_id that succeeds (state topic for PlayerState,
+            // chat for Chat — for simplicity we publish on all publisher IDs and
+            // let the write-side filter decide).
+            for &pub_id in &peer.publisher_ids {
+                let actions = match router.publish(pub_id, payload.to_vec(), session) {
+                    Ok(a) => a,
+                    Err(_) => continue,
+                };
+
+                for action in actions {
+                    if let PubSubAction::SendMessage {
+                        expr_id,
+                        payload: msg_payload,
+                    } = action
+                    {
+                        // Frame: [expr_id as u16 BE: 2 bytes][payload]
+                        let expr_id_u16 = expr_id as u16;
+                        let mut frame =
+                            Vec::with_capacity(2 + msg_payload.len());
+                        frame.extend_from_slice(&expr_id_u16.to_be_bytes());
+                        frame.extend_from_slice(&msg_payload);
+                        Self::send_via_link(
+                            link,
+                            rng,
+                            &frame,
+                            PacketContext::None,
+                            &mut out,
+                        );
+                    }
+                }
+            }
+        }
+        out
     }
 }
 
@@ -1598,6 +1897,203 @@ mod tests {
             peer_a_in_b.session.as_ref().unwrap().state(),
             SessionState::Active,
             "B's session should be Active"
+        );
+    }
+
+    /// Drive two NetworkStates through the full handshake + session + pubsub
+    /// setup, then shuttle all pending packets between them until both have
+    /// routers AND all SUB/RESDECL control messages have been exchanged.
+    /// Returns the pair and their address hashes.
+    fn drive_to_pubsub_ready(
+        street: &str,
+    ) -> (NetworkState, NetworkState, [u8; 16], [u8; 16]) {
+        let mut rng = OsRng;
+
+        let (mut state_a, mut state_b) = make_pair_on_street(street);
+        let addr_a = state_a.public_identity.address_hash;
+        let addr_b = state_b.public_identity.address_hash;
+
+        // Exchange announces.
+        let announce_b = build_announce_for(&state_b);
+        let mut actions_a = Vec::new();
+        state_a.handle_announce_received(&announce_b, 2, 2.0, &mut rng, &mut actions_a);
+
+        let announce_a = build_announce_for(&state_a);
+        let mut actions_b = Vec::new();
+        state_b.handle_announce_received(&announce_a, 2, 2.0, &mut rng, &mut actions_b);
+
+        // Shuttle A's link request to B.
+        let request_packets = extract_packets(&actions_a);
+        assert!(!request_packets.is_empty(), "A should emit a link request");
+
+        let actions_b = state_b.tick(
+            &[(INTERFACE_NAME.to_string(), request_packets[0].clone())],
+            3.0,
+            &mut rng,
+        );
+        let proof_packets = extract_packets(&actions_b);
+
+        // Shuttle B's proof to A.
+        let actions_a = state_a.tick(
+            &[(INTERFACE_NAME.to_string(), proof_packets[0].clone())],
+            4.0,
+            &mut rng,
+        );
+        let a_packets = extract_packets(&actions_a);
+
+        // Shuttle A's RTT + session handshake to B.
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let actions_b = state_b.tick(&inbound_for_b, 5.0, &mut rng);
+        let mut b_packets = extract_packets(&actions_b);
+
+        // Continue shuttling until both have Active sessions, routers,
+        // and all control packets (SUB/RESDECL) have been exchanged.
+        // We keep going a few rounds after routers are ready to ensure
+        // the subscriber declarations reach the other side.
+        let mut settled_rounds = 0;
+        for round in 1..=20 {
+            let a_has_router = state_a
+                .peers
+                .get(&addr_b)
+                .and_then(|p| p.router.as_ref())
+                .is_some();
+            let b_has_router = state_b
+                .peers
+                .get(&addr_a)
+                .and_then(|p| p.router.as_ref())
+                .is_some();
+
+            if a_has_router && b_has_router {
+                // Keep shuttling until no more packets in flight.
+                if b_packets.is_empty() {
+                    settled_rounds += 1;
+                    if settled_rounds >= 2 {
+                        break;
+                    }
+                } else {
+                    settled_rounds = 0;
+                }
+            }
+
+            if round == 20 {
+                panic!(
+                    "PubSub not ready after 20 rounds (A router: {a_has_router}, B router: {b_has_router})"
+                );
+            }
+
+            // Use tiny time increments (0.01s) to stay well within the
+            // 10s stale timeout window (join was at t=2.0).
+            if !b_packets.is_empty() {
+                let inbound_for_a: Vec<(String, Vec<u8>)> = b_packets
+                    .iter()
+                    .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+                    .collect();
+                let time_a = 5.0 + (round as f64) * 0.01;
+                let actions_a = state_a.tick(&inbound_for_a, time_a, &mut rng);
+                let a_new_packets = extract_packets(&actions_a);
+
+                if !a_new_packets.is_empty() {
+                    let inbound_for_b: Vec<(String, Vec<u8>)> = a_new_packets
+                        .iter()
+                        .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+                        .collect();
+                    let time_b = time_a + 0.005;
+                    let actions_b = state_b.tick(&inbound_for_b, time_b, &mut rng);
+                    b_packets = extract_packets(&actions_b);
+                } else {
+                    b_packets = Vec::new();
+                }
+            } else {
+                let time = 5.0 + (round as f64) * 0.01;
+                let actions_a = state_a.tick(&[], time, &mut rng);
+                let a_new = extract_packets(&actions_a);
+                if !a_new.is_empty() {
+                    let inbound: Vec<(String, Vec<u8>)> = a_new
+                        .iter()
+                        .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+                        .collect();
+                    let actions_b = state_b.tick(&inbound, time + 0.005, &mut rng);
+                    b_packets = extract_packets(&actions_b);
+                } else {
+                    b_packets = Vec::new();
+                }
+            }
+        }
+
+        (state_a, state_b, addr_a, addr_b)
+    }
+
+    #[test]
+    fn publish_player_state_round_trip() {
+        let mut rng = OsRng;
+
+        // 1. Drive both states through full handshake + session + router setup.
+        let (mut state_a, mut state_b, addr_a, addr_b) =
+            drive_to_pubsub_ready("meadow");
+
+        // Verify routers are set up.
+        assert!(
+            state_a.peers.get(&addr_b).unwrap().router.is_some(),
+            "A should have a PubSubRouter for B"
+        );
+        assert!(
+            state_b.peers.get(&addr_a).unwrap().router.is_some(),
+            "B should have a PubSubRouter for A"
+        );
+
+        // 2. A publishes player state.
+        let player_state = PlayerNetState {
+            x: 100.0,
+            y: -50.0,
+            vx: 10.0,
+            vy: -5.0,
+            facing: 1,
+            on_ground: true,
+        };
+
+        let publish_actions =
+            state_a.publish_player_state(&player_state, &mut rng);
+
+        // 3. Extract packets from A and feed them to B.
+        let a_packets = extract_packets(&publish_actions);
+        assert!(
+            !a_packets.is_empty(),
+            "A should emit data packets when publishing player state"
+        );
+
+        // Use a timestamp close to setup time (not 20s later, which would
+        // trigger stale purge on the registry — stale timeout is 10s).
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let _actions_b = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        // 4. B should have A's position in its remote frames.
+        let frames = state_b.remote_frames();
+        assert!(
+            !frames.is_empty(),
+            "B should have at least one remote player frame"
+        );
+
+        let a_hex = hex::encode(addr_a);
+        let a_frame = frames
+            .iter()
+            .find(|f| f.address_hash == a_hex)
+            .expect("B should have A's remote player frame");
+
+        assert!(
+            (a_frame.x - 100.0).abs() < f64::EPSILON,
+            "A's x should be 100.0, got {}",
+            a_frame.x
+        );
+        assert!(
+            (a_frame.y - -50.0).abs() < f64::EPSILON,
+            "A's y should be -50.0, got {}",
+            a_frame.y
         );
     }
 }
