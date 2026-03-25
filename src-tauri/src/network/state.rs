@@ -2194,6 +2194,98 @@ mod tests {
     }
 
     #[test]
+    fn chat_message_network_round_trip() {
+        let mut rng = OsRng;
+
+        // 1. Drive both states to pubsub-ready.
+        let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // 2. A sends a chat message — first action should be local echo.
+        let chat_actions = state_a.send_chat("Hello Bob!".to_string(), &mut rng);
+
+        // First action is the local echo ChatReceived.
+        assert!(
+            !chat_actions.is_empty(),
+            "send_chat should return at least one action (local echo)"
+        );
+        match &chat_actions[0] {
+            NetworkAction::ChatReceived(msg) => {
+                assert_eq!(msg.text, "Hello Bob!", "local echo text mismatch");
+                assert_eq!(msg.sender_name, "Lower", "local echo sender_name mismatch");
+            }
+            other => panic!("expected ChatReceived as first action, got {other:?}"),
+        }
+
+        // 3. Feed the SendPacket actions from A into B.
+        let a_packets = extract_packets(&chat_actions);
+        assert!(
+            !a_packets.is_empty(),
+            "send_chat should emit at least one SendPacket to peers"
+        );
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        // 4. B should receive a ChatReceived with the correct text and sender name.
+        let chat_received: Vec<_> = b_actions
+            .iter()
+            .filter_map(|a| match a {
+                NetworkAction::ChatReceived(msg) => Some(msg),
+                _ => None,
+            })
+            .collect();
+
+        assert!(
+            !chat_received.is_empty(),
+            "B should receive a ChatReceived action"
+        );
+        assert_eq!(
+            chat_received[0].text, "Hello Bob!",
+            "received chat text mismatch"
+        );
+        assert_eq!(
+            chat_received[0].sender_name, "Lower",
+            "received chat sender_name mismatch"
+        );
+    }
+
+    #[test]
+    fn street_change_tears_down_peers() {
+        let mut rng = OsRng;
+
+        // 1. Drive both states to pubsub-ready so A has B as an active peer.
+        let (mut state_a, _state_b, _addr_a, addr_b) = drive_to_pubsub_ready("meadow");
+
+        // 2. Verify A has B as a peer before the street change.
+        assert!(
+            state_a.peers.contains_key(&addr_b),
+            "A should have B as a peer after pubsub handshake"
+        );
+
+        // 3. A changes street.
+        state_a.change_street("heights", 10.0, &mut rng).unwrap();
+
+        // 4. Assert teardown: peers cleared, registry empty, current street updated.
+        assert!(
+            state_a.peers.is_empty(),
+            "peers should be cleared after change_street"
+        );
+        assert_eq!(
+            state_a.registry.count(),
+            0,
+            "registry should be empty after change_street"
+        );
+        assert_eq!(
+            state_a.current_street(),
+            Some("heights"),
+            "current_street should be updated to the new street"
+        );
+    }
+
+    #[test]
     fn tick_peer_session_sends_keepalive() {
         let mut rng = OsRng;
 
