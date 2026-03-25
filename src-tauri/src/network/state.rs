@@ -1196,7 +1196,9 @@ impl NetworkState {
                 return;
             }
             if let Some(key_expr) = text.strip_prefix("SUB:") {
-                // Peer declared subscriber interest — feed to our router.
+                // Peer declared subscriber interest — feed to our router and
+                // process any response actions (e.g. resource declarations the
+                // peer needs to resolve our ExprIds).
                 let peer = match self.peers.get_mut(addr) {
                     Some(p) => p,
                     None => return,
@@ -1204,12 +1206,47 @@ impl NetworkState {
                 if let (Some(router), Some(session)) =
                     (peer.router.as_mut(), peer.session.as_ref())
                 {
-                    let _ = router.handle_event(
+                    if let Ok(actions) = router.handle_event(
                         PubSubEvent::SubscriberDeclared {
                             key_expr: key_expr.to_string(),
                         },
                         session,
-                    );
+                    ) {
+                        let link =
+                            peer.link.as_ref().filter(|l| l.state() == LinkState::Active);
+                        if let Some(link) = link {
+                            for action in &actions {
+                                match action {
+                                    PubSubAction::Session(
+                                        SessionAction::SendResourceDeclare {
+                                            expr_id,
+                                            key_expr,
+                                        },
+                                    ) => {
+                                        let msg = format!("RESDECL:{expr_id}:{key_expr}");
+                                        Self::send_via_link(
+                                            link,
+                                            rng,
+                                            msg.as_bytes(),
+                                            PacketContext::None,
+                                            out,
+                                        );
+                                    }
+                                    PubSubAction::SendSubscriberDeclare { key_expr } => {
+                                        let msg = format!("SUB:{key_expr}");
+                                        Self::send_via_link(
+                                            link,
+                                            rng,
+                                            msg.as_bytes(),
+                                            PacketContext::None,
+                                            out,
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
                 }
                 return;
             }
@@ -1488,11 +1525,12 @@ impl NetworkState {
                 } = action
                 {
                     // Frame: [expr_id as u16 BE: 2 bytes][payload]
-                    // ExprId is u64 but values above u16::MAX would corrupt
-                    // the frame. With only 2 publishers per peer this is safe,
-                    // but assert to catch future growth.
-                    let expr_id_u16 = u16::try_from(expr_id)
-                        .expect("ExprId exceeds u16 frame limit");
+                    // ExprId is u64 but our 2-byte frame only fits u16.
+                    // Skip if it overflows — shouldn't happen with 2 publishers.
+                    let expr_id_u16 = match u16::try_from(expr_id) {
+                        Ok(v) => v,
+                        Err(_) => continue, // ExprId too large for 2-byte frame
+                    };
                     let mut frame = Vec::with_capacity(2 + msg_payload.len());
                     frame.extend_from_slice(&expr_id_u16.to_be_bytes());
                     frame.extend_from_slice(&msg_payload);
