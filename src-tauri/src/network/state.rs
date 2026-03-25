@@ -194,6 +194,7 @@ impl NetworkState {
             if let NodeAction::SendOnInterface {
                 interface_name,
                 raw,
+                ..
             } = action
             {
                 actions.push(NetworkAction::SendPacket {
@@ -250,8 +251,11 @@ impl NetworkState {
             self.peers.remove(&addr);
         }
 
-        // Purge stale players from the registry.
-        self.registry.purge_stale(now_secs);
+        // Purge stale players and clean up their PeerState entries.
+        let purged = self.registry.purge_stale(now_secs);
+        for addr in purged {
+            self.peers.remove(&addr);
+        }
 
         actions
     }
@@ -337,6 +341,7 @@ impl NetworkState {
             if let NodeAction::SendOnInterface {
                 interface_name,
                 raw,
+                ..
             } = action
             {
                 actions.push(NetworkAction::SendPacket {
@@ -381,6 +386,7 @@ impl NetworkState {
                 NodeAction::SendOnInterface {
                     interface_name,
                     raw,
+                    ..
                 } => {
                     out.push(NetworkAction::SendPacket {
                         interface_name: interface_name.to_string(),
@@ -406,6 +412,7 @@ impl NetworkState {
                         if let NodeAction::SendOnInterface {
                             interface_name,
                             raw,
+                            ..
                         } = a
                         {
                             out.push(NetworkAction::SendPacket {
