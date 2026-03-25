@@ -248,7 +248,7 @@ impl NetworkState {
         let peer_keys: Vec<[u8; 16]> = self.peers.keys().copied().collect();
         let mut closed_peers = Vec::new();
         for addr in peer_keys {
-            if self.tick_peer_session(&addr, now_ms, now_secs, &mut actions) {
+            if self.tick_peer_session(&addr, now_ms, now_secs, rng, &mut actions) {
                 closed_peers.push(addr);
             }
         }
@@ -979,6 +979,49 @@ impl NetworkState {
     ) {
         // Check for text-tagged control messages.
         if let Ok(text) = std::str::from_utf8(plaintext) {
+            if text == "KEEPALIVE" {
+                let peer = match self.peers.get_mut(addr) {
+                    Some(p) => p,
+                    None => return,
+                };
+                if let Some(session) = peer.session.as_mut() {
+                    let _ = session.handle_event(SessionEvent::KeepaliveReceived);
+                }
+                return;
+            }
+            if text == "CLOSE" {
+                let peer = match self.peers.get_mut(addr) {
+                    Some(p) => p,
+                    None => return,
+                };
+                let actions = peer
+                    .session
+                    .as_mut()
+                    .and_then(|s| s.handle_event(SessionEvent::CloseReceived).ok())
+                    .unwrap_or_default();
+                let link = peer
+                    .link
+                    .as_ref()
+                    .filter(|l| l.state() == LinkState::Active);
+                for action in actions {
+                    if let SessionAction::SendCloseAck = action {
+                        if let Some(link) = link {
+                            Self::send_via_link(link, rng, b"CLOSEACK", PacketContext::None, out);
+                        }
+                    }
+                }
+                return;
+            }
+            if text == "CLOSEACK" {
+                let peer = match self.peers.get_mut(addr) {
+                    Some(p) => p,
+                    None => return,
+                };
+                if let Some(session) = peer.session.as_mut() {
+                    let _ = session.handle_event(SessionEvent::CloseAckReceived);
+                }
+                return;
+            }
             if let Some(key_expr) = text.strip_prefix("SUB:") {
                 // Peer declared subscriber interest — feed to our router.
                 let peer = match self.peers.get_mut(addr) {
@@ -1012,6 +1055,19 @@ impl NetworkState {
                                 key_expr: key_expr.to_string(),
                             });
                         }
+                    }
+                }
+                return;
+            }
+            if let Some(rest) = text.strip_prefix("RESUNDECL:") {
+                // Peer undeclared a resource — feed to our session.
+                if let Ok(expr_id) = rest.parse::<ExprId>() {
+                    let peer = match self.peers.get_mut(addr) {
+                        Some(p) => p,
+                        None => return,
+                    };
+                    if let Some(session) = peer.session.as_mut() {
+                        let _ = session.handle_event(SessionEvent::ResourceUndeclared { expr_id });
                     }
                 }
                 return;
@@ -1103,6 +1159,7 @@ impl NetworkState {
         addr: &[u8; 16],
         now_ms: u64,
         now_secs_f64: f64,
+        rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) -> bool {
         let peer = match self.peers.get_mut(addr) {
@@ -1131,6 +1188,15 @@ impl NetworkState {
             Err(_) => return false,
         };
 
+        // Collect the link after releasing the session borrow.
+        // `session_actions` is now owned; the mutable borrow on session is gone.
+        // We can reborrow peer immutably to get the link.
+        let peer = match self.peers.get(addr) {
+            Some(p) => p,
+            None => return false,
+        };
+        let link = peer.link.as_ref().filter(|l| l.state() == LinkState::Active);
+
         let mut should_remove = false;
         for action in session_actions {
             match action {
@@ -1144,14 +1210,39 @@ impl NetworkState {
                     out.push(NetworkAction::PresenceChange(event));
                     should_remove = true;
                 }
-                SessionAction::SendKeepalive
-                | SessionAction::SendClose
-                | SessionAction::SendCloseAck
-                | SessionAction::SendHandshake { .. }
-                | SessionAction::SendResourceDeclare { .. }
-                | SessionAction::SendResourceUndeclare { .. } => {
-                    // These need to be wrapped in a Reticulum packet and sent
-                    // through the node. Will be wired up in Task 8.
+                SessionAction::SendKeepalive => {
+                    if let Some(link) = link {
+                        Self::send_via_link(link, rng, b"KEEPALIVE", PacketContext::None, out);
+                    }
+                }
+                SessionAction::SendClose => {
+                    if let Some(link) = link {
+                        Self::send_via_link(link, rng, b"CLOSE", PacketContext::None, out);
+                    }
+                }
+                SessionAction::SendCloseAck => {
+                    if let Some(link) = link {
+                        Self::send_via_link(link, rng, b"CLOSEACK", PacketContext::None, out);
+                    }
+                }
+                SessionAction::SendHandshake { proof } => {
+                    if let Some(link) = link {
+                        let mut msg = b"HANDSHAKE:".to_vec();
+                        msg.extend_from_slice(&proof);
+                        Self::send_via_link(link, rng, &msg, PacketContext::None, out);
+                    }
+                }
+                SessionAction::SendResourceDeclare { expr_id, key_expr } => {
+                    if let Some(link) = link {
+                        let msg = format!("RESDECL:{expr_id}:{key_expr}");
+                        Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                    }
+                }
+                SessionAction::SendResourceUndeclare { expr_id } => {
+                    if let Some(link) = link {
+                        let msg = format!("RESUNDECL:{expr_id}");
+                        Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                    }
                 }
                 SessionAction::SessionOpened
                 | SessionAction::ResourceAdded { .. }
@@ -2099,6 +2190,43 @@ mod tests {
             (a_frame.y - -50.0).abs() < f64::EPSILON,
             "A's y should be -50.0, got {}",
             a_frame.y
+        );
+    }
+
+    #[test]
+    fn tick_peer_session_sends_keepalive() {
+        let mut rng = OsRng;
+
+        // 1. Drive both states through full handshake + session + router setup.
+        // drive_to_pubsub_ready returns (state_a, state_b, addr_a, addr_b).
+        let (mut state_a, _state_b, _addr_a, addr_b) = drive_to_pubsub_ready("meadow");
+
+        // Verify A has an active session with B.
+        let session_state = state_a
+            .peers
+            .get(&addr_b)
+            .and_then(|p| p.session.as_ref())
+            .map(|s| s.state());
+        assert_eq!(
+            session_state,
+            Some(SessionState::Active),
+            "A should have an active session with B before keepalive test"
+        );
+
+        // 2. Advance time past the default keepalive interval (30_000 ms = 30 s).
+        //    drive_to_pubsub_ready ends around t=5.0s. Tick at t=35.0s (35_000 ms)
+        //    so that now_ms - last_sent_ms >= 30_000.
+        let actions = state_a.tick(&[], 35.0, &mut rng);
+
+        // 3. Assert that at least one SendPacket action was emitted (the keepalive).
+        let send_packets: Vec<_> = actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::SendPacket { .. }))
+            .collect();
+        assert!(
+            !send_packets.is_empty(),
+            "tick() at t=35s should emit at least one SendPacket (keepalive) but got: {:?}",
+            actions
         );
     }
 }
