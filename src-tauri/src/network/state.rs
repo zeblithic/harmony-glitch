@@ -11,12 +11,15 @@
 use std::collections::HashMap;
 
 use harmony_identity::{Identity, PrivateIdentity};
+use std::sync::Arc;
+
 use harmony_reticulum::{
-    DestinationName, InterfaceMode, Link, LinkState, Node, NodeAction, NodeEvent, PacketContext,
-    PacketType,
+    DestinationName, DestinationType, HeaderType, InterfaceMode, Link, LinkState, Node, NodeAction,
+    NodeEvent, Packet, PacketContext, PacketFlags, PacketHeader, PacketType, PropagationType,
 };
 use harmony_zenoh::{
-    PubSubRouter, PublisherId, Session, SessionAction, SessionEvent, SessionState, SubscriptionId,
+    PubSubRouter, PublisherId, Session, SessionAction, SessionConfig, SessionEvent, SessionState,
+    SubscriptionId,
 };
 use rand_core::CryptoRngCore;
 use zeroize::Zeroizing;
@@ -553,7 +556,7 @@ impl NetworkState {
     fn handle_local_delivery(
         &mut self,
         packet: &harmony_reticulum::Packet,
-        _now_secs: u64,
+        now_secs: u64,
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
@@ -623,18 +626,24 @@ impl NetworkState {
             // ── Proof: we are the initiator ──────────────────────────
             PacketType::Proof => {
                 // dest_hash is the link_id. Find the peer with a matching
-                // pending link.
-                let peer = self.peers.values_mut().find(|p| {
-                    p.link
-                        .as_ref()
-                        .is_some_and(|l| *l.link_id() == dest_hash && l.state() == LinkState::Pending)
-                });
+                // pending link. Extract the address first to avoid holding
+                // a mutable borrow when calling activate_peer_session.
+                let peer_addr = self
+                    .peers
+                    .iter()
+                    .find(|(_, p)| {
+                        p.link.as_ref().is_some_and(|l| {
+                            *l.link_id() == dest_hash && l.state() == LinkState::Pending
+                        })
+                    })
+                    .map(|(addr, _)| *addr);
 
-                let peer = match peer {
-                    Some(p) => p,
+                let peer_addr = match peer_addr {
+                    Some(a) => a,
                     None => return,
                 };
 
+                let peer = self.peers.get_mut(&peer_addr).unwrap();
                 let link = peer.link.as_mut().unwrap();
 
                 // Use a reasonable RTT estimate — we don't have real timing
@@ -653,33 +662,186 @@ impl NetworkState {
                         data: raw,
                     });
                 }
+
+                // Link is now Active — activate the Zenoh Session.
+                let now_ms = now_secs * 1000;
+                self.activate_peer_session(&peer_addr, now_ms, rng, out);
             }
 
             // ── Data ─────────────────────────────────────────────────
             PacketType::Data => {
                 // RTT packet from initiator: context=Lrrtt, link in Handshake state.
                 if packet.header.context == PacketContext::Lrrtt {
-                    let peer = self.peers.values_mut().find(|p| {
-                        p.link.as_ref().is_some_and(|l| {
-                            *l.link_id() == dest_hash && l.state() == LinkState::Handshake
+                    // Find the peer address first to avoid borrow conflicts.
+                    let peer_addr = self
+                        .peers
+                        .iter()
+                        .find(|(_, p)| {
+                            p.link.as_ref().is_some_and(|l| {
+                                *l.link_id() == dest_hash && l.state() == LinkState::Handshake
+                            })
                         })
-                    });
+                        .map(|(addr, _)| *addr);
 
-                    let peer = match peer {
-                        Some(p) => p,
+                    let peer_addr = match peer_addr {
+                        Some(a) => a,
                         None => return,
                     };
 
+                    let peer = self.peers.get_mut(&peer_addr).unwrap();
                     let link = peer.link.as_mut().unwrap();
                     let _rtt = link.activate(packet);
-                    // Link is now Active. Task 4 will activate the Session here.
+                    // Link is now Active — activate the Zenoh Session.
+                    let now_ms = now_secs * 1000;
+                    self.activate_peer_session(&peer_addr, now_ms, rng, out);
+                    return;
                 }
 
-                // Active link data — placeholder for Task 5 (Session/PubSub data routing).
+                // Active link data — decrypt and route to Session if applicable.
+                let peer_addr = self
+                    .peers
+                    .iter()
+                    .find(|(_, p)| {
+                        p.link
+                            .as_ref()
+                            .is_some_and(|l| *l.link_id() == dest_hash && l.state() == LinkState::Active)
+                    })
+                    .map(|(addr, _)| *addr);
+
+                let peer_addr = match peer_addr {
+                    Some(a) => a,
+                    None => return,
+                };
+
+                let peer = self.peers.get_mut(&peer_addr).unwrap();
+                let link = match peer.link.as_ref() {
+                    Some(l) => l,
+                    None => return,
+                };
+
+                // Decrypt the link data.
+                let plaintext = match link.decrypt(&packet.data) {
+                    Ok(pt) => pt,
+                    Err(_) => return,
+                };
+
+                // If the peer has a Session in Init state, treat the plaintext
+                // as a handshake proof (Ed25519 signature from the remote peer).
+                if let Some(ref mut session) = peer.session {
+                    if session.state() == SessionState::Init {
+                        if let Ok(actions) =
+                            session.handle_event(SessionEvent::HandshakeReceived {
+                                proof: plaintext,
+                            })
+                        {
+                            // Check for SessionOpened — session is now Active.
+                            for action in &actions {
+                                if matches!(action, SessionAction::SessionOpened) {
+                                    // Session handshake complete.
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Announce packets are handled via AnnounceReceived, not DeliverLocally.
             PacketType::Announce => {}
+        }
+    }
+
+    // ── Internal: Session activation ──────────────────────────────────────
+
+    /// Build an encrypted link data packet and push it as a `NetworkAction::SendPacket`.
+    ///
+    /// This is a static/associated function to avoid borrow conflicts when
+    /// called from contexts that already hold `&mut self`.
+    fn send_via_link(
+        link: &Link,
+        rng: &mut impl CryptoRngCore,
+        plaintext: &[u8],
+        context: PacketContext,
+        out: &mut Vec<NetworkAction>,
+    ) {
+        let ciphertext = match link.encrypt(rng, plaintext) {
+            Ok(ct) => ct,
+            Err(_) => return,
+        };
+
+        let packet = Packet {
+            header: PacketHeader {
+                flags: PacketFlags {
+                    ifac: false,
+                    header_type: HeaderType::Type1,
+                    context_flag: context != PacketContext::None,
+                    propagation: PropagationType::Broadcast,
+                    destination_type: DestinationType::Link,
+                    packet_type: PacketType::Data,
+                },
+                hops: 0,
+                transport_id: None,
+                destination_hash: *link.link_id(),
+                context,
+            },
+            data: Arc::from(ciphertext.as_slice()),
+        };
+
+        if let Ok(raw) = packet.to_bytes() {
+            out.push(NetworkAction::SendPacket {
+                interface_name: INTERFACE_NAME.to_string(),
+                data: raw,
+            });
+        }
+    }
+
+    /// Activate a Zenoh Session for a peer whose Link just became Active.
+    ///
+    /// Reconstructs a `PrivateIdentity` from saved bytes, creates a Session,
+    /// and sends the handshake proof encrypted through the peer's Link.
+    fn activate_peer_session(
+        &mut self,
+        addr: &[u8; 16],
+        now_ms: u64,
+        rng: &mut impl CryptoRngCore,
+        out: &mut Vec<NetworkAction>,
+    ) {
+        // Reconstruct the PrivateIdentity (Session::new consumes it by value).
+        let private_identity =
+            match PrivateIdentity::from_private_bytes(self.identity_bytes.as_ref()) {
+                Ok(id) => id,
+                Err(_) => return,
+            };
+
+        // Gather peer data needed for session creation.
+        let peer = match self.peers.get(addr) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let peer_identity = peer.identity.clone();
+        let link = match peer.link.as_ref() {
+            Some(l) if l.state() == LinkState::Active => l,
+            _ => return,
+        };
+
+        // Create the Session — this produces a SendHandshake action with our proof.
+        let (session, session_actions) = Session::new(
+            private_identity,
+            peer_identity,
+            SessionConfig::default(),
+            now_ms,
+        );
+
+        // Encrypt and send each session action through the link.
+        for action in &session_actions {
+            if let SessionAction::SendHandshake { proof } = action {
+                Self::send_via_link(link, rng, proof, PacketContext::Channel, out);
+            }
+        }
+
+        // Store the session in Init state.
+        if let Some(peer) = self.peers.get_mut(addr) {
+            peer.session = Some(session);
         }
     }
 
@@ -1273,6 +1435,169 @@ mod tests {
             peer_b_in_a.link.as_ref().unwrap().state(),
             LinkState::Active,
             "A's link should still be Active"
+        );
+    }
+
+    #[test]
+    fn session_activates_after_link_handshake() {
+        let mut rng = OsRng;
+
+        // 1. Create two NetworkStates on the same street.
+        let (mut state_a, mut state_b) = make_pair_on_street("meadow");
+
+        assert!(
+            state_a.public_identity.address_hash < state_b.public_identity.address_hash,
+            "state_a should have the lower hash"
+        );
+
+        let addr_a = state_a.public_identity.address_hash;
+        let addr_b = state_b.public_identity.address_hash;
+
+        // 2. Exchange announces so both know about each other.
+        let announce_b = build_announce_for(&state_b);
+        let mut actions_a = Vec::new();
+        state_a.handle_announce_received(&announce_b, 2, 2.0, &mut rng, &mut actions_a);
+
+        let announce_a = build_announce_for(&state_a);
+        let mut actions_b = Vec::new();
+        state_b.handle_announce_received(&announce_a, 2, 2.0, &mut rng, &mut actions_b);
+
+        // 3. A emitted a link request (lower hash initiates).
+        let request_packets = extract_packets(&actions_a);
+        assert!(!request_packets.is_empty(), "A should emit a link request");
+
+        // 4. Feed A's request to B → B responds with proof.
+        let actions_b = state_b.tick(
+            &[(INTERFACE_NAME.to_string(), request_packets[0].clone())],
+            3.0,
+            &mut rng,
+        );
+        let proof_packets = extract_packets(&actions_b);
+        assert!(!proof_packets.is_empty(), "B should emit a proof packet");
+
+        // 5. Feed B's proof to A → A completes handshake, emits RTT + session handshake.
+        let actions_a = state_a.tick(
+            &[(INTERFACE_NAME.to_string(), proof_packets[0].clone())],
+            4.0,
+            &mut rng,
+        );
+        let a_packets = extract_packets(&actions_a);
+        // At least 2 packets: RTT + session handshake proof.
+        assert!(
+            a_packets.len() >= 2,
+            "A should emit RTT + session handshake, got {} packets",
+            a_packets.len()
+        );
+
+        // A should now have a session in Init state.
+        let peer_b_in_a = state_a.peers.get(&addr_b).unwrap();
+        assert!(
+            peer_b_in_a.session.is_some(),
+            "A should have created a session"
+        );
+        assert_eq!(
+            peer_b_in_a.session.as_ref().unwrap().state(),
+            SessionState::Init,
+            "A's session should be in Init state"
+        );
+
+        // 6. Shuttle all of A's packets to B (RTT activates B's link, session handshake
+        //    may arrive in the same or subsequent tick).
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let actions_b = state_b.tick(&inbound_for_b, 5.0, &mut rng);
+
+        // B's link should now be Active and it should have created a session.
+        let peer_a_in_b = state_b.peers.get(&addr_a).unwrap();
+        assert_eq!(
+            peer_a_in_b.link.as_ref().unwrap().state(),
+            LinkState::Active,
+            "B's link should be Active"
+        );
+        assert!(
+            peer_a_in_b.session.is_some(),
+            "B should have created a session"
+        );
+
+        // 7. Continue shuttling packets until both sessions are Active (up to 10 rounds).
+        let mut b_packets = extract_packets(&actions_b);
+        let mut round = 0;
+        loop {
+            round += 1;
+            if round > 10 {
+                panic!("Sessions did not both become Active within 10 rounds");
+            }
+
+            // Check if both sessions are Active.
+            let a_session_active = state_a
+                .peers
+                .get(&addr_b)
+                .and_then(|p| p.session.as_ref())
+                .is_some_and(|s| s.state() == SessionState::Active);
+            let b_session_active = state_b
+                .peers
+                .get(&addr_a)
+                .and_then(|p| p.session.as_ref())
+                .is_some_and(|s| s.state() == SessionState::Active);
+
+            if a_session_active && b_session_active {
+                break;
+            }
+
+            // Shuttle B's packets to A.
+            if !b_packets.is_empty() {
+                let inbound_for_a: Vec<(String, Vec<u8>)> = b_packets
+                    .iter()
+                    .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+                    .collect();
+                let time_a = 5.0 + (round as f64) * 0.5;
+                let actions_a = state_a.tick(&inbound_for_a, time_a, &mut rng);
+                let a_new_packets = extract_packets(&actions_a);
+
+                // Shuttle A's packets to B.
+                if !a_new_packets.is_empty() {
+                    let inbound_for_b: Vec<(String, Vec<u8>)> = a_new_packets
+                        .iter()
+                        .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+                        .collect();
+                    let time_b = 5.0 + (round as f64) * 0.5 + 0.1;
+                    let actions_b = state_b.tick(&inbound_for_b, time_b, &mut rng);
+                    b_packets = extract_packets(&actions_b);
+                } else {
+                    b_packets = Vec::new();
+                }
+            } else {
+                // No more packets to shuttle but sessions aren't both Active yet.
+                // Run empty ticks to let timer events process.
+                let time = 5.0 + (round as f64) * 0.5;
+                let actions_a = state_a.tick(&[], time, &mut rng);
+                let a_new = extract_packets(&actions_a);
+                if !a_new.is_empty() {
+                    let inbound: Vec<(String, Vec<u8>)> = a_new
+                        .iter()
+                        .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+                        .collect();
+                    let actions_b = state_b.tick(&inbound, time + 0.1, &mut rng);
+                    b_packets = extract_packets(&actions_b);
+                }
+            }
+        }
+
+        // 8. Assert both peers have active sessions.
+        let peer_b_in_a = state_a.peers.get(&addr_b).unwrap();
+        assert_eq!(
+            peer_b_in_a.session.as_ref().unwrap().state(),
+            SessionState::Active,
+            "A's session should be Active"
+        );
+
+        let peer_a_in_b = state_b.peers.get(&addr_a).unwrap();
+        assert_eq!(
+            peer_a_in_b.session.as_ref().unwrap().state(),
+            SessionState::Active,
+            "B's session should be Active"
         );
     }
 }
