@@ -95,10 +95,19 @@ impl RemotePlayerRegistry {
     }
 
     /// Remove players whose `last_update` is more than `STALE_TIMEOUT`
-    /// seconds behind `now`.
-    pub fn purge_stale(&mut self, now: f64) {
-        self.players
-            .retain(|_, player| (now - player.last_update) < STALE_TIMEOUT);
+    /// seconds behind `now`. Returns the address hashes of removed players
+    /// so the caller can clean up associated peer state.
+    pub fn purge_stale(&mut self, now: f64) -> Vec<[u8; 16]> {
+        let mut purged = Vec::new();
+        self.players.retain(|hash, player| {
+            if (now - player.last_update) >= STALE_TIMEOUT {
+                purged.push(*hash);
+                false
+            } else {
+                true
+            }
+        });
+        purged
     }
 
     /// Produce render frames for all tracked players, sorted by
@@ -338,6 +347,31 @@ mod tests {
 
         reg.update_display_name(&make_hash(1), "NewName".into());
         assert_eq!(reg.frames()[0].display_name, "NewName");
+    }
+
+    #[test]
+    fn purge_stale_returns_removed_hashes() {
+        let mut reg = RemotePlayerRegistry::new();
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(1),
+                display_name: "Alice".into(),
+            },
+            1.0,
+        );
+        reg.handle_presence(
+            &PresenceEvent::Joined {
+                address_hash: make_hash(2),
+                display_name: "Bob".into(),
+            },
+            5.0,
+        );
+
+        // At t=12, Alice (joined at 1.0) is stale, Bob (joined at 5.0) is not.
+        let purged = reg.purge_stale(12.0);
+        assert_eq!(purged.len(), 1);
+        assert_eq!(purged[0], make_hash(1));
+        assert_eq!(reg.count(), 1);
     }
 
     #[test]

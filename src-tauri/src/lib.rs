@@ -239,7 +239,7 @@ fn send_chat(message: String, app: AppHandle) -> Result<(), String> {
     let actions = {
         let net = app.state::<NetworkWrapper>();
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
-        net_state.send_chat(message)
+        net_state.send_chat(message, &mut rand::rngs::OsRng)
     };
     execute_network_actions(&app, actions);
     Ok(())
@@ -411,7 +411,7 @@ fn game_loop(app: AppHandle) {
                 };
                 let net = app.state::<NetworkWrapper>();
                 let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
-                ns.publish_player_state(&net_state)
+                ns.publish_player_state(&net_state, &mut rand::rngs::OsRng)
             };
             execute_network_actions(&app, publish_actions);
 
