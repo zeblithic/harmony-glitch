@@ -487,6 +487,49 @@ fn handle_local_delivery(
     let dest_hash = packet.header.destination_hash;
 
     match packet.header.flags.packet_type {
+        PacketType::Proof => {
+            // We're the initiator — this is the link proof from the responder.
+            // Find our pending link whose link_id matches the destination_hash.
+            let peer_addr = self
+                .peers
+                .iter()
+                .find_map(|(addr, peer)| {
+                    peer.link
+                        .as_ref()
+                        .filter(|l| *l.link_id() == dest_hash && l.state() == LinkState::Pending)
+                        .map(|_| *addr)
+                });
+
+            if let Some(addr) = peer_addr {
+                let peer = match self.peers.get_mut(&addr) {
+                    Some(p) => p,
+                    None => return,
+                };
+                let link = match peer.link.as_mut() {
+                    Some(l) => l,
+                    None => return,
+                };
+
+                let now_f64 = now_secs as f64;
+                match link.complete_handshake(rng, packet, now_f64) {
+                    Ok(rtt_packet) => {
+                        if let Ok(raw) = rtt_packet.to_bytes() {
+                            out.push(NetworkAction::SendPacket {
+                                interface_name: INTERFACE_NAME.to_string(),
+                                data: raw,
+                            });
+                        }
+                        // Link is now Active — begin Session handshake.
+                        let now_ms = (now_secs as f64 * 1000.0) as u64;
+                        self.activate_peer_session(&addr, now_ms, rng, out);
+                    }
+                    Err(_) => {
+                        peer.link = None;
+                    }
+                }
+            }
+        }
+
         PacketType::LinkRequest => {
             // We're the responder. The destination_hash is our announcing
             // destination hash. Create a responding Link.
@@ -538,8 +581,7 @@ fn handle_local_delivery(
 
         PacketType::Data => {
             // Data packets addressed to a link_id. Could be:
-            // - Link proof (for our pending link as initiator)
-            // - Link RTT (for our handshake link as responder)
+            // - Link RTT (context = Lrrtt, for our Handshake link as responder)
             // - Session/PubSub data (for active links)
             // Find the peer whose link matches this destination_hash (link_id).
             let peer_addr = self
@@ -550,13 +592,6 @@ fn handle_local_delivery(
                         .as_ref()
                         .filter(|l| *l.link_id() == dest_hash)
                         .map(|_| *addr)
-                })
-                .or_else(|| {
-                    // Also check if dest_hash matches our announcing dest
-                    // (for initial link proof routing). This shouldn't happen
-                    // for Data packets though — link proofs are routed to
-                    // the link_id, not the dest_hash.
-                    None
                 });
 
             if let Some(addr) = peer_addr {
@@ -571,50 +606,15 @@ fn handle_local_delivery(
                 };
 
                 match link.state() {
-                    LinkState::Pending => {
-                        // We're the initiator, this should be the proof.
-                        let now_f64 = now_secs as f64;
-                        let rtt_secs = now_f64 - 1.0; // approximate RTT
-                        match link.complete_handshake(rng, packet, rtt_secs) {
-                            Ok(rtt_packet) => {
-                                if let Ok(raw) = rtt_packet.to_bytes() {
-                                    out.push(NetworkAction::SendPacket {
-                                        interface_name: INTERFACE_NAME.to_string(),
-                                        data: raw,
-                                    });
-                                }
-                                // Link is now Active — activate Session in Task 4.
-                            }
-                            Err(_) => {
-                                // Proof validation failed — drop the link.
-                                peer.link = None;
-                            }
-                        }
-                    }
-
                     LinkState::Handshake => {
-                        // We're the responder, this should be the RTT.
-                        // The RTT packet is encrypted with the derived key.
-                        // Decrypt to verify, which completes the handshake.
-                        match link.decrypt(&packet.data) {
-                            Ok(_) => {
-                                // RTT verified — link is now Active.
-                                // Note: Link::respond already set state to
-                                // Handshake. After decrypting the RTT
-                                // successfully, we know the initiator has the
-                                // correct key. Transition to Active.
-                                // The Link type handles this internally when
-                                // handle_rtt is called — but we don't have
-                                // handle_rtt. Check if decrypt on a Handshake
-                                // link transitions to Active...
-                                // Actually, Link::respond sets Handshake state,
-                                // and the responder becomes Active when it
-                                // processes the RTT. Let's check the Link API.
-                                // For now, we rely on the fact that if decrypt
-                                // succeeds, both sides have the same key.
-                                // The link stays in Handshake state but is
-                                // functionally active (can encrypt/decrypt).
-                                // Task 4 will activate Session.
+                        // We're the responder — this is the RTT from the initiator.
+                        // Use link.activate() which decrypts internally and
+                        // transitions from Handshake → Active.
+                        match link.activate(packet) {
+                            Ok(_rtt_secs) => {
+                                // Link is now Active — begin Session handshake.
+                                let now_ms = (now_secs as f64 * 1000.0) as u64;
+                                self.activate_peer_session(&addr, now_ms, rng, out);
                             }
                             Err(_) => {
                                 // Bad RTT — drop the link.
@@ -627,7 +627,7 @@ fn handle_local_delivery(
                         // Session/PubSub data — handled in Task 5.
                     }
 
-                    LinkState::Closed => {}
+                    _ => {}
                 }
             }
         }
@@ -640,11 +640,7 @@ fn handle_local_delivery(
 }
 ```
 
-**Important:** The responder RTT handling above has a subtlety. Check the actual `Link` API — does `decrypt()` on a `Handshake`-state link work? The `require_active()` guard may reject it. If so, we need to check if there's a `handle_rtt()` method or if the responder transitions to Active differently.
-
-Read `src-tauri/../../harmony/crates/harmony-reticulum/src/link.rs` and look for how the responder handles the RTT packet. The `respond()` method sets state to `Handshake` and `complete_handshake()` is initiator-only. Look for `handle_rtt` or similar.
-
-If `decrypt` rejects `Handshake` state (via `require_active`), we need an alternative. The responder may need to call `link.complete_handshake_responder()` or there may be a `receive_rtt()` method. Adapt the implementation based on what you find. The key insight: after the responder decrypts the RTT data, the link should transition to `Active`.
+**Note:** The responder uses `link.activate(rtt_packet)` to process the RTT — this decrypts internally, extracts the RTT value, and transitions from `Handshake` → `Active`. The initiator uses `link.complete_handshake(rng, proof_packet, rtt_secs)` which processes the proof and transitions from `Pending` → `Active`. Proof packets use `PacketType::Proof` (not `Data`), so they're handled in their own match arm.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -1112,11 +1108,12 @@ fn setup_pubsub_router(
         street, our_addr_hex
     );
 
-    if let Ok((pub_id, actions)) = router.declare_publisher(&our_state_topic, session) {
+    // declare_publisher takes (String, &mut Session).
+    if let Ok((pub_id, actions)) = router.declare_publisher(our_state_topic, session) {
         publisher_ids.push(pub_id);
         Self::process_pubsub_actions(&actions, link, rng, session, out);
     }
-    if let Ok((pub_id, actions)) = router.declare_publisher(&our_chat_topic, session) {
+    if let Ok((pub_id, actions)) = router.declare_publisher(our_chat_topic, session) {
         publisher_ids.push(pub_id);
         Self::process_pubsub_actions(&actions, link, rng, session, out);
     }
@@ -1131,11 +1128,12 @@ fn setup_pubsub_router(
         street, peer_addr_hex
     );
 
-    if let Ok((sub_id, actions)) = router.subscribe(&peer_state_topic, session) {
+    // subscribe takes (&mut self, &str) — no session parameter.
+    if let Ok((sub_id, actions)) = router.subscribe(&peer_state_topic) {
         subscription_ids.push(sub_id);
         Self::process_pubsub_actions(&actions, link, rng, session, out);
     }
-    if let Ok((sub_id, actions)) = router.subscribe(&peer_chat_topic, session) {
+    if let Ok((sub_id, actions)) = router.subscribe(&peer_chat_topic) {
         subscription_ids.push(sub_id);
         Self::process_pubsub_actions(&actions, link, rng, session, out);
     }
