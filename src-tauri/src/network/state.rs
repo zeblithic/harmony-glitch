@@ -1218,7 +1218,8 @@ impl NetworkState {
     /// Handle an inbound decrypted message from a peer with an Active session.
     ///
     /// Dispatches control messages (SUB:, RESDECL:) and PubSub data frames
-    /// to the appropriate handler.
+    /// to the appropriate handler. Returns an address to remove from peers
+    /// if a CLOSE or Presence(Left) triggers teardown.
     fn handle_inbound_pubsub(
         &mut self,
         addr: &[u8; 16],
@@ -1241,10 +1242,12 @@ impl NetworkState {
         }
 
         // Control messages (tag 0x01): UTF-8 text.
-        // Also handle untagged messages (tag != 0x01 && tag != 0x02) as
-        // legacy control for backward compat during development.
-        let control_body = if tag == FRAME_TAG_CONTROL { body } else { plaintext };
-        if let Ok(text) = std::str::from_utf8(control_body) {
+        if tag != FRAME_TAG_CONTROL {
+            // Unknown tag — discard. No fallback to raw UTF-8 parsing,
+            // which would reintroduce the framing ambiguity.
+            return;
+        }
+        if let Ok(text) = std::str::from_utf8(body) {
             if text == "KEEPALIVE" {
                 let peer = match self.peers.get_mut(addr) {
                     Some(p) => p,
@@ -1274,13 +1277,30 @@ impl NetworkState {
                     .link
                     .as_ref()
                     .filter(|l| l.state() == LinkState::Active);
-                for action in actions {
-                    if let SessionAction::SendCloseAck = action {
-                        if let Some(link) = link {
-                            Self::send_control(link, rng, b"CLOSEACK", out);
+                for action in &actions {
+                    match action {
+                        SessionAction::SendCloseAck => {
+                            if let Some(link) = link {
+                                Self::send_control(link, rng, b"CLOSEACK", out);
+                            }
                         }
+                        SessionAction::SessionClosed | SessionAction::PeerStale => {
+                            // Session transitioned to Closed — schedule teardown.
+                        }
+                        _ => {}
                     }
                 }
+                // The remote explicitly asked us to close — tear down the peer.
+                // Emit PresenceEvent::Left so the frontend knows they departed.
+                self.registry.handle_presence(
+                    &PresenceEvent::Left { address_hash: *addr },
+                    now_secs_f64,
+                );
+                out.push(NetworkAction::PresenceChange(PresenceEvent::Left {
+                    address_hash: *addr,
+                }));
+                self.unregister_peer_link(addr);
+                self.peers.remove(addr);
                 return;
             }
             if text == "CLOSEACK" {
