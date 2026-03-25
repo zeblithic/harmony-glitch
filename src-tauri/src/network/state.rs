@@ -388,6 +388,13 @@ impl NetworkState {
             self.node.unregister_destination(&link_id);
         }
 
+        // Emit PresenceChange(Left) for all peers so the frontend removes them.
+        for addr in &peer_addrs {
+            actions.push(NetworkAction::PresenceChange(PresenceEvent::Left {
+                address_hash: *addr,
+            }));
+        }
+
         // Clear all remote players and peer connections.
         self.registry.clear();
         self.peers.clear();
