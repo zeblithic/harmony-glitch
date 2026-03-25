@@ -51,8 +51,8 @@ What's stubbed:
 ```
 GameState.tick() → RenderFrame → PlayerNetState (f32 positions, 17 bytes)
   → NetworkState.publish_player_state(&state)
-  → PubSubRouter.publish(state_topic, json_payload)
-  → PubSubAction::SendMessage { key_expr, payload }
+  → PubSubRouter.publish(pub_id, json_payload, &session)
+  → PubSubAction::SendMessage { expr_id, payload }
   → Session framing (message type + expr_id + payload)
   → Link.encrypt(session_frame) → Fernet ciphertext
   → Node builds Reticulum data packet (Type1 header + encrypted payload)
@@ -65,13 +65,13 @@ GameState.tick() → RenderFrame → PlayerNetState (f32 positions, 17 bytes)
 ```
 UDP recv → raw bytes
   → Node.handle_event(NodeEvent::InboundPacket)
-  → NodeAction::DeliverLocally { packet, link_id }
+  → NodeAction::DeliverLocally { destination_hash, packet, interface_name }
   → NetworkState.handle_local_delivery()
-  → Match link_id to PeerState → Link.decrypt(packet.data)
-  → Session.handle_event(SessionEvent::Message { data })
-  → SessionAction::Deliver { data } (after stripping session framing)
-  → PubSubRouter.handle_event(PubSubEvent::InboundMessage { key_expr, payload })
-  → PubSubEvent::DataReceived { subscription_id, key_expr, payload }
+  → Match destination_hash to PeerState → Link.decrypt(packet.data)
+  → Session.handle_event(SessionEvent::ResourceDeclared/KeepaliveReceived/etc.)
+     or parse as PubSub frame
+  → PubSubRouter.handle_event(PubSubEvent::MessageReceived { expr_id, payload })
+  → PubSubAction::Deliver { subscription_id, key_expr, payload }
   → Deserialize NetMessage (PlayerState | Chat | Presence)
   → Update RemotePlayerRegistry or emit NetworkAction::ChatReceived
 ```
@@ -100,8 +100,10 @@ UDP recv → raw bytes
                       │       │
                       ▼       ▼
               Create Session (both sides)
-              → handle_event(Open)
-              → SessionState::Open
+              → Session::new() emits SendHandshake { proof }
+              → Send proof through Link → peer verifies
+              → handle_event(HandshakeReceived { proof })
+              → SessionState::Active
                       │
                       ▼
               Create PubSubRouter
@@ -127,11 +129,23 @@ The Reticulum Link uses a 3-step ECDH handshake:
 
 1. **Initiator → Responder:** Link request packet containing ephemeral X25519 + Ed25519 public keys. Sent as a Reticulum `LinkRequest` packet type to the peer's destination hash.
 
-2. **Responder → Initiator:** Link proof packet. Responder performs ECDH with initiator's ephemeral key, derives session key via HKDF-SHA256, signs the proof with Ed25519. Creates the Link via `Link::accept_request()`.
+2. **Responder → Initiator:** Link proof packet. Responder performs ECDH with initiator's ephemeral key, derives session key via HKDF-SHA256, signs the proof with Ed25519. Creates the Link via `Link::respond(private_identity, dest_name, request_packet)`.
 
 3. **Initiator → Responder:** RTT packet. Initiator verifies proof signature, performs ECDH, derives matching session key, sends RTT acknowledgment. Both sides now have `LinkState::Active` with a shared Fernet encryption key.
 
 After step 3, both sides have an authenticated, encrypted channel. All subsequent data is Fernet-encrypted (AES-256-CBC + HMAC-SHA256).
+
+### Session Handshake (over Link)
+
+After the Link becomes Active, both sides activate a Zenoh Session. This is a separate handshake layered on top of the encrypted Link:
+
+1. **Both sides:** Call `Session::new(local_private_identity, remote_identity, config, now_ms)`. This consumes a `PrivateIdentity` (not `Clone` — must be reconstructed from `identity_bytes` stored in `NetworkState`). Returns `(Session, Vec<SessionAction>)` where the actions include `SendHandshake { proof }` containing an Ed25519 signature of `"harmony-session-v1" || remote_address_hash`.
+
+2. **Both sides:** Encrypt and send the handshake proof through the Link (as link data).
+
+3. **Both sides:** On receiving the peer's proof, call `session.handle_event(SessionEvent::HandshakeReceived { proof })`. The Session verifies the signature against the peer's identity. On success, emits `SessionAction::SessionOpened` and transitions to `SessionState::Active`.
+
+After both sides complete this exchange, the Session is open and ready for resource declaration and pub/sub routing.
 
 ### Tiebreaker Rule
 
@@ -163,7 +177,7 @@ enum NetMessage {
 }
 ```
 
-All fit within Reticulum's 500-byte MTU after headers (35 bytes Type2) + Fernet overhead (~57 bytes) + Session framing (~10 bytes).
+All fit within Reticulum's 500-byte MTU after headers (35 bytes Type2) + Fernet overhead (~57 bytes) + Zenoh/Session framing (~33 bytes). Budget: 500 - 35 - 57 - 33 = ~375 bytes available for JSON payload.
 
 ### Stale Peer Cleanup
 
@@ -192,35 +206,37 @@ After recording the peer (existing logic), add:
 
 Currently a no-op. Implement packet classification:
 
-1. **Link request (we're responder):** Extract destination hash from packet, find matching peer. Call `Link::accept_request()`, store link in PeerState, emit proof packet.
-2. **Link proof (we're initiator):** Find peer with matching pending link. Call `link.complete_handshake()`, emit RTT packet. On success, activate Session + PubSubRouter.
-3. **Link data (active link):** Find peer by link_id. Call `link.decrypt()`, feed decrypted data to `session.handle_event(Message)`, process session actions through PubSubRouter.
+1. **Link request (we're responder):** Extract destination hash from packet, find matching peer. Call `Link::respond(private_identity, dest_name, request_packet)`, store link in PeerState, emit proof packet.
+2. **Link proof (we're initiator):** Find peer with matching pending link. Call `link.complete_handshake()`, emit RTT packet. On success, begin Session activation (create Session, send handshake proof through Link).
+3. **RTT received (we're responder):** Link transitions to Active. Begin Session activation.
+4. **Link data (active link):** Find peer by destination_hash. Call `link.decrypt()`. If Session is in handshake phase, feed as `SessionEvent::HandshakeReceived`. If Session is active, parse as PubSub frame and feed to `router.handle_event(PubSubEvent::MessageReceived { expr_id, payload })`. Process resulting `PubSubAction::Deliver` actions.
 
 ### `NetworkState::publish_to_all_peers()`
 
 Replace the empty stub:
-1. Iterate all peers with active routers
-2. For each peer: `router.publish(topic, payload)` → `PubSubAction::SendMessage`
+1. Iterate all peers with active routers and sessions
+2. For each peer: `router.publish(pub_id, payload, &session)` → `PubSubAction::SendMessage { expr_id, payload }`
 3. Convert: Session frame the message → `link.encrypt()` → build Reticulum data packet via Node
 4. Collect all resulting `NetworkAction::SendPacket` actions
 
 ### `NetworkState::tick_peer_session()`
 
 Already called in the tick loop. Extend to:
-1. Process any pending Session actions
+1. Process any pending Session actions (timer ticks, keepalives)
 2. Feed PubSubRouter events from Session deliveries
-3. Convert `PubSubEvent::DataReceived` → deserialize `NetMessage` → update registry or emit chat action
+3. Convert `PubSubAction::Deliver { subscription_id, key_expr, payload }` → deserialize `NetMessage` → update registry or emit `NetworkAction::ChatReceived`
 4. Return whether the peer should be closed (session closed or errored)
 
 ### `NetworkState::activate_peer()`
 
 New helper called when a Link becomes Active:
-1. Create `Session::new()` with peer identity
-2. Call `session.handle_event(SessionEvent::Open)` → get `SessionAction`s
-3. Create `PubSubRouter::new()`
-4. Declare publishers for our state + chat topics
-5. Subscribe to the peer's state + chat + presence topics
-6. Store session and router in `PeerState`
+1. Reconstruct `PrivateIdentity` from `self.identity_bytes` (Session consumes it by value, not `Clone`)
+2. Call `Session::new(private_identity, peer_identity, SessionConfig::default(), now_ms)` → returns `(Session, Vec<SessionAction>)` including `SendHandshake { proof }`
+3. Encrypt and send the handshake proof through the Link as link data
+4. Store the Session in `PeerState` (still in `Init` state, waiting for peer's handshake)
+5. When peer's handshake arrives (via `handle_local_delivery`), call `session.handle_event(SessionEvent::HandshakeReceived { proof })` → `SessionAction::SessionOpened`
+6. Create `PubSubRouter::new()`, declare publishers for our state + chat topics, subscribe to the peer's state + chat + presence topics
+7. Store router in `PeerState` — peer is now fully active
 
 ## Testing Strategy
 
