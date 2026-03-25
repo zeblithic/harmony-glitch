@@ -631,6 +631,10 @@ impl NetworkState {
                             &PresenceEvent::Left { address_hash: addr },
                             now_secs_f64,
                         );
+                        // Match the Joined we already emitted above.
+                        out.push(NetworkAction::PresenceChange(PresenceEvent::Left {
+                            address_hash: addr,
+                        }));
                     }
                 }
             }
@@ -1138,13 +1142,15 @@ impl NetworkState {
             return;
         }
 
-        // Refresh liveness so the peer isn't evicted before their first
-        // keepalive (STALE_TIMEOUT=10s < keepalive interval=30s).
-        self.registry.refresh_liveness(addr, now_secs);
         let street = match &self.current_street {
             Some(s) => s.clone(),
             None => return,
         };
+
+        // Refresh liveness so the peer isn't evicted before their first
+        // keepalive (STALE_TIMEOUT=10s < keepalive interval=30s).
+        // After the street guard — don't refresh if we have no street context.
+        self.registry.refresh_liveness(addr, now_secs);
 
         let our_addr_hex = hex::encode(self.public_identity.address_hash);
         let peer_addr_hex = hex::encode(addr);
@@ -1328,8 +1334,29 @@ impl NetworkState {
                     Some(p) => p,
                     None => return,
                 };
+                let mut should_close = false;
                 if let Some(session) = peer.session.as_mut() {
-                    let _ = session.handle_event(SessionEvent::CloseAckReceived);
+                    if let Ok(actions) = session.handle_event(SessionEvent::CloseAckReceived) {
+                        for action in &actions {
+                            if matches!(
+                                action,
+                                SessionAction::SessionClosed | SessionAction::PeerStale
+                            ) {
+                                should_close = true;
+                            }
+                        }
+                    }
+                }
+                if should_close {
+                    self.registry.handle_presence(
+                        &PresenceEvent::Left { address_hash: *addr },
+                        now_secs_f64,
+                    );
+                    out.push(NetworkAction::PresenceChange(PresenceEvent::Left {
+                        address_hash: *addr,
+                    }));
+                    self.unregister_peer_link(addr);
+                    self.peers.remove(addr);
                 }
                 return;
             }
