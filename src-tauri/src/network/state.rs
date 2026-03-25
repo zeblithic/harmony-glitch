@@ -1074,6 +1074,16 @@ impl NetworkState {
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
+        // Don't reinitialise a router that is already running (guards against
+        // retransmitted session proofs causing duplicate SessionOpened actions).
+        if self
+            .peers
+            .get(addr)
+            .and_then(|p| p.router.as_ref())
+            .is_some()
+        {
+            return;
+        }
         let street = match &self.current_street {
             Some(s) => s.clone(),
             None => return,
@@ -1187,6 +1197,8 @@ impl NetworkState {
                 }
                 // Refresh registry liveness so idle-but-alive peers aren't
                 // evicted by purge_stale (STALE_TIMEOUT=10s < keepalive=30s).
+                // NOTE: purge_stale() in tick() runs AFTER inbound packet
+                // processing, so this refresh is visible to the same-tick purge.
                 self.registry.refresh_liveness(addr, now_secs_f64);
                 return;
             }
@@ -1348,6 +1360,7 @@ impl NetworkState {
             _ => return,
         };
 
+        let mut peer_to_remove: Option<[u8; 16]> = None;
         for action in deliver_actions {
             match action {
                 PubSubAction::Deliver {
@@ -1368,6 +1381,11 @@ impl NetworkState {
                             }
                             NetMessage::Presence(event) => {
                                 self.registry.handle_presence(&event, now_secs_f64);
+                                // Defer peer teardown to after the loop to avoid
+                                // borrow conflicts with self.peers.
+                                if let PresenceEvent::Left { address_hash } = &event {
+                                    peer_to_remove = Some(*address_hash);
+                                }
                                 out.push(NetworkAction::PresenceChange(event));
                             }
                         }
@@ -1386,6 +1404,13 @@ impl NetworkState {
                 }
                 _ => {}
             }
+        }
+
+        // Deferred peer teardown for Presence(Left) — couldn't do it inside
+        // the loop because self.peers was borrowed via `peer`/`link`.
+        if let Some(leave_addr) = peer_to_remove {
+            self.unregister_peer_link(&leave_addr);
+            self.peers.remove(&leave_addr);
         }
     }
 
