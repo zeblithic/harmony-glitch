@@ -750,7 +750,12 @@ impl NetworkState {
                     // Check unmatched_links first (responder side).
                     if let Some(link) = self.unmatched_links.get_mut(&dest_hash) {
                         if link.state() == LinkState::Handshake {
-                            let _ = link.activate(packet);
+                            if link.activate(packet).is_err() {
+                                // RTT verification failed — drop the link.
+                                self.node.unregister_destination(&dest_hash);
+                                self.unmatched_links.remove(&dest_hash);
+                                return;
+                            }
                             // Link is now Active but not yet assigned to a peer.
                             // It will be matched during Session handshake when
                             // the remote identity is revealed via
