@@ -822,13 +822,18 @@ impl NetworkState {
                 if peer_addr.is_none() {
                     if let Some(link) = self.unmatched_links.get(&dest_hash) {
                         if link.state() == LinkState::Active {
-                            // Decrypt and try to identify the peer from the
-                            // Session handshake proof (Ed25519 signature over
-                            // "harmony-session-v1" || our_address_hash).
-                            if let Ok(plaintext) = link.decrypt(&packet.data) {
-                                self.try_match_unmatched_link(
-                                    &dest_hash, &plaintext, now_secs, rng, out,
-                                );
+                            // Only session handshake proofs (PacketContext::Channel)
+                            // can be used for identity-based peer matching. Other
+                            // packets (KEEPALIVE, RESDECL, data frames) on unmatched
+                            // links are discarded — they can't be processed without
+                            // a Session, and the link will be matched when the proof
+                            // arrives (same tick or via retransmit).
+                            if packet.header.context == PacketContext::Channel {
+                                if let Ok(plaintext) = link.decrypt(&packet.data) {
+                                    self.try_match_unmatched_link(
+                                        &dest_hash, &plaintext, now_secs, rng, out,
+                                    );
+                                }
                             }
                             return;
                         }
@@ -1664,16 +1669,29 @@ impl NetworkState {
             };
 
             for action in actions {
-                if let PubSubAction::SendMessage {
-                    expr_id,
-                    payload: msg_payload,
-                } = action
-                {
-                    let expr_id_u16 = match u16::try_from(expr_id) {
-                        Ok(v) => v,
-                        Err(_) => continue,
-                    };
-                    Self::send_data_frame(link, rng, expr_id_u16, &msg_payload, &mut out);
+                match action {
+                    PubSubAction::SendMessage {
+                        expr_id,
+                        payload: msg_payload,
+                    } => {
+                        let expr_id_u16 = match u16::try_from(expr_id) {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+                        Self::send_data_frame(link, rng, expr_id_u16, &msg_payload, &mut out);
+                    }
+                    PubSubAction::Session(SessionAction::SendResourceDeclare {
+                        expr_id,
+                        key_expr,
+                    }) => {
+                        let msg = format!("RESDECL:{expr_id}:{key_expr}");
+                        Self::send_control(link, rng, msg.as_bytes(), &mut out);
+                    }
+                    PubSubAction::SendSubscriberDeclare { key_expr } => {
+                        let msg = format!("SUB:{key_expr}");
+                        Self::send_control(link, rng, msg.as_bytes(), &mut out);
+                    }
+                    _ => {}
                 }
             }
         }
