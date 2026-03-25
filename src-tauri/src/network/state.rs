@@ -49,6 +49,13 @@ const ANNOUNCE_INTERVAL_SECS: u64 = 30;
 /// Separator between display name and street in announce app_data.
 const APP_DATA_SEPARATOR: u8 = 0x00;
 
+/// Frame tag for control messages (UTF-8 text follows).
+/// Eliminates ambiguity with binary PubSub data frames.
+const FRAME_TAG_CONTROL: u8 = 0x01;
+
+/// Frame tag for binary PubSub data ([expr_id: u16 BE][payload] follows).
+const FRAME_TAG_DATA: u8 = 0x02;
+
 /// Which topic to publish on — avoids positional index bugs.
 #[derive(Clone, Copy)]
 enum PubTopic {
@@ -282,13 +289,7 @@ impl NetworkState {
             if let Some(peer) = self.peers.get(&addr) {
                 if let Some(link) = peer.link.as_ref() {
                     if link.state() == LinkState::Active {
-                        Self::send_via_link(
-                            link,
-                            rng,
-                            b"CLOSE",
-                            PacketContext::None,
-                            &mut actions,
-                        );
+                        Self::send_control(link, rng, b"CLOSE", &mut actions);
                     }
                 }
             }
@@ -367,10 +368,19 @@ impl NetworkState {
         let mut actions = Vec::new();
         let now_secs_u64 = now_secs as u64;
 
-        // Unregister all link destinations before clearing peers.
+        // Send graceful CLOSE to all peers with active links, then unregister.
         let peer_addrs: Vec<[u8; 16]> = self.peers.keys().copied().collect();
-        for addr in peer_addrs {
-            self.unregister_peer_link(&addr);
+        for addr in &peer_addrs {
+            if let Some(peer) = self.peers.get(addr) {
+                if let Some(link) = peer.link.as_ref() {
+                    if link.state() == LinkState::Active {
+                        Self::send_control(link, rng, b"CLOSE", &mut actions);
+                    }
+                }
+            }
+        }
+        for addr in &peer_addrs {
+            self.unregister_peer_link(addr);
         }
         // Also unregister any unmatched links.
         let unmatched_ids: Vec<[u8; 16]> = self.unmatched_links.keys().copied().collect();
@@ -962,10 +972,38 @@ impl NetworkState {
         }
     }
 
+    /// Send a control message (UTF-8 text) through a link with FRAME_TAG_CONTROL prefix.
+    fn send_control(
+        link: &Link,
+        rng: &mut impl CryptoRngCore,
+        text: &[u8],
+        out: &mut Vec<NetworkAction>,
+    ) {
+        let mut tagged = Vec::with_capacity(1 + text.len());
+        tagged.push(FRAME_TAG_CONTROL);
+        tagged.extend_from_slice(text);
+        Self::send_via_link(link, rng, &tagged, PacketContext::None, out);
+    }
+
+    /// Send a binary PubSub data frame through a link with FRAME_TAG_DATA prefix.
+    fn send_data_frame(
+        link: &Link,
+        rng: &mut impl CryptoRngCore,
+        expr_id: u16,
+        payload: &[u8],
+        out: &mut Vec<NetworkAction>,
+    ) {
+        let mut tagged = Vec::with_capacity(1 + 2 + payload.len());
+        tagged.push(FRAME_TAG_DATA);
+        tagged.extend_from_slice(&expr_id.to_be_bytes());
+        tagged.extend_from_slice(payload);
+        Self::send_via_link(link, rng, &tagged, PacketContext::None, out);
+    }
+
     /// Build an encrypted link data packet and push it as a `NetworkAction::SendPacket`.
     ///
-    /// This is a static/associated function to avoid borrow conflicts when
-    /// called from contexts that already hold `&mut self`.
+    /// Low-level — prefer `send_control` or `send_data_frame` for tagged messages.
+    /// Used directly only for session handshake proofs (PacketContext::Channel).
     fn send_via_link(
         link: &Link,
         rng: &mut impl CryptoRngCore,
@@ -1158,11 +1196,11 @@ impl NetworkState {
                     key_expr,
                 }) => {
                     let msg = format!("RESDECL:{expr_id}:{key_expr}");
-                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                    Self::send_control(link, rng, msg.as_bytes(), out);
                 }
                 PubSubAction::SendSubscriberDeclare { key_expr } => {
                     let msg = format!("SUB:{key_expr}");
-                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                    Self::send_control(link, rng, msg.as_bytes(), out);
                 }
                 _ => {}
             }
@@ -1189,8 +1227,24 @@ impl NetworkState {
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
-        // Check for text-tagged control messages.
-        if let Ok(text) = std::str::from_utf8(plaintext) {
+        // Dispatch based on frame tag byte.
+        if plaintext.is_empty() {
+            return;
+        }
+        let tag = plaintext[0];
+        let body = &plaintext[1..];
+
+        // Data frames (tag 0x02): [expr_id: 2 bytes BE][payload].
+        if tag == FRAME_TAG_DATA {
+            self.handle_inbound_data_frame(addr, body, now_secs_f64, rng, out);
+            return;
+        }
+
+        // Control messages (tag 0x01): UTF-8 text.
+        // Also handle untagged messages (tag != 0x01 && tag != 0x02) as
+        // legacy control for backward compat during development.
+        let control_body = if tag == FRAME_TAG_CONTROL { body } else { plaintext };
+        if let Ok(text) = std::str::from_utf8(control_body) {
             if text == "KEEPALIVE" {
                 let peer = match self.peers.get_mut(addr) {
                     Some(p) => p,
@@ -1223,7 +1277,7 @@ impl NetworkState {
                 for action in actions {
                     if let SessionAction::SendCloseAck = action {
                         if let Some(link) = link {
-                            Self::send_via_link(link, rng, b"CLOSEACK", PacketContext::None, out);
+                            Self::send_control(link, rng, b"CLOSEACK", out);
                         }
                     }
                 }
@@ -1268,21 +1322,19 @@ impl NetworkState {
                                         },
                                     ) => {
                                         let msg = format!("RESDECL:{expr_id}:{key_expr}");
-                                        Self::send_via_link(
+                                        Self::send_control(
                                             link,
                                             rng,
                                             msg.as_bytes(),
-                                            PacketContext::None,
                                             out,
                                         );
                                     }
                                     PubSubAction::SendSubscriberDeclare { key_expr } => {
                                         let msg = format!("SUB:{key_expr}");
-                                        Self::send_via_link(
+                                        Self::send_control(
                                             link,
                                             rng,
                                             msg.as_bytes(),
-                                            PacketContext::None,
                                             out,
                                         );
                                     }
@@ -1324,16 +1376,24 @@ impl NetworkState {
                         let _ = session.handle_event(SessionEvent::ResourceUndeclared { expr_id });
                     }
                 }
-                return;
             }
         }
+    }
 
-        // Binary PubSub data frame: [expr_id: 2 bytes BE][payload].
-        if plaintext.len() < 2 {
+    /// Handle a binary PubSub data frame: [expr_id: 2 bytes BE][payload].
+    fn handle_inbound_data_frame(
+        &mut self,
+        addr: &[u8; 16],
+        body: &[u8],
+        now_secs_f64: f64,
+        rng: &mut impl CryptoRngCore,
+        out: &mut Vec<NetworkAction>,
+    ) {
+        if body.len() < 2 {
             return;
         }
-        let expr_id = u16::from_be_bytes([plaintext[0], plaintext[1]]) as ExprId;
-        let payload = plaintext[2..].to_vec();
+        let expr_id = u16::from_be_bytes([body[0], body[1]]) as ExprId;
+        let payload = body[2..].to_vec();
 
         let peer = match self.peers.get_mut(addr) {
             Some(p) => p,
@@ -1400,14 +1460,14 @@ impl NetworkState {
                 }
                 PubSubAction::SendSubscriberDeclare { key_expr } => {
                     let msg = format!("SUB:{key_expr}");
-                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                    Self::send_control(link, rng, msg.as_bytes(), out);
                 }
                 PubSubAction::Session(SessionAction::SendResourceDeclare {
                     expr_id,
                     key_expr,
                 }) => {
                     let msg = format!("RESDECL:{expr_id}:{key_expr}");
-                    Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                    Self::send_control(link, rng, msg.as_bytes(), out);
                 }
                 _ => {}
             }
@@ -1483,17 +1543,17 @@ impl NetworkState {
                 }
                 SessionAction::SendKeepalive => {
                     if let Some(link) = link {
-                        Self::send_via_link(link, rng, b"KEEPALIVE", PacketContext::None, out);
+                        Self::send_control(link, rng, b"KEEPALIVE", out);
                     }
                 }
                 SessionAction::SendClose => {
                     if let Some(link) = link {
-                        Self::send_via_link(link, rng, b"CLOSE", PacketContext::None, out);
+                        Self::send_control(link, rng, b"CLOSE", out);
                     }
                 }
                 SessionAction::SendCloseAck => {
                     if let Some(link) = link {
-                        Self::send_via_link(link, rng, b"CLOSEACK", PacketContext::None, out);
+                        Self::send_control(link, rng, b"CLOSEACK", out);
                     }
                 }
                 SessionAction::SendHandshake { proof } => {
@@ -1508,13 +1568,13 @@ impl NetworkState {
                 SessionAction::SendResourceDeclare { expr_id, key_expr } => {
                     if let Some(link) = link {
                         let msg = format!("RESDECL:{expr_id}:{key_expr}");
-                        Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                        Self::send_control(link, rng, msg.as_bytes(), out);
                     }
                 }
                 SessionAction::SendResourceUndeclare { expr_id } => {
                     if let Some(link) = link {
                         let msg = format!("RESUNDECL:{expr_id}");
-                        Self::send_via_link(link, rng, msg.as_bytes(), PacketContext::None, out);
+                        Self::send_control(link, rng, msg.as_bytes(), out);
                     }
                 }
                 SessionAction::SessionOpened
@@ -1585,23 +1645,11 @@ impl NetworkState {
                     payload: msg_payload,
                 } = action
                 {
-                    // Frame: [expr_id as u16 BE: 2 bytes][payload]
-                    // ExprId is u64 but our 2-byte frame only fits u16.
-                    // Skip if it overflows — shouldn't happen with 2 publishers.
                     let expr_id_u16 = match u16::try_from(expr_id) {
                         Ok(v) => v,
-                        Err(_) => continue, // ExprId too large for 2-byte frame
+                        Err(_) => continue,
                     };
-                    let mut frame = Vec::with_capacity(2 + msg_payload.len());
-                    frame.extend_from_slice(&expr_id_u16.to_be_bytes());
-                    frame.extend_from_slice(&msg_payload);
-                    Self::send_via_link(
-                        link,
-                        rng,
-                        &frame,
-                        PacketContext::None,
-                        &mut out,
-                    );
+                    Self::send_data_frame(link, rng, expr_id_u16, &msg_payload, &mut out);
                 }
             }
         }
