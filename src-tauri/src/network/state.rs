@@ -449,7 +449,7 @@ impl NetworkState {
         announce: &harmony_reticulum::ValidatedAnnounce,
         _now_secs: u64,
         now_secs_f64: f64,
-        _rng: &mut impl CryptoRngCore,
+        rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
         let addr = announce.identity.address_hash;
@@ -517,11 +517,30 @@ impl NetworkState {
         self.registry.handle_presence(&event, now_secs_f64);
         out.push(NetworkAction::PresenceChange(event));
 
-        // TODO: In Task 8 (game loop integration), initiate a Link to this
-        // peer to establish an encrypted channel, then layer a Zenoh Session
-        // on top. For now we record the peer and emit presence — the full
-        // link/session handshake requires routing link packets through the
-        // node which needs the socket layer (Task 7) to be in place.
+        // Tiebreaker: lower address hash initiates the Link.
+        // The higher-hash side waits for the incoming link request.
+        if self.public_identity.address_hash < addr {
+            if let Some(ref dest_name) = self.dest_name {
+                match Link::initiate(rng, &announce.identity, dest_name) {
+                    Ok((link, request_packet)) => {
+                        // Serialize the link request and emit for sending.
+                        if let Ok(raw) = request_packet.to_bytes() {
+                            out.push(NetworkAction::SendPacket {
+                                interface_name: INTERFACE_NAME.to_string(),
+                                data: raw,
+                            });
+                        }
+                        // Store the pending link.
+                        if let Some(peer) = self.peers.get_mut(&addr) {
+                            peer.link = Some(link);
+                        }
+                    }
+                    Err(_) => {
+                        // Link initiation failed — peer stays in discovered state.
+                    }
+                }
+            }
+        }
     }
 
     fn handle_local_delivery(
@@ -846,5 +865,93 @@ mod tests {
 
         // Destination should still be registered.
         assert_eq!(state.node.announcing_destination_count(), 1);
+    }
+
+    #[test]
+    fn announce_triggers_link_initiation_for_lower_hash() {
+        use harmony_reticulum::ValidatedAnnounce;
+
+        let id_a = make_identity();
+        let id_b = make_identity();
+
+        let pub_a = id_a.public_identity().clone();
+        let pub_b = id_b.public_identity().clone();
+        let (lower_id, higher_pub) = if pub_a.address_hash < pub_b.address_hash {
+            (id_a, pub_b)
+        } else {
+            (id_b, pub_a)
+        };
+
+        let mut state = NetworkState::new(lower_id, "Lower".to_string());
+        let mut rng = OsRng;
+        state.change_street("meadow", 1.0, &mut rng).unwrap();
+
+        let app_data = encode_app_data("Higher", Some("meadow"));
+        let dest_name =
+            DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
+        let destination_hash = dest_name.destination_hash(&higher_pub.address_hash);
+        let announce = ValidatedAnnounce {
+            identity: higher_pub.clone(),
+            destination_name: dest_name.clone(),
+            destination_hash,
+            random_hash: [0u8; 10],
+            ratchet: None,
+            app_data,
+        };
+
+        let mut actions = Vec::new();
+        state.handle_announce_received(&announce, 2, 2.0, &mut rng, &mut actions);
+
+        assert!(state.peers.contains_key(&higher_pub.address_hash));
+        let peer = state.peers.get(&higher_pub.address_hash).unwrap();
+        assert!(peer.link.is_some());
+        let link = peer.link.as_ref().unwrap();
+        assert_eq!(link.state(), harmony_reticulum::LinkState::Pending);
+
+        let send_count = actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::SendPacket { .. }))
+            .count();
+        assert!(send_count > 0, "Expected link request SendPacket");
+    }
+
+    #[test]
+    fn announce_does_not_initiate_link_for_higher_hash() {
+        use harmony_reticulum::ValidatedAnnounce;
+
+        let id_a = make_identity();
+        let id_b = make_identity();
+
+        let pub_a = id_a.public_identity().clone();
+        let pub_b = id_b.public_identity().clone();
+        let (higher_id, lower_pub) = if pub_a.address_hash > pub_b.address_hash {
+            (id_a, pub_b)
+        } else {
+            (id_b, pub_a)
+        };
+
+        let mut state = NetworkState::new(higher_id, "Higher".to_string());
+        let mut rng = OsRng;
+        state.change_street("meadow", 1.0, &mut rng).unwrap();
+
+        let app_data = encode_app_data("Lower", Some("meadow"));
+        let dest_name =
+            DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
+        let destination_hash = dest_name.destination_hash(&lower_pub.address_hash);
+        let announce = ValidatedAnnounce {
+            identity: lower_pub.clone(),
+            destination_name: dest_name.clone(),
+            destination_hash,
+            random_hash: [0u8; 10],
+            ratchet: None,
+            app_data,
+        };
+
+        let mut actions = Vec::new();
+        state.handle_announce_received(&announce, 2, 2.0, &mut rng, &mut actions);
+
+        assert!(state.peers.contains_key(&lower_pub.address_hash));
+        let peer = state.peers.get(&lower_pub.address_hash).unwrap();
+        assert!(peer.link.is_none(), "Higher hash should not initiate link");
     }
 }
