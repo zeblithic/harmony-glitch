@@ -49,6 +49,13 @@ const ANNOUNCE_INTERVAL_SECS: u64 = 30;
 /// Separator between display name and street in announce app_data.
 const APP_DATA_SEPARATOR: u8 = 0x00;
 
+/// Which topic to publish on — avoids positional index bugs.
+#[derive(Clone, Copy)]
+enum PubTopic {
+    State,
+    Chat,
+}
+
 // ── Types ────────────────────────────────────────────────────────────────
 
 /// Actions the game loop must execute after each `tick()`.
@@ -87,8 +94,10 @@ pub struct PeerState {
     pub session: Option<Session>,
     /// Pub/sub router (present once session is active).
     pub router: Option<PubSubRouter>,
-    /// Publisher IDs for our topics on this peer's router.
-    pub publisher_ids: Vec<PublisherId>,
+    /// Publisher ID for our player state topic (None if declaration failed).
+    pub state_publisher_id: Option<PublisherId>,
+    /// Publisher ID for our chat topic (None if declaration failed).
+    pub chat_publisher_id: Option<PublisherId>,
     /// Subscription IDs for cleanup on disconnect.
     pub subscription_ids: Vec<SubscriptionId>,
 }
@@ -274,40 +283,27 @@ impl NetworkState {
             actions.push(NetworkAction::PresenceChange(event));
         }
 
-        // Sweep unmatched_links: remove links that are Closed or that have
-        // no remaining linkless peers to match against (orphaned after all
-        // candidate peers were purged or left the street).
-        let has_linkless_peer = self.peers.values().any(|p| p.link.is_none());
-        if !has_linkless_peer && !self.unmatched_links.is_empty() {
-            let orphan_ids: Vec<[u8; 16]> =
-                self.unmatched_links.keys().copied().collect();
-            for link_id in orphan_ids {
-                self.node.unregister_destination(&link_id);
-            }
-            self.unmatched_links.clear();
-        } else {
-            // Remove individually closed links.
-            let closed_ids: Vec<[u8; 16]> = self
-                .unmatched_links
-                .iter()
-                .filter(|(_, l)| l.state() == LinkState::Closed)
-                .map(|(id, _)| *id)
-                .collect();
-            for link_id in closed_ids {
-                self.node.unregister_destination(&link_id);
-                self.unmatched_links.remove(&link_id);
-            }
+        // Sweep unmatched_links: remove Closed links unconditionally.
+        // Active/Handshake links are kept even if no linkless peer exists
+        // yet — the initiator's announce may arrive after their LinkRequest
+        // (race condition), so we must not prematurely purge a valid link.
+        // Only purge non-Closed links if the street is completely empty
+        // (no peers at all), meaning this is truly orphaned.
+        let remove_ids: Vec<[u8; 16]> = self
+            .unmatched_links
+            .iter()
+            .filter(|(_, l)| l.state() == LinkState::Closed || self.peers.is_empty())
+            .map(|(id, _)| *id)
+            .collect();
+        for link_id in remove_ids {
+            self.node.unregister_destination(&link_id);
+            self.unmatched_links.remove(&link_id);
         }
 
         actions
     }
 
     /// Publish our player state to all active peers.
-    /// Publisher index for the state topic (declared first in setup_pubsub_router).
-    const PUB_INDEX_STATE: usize = 0;
-    /// Publisher index for the chat topic (declared second in setup_pubsub_router).
-    const PUB_INDEX_CHAT: usize = 1;
-
     pub fn publish_player_state(
         &mut self,
         state: &PlayerNetState,
@@ -318,7 +314,7 @@ impl NetworkState {
             Ok(p) => p,
             Err(_) => return Vec::new(),
         };
-        self.publish_to_all_peers(&payload, Self::PUB_INDEX_STATE, rng)
+        self.publish_to_all_peers(&payload, PubTopic::State, rng)
     }
 
     /// Send a chat message to all active peers.
@@ -338,7 +334,7 @@ impl NetworkState {
 
         let msg = NetMessage::Chat(chat);
         if let Ok(payload) = serde_json::to_vec(&msg) {
-            actions.extend(self.publish_to_all_peers(&payload, Self::PUB_INDEX_CHAT, rng));
+            actions.extend(self.publish_to_all_peers(&payload, PubTopic::Chat, rng));
         }
         actions
     }
@@ -568,7 +564,8 @@ impl NetworkState {
             link: None,
             session: None,
             router: None,
-            publisher_ids: Vec::new(),
+            state_publisher_id: None,
+            chat_publisher_id: None,
             subscription_ids: Vec::new(),
         };
         self.peers.insert(addr, peer);
@@ -1079,15 +1076,16 @@ impl NetworkState {
         let chat_topic =
             format!("harmony/glitch/street/{street}/player/{our_addr_hex}/chat");
 
-        let mut publisher_ids = Vec::new();
+        let mut state_publisher_id = None;
+        let mut chat_publisher_id = None;
         let mut all_pubsub_actions: Vec<PubSubAction> = Vec::new();
 
         if let Ok((pub_id, actions)) = router.declare_publisher(state_topic, session) {
-            publisher_ids.push(pub_id);
+            state_publisher_id = Some(pub_id);
             all_pubsub_actions.extend(actions);
         }
         if let Ok((pub_id, actions)) = router.declare_publisher(chat_topic, session) {
-            publisher_ids.push(pub_id);
+            chat_publisher_id = Some(pub_id);
             all_pubsub_actions.extend(actions);
         }
 
@@ -1133,7 +1131,8 @@ impl NetworkState {
 
         // Store the router and IDs in the peer state.
         peer.router = Some(router);
-        peer.publisher_ids = publisher_ids;
+        peer.state_publisher_id = state_publisher_id;
+        peer.chat_publisher_id = chat_publisher_id;
         peer.subscription_ids = subscription_ids;
     }
 
@@ -1430,9 +1429,11 @@ impl NetworkState {
 
     // ── Internal: Publishing ─────────────────────────────────────────────
 
-    /// Publish a payload to all peers through a specific publisher index.
+    /// Publish a payload to all peers through a specific topic's publisher.
     ///
-    /// `pub_index` selects which publisher to use: 0 = state, 1 = chat.
+    /// `topic` selects which publisher to use. Each publisher is stored by
+    /// name on PeerState (not positional), so declaration failures can't
+    /// cause topic misrouting.
     /// For each peer with active router/session/link: calls
     /// `router.publish(pub_id, payload, &session)`, frames `SendMessage`
     /// actions as `[expr_id: 2 bytes BE][payload]`, encrypts via link,
@@ -1440,7 +1441,7 @@ impl NetworkState {
     fn publish_to_all_peers(
         &mut self,
         payload: &[u8],
-        pub_index: usize,
+        topic: PubTopic,
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
         let mut out = Vec::new();
@@ -1464,9 +1465,15 @@ impl NetworkState {
                 _ => continue,
             };
 
-            let pub_id = match peer.publisher_ids.get(pub_index) {
-                Some(&id) => id,
-                None => continue,
+            let pub_id = match topic {
+                PubTopic::State => match peer.state_publisher_id {
+                    Some(id) => id,
+                    None => continue,
+                },
+                PubTopic::Chat => match peer.chat_publisher_id {
+                    Some(id) => id,
+                    None => continue,
+                },
             };
 
             let actions = match router.publish(pub_id, payload.to_vec(), session) {
@@ -1690,7 +1697,8 @@ mod tests {
                 link: None,
                 session: None,
                 router: None,
-                publisher_ids: Vec::new(),
+                state_publisher_id: None,
+                chat_publisher_id: None,
                 subscription_ids: Vec::new(),
             },
         );
