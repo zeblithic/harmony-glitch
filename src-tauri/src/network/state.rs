@@ -878,7 +878,7 @@ impl NetworkState {
                             }
                         }
                         if opened {
-                            self.setup_pubsub_router(&peer_addr, rng, out);
+                            self.setup_pubsub_router(&peer_addr, now_secs, rng, out);
                         }
                     }
                     // If session is already Active, this is a late retransmit — ignore.
@@ -960,7 +960,7 @@ impl NetworkState {
                                 }
                             }
                             if opened {
-                                self.setup_pubsub_router(&peer_addr, rng, out);
+                                self.setup_pubsub_router(&peer_addr, now_secs, rng, out);
                             }
                         }
                     }
@@ -1118,6 +1118,7 @@ impl NetworkState {
     fn setup_pubsub_router(
         &mut self,
         addr: &[u8; 16],
+        now_secs: f64,
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
@@ -1131,6 +1132,10 @@ impl NetworkState {
         {
             return;
         }
+
+        // Refresh liveness so the peer isn't evicted before their first
+        // keepalive (STALE_TIMEOUT=10s < keepalive interval=30s).
+        self.registry.refresh_liveness(addr, now_secs);
         let street = match &self.current_street {
             Some(s) => s.clone(),
             None => return,
@@ -1373,6 +1378,9 @@ impl NetworkState {
             }
             if let Some(rest) = text.strip_prefix("RESDECL:") {
                 // Peer declared a resource — feed to our session.
+                // Format: "RESDECL:{expr_id}:{key_expr}" — split at first colon.
+                // expr_id is always numeric, so key_expr (after the colon) may
+                // safely contain colons itself (e.g. "harmony:v2/...").
                 if let Some(colon_pos) = rest.find(':') {
                     if let Ok(expr_id) = rest[..colon_pos].parse::<ExprId>() {
                         let key_expr = &rest[colon_pos + 1..];
