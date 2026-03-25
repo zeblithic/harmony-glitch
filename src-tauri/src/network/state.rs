@@ -272,6 +272,31 @@ impl NetworkState {
             self.peers.remove(&addr);
         }
 
+        // Sweep unmatched_links: remove links that are Closed or that have
+        // no remaining linkless peers to match against (orphaned after all
+        // candidate peers were purged or left the street).
+        let has_linkless_peer = self.peers.values().any(|p| p.link.is_none());
+        if !has_linkless_peer && !self.unmatched_links.is_empty() {
+            let orphan_ids: Vec<[u8; 16]> =
+                self.unmatched_links.keys().copied().collect();
+            for link_id in orphan_ids {
+                self.node.unregister_destination(&link_id);
+            }
+            self.unmatched_links.clear();
+        } else {
+            // Remove individually closed links.
+            let closed_ids: Vec<[u8; 16]> = self
+                .unmatched_links
+                .iter()
+                .filter(|(_, l)| l.state() == LinkState::Closed)
+                .map(|(id, _)| *id)
+                .collect();
+            for link_id in closed_ids {
+                self.node.unregister_destination(&link_id);
+                self.unmatched_links.remove(&link_id);
+            }
+        }
+
         actions
     }
 
@@ -462,7 +487,7 @@ impl NetworkState {
                 NodeAction::DeliverLocally { packet, .. } => {
                     // Link-related packets delivered locally.
                     // For now we handle link proofs for pending links.
-                    self.handle_local_delivery(&packet, now_secs, rng, out);
+                    self.handle_local_delivery(&packet, now_secs_f64, rng, out);
                 }
 
                 // Diagnostic/transport actions we don't need to surface.
@@ -587,7 +612,7 @@ impl NetworkState {
     fn handle_local_delivery(
         &mut self,
         packet: &harmony_reticulum::Packet,
-        now_secs: u64,
+        now_secs: f64,
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
@@ -656,6 +681,8 @@ impl NetworkState {
 
                 // Use a reasonable RTT estimate — we don't have real timing
                 // yet, so use 0.1s as a placeholder.
+                // TODO: measure actual RTT from (now_secs - request_sent_time)
+                // once timestamps are threaded through the link state.
                 let rtt_secs = 0.1;
 
                 let rtt_packet = match link.complete_handshake(rng, packet, rtt_secs) {
@@ -672,7 +699,7 @@ impl NetworkState {
                 }
 
                 // Link is now Active — activate the Zenoh Session.
-                let now_ms = now_secs * 1000;
+                let now_ms = (now_secs * 1000.0) as u64;
                 self.activate_peer_session(&peer_addr, now_ms, rng, out);
             }
 
@@ -711,7 +738,7 @@ impl NetworkState {
                                 if let Some(peer) = self.peers.get_mut(&peer_addr) {
                                     peer.link = Some(link);
                                 }
-                                let now_ms = now_secs * 1000;
+                                let now_ms = (now_secs * 1000.0) as u64;
                                 self.activate_peer_session(&peer_addr, now_ms, rng, out);
                             }
                             // If multiple linkless peers, the link stays in
@@ -738,13 +765,14 @@ impl NetworkState {
                         let peer = self.peers.get_mut(&peer_addr).unwrap();
                         let link = peer.link.as_mut().unwrap();
                         let _rtt = link.activate(packet);
-                        let now_ms = now_secs * 1000;
+                        let now_ms = (now_secs * 1000.0) as u64;
                         self.activate_peer_session(&peer_addr, now_ms, rng, out);
                     }
                     return;
                 }
 
                 // Active link data — decrypt and route to Session/PubSub.
+                // Check peers first, then unmatched_links for the multi-peer case.
                 let peer_addr = self
                     .peers
                     .iter()
@@ -755,10 +783,26 @@ impl NetworkState {
                     })
                     .map(|(addr, _)| *addr);
 
-                let peer_addr = match peer_addr {
-                    Some(a) => a,
-                    None => return,
-                };
+                // If not on a peer, check unmatched_links (multi-peer case:
+                // link activated via RTT but couldn't determine which peer).
+                if peer_addr.is_none() {
+                    if let Some(link) = self.unmatched_links.get(&dest_hash) {
+                        if link.state() == LinkState::Active {
+                            // Decrypt and try to identify the peer from the
+                            // Session handshake proof (Ed25519 signature over
+                            // "harmony-session-v1" || our_address_hash).
+                            if let Ok(plaintext) = link.decrypt(&packet.data) {
+                                self.try_match_unmatched_link(
+                                    &dest_hash, &plaintext, now_secs, rng, out,
+                                );
+                            }
+                            return;
+                        }
+                    }
+                    return;
+                }
+
+                let peer_addr = peer_addr.unwrap();
 
                 let peer = self.peers.get_mut(&peer_addr).unwrap();
                 let link = match peer.link.as_ref() {
@@ -800,7 +844,7 @@ impl NetworkState {
 
                 // Session is Active — handle PubSub data and control messages.
                 if session_state == Some(SessionState::Active) {
-                    self.handle_inbound_pubsub(&peer_addr, &plaintext, now_secs as f64, rng, out);
+                    self.handle_inbound_pubsub(&peer_addr, &plaintext, now_secs, rng, out);
                 }
             }
 
@@ -813,6 +857,75 @@ impl NetworkState {
 
     /// Unregister a peer's link_id from the Node so orphan destinations
     /// don't continue to match/deliver packets after teardown.
+    /// Try to match an unmatched link to a peer using the Session handshake
+    /// proof. The proof is an Ed25519 signature of "harmony-session-v1" ||
+    /// our_address_hash, signed by the remote peer. We verify against each
+    /// linkless peer's identity to find the match.
+    fn try_match_unmatched_link(
+        &mut self,
+        link_id: &[u8; 16],
+        proof_bytes: &[u8],
+        now_secs: f64,
+        rng: &mut impl CryptoRngCore,
+        out: &mut Vec<NetworkAction>,
+    ) {
+        // Ed25519 signature length.
+        const SIG_LEN: usize = 64;
+
+        // Session handshake proofs are exactly 64 bytes (Ed25519 signature).
+        if proof_bytes.len() != SIG_LEN {
+            return;
+        }
+        let signature: &[u8; SIG_LEN] = proof_bytes.try_into().unwrap();
+
+        // Construct the expected signed message.
+        let mut expected_msg = b"harmony-session-v1".to_vec();
+        expected_msg.extend_from_slice(&self.public_identity.address_hash);
+
+        // Try each linkless peer's identity.
+        let matched_addr = self
+            .peers
+            .iter()
+            .filter(|(_, p)| p.link.is_none())
+            .find(|(_, p)| p.identity.verify(&expected_msg, signature).is_ok())
+            .map(|(addr, _)| *addr);
+
+        if let Some(peer_addr) = matched_addr {
+            // Match found — move link from unmatched_links to this peer.
+            if let Some(link) = self.unmatched_links.remove(link_id) {
+                if let Some(peer) = self.peers.get_mut(&peer_addr) {
+                    peer.link = Some(link);
+                }
+                // Activate Session for this peer.
+                let now_ms = (now_secs * 1000.0) as u64;
+                self.activate_peer_session(&peer_addr, now_ms, rng, out);
+
+                // Now feed the handshake proof to the new Session.
+                if let Some(peer) = self.peers.get_mut(&peer_addr) {
+                    if let Some(ref mut session) = peer.session {
+                        if session.state() == SessionState::Init {
+                            let mut opened = false;
+                            if let Ok(actions) = session.handle_event(
+                                SessionEvent::HandshakeReceived {
+                                    proof: proof_bytes.to_vec(),
+                                },
+                            ) {
+                                for action in &actions {
+                                    if matches!(action, SessionAction::SessionOpened) {
+                                        opened = true;
+                                    }
+                                }
+                            }
+                            if opened {
+                                self.setup_pubsub_router(&peer_addr, rng, out);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn unregister_peer_link(&mut self, addr: &[u8; 16]) {
         if let Some(peer) = self.peers.get(addr) {
             if let Some(ref link) = peer.link {
