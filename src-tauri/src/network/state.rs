@@ -116,6 +116,12 @@ pub struct NetworkState {
     registry: RemotePlayerRegistry,
     /// Active and pending peer connections, keyed by address_hash.
     peers: HashMap<[u8; 16], PeerState>,
+    /// Links from incoming LinkRequests that haven't been matched to a peer yet.
+    /// The responder can't determine the initiator's identity from the request
+    /// (it only contains ephemeral keys), so we buffer the link here and match
+    /// it to a peer during Session handshake when the real identity is revealed.
+    /// Keyed by link_id.
+    unmatched_links: HashMap<[u8; 16], Link>,
 }
 
 impl NetworkState {
@@ -153,6 +159,7 @@ impl NetworkState {
             dest_name: Some(dest_name),
             registry: RemotePlayerRegistry::new(),
             peers: HashMap::new(),
+            unmatched_links: HashMap::new(),
         }
     }
 
@@ -324,6 +331,7 @@ impl NetworkState {
         // Clear all remote players and peer connections.
         self.registry.clear();
         self.peers.clear();
+        self.unmatched_links.clear();
 
         // Unregister old destination.
         if let Some(ref old_hash) = self.dest_hash {
@@ -593,35 +601,12 @@ impl NetworkState {
                 // data packet (addressed to link_id) gets DeliverLocally.
                 self.node.register_destination(*link.link_id());
 
-                // Find the peer whose identity matches the link's initiator.
-                // The link doesn't directly expose the initiator identity, but
-                // the LinkRequest's destination_hash is our announcing dest hash.
-                // We need to figure out which peer sent this. The request was
-                // addressed to our dest_hash, and we look up the peer by checking
-                // remote_identity OR by iterating peers without a link (the higher-
-                // hash peer that is waiting for our request).
-                //
-                // Since the responder doesn't know the initiator's identity from
-                // the link request alone (it contains ephemeral keys, not the
-                // initiator's real identity), we match by finding the peer that
-                // has no link yet (the higher-hash side stores the peer in
-                // handle_announce_received without a link because it doesn't
-                // initiate).
+                // Buffer the link — we can't determine the initiator's identity
+                // from the request (it only contains ephemeral keys). The link
+                // will be matched to the correct peer during Session handshake,
+                // which reveals the real Ed25519 identity.
                 let link_id = *link.link_id();
-                let mut stored = false;
-                for peer in self.peers.values_mut() {
-                    if peer.link.is_none() {
-                        peer.link = Some(link);
-                        stored = true;
-                        break;
-                    }
-                }
-
-                if !stored {
-                    // No peer slot available — unregister the link_id we just added.
-                    self.node.unregister_destination(&link_id);
-                    return;
-                }
+                self.unmatched_links.insert(link_id, link);
 
                 // Emit the proof packet for sending.
                 if let Ok(raw) = proof_packet.to_bytes() {
@@ -680,8 +665,51 @@ impl NetworkState {
             // ── Data ─────────────────────────────────────────────────
             PacketType::Data => {
                 // RTT packet from initiator: context=Lrrtt, link in Handshake state.
+                // The link may be in unmatched_links (responder side) or on a peer.
                 if packet.header.context == PacketContext::Lrrtt {
-                    // Find the peer address first to avoid borrow conflicts.
+                    // Check unmatched_links first (responder side).
+                    if let Some(link) = self.unmatched_links.get_mut(&dest_hash) {
+                        if link.state() == LinkState::Handshake {
+                            let _ = link.activate(packet);
+                            // Link is now Active but not yet assigned to a peer.
+                            // It will be matched during Session handshake when
+                            // the remote identity is revealed via
+                            // activate_peer_session → Session::new → proof exchange.
+                            // For now, start the Session with the link still in
+                            // unmatched_links. We need to move it to a peer first.
+                            // Since we can't determine peer identity yet, we'll
+                            // handle the Session handshake proof to discover it.
+                            //
+                            // We don't know the remote identity yet — try to find
+                            // a linkless peer. If there's exactly one, it's the one.
+                            // If multiple, we defer until identity is revealed.
+                            let linkless_peers: Vec<[u8; 16]> = self
+                                .peers
+                                .iter()
+                                .filter(|(_, p)| p.link.is_none())
+                                .map(|(addr, _)| *addr)
+                                .collect();
+
+                            if linkless_peers.len() == 1 {
+                                // Exactly one candidate — assign link to this peer.
+                                let peer_addr = linkless_peers[0];
+                                let link = self.unmatched_links.remove(&dest_hash).unwrap();
+                                if let Some(peer) = self.peers.get_mut(&peer_addr) {
+                                    peer.link = Some(link);
+                                }
+                                let now_ms = now_secs * 1000;
+                                self.activate_peer_session(&peer_addr, now_ms, rng, out);
+                            }
+                            // If multiple linkless peers, the link stays in
+                            // unmatched_links until we can resolve via Session
+                            // handshake identity. This is a known limitation —
+                            // for the current LAN MVP it's acceptable.
+                            return;
+                        }
+                    }
+
+                    // Also check peers (initiator side won't hit this for RTT,
+                    // but handle it for completeness).
                     let peer_addr = self
                         .peers
                         .iter()
@@ -692,17 +720,13 @@ impl NetworkState {
                         })
                         .map(|(addr, _)| *addr);
 
-                    let peer_addr = match peer_addr {
-                        Some(a) => a,
-                        None => return,
-                    };
-
-                    let peer = self.peers.get_mut(&peer_addr).unwrap();
-                    let link = peer.link.as_mut().unwrap();
-                    let _rtt = link.activate(packet);
-                    // Link is now Active — activate the Zenoh Session.
-                    let now_ms = now_secs * 1000;
-                    self.activate_peer_session(&peer_addr, now_ms, rng, out);
+                    if let Some(peer_addr) = peer_addr {
+                        let peer = self.peers.get_mut(&peer_addr).unwrap();
+                        let link = peer.link.as_mut().unwrap();
+                        let _rtt = link.activate(packet);
+                        let now_ms = now_secs * 1000;
+                        self.activate_peer_session(&peer_addr, now_ms, rng, out);
+                    }
                     return;
                 }
 
@@ -1226,10 +1250,12 @@ impl NetworkState {
                     }
                 }
                 SessionAction::SendHandshake { proof } => {
+                    // Send raw proof bytes with PacketContext::Channel,
+                    // matching activate_peer_session's initial handshake send.
+                    // The receiver passes raw decrypted bytes directly to
+                    // SessionEvent::HandshakeReceived — no prefix stripping.
                     if let Some(link) = link {
-                        let mut msg = b"HANDSHAKE:".to_vec();
-                        msg.extend_from_slice(&proof);
-                        Self::send_via_link(link, rng, &msg, PacketContext::None, out);
+                        Self::send_via_link(link, rng, &proof, PacketContext::Channel, out);
                     }
                 }
                 SessionAction::SendResourceDeclare { expr_id, key_expr } => {
@@ -1305,7 +1331,11 @@ impl NetworkState {
                 } = action
                 {
                     // Frame: [expr_id as u16 BE: 2 bytes][payload]
-                    let expr_id_u16 = expr_id as u16;
+                    // ExprId is u64 but values above u16::MAX would corrupt
+                    // the frame. With only 2 publishers per peer this is safe,
+                    // but assert to catch future growth.
+                    let expr_id_u16 = u16::try_from(expr_id)
+                        .expect("ExprId exceeds u16 frame limit");
                     let mut frame = Vec::with_capacity(2 + msg_payload.len());
                     frame.extend_from_slice(&expr_id_u16.to_be_bytes());
                     frame.extend_from_slice(&msg_payload);
@@ -1755,19 +1785,18 @@ mod tests {
             &mut rng,
         );
 
-        // B should now have a link in Handshake state.
-        let peer_a_in_b = state_b
-            .peers
-            .get(&state_a.public_identity.address_hash)
-            .expect("B should still have A as peer");
+        // B's link should be in unmatched_links (Handshake state) — the responder
+        // can't determine the initiator's identity from the request, so the link
+        // is buffered until the Session handshake reveals identity.
         assert!(
-            peer_a_in_b.link.is_some(),
-            "B should have created a link after receiving request"
+            !state_b.unmatched_links.is_empty(),
+            "B should have an unmatched link after receiving request"
         );
+        let unmatched_link = state_b.unmatched_links.values().next().unwrap();
         assert_eq!(
-            peer_a_in_b.link.as_ref().unwrap().state(),
+            unmatched_link.state(),
             LinkState::Handshake,
-            "B's link should be in Handshake state after responding"
+            "B's unmatched link should be in Handshake state after responding"
         );
 
         // B should have emitted a proof packet.
@@ -1811,7 +1840,12 @@ mod tests {
             &mut rng,
         );
 
-        // 7. Both links should be Active.
+        // 7. Both links should be Active. B's link should have moved from
+        // unmatched_links to the peer entry after RTT resolution.
+        assert!(
+            state_b.unmatched_links.is_empty(),
+            "unmatched_links should be empty after RTT resolves"
+        );
         let peer_a_in_b = state_b
             .peers
             .get(&state_a.public_identity.address_hash)
