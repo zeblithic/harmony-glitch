@@ -11,7 +11,10 @@
 use std::collections::HashMap;
 
 use harmony_identity::{Identity, PrivateIdentity};
-use harmony_reticulum::{DestinationName, InterfaceMode, Link, Node, NodeAction, NodeEvent};
+use harmony_reticulum::{
+    DestinationName, InterfaceMode, Link, LinkState, Node, NodeAction, NodeEvent, PacketContext,
+    PacketType,
+};
 use harmony_zenoh::{
     PubSubRouter, PublisherId, Session, SessionAction, SessionEvent, SessionState, SubscriptionId,
 };
@@ -530,6 +533,10 @@ impl NetworkState {
                                 data: raw,
                             });
                         }
+                        // Register the link_id so proof/data packets
+                        // addressed to it get DeliverLocally by the node.
+                        self.node.register_destination(*link.link_id());
+
                         // Store the pending link.
                         if let Some(peer) = self.peers.get_mut(&addr) {
                             peer.link = Some(link);
@@ -545,16 +552,135 @@ impl NetworkState {
 
     fn handle_local_delivery(
         &mut self,
-        _packet: &harmony_reticulum::Packet,
+        packet: &harmony_reticulum::Packet,
         _now_secs: u64,
-        _rng: &mut impl CryptoRngCore,
-        _out: &mut Vec<NetworkAction>,
+        rng: &mut impl CryptoRngCore,
+        out: &mut Vec<NetworkAction>,
     ) {
-        // Link proof handling and session data routing will be implemented
-        // when the socket layer (Task 7) and game loop (Task 8) are in place.
-        // The Link/Session handshake involves multiple round-trips that need
-        // actual packet exchange, which this tick-driven skeleton supports
-        // but the test harness doesn't exercise yet.
+        let dest_hash = packet.header.destination_hash;
+
+        match packet.header.flags.packet_type {
+            // ── LinkRequest: we are the responder ────────────────────
+            PacketType::LinkRequest => {
+                let identity =
+                    match PrivateIdentity::from_private_bytes(self.identity_bytes.as_ref()) {
+                        Ok(id) => id,
+                        Err(_) => return,
+                    };
+                let dest_name = match &self.dest_name {
+                    Some(dn) => dn,
+                    None => return,
+                };
+
+                let (link, proof_packet) = match Link::respond(&identity, dest_name, packet) {
+                    Ok(pair) => pair,
+                    Err(_) => return,
+                };
+
+                // Register the link_id as a local destination so the RTT
+                // data packet (addressed to link_id) gets DeliverLocally.
+                self.node.register_destination(*link.link_id());
+
+                // Find the peer whose identity matches the link's initiator.
+                // The link doesn't directly expose the initiator identity, but
+                // the LinkRequest's destination_hash is our announcing dest hash.
+                // We need to figure out which peer sent this. The request was
+                // addressed to our dest_hash, and we look up the peer by checking
+                // remote_identity OR by iterating peers without a link (the higher-
+                // hash peer that is waiting for our request).
+                //
+                // Since the responder doesn't know the initiator's identity from
+                // the link request alone (it contains ephemeral keys, not the
+                // initiator's real identity), we match by finding the peer that
+                // has no link yet (the higher-hash side stores the peer in
+                // handle_announce_received without a link because it doesn't
+                // initiate).
+                let link_id = *link.link_id();
+                let mut stored = false;
+                for peer in self.peers.values_mut() {
+                    if peer.link.is_none() {
+                        peer.link = Some(link);
+                        stored = true;
+                        break;
+                    }
+                }
+
+                if !stored {
+                    // No peer slot available — unregister the link_id we just added.
+                    self.node.unregister_destination(&link_id);
+                    return;
+                }
+
+                // Emit the proof packet for sending.
+                if let Ok(raw) = proof_packet.to_bytes() {
+                    out.push(NetworkAction::SendPacket {
+                        interface_name: INTERFACE_NAME.to_string(),
+                        data: raw,
+                    });
+                }
+            }
+
+            // ── Proof: we are the initiator ──────────────────────────
+            PacketType::Proof => {
+                // dest_hash is the link_id. Find the peer with a matching
+                // pending link.
+                let peer = self.peers.values_mut().find(|p| {
+                    p.link
+                        .as_ref()
+                        .is_some_and(|l| *l.link_id() == dest_hash && l.state() == LinkState::Pending)
+                });
+
+                let peer = match peer {
+                    Some(p) => p,
+                    None => return,
+                };
+
+                let link = peer.link.as_mut().unwrap();
+
+                // Use a reasonable RTT estimate — we don't have real timing
+                // yet, so use 0.1s as a placeholder.
+                let rtt_secs = 0.1;
+
+                let rtt_packet = match link.complete_handshake(rng, packet, rtt_secs) {
+                    Ok(pkt) => pkt,
+                    Err(_) => return,
+                };
+
+                // Emit the RTT packet for sending.
+                if let Ok(raw) = rtt_packet.to_bytes() {
+                    out.push(NetworkAction::SendPacket {
+                        interface_name: INTERFACE_NAME.to_string(),
+                        data: raw,
+                    });
+                }
+            }
+
+            // ── Data ─────────────────────────────────────────────────
+            PacketType::Data => {
+                // RTT packet from initiator: context=Lrrtt, link in Handshake state.
+                if packet.header.context == PacketContext::Lrrtt {
+                    let peer = self.peers.values_mut().find(|p| {
+                        p.link.as_ref().is_some_and(|l| {
+                            *l.link_id() == dest_hash && l.state() == LinkState::Handshake
+                        })
+                    });
+
+                    let peer = match peer {
+                        Some(p) => p,
+                        None => return,
+                    };
+
+                    let link = peer.link.as_mut().unwrap();
+                    let _rtt = link.activate(packet);
+                    // Link is now Active. Task 4 will activate the Session here.
+                }
+
+                // Active link data — placeholder for Task 5 (Session/PubSub data routing).
+            }
+
+            // Announce packets are handled via AnnounceReceived, not DeliverLocally.
+            PacketType::Announce => {}
+        }
     }
 
     // ── Internal: Session ticking ────────────────────────────────────────
@@ -953,5 +1079,200 @@ mod tests {
         assert!(state.peers.contains_key(&lower_pub.address_hash));
         let peer = state.peers.get(&lower_pub.address_hash).unwrap();
         assert!(peer.link.is_none(), "Higher hash should not initiate link");
+    }
+
+    // ── Helpers for handshake test ───────────────────────────────────
+
+    /// Create two NetworkStates on the same street, with the lower-hash one first.
+    fn make_pair_on_street(street: &str) -> (NetworkState, NetworkState) {
+        let mut rng = OsRng;
+        let id_a = make_identity();
+        let id_b = make_identity();
+
+        let pub_a = id_a.public_identity().clone();
+        let pub_b = id_b.public_identity().clone();
+
+        let (lower_id, higher_id) = if pub_a.address_hash < pub_b.address_hash {
+            (id_a, id_b)
+        } else {
+            (id_b, id_a)
+        };
+
+        let mut state_low = NetworkState::new(lower_id, "Lower".to_string());
+        let mut state_high = NetworkState::new(higher_id, "Higher".to_string());
+
+        state_low.change_street(street, 1.0, &mut rng).unwrap();
+        state_high.change_street(street, 1.0, &mut rng).unwrap();
+
+        (state_low, state_high)
+    }
+
+    /// Extract raw packet bytes from SendPacket actions.
+    fn extract_packets(actions: &[NetworkAction]) -> Vec<Vec<u8>> {
+        actions
+            .iter()
+            .filter_map(|a| match a {
+                NetworkAction::SendPacket { data, .. } => Some(data.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Build a ValidatedAnnounce for a given NetworkState, suitable for feeding
+    /// to another state's handle_announce_received.
+    fn build_announce_for(state: &NetworkState) -> harmony_reticulum::ValidatedAnnounce {
+        let dest_name =
+            DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
+        let destination_hash =
+            dest_name.destination_hash(&state.public_identity.address_hash);
+        let app_data = encode_app_data(
+            &state.display_name,
+            state.current_street.as_deref(),
+        );
+
+        harmony_reticulum::ValidatedAnnounce {
+            identity: state.public_identity.clone(),
+            destination_name: dest_name,
+            destination_hash,
+            random_hash: [0u8; 10],
+            ratchet: None,
+            app_data,
+        }
+    }
+
+    #[test]
+    fn full_link_handshake_between_two_states() {
+        let mut rng = OsRng;
+
+        // 1. Create two NetworkStates: A (lower hash), B (higher hash), both on "meadow".
+        let (mut state_a, mut state_b) = make_pair_on_street("meadow");
+
+        // Verify the tiebreaker ordering.
+        assert!(
+            state_a.public_identity.address_hash < state_b.public_identity.address_hash,
+            "state_a should have the lower hash"
+        );
+
+        // 2. Feed B's announce to A → A discovers B, initiates link, emits request packet.
+        let announce_b = build_announce_for(&state_b);
+        let mut actions_a = Vec::new();
+        state_a.handle_announce_received(&announce_b, 2, 2.0, &mut rng, &mut actions_a);
+
+        // A should have a peer for B with a Pending link.
+        let peer_b_in_a = state_a
+            .peers
+            .get(&state_b.public_identity.address_hash)
+            .expect("A should have B as peer");
+        assert!(peer_b_in_a.link.is_some(), "A should have initiated a link to B");
+        assert_eq!(
+            peer_b_in_a.link.as_ref().unwrap().state(),
+            LinkState::Pending
+        );
+
+        // A should have emitted a link request SendPacket.
+        let request_packets = extract_packets(&actions_a);
+        assert!(
+            !request_packets.is_empty(),
+            "A should emit a link request packet"
+        );
+
+        // 3. Feed A's announce to B (so B knows about A, but doesn't initiate — higher hash).
+        let announce_a = build_announce_for(&state_a);
+        let mut actions_b = Vec::new();
+        state_b.handle_announce_received(&announce_a, 2, 2.0, &mut rng, &mut actions_b);
+
+        let peer_a_in_b = state_b
+            .peers
+            .get(&state_a.public_identity.address_hash)
+            .expect("B should have A as peer");
+        assert!(
+            peer_a_in_b.link.is_none(),
+            "B (higher hash) should NOT initiate a link"
+        );
+
+        // 4. Feed A's request packet to B via tick → B responds with proof.
+        let request_raw = &request_packets[0];
+        let actions_b = state_b.tick(
+            &[(INTERFACE_NAME.to_string(), request_raw.clone())],
+            3.0,
+            &mut rng,
+        );
+
+        // B should now have a link in Handshake state.
+        let peer_a_in_b = state_b
+            .peers
+            .get(&state_a.public_identity.address_hash)
+            .expect("B should still have A as peer");
+        assert!(
+            peer_a_in_b.link.is_some(),
+            "B should have created a link after receiving request"
+        );
+        assert_eq!(
+            peer_a_in_b.link.as_ref().unwrap().state(),
+            LinkState::Handshake,
+            "B's link should be in Handshake state after responding"
+        );
+
+        // B should have emitted a proof packet.
+        let proof_packets = extract_packets(&actions_b);
+        assert!(
+            !proof_packets.is_empty(),
+            "B should emit a proof packet"
+        );
+
+        // 5. Feed B's proof to A via tick → A completes handshake, emits RTT.
+        let proof_raw = &proof_packets[0];
+        let actions_a = state_a.tick(
+            &[(INTERFACE_NAME.to_string(), proof_raw.clone())],
+            4.0,
+            &mut rng,
+        );
+
+        // A's link should now be Active.
+        let peer_b_in_a = state_a
+            .peers
+            .get(&state_b.public_identity.address_hash)
+            .expect("A should still have B as peer");
+        assert_eq!(
+            peer_b_in_a.link.as_ref().unwrap().state(),
+            LinkState::Active,
+            "A's link should be Active after receiving proof"
+        );
+
+        // A should have emitted an RTT packet.
+        let rtt_packets = extract_packets(&actions_a);
+        assert!(
+            !rtt_packets.is_empty(),
+            "A should emit an RTT packet"
+        );
+
+        // 6. Feed A's RTT to B via tick → B activates link.
+        let rtt_raw = &rtt_packets[0];
+        let _actions_b = state_b.tick(
+            &[(INTERFACE_NAME.to_string(), rtt_raw.clone())],
+            5.0,
+            &mut rng,
+        );
+
+        // 7. Both links should be Active.
+        let peer_a_in_b = state_b
+            .peers
+            .get(&state_a.public_identity.address_hash)
+            .expect("B should still have A as peer");
+        assert_eq!(
+            peer_a_in_b.link.as_ref().unwrap().state(),
+            LinkState::Active,
+            "B's link should be Active after receiving RTT"
+        );
+
+        let peer_b_in_a = state_a
+            .peers
+            .get(&state_b.public_identity.address_hash)
+            .expect("A should still have B as peer");
+        assert_eq!(
+            peer_b_in_a.link.as_ref().unwrap().state(),
+            LinkState::Active,
+            "A's link should still be Active"
+        );
     }
 }
