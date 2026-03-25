@@ -298,16 +298,15 @@ impl NetworkState {
             actions.push(NetworkAction::PresenceChange(event));
         }
 
-        // Sweep unmatched_links: remove Closed links unconditionally.
-        // Active/Handshake links are kept even if no linkless peer exists
-        // yet — the initiator's announce may arrive after their LinkRequest
-        // (race condition), so we must not prematurely purge a valid link.
-        // Only purge non-Closed links if the street is completely empty
-        // (no peers at all), meaning this is truly orphaned.
+        // Sweep unmatched_links: only remove Closed links. Active/Handshake
+        // links are kept regardless of peer count — a LinkRequest can arrive
+        // before the initiator's announce (race), so we must not purge valid
+        // links just because no peer entry exists yet. Truly orphaned links
+        // are cleaned up by change_street() which clears everything.
         let remove_ids: Vec<[u8; 16]> = self
             .unmatched_links
             .iter()
-            .filter(|(_, l)| l.state() == LinkState::Closed || self.peers.is_empty())
+            .filter(|(_, l)| l.state() == LinkState::Closed)
             .map(|(id, _)| *id)
             .collect();
         for link_id in remove_ids {
@@ -1186,6 +1185,9 @@ impl NetworkState {
                 if let Some(session) = peer.session.as_mut() {
                     let _ = session.handle_event(SessionEvent::KeepaliveReceived);
                 }
+                // Refresh registry liveness so idle-but-alive peers aren't
+                // evicted by purge_stale (STALE_TIMEOUT=10s < keepalive=30s).
+                self.registry.refresh_liveness(addr, now_secs_f64);
                 return;
             }
             if text == "CLOSE" {
@@ -1365,6 +1367,7 @@ impl NetworkState {
                                 out.push(NetworkAction::ChatReceived(chat));
                             }
                             NetMessage::Presence(event) => {
+                                self.registry.handle_presence(&event, now_secs_f64);
                                 out.push(NetworkAction::PresenceChange(event));
                             }
                         }
