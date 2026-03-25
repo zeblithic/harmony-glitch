@@ -1468,7 +1468,7 @@ impl NetworkState {
                                 // departure. Ignore forged/mismatched Left events.
                                 if let PresenceEvent::Left { address_hash } = &event {
                                     if address_hash != addr {
-                                        return;
+                                        continue; // Ignore forged event, process remaining actions
                                     }
                                     peer_to_remove = Some(*addr);
                                 }
