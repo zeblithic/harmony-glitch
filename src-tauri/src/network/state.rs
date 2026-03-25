@@ -1465,11 +1465,15 @@ impl NetworkState {
                             }
                             NetMessage::Presence(event) => {
                                 // Validate: a peer may only announce their own
-                                // departure. Ignore forged/mismatched Left events.
-                                if let PresenceEvent::Left { address_hash } = &event {
-                                    if address_hash != addr {
-                                        continue; // Ignore forged event, process remaining actions
-                                    }
+                                // presence changes. Ignore forged events.
+                                let event_hash = match &event {
+                                    PresenceEvent::Left { address_hash } => *address_hash,
+                                    PresenceEvent::Joined { address_hash, .. } => *address_hash,
+                                };
+                                if &event_hash != addr {
+                                    continue;
+                                }
+                                if let PresenceEvent::Left { .. } = &event {
                                     peer_to_remove = Some(*addr);
                                 }
                                 self.registry.handle_presence(&event, now_secs_f64);
