@@ -261,12 +261,14 @@ impl NetworkState {
         }
         // Remove peers whose sessions have closed/gone stale.
         for addr in closed_peers {
+            self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
         }
 
         // Purge stale players and clean up their PeerState entries.
         let purged = self.registry.purge_stale(now_secs);
         for addr in purged {
+            self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
         }
 
@@ -327,6 +329,17 @@ impl NetworkState {
     ) -> Result<Vec<NetworkAction>, String> {
         let mut actions = Vec::new();
         let now_secs_u64 = now_secs as u64;
+
+        // Unregister all link destinations before clearing peers.
+        let peer_addrs: Vec<[u8; 16]> = self.peers.keys().copied().collect();
+        for addr in peer_addrs {
+            self.unregister_peer_link(&addr);
+        }
+        // Also unregister any unmatched links.
+        let unmatched_ids: Vec<[u8; 16]> = self.unmatched_links.keys().copied().collect();
+        for link_id in unmatched_ids {
+            self.node.unregister_destination(&link_id);
+        }
 
         // Clear all remote players and peer connections.
         self.registry.clear();
@@ -493,6 +506,7 @@ impl NetworkState {
 
         if !same_street {
             // If we had this peer before and they changed streets, treat as leave.
+            self.unregister_peer_link(&addr);
             if self.peers.remove(&addr).is_some() {
                 let event = PresenceEvent::Left { address_hash: addr };
                 self.registry.handle_presence(&event, now_secs_f64);
@@ -796,6 +810,16 @@ impl NetworkState {
     }
 
     // ── Internal: Session activation ──────────────────────────────────────
+
+    /// Unregister a peer's link_id from the Node so orphan destinations
+    /// don't continue to match/deliver packets after teardown.
+    fn unregister_peer_link(&mut self, addr: &[u8; 16]) {
+        if let Some(peer) = self.peers.get(addr) {
+            if let Some(ref link) = peer.link {
+                self.node.unregister_destination(link.link_id());
+            }
+        }
+    }
 
     /// Build an encrypted link data packet and push it as a `NetworkAction::SendPacket`.
     ///
