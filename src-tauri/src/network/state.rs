@@ -1204,6 +1204,13 @@ impl NetworkState {
             all_pubsub_actions.extend(actions);
         }
 
+        // Fail fast: if no publishers were declared, don't announce
+        // subscriptions either — we'd create dangling SUBs on the remote
+        // side that can never be satisfied (no router stored locally).
+        if state_publisher_id.is_none() && chat_publisher_id.is_none() {
+            return;
+        }
+
         // Process all PubSubActions — send them through the link.
         let link = match peer.link.as_ref() {
             Some(l) if l.state() == LinkState::Active => l,
@@ -1225,11 +1232,6 @@ impl NetworkState {
                 }
                 _ => {}
             }
-        }
-
-        // Don't store a broken router if no publishers were declared.
-        if state_publisher_id.is_none() && chat_publisher_id.is_none() {
-            return;
         }
 
         // Store the router and IDs in the peer state.
@@ -1426,10 +1428,35 @@ impl NetworkState {
                             None => return,
                         };
                         if let Some(session) = peer.session.as_mut() {
-                            let _ = session.handle_event(SessionEvent::ResourceDeclared {
-                                expr_id,
-                                key_expr: key_expr.to_string(),
-                            });
+                            if let Ok(actions) = session.handle_event(
+                                SessionEvent::ResourceDeclared {
+                                    expr_id,
+                                    key_expr: key_expr.to_string(),
+                                },
+                            ) {
+                                let link = peer
+                                    .link
+                                    .as_ref()
+                                    .filter(|l| l.state() == LinkState::Active);
+                                if let Some(link) = link {
+                                    for action in &actions {
+                                        if let SessionAction::SendResourceDeclare {
+                                            expr_id,
+                                            key_expr,
+                                        } = action
+                                        {
+                                            let msg =
+                                                format!("RESDECL:{expr_id}:{key_expr}");
+                                            Self::send_control(
+                                                link,
+                                                rng,
+                                                msg.as_bytes(),
+                                                out,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1443,7 +1470,24 @@ impl NetworkState {
                         None => return,
                     };
                     if let Some(session) = peer.session.as_mut() {
-                        let _ = session.handle_event(SessionEvent::ResourceUndeclared { expr_id });
+                        if let Ok(actions) =
+                            session.handle_event(SessionEvent::ResourceUndeclared { expr_id })
+                        {
+                            let link = peer
+                                .link
+                                .as_ref()
+                                .filter(|l| l.state() == LinkState::Active);
+                            if let Some(link) = link {
+                                for action in &actions {
+                                    if let SessionAction::SendResourceUndeclare { expr_id } =
+                                        action
+                                    {
+                                        let msg = format!("RESUNDECL:{expr_id}");
+                                        Self::send_control(link, rng, msg.as_bytes(), out);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
