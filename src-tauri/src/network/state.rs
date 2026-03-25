@@ -625,7 +625,12 @@ impl NetworkState {
                         }
                     }
                     Err(_) => {
-                        // Link initiation failed — peer stays in discovered state.
+                        // Roll back peer insertion so re-announce retries cleanly.
+                        self.peers.remove(&addr);
+                        self.registry.handle_presence(
+                            &PresenceEvent::Left { address_hash: addr },
+                            now_secs_f64,
+                        );
                     }
                 }
             }
@@ -1216,6 +1221,11 @@ impl NetworkState {
             }
         }
 
+        // Don't store a broken router if no publishers were declared.
+        if state_publisher_id.is_none() && chat_publisher_id.is_none() {
+            return;
+        }
+
         // Store the router and IDs in the peer state.
         peer.router = Some(router);
         peer.state_publisher_id = state_publisher_id;
@@ -1567,6 +1577,9 @@ impl NetworkState {
 
         let mut should_remove = false;
         for action in session_actions {
+            if should_remove {
+                break; // Don't send keepalives/data to an evicted peer.
+            }
             match action {
                 SessionAction::PeerStale | SessionAction::SessionClosed => {
                     // Peer went stale or session closed — emit presence leave
