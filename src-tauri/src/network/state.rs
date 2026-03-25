@@ -275,8 +275,23 @@ impl NetworkState {
         }
 
         // Purge stale players and clean up their PeerState entries.
+        // Send a graceful CLOSE to peers with active links so the remote
+        // side tears down promptly instead of waiting for its own stale timeout.
         let purged = self.registry.purge_stale(now_secs);
         for addr in purged {
+            if let Some(peer) = self.peers.get(&addr) {
+                if let Some(link) = peer.link.as_ref() {
+                    if link.state() == LinkState::Active {
+                        Self::send_via_link(
+                            link,
+                            rng,
+                            b"CLOSE",
+                            PacketContext::None,
+                            &mut actions,
+                        );
+                    }
+                }
+            }
             self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
             let event = PresenceEvent::Left { address_hash: addr };
@@ -997,6 +1012,17 @@ impl NetworkState {
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
+        // Don't overwrite a session that is already underway (guards against
+        // retransmit races between the RTT path and try_match_unmatched_link).
+        if self
+            .peers
+            .get(addr)
+            .and_then(|p| p.session.as_ref())
+            .is_some()
+        {
+            return;
+        }
+
         // Reconstruct the PrivateIdentity (Session::new consumes it by value).
         let private_identity =
             match PrivateIdentity::from_private_bytes(self.identity_bytes.as_ref()) {
