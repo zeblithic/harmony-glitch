@@ -840,29 +840,33 @@ impl NetworkState {
                     Err(_) => return,
                 };
 
-                // If the peer has a Session in Init state, treat the plaintext
-                // as a handshake proof (Ed25519 signature from the remote peer).
+                // Session handshake proofs are sent with PacketContext::Channel.
+                // Use this as a discriminator so late/retransmitted proofs
+                // arriving after the session goes Active are silently ignored
+                // instead of falling through to the PubSub handler.
                 let session_state = peer.session.as_ref().map(|s| s.state());
-                if session_state == Some(SessionState::Init) {
-                    let mut opened = false;
-                    if let Some(ref mut session) = peer.session {
-                        if let Ok(actions) =
-                            session.handle_event(SessionEvent::HandshakeReceived {
-                                proof: plaintext,
-                            })
-                        {
-                            for action in &actions {
-                                if matches!(action, SessionAction::SessionOpened) {
-                                    opened = true;
+                if packet.header.context == PacketContext::Channel {
+                    // This is a session handshake proof (initial or retransmit).
+                    if session_state == Some(SessionState::Init) {
+                        let mut opened = false;
+                        if let Some(ref mut session) = peer.session {
+                            if let Ok(actions) =
+                                session.handle_event(SessionEvent::HandshakeReceived {
+                                    proof: plaintext,
+                                })
+                            {
+                                for action in &actions {
+                                    if matches!(action, SessionAction::SessionOpened) {
+                                        opened = true;
+                                    }
                                 }
                             }
                         }
+                        if opened {
+                            self.setup_pubsub_router(&peer_addr, rng, out);
+                        }
                     }
-                    if opened {
-                        // Session is now Active — set up the PubSubRouter.
-                        // (drops the mutable borrow on peer before calling setup_pubsub_router)
-                        self.setup_pubsub_router(&peer_addr, rng, out);
-                    }
+                    // If session is already Active, this is a late retransmit — ignore.
                     return;
                 }
 
@@ -1380,12 +1384,15 @@ impl NetworkState {
                                 out.push(NetworkAction::ChatReceived(chat));
                             }
                             NetMessage::Presence(event) => {
-                                self.registry.handle_presence(&event, now_secs_f64);
-                                // Defer peer teardown to after the loop to avoid
-                                // borrow conflicts with self.peers.
+                                // Validate: a peer may only announce their own
+                                // departure. Ignore forged/mismatched Left events.
                                 if let PresenceEvent::Left { address_hash } = &event {
-                                    peer_to_remove = Some(*address_hash);
+                                    if address_hash != addr {
+                                        return;
+                                    }
+                                    peer_to_remove = Some(*addr);
                                 }
+                                self.registry.handle_presence(&event, now_secs_f64);
                                 out.push(NetworkAction::PresenceChange(event));
                             }
                         }
