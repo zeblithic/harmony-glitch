@@ -270,6 +270,8 @@ impl NetworkState {
         for addr in purged {
             self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
+            let event = PresenceEvent::Left { address_hash: addr };
+            actions.push(NetworkAction::PresenceChange(event));
         }
 
         // Sweep unmatched_links: remove links that are Closed or that have
@@ -741,10 +743,21 @@ impl NetworkState {
                                 let now_ms = (now_secs * 1000.0) as u64;
                                 self.activate_peer_session(&peer_addr, now_ms, rng, out);
                             }
-                            // If multiple linkless peers, the link stays in
-                            // unmatched_links until we can resolve via Session
-                            // handshake identity. This is a known limitation —
-                            // for the current LAN MVP it's acceptable.
+                            // Multiple linkless peers — can't determine which one
+                            // sent this link request from the RTT alone. The link
+                            // stays in unmatched_links until the initiator's
+                            // Session handshake proof arrives (which contains an
+                            // Ed25519 signature we can verify against each candidate).
+                            //
+                            // This resolves in the same tick: the initiator emits
+                            // both the RTT and session proof in the same output
+                            // batch, so the proof packet is processed immediately
+                            // after this RTT → try_match_unmatched_link verifies
+                            // the signature and assigns the link to the correct peer.
+                            //
+                            // Edge case: if the session proof packet is lost (UDP),
+                            // the initiator's Session timer will retransmit the
+                            // handshake, resolving on the next arrival.
                             return;
                         }
                     }
