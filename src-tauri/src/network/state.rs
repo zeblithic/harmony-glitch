@@ -267,6 +267,11 @@ impl NetworkState {
     }
 
     /// Publish our player state to all active peers.
+    /// Publisher index for the state topic (declared first in setup_pubsub_router).
+    const PUB_INDEX_STATE: usize = 0;
+    /// Publisher index for the chat topic (declared second in setup_pubsub_router).
+    const PUB_INDEX_CHAT: usize = 1;
+
     pub fn publish_player_state(
         &mut self,
         state: &PlayerNetState,
@@ -277,7 +282,7 @@ impl NetworkState {
             Ok(p) => p,
             Err(_) => return Vec::new(),
         };
-        self.publish_to_all_peers(&payload, rng)
+        self.publish_to_all_peers(&payload, Self::PUB_INDEX_STATE, rng)
     }
 
     /// Send a chat message to all active peers.
@@ -297,7 +302,7 @@ impl NetworkState {
 
         let msg = NetMessage::Chat(chat);
         if let Ok(payload) = serde_json::to_vec(&msg) {
-            actions.extend(self.publish_to_all_peers(&payload, rng));
+            actions.extend(self.publish_to_all_peers(&payload, Self::PUB_INDEX_CHAT, rng));
         }
         actions
     }
@@ -1158,15 +1163,17 @@ impl NetworkState {
 
     // ── Internal: Publishing ─────────────────────────────────────────────
 
-    /// Publish a payload to all peers with active sessions and routers.
+    /// Publish a payload to all peers through a specific publisher index.
     ///
-    /// For each peer: calls `router.publish(pub_id, payload, &session)` for
-    /// each publisher_id, then frames `SendMessage` actions as
-    /// `[expr_id: 2 bytes BE][payload]`, encrypts via link, and emits
-    /// `NetworkAction::SendPacket`.
+    /// `pub_index` selects which publisher to use: 0 = state, 1 = chat.
+    /// For each peer with active router/session/link: calls
+    /// `router.publish(pub_id, payload, &session)`, frames `SendMessage`
+    /// actions as `[expr_id: 2 bytes BE][payload]`, encrypts via link,
+    /// and emits `NetworkAction::SendPacket`.
     fn publish_to_all_peers(
         &mut self,
         payload: &[u8],
+        pub_index: usize,
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
         let mut out = Vec::new();
@@ -1190,36 +1197,34 @@ impl NetworkState {
                 _ => continue,
             };
 
-            // Publish through each publisher_id (state topic is [0], chat is [1]).
-            // Use the first publisher_id that succeeds (state topic for PlayerState,
-            // chat for Chat — for simplicity we publish on all publisher IDs and
-            // let the write-side filter decide).
-            for &pub_id in &peer.publisher_ids {
-                let actions = match router.publish(pub_id, payload.to_vec(), session) {
-                    Ok(a) => a,
-                    Err(_) => continue,
-                };
+            let pub_id = match peer.publisher_ids.get(pub_index) {
+                Some(&id) => id,
+                None => continue,
+            };
 
-                for action in actions {
-                    if let PubSubAction::SendMessage {
-                        expr_id,
-                        payload: msg_payload,
-                    } = action
-                    {
-                        // Frame: [expr_id as u16 BE: 2 bytes][payload]
-                        let expr_id_u16 = expr_id as u16;
-                        let mut frame =
-                            Vec::with_capacity(2 + msg_payload.len());
-                        frame.extend_from_slice(&expr_id_u16.to_be_bytes());
-                        frame.extend_from_slice(&msg_payload);
-                        Self::send_via_link(
-                            link,
-                            rng,
-                            &frame,
-                            PacketContext::None,
-                            &mut out,
-                        );
-                    }
+            let actions = match router.publish(pub_id, payload.to_vec(), session) {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
+
+            for action in actions {
+                if let PubSubAction::SendMessage {
+                    expr_id,
+                    payload: msg_payload,
+                } = action
+                {
+                    // Frame: [expr_id as u16 BE: 2 bytes][payload]
+                    let expr_id_u16 = expr_id as u16;
+                    let mut frame = Vec::with_capacity(2 + msg_payload.len());
+                    frame.extend_from_slice(&expr_id_u16.to_be_bytes());
+                    frame.extend_from_slice(&msg_payload);
+                    Self::send_via_link(
+                        link,
+                        rng,
+                        &frame,
+                        PacketContext::None,
+                        &mut out,
+                    );
                 }
             }
         }
