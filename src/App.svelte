@@ -53,6 +53,9 @@
     }
 
     // Auto-resume from save file if available.
+    // Only runs if identity was already configured before this launch.
+    // First-time users who complete identity setup via IdentitySetup component
+    // will see the street picker (no save file exists for them anyway).
     if (identityReady) {
       try {
         const saved = await getSavedState();

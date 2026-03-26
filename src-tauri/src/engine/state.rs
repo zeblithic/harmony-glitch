@@ -603,6 +603,10 @@ impl GameState {
             self.player.x = save.x.clamp(street.left + 1.0, street.right - 1.0);
             self.player.y = save.y.clamp(street.top + 1.0, street.bottom);
         } else {
+            // Invariant: restore_save should be called after load_street.
+            // Log a warning but don't panic — this path is reachable in tests
+            // and must degrade gracefully in production.
+            eprintln!("[persistence] restore_save called with no street loaded; position not clamped");
             self.player.x = save.x;
             self.player.y = save.y;
         }

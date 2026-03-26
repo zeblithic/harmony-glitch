@@ -120,10 +120,9 @@ fn load_street(
         );
         // Restore saved position/inventory if provided (auto-resume).
         if let Some(ref save_json) = save_state {
-            if let Ok(save) =
-                serde_json::from_value::<crate::engine::state::SaveState>(save_json.clone())
-            {
-                state.restore_save(&save);
+            match serde_json::from_value::<crate::engine::state::SaveState>(save_json.clone()) {
+                Ok(save) => state.restore_save(&save),
+                Err(e) => eprintln!("[persistence] Failed to deserialize save_state in load_street: {e}"),
             }
         }
     }
