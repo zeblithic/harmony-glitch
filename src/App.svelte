@@ -7,7 +7,7 @@
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, type SoundKit } from './lib/engine/audio';
@@ -24,6 +24,7 @@
   const MAX_TRANSITION_ATTEMPTS = 3;
   let identityReady = $state(false);
   let checkingIdentity = $state(true);
+  let resuming = $state(false);
   let recipes = $state<RecipeDef[]>([]);
 
   onMount(async () => {
@@ -50,6 +51,29 @@
       audioManager = new AudioManager(cachedKit, '/assets/audio/');
     } catch (e) {
       console.error('Failed to initialize audio:', e);
+    }
+
+    // Auto-resume from save file if available.
+    // Only runs if identity was already configured before this launch.
+    // First-time users who complete identity setup via IdentitySetup component
+    // will see the street picker (no save file exists for them anyway).
+    if (identityReady) {
+      // Set resuming BEFORE any async calls to suppress street picker flash.
+      resuming = true;
+      try {
+        const saved = await getSavedState();
+        if (saved) {
+          const street = await loadStreet(saved.streetId, saved);
+          // Set currentStreet to mount GameCanvas. GameCanvas.onMount calls
+          // buildScene then startGame — we don't call startGame here to
+          // ensure the scene is built and listeners registered first.
+          currentStreet = street;
+        }
+      } catch (e) {
+        console.error('Auto-resume failed, showing street picker:', e);
+      } finally {
+        resuming = false;
+      }
     }
   });
 
@@ -121,8 +145,8 @@
 }} />
 
 <main>
-  {#if checkingIdentity}
-    <!-- Wait for identity check before showing anything -->
+  {#if checkingIdentity || resuming}
+    <!-- Wait for identity check or auto-resume before showing anything -->
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}

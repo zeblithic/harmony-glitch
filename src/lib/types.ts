@@ -235,6 +235,20 @@ export interface RecipeItem {
   count: number;
 }
 
+/** Minimal item stack for save/load (not ItemStackFrame). */
+export interface SaveItemStack {
+  itemId: string;
+  count: number;
+}
+
+export interface SavedState {
+  streetId: string;
+  x: number;
+  y: number;
+  facing: string;
+  inventory: (SaveItemStack | null)[];
+}
+
 export type AudioEvent =
   | { type: 'itemPickup'; itemId: string }
   | { type: 'craftSuccess'; recipeId: string }

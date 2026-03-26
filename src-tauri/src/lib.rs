@@ -58,12 +58,56 @@ fn list_streets() -> Vec<String> {
 }
 
 #[tauri::command]
-fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
+fn get_saved_state(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
+    let pi = app.state::<PlayerIdentityWrapper>();
+    let save_path = pi.data_dir.join("savegame.json");
+    let save = crate::engine::state::read_save_state(&save_path)?;
+    match save {
+        Some(s) => {
+            if load_street_xml(&s.street_id).is_err() {
+                return Ok(None);
+            }
+            Ok(Some(serde_json::to_value(&s).map_err(|e| e.to_string())?))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Save the current game state to disk. Non-fatal on failure.
+/// Locks GameStateWrapper internally — callers must NOT hold that lock.
+fn save_current_state(app: &AppHandle) {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = match state_wrapper.0.lock() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let save = match state.save_state() {
+        Some(s) => s,
+        None => return,
+    };
+    drop(state); // Release lock before file I/O
+
+    let pi = app.state::<PlayerIdentityWrapper>();
+    let save_path = pi.data_dir.join("savegame.json");
+    if let Err(e) = crate::engine::state::write_save_state(&save_path, &save) {
+        eprintln!("[persistence] Save failed: {e}");
+    }
+}
+
+#[tauri::command]
+fn load_street(
+    name: String,
+    save_state: Option<serde_json::Value>,
+    app: AppHandle,
+) -> Result<StreetData, String> {
     // Load XML from bundled assets
     let xml = load_street_xml(&name)?;
     let street_data = parse_street(&xml)?;
     let entity_json = load_entity_placement(&name)?;
     let placement = item::loader::parse_entity_placements(&entity_json)?;
+
+    // Save current state BEFORE acquiring GameStateWrapper lock.
+    save_current_state(&app);
 
     // Update game state
     {
@@ -74,6 +118,13 @@ fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
             placement.entities,
             placement.ground_items,
         );
+        // Restore saved position/inventory if provided (auto-resume).
+        if let Some(ref save_json) = save_state {
+            match serde_json::from_value::<crate::engine::state::SaveState>(save_json.clone()) {
+                Ok(save) => state.restore_save(&save),
+                Err(e) => eprintln!("[persistence] Failed to deserialize save_state in load_street: {e}"),
+            }
+        }
     }
 
     // Update network state for the new street.
@@ -140,6 +191,9 @@ fn start_game(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn stop_game(app: AppHandle) -> Result<(), String> {
+    // Save game state before tearing down.
+    save_current_state(&app);
+
     // Reset input so the next session doesn't inherit stale key state.
     {
         let input_wrapper = app.state::<InputStateWrapper>();
@@ -553,6 +607,11 @@ pub fn run() {
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                save_current_state(window.app_handle());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             list_streets,
             load_street,
@@ -567,6 +626,7 @@ pub fn run() {
             craft_recipe,
             street_transition_ready,
             get_network_status,
+            get_saved_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");
