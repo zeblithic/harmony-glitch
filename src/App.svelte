@@ -58,22 +58,20 @@
     // First-time users who complete identity setup via IdentitySetup component
     // will see the street picker (no save file exists for them anyway).
     if (identityReady) {
+      // Set resuming BEFORE any async calls to suppress street picker flash.
+      resuming = true;
       try {
         const saved = await getSavedState();
         if (saved) {
-          // Set resuming flag to suppress street picker flash during async loads.
-          resuming = true;
           const street = await loadStreet(saved.streetId, saved);
           // Set currentStreet to mount GameCanvas. GameCanvas.onMount calls
           // buildScene then startGame — we don't call startGame here to
           // ensure the scene is built and listeners registered first.
           currentStreet = street;
-          resuming = false;
-        } else {
-          resuming = false;
         }
       } catch (e) {
         console.error('Auto-resume failed, showing street picker:', e);
+      } finally {
         resuming = false;
       }
     }
