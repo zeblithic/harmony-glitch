@@ -7,7 +7,7 @@
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, startGame, streetTransitionReady, getRecipes, getSavedState } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, type SoundKit } from './lib/engine/audio';
@@ -50,6 +50,20 @@
       audioManager = new AudioManager(cachedKit, '/assets/audio/');
     } catch (e) {
       console.error('Failed to initialize audio:', e);
+    }
+
+    // Auto-resume from save file if available.
+    if (identityReady) {
+      try {
+        const saved = await getSavedState();
+        if (saved) {
+          const street = await loadStreet(saved.streetId, saved);
+          await startGame();
+          currentStreet = street;
+        }
+      } catch (e) {
+        console.error('Auto-resume failed, showing street picker:', e);
+      }
     }
   });
 

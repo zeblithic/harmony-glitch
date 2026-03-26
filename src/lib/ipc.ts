@@ -1,13 +1,20 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState } from './types';
 
 export async function listStreets(): Promise<string[]> {
   return invoke<string[]>('list_streets');
 }
 
-export async function loadStreet(name: string): Promise<StreetData> {
-  return invoke<StreetData>('load_street', { name });
+export async function loadStreet(name: string, saveState?: SavedState | null): Promise<StreetData> {
+  return invoke<StreetData>('load_street', {
+    name,
+    saveState: saveState ?? null,
+  });
+}
+
+export async function getSavedState(): Promise<SavedState | null> {
+  return invoke<SavedState | null>('get_saved_state');
 }
 
 export async function sendInput(input: InputState): Promise<void> {
