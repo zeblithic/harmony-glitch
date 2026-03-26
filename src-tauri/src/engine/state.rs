@@ -774,6 +774,34 @@ impl GameState {
     }
 }
 
+/// Write a save state to disk as pretty-printed JSON.
+pub fn write_save_state(path: &std::path::Path, save: &SaveState) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(save).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| e.to_string())
+}
+
+/// Read a save state from disk. Returns Ok(None) if the file is missing
+/// or corrupted (graceful degradation — player sees street picker).
+pub fn read_save_state(path: &std::path::Path) -> Result<Option<SaveState>, String> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let json = match std::fs::read_to_string(path) {
+        Ok(j) => j,
+        Err(e) => {
+            eprintln!("[persistence] Failed to read save file: {e}");
+            return Ok(None);
+        }
+    };
+    match serde_json::from_str::<SaveState>(&json) {
+        Ok(save) => Ok(Some(save)),
+        Err(e) => {
+            eprintln!("[persistence] Corrupted save file: {e}");
+            Ok(None)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2285,5 +2313,48 @@ mod save_tests {
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.inventory.len(), 16);
         assert!(loaded.inventory.iter().all(|s| s.is_none()));
+    }
+
+    #[test]
+    fn write_and_read_save_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("savegame.json");
+
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 100.0,
+            y: -50.0,
+            facing: Direction::Right,
+            inventory: vec![
+                Some(ItemStack { item_id: "cherry".to_string(), count: 3 }),
+                None,
+            ],
+        };
+
+        write_save_state(&path, &save).unwrap();
+        let loaded = read_save_state(&path).unwrap();
+        assert!(loaded.is_some());
+        let loaded = loaded.unwrap();
+        assert_eq!(loaded.street_id, "demo_meadow");
+        assert!((loaded.x - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn missing_save_file_returns_none() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("nonexistent.json");
+        let result = read_save_state(&path);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn corrupted_save_file_returns_none() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("savegame.json");
+        std::fs::write(&path, "not valid json!!!").unwrap();
+        let result = read_save_state(&path);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }
