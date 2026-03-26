@@ -7,7 +7,7 @@
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, startGame, streetTransitionReady, getRecipes, getSavedState } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, type SoundKit } from './lib/engine/audio';
@@ -64,11 +64,11 @@
           // Set resuming flag to suppress street picker flash during async loads.
           resuming = true;
           const street = await loadStreet(saved.streetId, saved);
-          // Set currentStreet BEFORE startGame so GameCanvas mounts and
-          // registers its render_frame listener before the first tick fires.
+          // Set currentStreet to mount GameCanvas. GameCanvas.onMount calls
+          // buildScene then startGame — we don't call startGame here to
+          // ensure the scene is built and listeners registered first.
           currentStreet = street;
           resuming = false;
-          await startGame();
         } else {
           resuming = false;
         }
