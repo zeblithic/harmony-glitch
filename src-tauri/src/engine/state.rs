@@ -2357,4 +2357,58 @@ mod save_tests {
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
     }
+
+    #[test]
+    fn restore_save_clamps_position() {
+        let item_defs = crate::item::types::ItemDefs::new();
+        let entity_defs = crate::item::types::EntityDefs::new();
+        let recipe_defs = crate::item::types::RecipeDefs::new();
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+
+        // Load a street to get bounds
+        let xml = include_str!("../../../assets/streets/demo_meadow.xml");
+        let street = crate::street::parser::parse_street(xml).unwrap();
+        state.load_street(street, vec![], vec![]);
+
+        // Try to restore a position way outside bounds.
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 99999.0,
+            y: -99999.0,
+            facing: Direction::Left,
+            inventory: vec![],
+        };
+        state.restore_save(&save);
+
+        // Position should be clamped to street bounds.
+        let street = state.street.as_ref().unwrap();
+        assert!(state.player.x <= street.right - 1.0, "x should be clamped to right bound");
+        assert!(state.player.y >= street.top + 1.0, "y should be clamped to top bound");
+        assert_eq!(state.facing, Direction::Left);
+    }
+
+    #[test]
+    fn restore_save_fills_inventory() {
+        let item_defs = crate::item::types::ItemDefs::new();
+        let entity_defs = crate::item::types::EntityDefs::new();
+        let recipe_defs = crate::item::types::RecipeDefs::new();
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        assert_eq!(state.inventory.slots.len(), 16);
+
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![
+                Some(ItemStack { item_id: "cherry".to_string(), count: 5 }),
+            ],
+        };
+        state.restore_save(&save);
+
+        // Capacity preserved at 16, first slot has cherry, rest are None.
+        assert_eq!(state.inventory.slots.len(), 16);
+        assert_eq!(state.inventory.slots[0].as_ref().unwrap().item_id, "cherry");
+        assert!(state.inventory.slots[1].is_none());
+    }
 }
