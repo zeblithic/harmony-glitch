@@ -301,7 +301,7 @@ git commit -m "feat(persistence): add save file read/write with graceful corrupt
 
 ### Task 3: IPC commands — get_saved_state and save hooks
 
-Wire the save/load into Tauri IPC: new `get_saved_state` command, save on `load_street` and `stop_game`, restore on `load_street` when save data is available.
+Wire the save/load into Tauri IPC: new `get_saved_state` command, save helper, save hooks in `load_street`/`stop_game`/window close. The `load_street` command gains an optional `SaveState` parameter for restoration (matching the spec's single-call design — no separate restore command, no race between load and restore).
 
 **Files:**
 - Modify: `src-tauri/src/lib.rs`
@@ -366,14 +366,71 @@ fn save_current_state(app: &AppHandle) {
 
 - [ ] **Step 3: Add save hook in `load_street`**
 
-In the `load_street` IPC command, BEFORE the `state.load_street(...)` call, add:
+In the `load_street` IPC command, add `save_current_state(&app)` BEFORE the lock scope that calls `state.load_street(...)` (i.e., before line 69's `{` that opens the GameStateWrapper lock scope). This is critical: `save_current_state` locks GameStateWrapper internally and releases it, then the existing lock scope acquires it again. Placing it inside the lock scope would deadlock.
 
 ```rust
-// Save current state before loading a new street (captures position on old street).
-save_current_state(&app);
+#[tauri::command]
+fn load_street(name: String, app: AppHandle) -> Result<StreetData, String> {
+    let xml = load_street_xml(&name)?;
+    let street_data = parse_street(&xml)?;
+    let entity_json = load_entity_placement(&name)?;
+    let placement = item::loader::parse_entity_placements(&entity_json)?;
+
+    // Save current state BEFORE acquiring GameStateWrapper lock.
+    save_current_state(&app);
+
+    // Update game state
+    {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        state.load_street(
+            street_data.clone(),
+            placement.entities,
+            placement.ground_items,
+        );
+    }
+    // ... rest unchanged
 ```
 
-- [ ] **Step 4: Add save hook in `stop_game`**
+- [ ] **Step 4: Add restore logic in `load_street`**
+
+The `load_street` command gains an optional `save_state` JSON parameter. When provided, it applies the saved position, facing, and inventory AFTER loading the street (inside the same lock scope — no race with the game loop).
+
+Update the command signature and add restore logic:
+
+```rust
+#[tauri::command]
+fn load_street(name: String, save_state: Option<serde_json::Value>, app: AppHandle) -> Result<StreetData, String> {
+    let xml = load_street_xml(&name)?;
+    let street_data = parse_street(&xml)?;
+    let entity_json = load_entity_placement(&name)?;
+    let placement = item::loader::parse_entity_placements(&entity_json)?;
+
+    // Save current state BEFORE acquiring GameStateWrapper lock.
+    save_current_state(&app);
+
+    // Update game state
+    {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        state.load_street(
+            street_data.clone(),
+            placement.entities,
+            placement.ground_items,
+        );
+        // Restore saved position/inventory if provided (auto-resume).
+        // Applied inside the same lock so no game tick sees default-then-saved.
+        if let Some(ref save_json) = save_state {
+            if let Ok(save) = serde_json::from_value::<crate::engine::state::SaveState>(save_json.clone()) {
+                state.restore_save(&save);
+            }
+        }
+    }
+
+    // ... network change_street and return unchanged
+```
+
+- [ ] **Step 5: Add save hook in `stop_game`**
 
 At the beginning of `stop_game`, before resetting input:
 
@@ -382,40 +439,9 @@ At the beginning of `stop_game`, before resetting input:
 save_current_state(&app);
 ```
 
-- [ ] **Step 5: Add restore logic in `load_street`**
-
-The `load_street` command needs to accept an optional save restoration. Add a new command `load_street_with_save` or modify the existing one to accept an optional position.
-
-The simplest approach: add a separate `restore_saved_state` command that applies the save data after `load_street` returns:
-
-```rust
-#[tauri::command]
-fn restore_saved_state(x: f64, y: f64, facing: String, inventory: Vec<Option<crate::item::types::ItemStack>>, app: AppHandle) -> Result<(), String> {
-    let state_wrapper = app.state::<GameStateWrapper>();
-    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-
-    let facing_dir = match facing.as_str() {
-        "left" => crate::avatar::types::Direction::Left,
-        _ => crate::avatar::types::Direction::Right,
-    };
-
-    let save = crate::engine::state::SaveState {
-        street_id: String::new(), // Not needed for restore
-        x,
-        y,
-        facing: facing_dir,
-        inventory,
-    };
-    state.restore_save(&save);
-    Ok(())
-}
-```
-
-Register in `invoke_handler`.
-
 - [ ] **Step 6: Add window close save hook**
 
-In the `setup` closure (where identity is loaded), add a window close event handler:
+In the `setup` closure, before `Ok(())`:
 
 ```rust
 // Save on window close.
@@ -437,7 +463,7 @@ Expected: ALL PASS, no clippy errors
 
 ```bash
 cd /Users/zeblith/work/zeblithic/harmony-glitch
-git add src-tauri/src/lib.rs src-tauri/src/engine/state.rs
+git add src-tauri/src/lib.rs
 git commit -m "feat(persistence): add IPC commands and save hooks for game state"
 ```
 
@@ -445,13 +471,13 @@ git commit -m "feat(persistence): add IPC commands and save hooks for game state
 
 ### Task 4: Frontend types and IPC wrappers
 
-Add TypeScript types and IPC functions for save/load.
+Add TypeScript types and IPC function for save/load. Update `loadStreet` to accept optional save data.
 
 **Files:**
 - Modify: `src/lib/types.ts`
 - Modify: `src/lib/ipc.ts`
 
-- [ ] **Step 1: Add `SavedState` type**
+- [ ] **Step 1: Add `SavedState` and `ItemStack` types**
 
 Add to `src/lib/types.ts`:
 
@@ -461,18 +487,19 @@ export interface SavedState {
   x: number;
   y: number;
   facing: string;
-  inventory: (ItemStack | null)[];
+  inventory: (SaveItemStack | null)[];
 }
 
-export interface ItemStack {
+/** Minimal item stack for save/load (not the full ItemStackFrame with name/description). */
+export interface SaveItemStack {
   itemId: string;
   count: number;
 }
 ```
 
-Check if `ItemStack` already exists in `types.ts`. If so, reuse it. If only `ItemStackFrame` exists (with extra fields like `name`, `description`), create the minimal `ItemStack` separately.
+Check if a compatible `ItemStack` already exists in `types.ts`. If only `ItemStackFrame` exists (with extra fields), use the new `SaveItemStack` name to avoid conflict.
 
-- [ ] **Step 2: Add IPC wrappers**
+- [ ] **Step 2: Add `getSavedState` IPC wrapper and update `loadStreet`**
 
 Add to `src/lib/ipc.ts`:
 
@@ -482,18 +509,20 @@ import type { SavedState } from './types';
 export async function getSavedState(): Promise<SavedState | null> {
   return invoke<SavedState | null>('get_saved_state');
 }
+```
 
-export async function restoreSavedState(
-  x: number,
-  y: number,
-  facing: string,
-  inventory: (ItemStack | null)[]
-): Promise<void> {
-  return invoke('restore_saved_state', { x, y, facing, inventory });
+Update the existing `loadStreet` to accept optional save state:
+
+```typescript
+export async function loadStreet(name: string, saveState?: SavedState | null): Promise<StreetData> {
+  return invoke<StreetData>('load_street', {
+    name,
+    saveState: saveState ?? null,
+  });
 }
 ```
 
-Update the import line at the top of `ipc.ts` to include the new types.
+Update the import at the top of `ipc.ts` to include `SavedState`.
 
 - [ ] **Step 3: Verify frontend builds**
 
@@ -512,47 +541,41 @@ git commit -m "feat(persistence): add frontend SavedState type and IPC wrappers"
 
 ### Task 5: Auto-resume in App.svelte
 
-On mount, check for a saved state. If it exists, skip the street picker and auto-load the saved street with restored position/inventory.
+On mount, check for a saved state. If it exists, skip the street picker and auto-load the saved street with restored position/inventory. Restoration happens inside the `loadStreet` call (single atomic operation, no race).
 
 **Files:**
 - Modify: `src/App.svelte`
 
-- [ ] **Step 1: Import the new IPC functions**
+- [ ] **Step 1: Import the new IPC function**
 
-Update the import line in `App.svelte`:
+Update the import line in `App.svelte` to add `getSavedState` and `startGame`:
 
 ```typescript
-import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, restoreSavedState, startGame } from './lib/ipc';
+import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, startGame } from './lib/ipc';
 ```
 
-Note: `startGame` may already be imported elsewhere in the file. Check and add if needed. `loadStreet` is already imported.
+`loadStreet` is already imported. `startGame` may not be — add it.
 
 - [ ] **Step 2: Add auto-resume logic in `onMount`**
 
-After the identity check and recipe loading (around line 43), add:
+After the identity check and recipe loading (after the audio init try/catch, around line 53), add:
 
 ```typescript
 // Auto-resume from save file if available.
+// Must happen after identity check (identityReady) and audio init.
 if (identityReady) {
   try {
     const saved = await getSavedState();
     if (saved) {
-      const street = await loadStreet(saved.streetId);
-      await restoreSavedState(saved.x, saved.y, saved.facing, saved.inventory);
+      // loadStreet with save data restores position/inventory atomically
+      // (no separate restore call, no race with game loop).
+      const street = await loadStreet(saved.streetId, saved);
       await startGame();
-      // Recreate audio if needed
-      if (!audioManager && cachedKit) {
-        try {
-          audioManager = new AudioManager(cachedKit, '/assets/audio/');
-        } catch (e) {
-          console.error('Failed to recreate audio:', e);
-        }
-      }
       currentStreet = street;
     }
   } catch (e) {
     console.error('Auto-resume failed, showing street picker:', e);
-    // Fall through to street picker
+    // Fall through to street picker — currentStreet stays null
   }
 }
 ```
