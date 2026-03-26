@@ -613,6 +613,13 @@ impl GameState {
         self.facing = save.facing;
         let capacity = self.inventory.capacity;
         self.inventory.slots = save.inventory.clone();
+        if self.inventory.slots.len() > capacity {
+            eprintln!(
+                "[persistence] Inventory in save ({} slots) exceeds capacity ({}); truncating",
+                self.inventory.slots.len(),
+                capacity
+            );
+        }
         self.inventory.slots.resize(capacity, None);
     }
 

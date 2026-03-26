@@ -24,6 +24,7 @@
   const MAX_TRANSITION_ATTEMPTS = 3;
   let identityReady = $state(false);
   let checkingIdentity = $state(true);
+  let resuming = $state(false);
   let recipes = $state<RecipeDef[]>([]);
 
   onMount(async () => {
@@ -60,12 +61,17 @@
       try {
         const saved = await getSavedState();
         if (saved) {
+          // Set resuming flag to suppress street picker flash during async loads.
+          resuming = true;
           const street = await loadStreet(saved.streetId, saved);
-          await startGame();
+          // Set currentStreet BEFORE startGame so GameCanvas mounts and
+          // registers its render_frame listener before the first tick fires.
           currentStreet = street;
+          await startGame();
         }
       } catch (e) {
         console.error('Auto-resume failed, showing street picker:', e);
+        resuming = false;
       }
     }
   });
@@ -138,8 +144,8 @@
 }} />
 
 <main>
-  {#if checkingIdentity}
-    <!-- Wait for identity check before showing anything -->
+  {#if checkingIdentity || resuming}
+    <!-- Wait for identity check or auto-resume before showing anything -->
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
