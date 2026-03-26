@@ -9,11 +9,23 @@ use crate::engine::transition::{
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
-    EntityDefs, EntityInstanceState, InteractionPrompt, InventoryFrame, ItemDefs, ItemStackFrame,
-    PickupFeedback, RecipeDefs, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
+    EntityDefs, EntityInstanceState, InteractionPrompt, InventoryFrame, ItemDefs, ItemStack,
+    ItemStackFrame, PickupFeedback, RecipeDefs, WorldEntity, WorldEntityFrame, WorldItem,
+    WorldItemFrame,
 };
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
+
+/// Minimal player state for save/load.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveState {
+    pub street_id: String,
+    pub x: f64,
+    pub y: f64,
+    pub facing: Direction,
+    pub inventory: Vec<Option<ItemStack>>,
+}
 
 /// The complete game state.
 pub struct GameState {
@@ -566,6 +578,38 @@ impl GameState {
             },
             audio_events,
         })
+    }
+
+    /// Extract the current save-worthy state. Returns None if no street loaded.
+    pub fn save_state(&self) -> Option<SaveState> {
+        let street = self.street.as_ref()?;
+        Some(SaveState {
+            street_id: self
+                .tsid_to_name
+                .get(&street.tsid)
+                .cloned()
+                .unwrap_or_else(|| street.tsid.clone()),
+            x: self.player.x,
+            y: self.player.y,
+            facing: self.facing,
+            inventory: self.inventory.slots.clone(),
+        })
+    }
+
+    /// Restore saved state after a street has been loaded.
+    /// Position is clamped to street bounds.
+    pub fn restore_save(&mut self, save: &SaveState) {
+        if let Some(ref street) = self.street {
+            self.player.x = save.x.clamp(street.left + 1.0, street.right - 1.0);
+            self.player.y = save.y.clamp(street.top + 1.0, street.bottom);
+        } else {
+            self.player.x = save.x;
+            self.player.y = save.y;
+        }
+        self.facing = save.facing;
+        let capacity = self.inventory.capacity;
+        self.inventory.slots = save.inventory.clone();
+        self.inventory.slots.resize(capacity, None);
     }
 
     fn tick_entities(&mut self, dt: f64, rng: &mut impl Rng) {
@@ -2182,5 +2226,64 @@ mod tests {
             .pending_audio_events
             .iter()
             .any(|e| matches!(e, AudioEvent::StreetChanged { .. })));
+    }
+}
+
+#[cfg(test)]
+mod save_tests {
+    use super::*;
+    use crate::item::types::ItemStack;
+
+    #[test]
+    fn save_state_round_trip() {
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: -500.0,
+            y: -100.0,
+            facing: Direction::Right,
+            inventory: vec![
+                Some(ItemStack { item_id: "cherry".to_string(), count: 5 }),
+                None,
+                Some(ItemStack { item_id: "grain".to_string(), count: 2 }),
+            ],
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let loaded: SaveState = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.street_id, "demo_meadow");
+        assert!((loaded.x - (-500.0)).abs() < f64::EPSILON);
+        assert!((loaded.y - (-100.0)).abs() < f64::EPSILON);
+        assert_eq!(loaded.facing, Direction::Right);
+        assert_eq!(loaded.inventory.len(), 3);
+        assert_eq!(loaded.inventory[0].as_ref().unwrap().item_id, "cherry");
+        assert!(loaded.inventory[1].is_none());
+    }
+
+    #[test]
+    fn save_state_uses_camel_case() {
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Left,
+            inventory: vec![Some(ItemStack { item_id: "cherry".to_string(), count: 1 })],
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
+        assert!(json.contains("\"itemId\""), "ItemStack should use camelCase: {json}");
+    }
+
+    #[test]
+    fn empty_inventory_round_trip() {
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Left,
+            inventory: vec![None; 16],
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let loaded: SaveState = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.inventory.len(), 16);
+        assert!(loaded.inventory.iter().all(|s| s.is_none()));
     }
 }
