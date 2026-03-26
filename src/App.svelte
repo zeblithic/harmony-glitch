@@ -67,7 +67,10 @@
           // Set currentStreet BEFORE startGame so GameCanvas mounts and
           // registers its render_frame listener before the first tick fires.
           currentStreet = street;
+          resuming = false;
           await startGame();
+        } else {
+          resuming = false;
         }
       } catch (e) {
         console.error('Auto-resume failed, showing street picker:', e);
