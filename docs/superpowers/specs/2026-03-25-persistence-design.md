@@ -15,17 +15,20 @@ Location: `<app_data_dir>/savegame.json` (alongside existing `profile.json`).
 Platform-standard paths via Tauri's `app.path().app_data_dir()`:
 - macOS: `~/Library/Application Support/com.zeblithic.harmony-glitch/`
 - Linux: `~/.config/com.zeblithic.harmony-glitch/`
+- Windows: `%APPDATA%\com.zeblithic.harmony-glitch\`
 
 ### Format
 
+`SaveState` uses `#[serde(rename_all = "camelCase")]` to match the frontend convention. `ItemStack` already has `rename_all = "camelCase"`, so `item_id` serializes as `"itemId"`.
+
 ```json
 {
-  "street_id": "demo_meadow",
+  "streetId": "demo_meadow",
   "x": -500.0,
   "y": -100.0,
   "facing": "right",
   "inventory": [
-    { "item_id": "cherry", "count": 5 },
+    { "itemId": "cherry", "count": 5 },
     null,
     null
   ]
@@ -34,13 +37,13 @@ Platform-standard paths via Tauri's `app.path().app_data_dir()`:
 
 Small (~500 bytes). Synchronous write is fine — no game loop stutter at this size.
 
-The `inventory` array is a fixed-length Vec matching `Inventory.slots` (16 entries). `null` = empty slot. Each non-null entry has `item_id` (String) and `count` (u32).
+The `inventory` array is a fixed-length Vec matching `Inventory.slots` (16 entries). `null` = empty slot. The `streetId` uses the short name (e.g. `"demo_meadow"`, not the TSID `"LADEMO001"`) — `load_street_xml` accepts both, but short names are more readable in the save file.
 
 ## Save Triggers
 
-1. **Street change** — save before loading the new street, in the `load_street` IPC command handler. Captures the player's position on the OLD street before it's replaced.
+1. **Street change** — in the `load_street` IPC command, if `GameState.street.is_some()` (a street was previously loaded), save current state BEFORE loading the new street. This captures the player's position on the old street.
 
-2. **App exit** — save in `stop_game` command. Also hook Tauri's window close event (`on_window_event` with `CloseRequested`) so saves happen even if the user closes the window directly.
+2. **App exit** — in `stop_game` command and Tauri's `on_window_event` with `CloseRequested`. Saves even if the user closes the window directly.
 
 ## Load Flow
 
@@ -50,46 +53,40 @@ A new IPC command `get_saved_state()` reads `savegame.json` and returns either:
 - `{ streetId, x, y, facing, inventory }` — if save exists and is valid
 - `null` — if no save file, or if the file is corrupted (log warning, don't crash)
 
-The actual state restoration happens when the frontend calls `load_street(streetId)` followed by `start_game()` — the existing flow. The save data is applied to `GameState` after the street loads:
-- Set `player.x`, `player.y` from save
-- Set `facing` from save
-- Populate `inventory.slots` from save
+State restoration: `load_street` gains an optional `saved_state` parameter. When the frontend passes save data, `load_street` applies the saved position, facing, and inventory to `GameState` AFTER loading the street XML (which resets player to spawn point). This keeps the restoration logic inside the existing `load_street` flow — no separate `restore_save` command needed.
+
+Specifically, after `GameState::load_street()` sets the default spawn position:
+- Override `player.x`, `player.y` from save (clamped to street bounds)
+- Override `facing` from save
+- Replace `inventory.slots` from save
 
 ### Frontend
 
 On mount in `App.svelte`:
-1. Call `get_saved_state()`
-2. If non-null: skip the street picker, call `load_street(savedState.streetId)` directly, then `start_game()`
+1. Call `getSavedState()`
+2. If non-null: skip the street picker, call `loadStreet(savedState.streetId, savedState)` directly, then `startGame()`
 3. If null: show street picker as today (first-time player)
 4. The "Back" button (already exists) returns to the street picker — this is how players switch streets
 
-### Save on Load
-
-When `load_street` is called and a game is already running (street transition or explicit street change), save the current state BEFORE loading the new street. This ensures the save always reflects the latest position.
-
 ## Serialization
-
-Add `#[derive(Serialize, Deserialize)]` to types that don't already have it:
-
-| Type | Current Derives | Needs Adding |
-|------|----------------|--------------|
-| `PhysicsBody` | `Debug, Clone` | `Serialize, Deserialize` |
-| `Inventory` | `Debug, Clone` | `Serialize, Deserialize` |
-| `ItemStack` | `Debug, Clone, Serialize, Deserialize` | Already done |
-| `Direction` | `Debug, Clone, Copy, PartialEq, Serialize, Deserialize` | Already done |
 
 A dedicated `SaveState` struct wraps just the fields we save — we don't serialize the entire `GameState`:
 
 ```rust
 #[derive(Serialize, Deserialize)]
-struct SaveState {
-    street_id: String,
-    x: f64,
-    y: f64,
-    facing: Direction,
-    inventory: Vec<Option<ItemStack>>,
+#[serde(rename_all = "camelCase")]
+pub struct SaveState {
+    pub street_id: String,
+    pub x: f64,
+    pub y: f64,
+    pub facing: Direction,
+    pub inventory: Vec<Option<ItemStack>>,
 }
 ```
+
+`PhysicsBody` and `Inventory` do NOT need `Serialize`/`Deserialize` derives — `SaveState` extracts the relevant fields directly, avoiding issues with private fields like `PhysicsBody.prev_jump`.
+
+`ItemStack` and `Direction` already have `Serialize`/`Deserialize`.
 
 ## Error Handling
 
@@ -97,6 +94,7 @@ struct SaveState {
 - **Corrupted JSON:** Log warning via `eprintln!`, return null. Player sees street picker.
 - **Save write failure:** Log error but don't crash. Non-fatal — next save trigger will retry.
 - **Unknown street_id in save:** Return null. Street may have been removed between versions.
+- **Position out of bounds:** Clamp to street bounds after loading. Prevents stuck players if street geometry changed.
 
 ## Testing
 
@@ -107,24 +105,24 @@ struct SaveState {
 3. **Missing file returns None:** `load_save_state` with non-existent path returns None.
 4. **Corrupted file returns None:** Write invalid JSON, verify graceful fallback.
 5. **Street validation:** Save with unknown street_id treated as no-save.
+6. **Position clamping:** Saved position outside street bounds gets clamped.
 
 ### Frontend Tests (vitest)
 
-1. **Auto-resume flow:** Mock `get_saved_state()` returning a save → verify `loadStreet` called with saved street.
+1. **Auto-resume flow:** Mock `getSavedState()` returning a save → verify `loadStreet` called with saved street.
 2. **First-time flow:** Mock returning null → verify street picker shown.
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `src-tauri/src/engine/state.rs` | Add Serialize/Deserialize to `PhysicsBody` |
-| `src-tauri/src/item/inventory.rs` | Add Serialize/Deserialize to `Inventory` |
-| `src-tauri/src/lib.rs` | New `get_saved_state` and `save_game` commands, save hooks in `load_street`/`stop_game`/window close |
+| `src-tauri/src/lib.rs` | New `get_saved_state` command, save logic in `load_street`/`stop_game`/window close, `load_street` gains optional save restoration |
+| `src-tauri/src/engine/state.rs` | New `SaveState` struct, `save_state()` and `restore_save()` methods on `GameState` |
 | `src/App.svelte` | Auto-resume logic on mount |
-| `src/lib/ipc.ts` | New `getSavedState()` wrapper |
+| `src/lib/ipc.ts` | New `getSavedState()` wrapper, update `loadStreet` signature |
 | `src/lib/types.ts` | New `SavedState` interface |
 
-No new crates. No new dependencies.
+No new crates. No new dependencies. No derives needed on `PhysicsBody` or `Inventory`.
 
 ## What This Does NOT Include
 
