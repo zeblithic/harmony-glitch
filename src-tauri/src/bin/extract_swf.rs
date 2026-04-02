@@ -108,13 +108,21 @@ fn decode_lossless(bitmap: &swf::DefineBitsLossless) -> Option<ExtractedBitmap> 
             }
             let (palette_data, pixel_data) = decompressed.split_at(palette_size);
 
-            // Parse palette entries
+            // Parse palette entries (v2 uses premultiplied RGBA — un-premultiply)
             let entry_size = if is_v2 { 4 } else { 3 };
             let palette: Vec<[u8; 4]> = palette_data
                 .chunks_exact(entry_size)
                 .map(|c| {
                     if is_v2 {
-                        [c[0], c[1], c[2], c[3]] // RGBA
+                        let a = c[3];
+                        if a == 0 {
+                            [0, 0, 0, 0]
+                        } else if a == 255 {
+                            [c[0], c[1], c[2], 255]
+                        } else {
+                            let un = |v: u8| ((v as u16 * 255) / a as u16).min(255) as u8;
+                            [un(c[0]), un(c[1]), un(c[2]), a]
+                        }
                     } else {
                         [c[0], c[1], c[2], 255] // RGB, opaque
                     }

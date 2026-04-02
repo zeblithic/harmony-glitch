@@ -198,12 +198,9 @@ async function run(inputDir, outputDir, name, animationMode) {
     pngs.map(async (filePath) => {
       try {
         const meta = await sharp(filePath).metadata();
-        // Use path relative to inputDir to avoid basename collisions across subdirs
-        const rel = path.relative(inputDir, filePath);
-        const name = rel.replace(/\.png$/i, '').replace(/[\\/]/g, '_');
         return {
           path: filePath,
-          name,
+          name: path.basename(filePath, '.png'),
           width: meta.width,
           height: meta.height,
         };
@@ -214,6 +211,15 @@ async function run(inputDir, outputDir, name, animationMode) {
     }),
   );
   const images = imageResults.filter(Boolean);
+
+  // Warn on basename collisions (last one wins)
+  const seen = new Map();
+  for (const img of images) {
+    if (seen.has(img.name)) {
+      console.warn(`WARN: duplicate frame name "${img.name}" — ${img.path} overwrites ${seen.get(img.name)}`);
+    }
+    seen.set(img.name, img.path);
+  }
 
   if (images.length === 0) {
     console.error('No valid PNG files could be read');
