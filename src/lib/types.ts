@@ -37,6 +37,7 @@ export interface PlatformLine {
   end: Point;
   pcPerm: number | null;
   itemPerm: number | null;
+  surface: string;
 }
 
 export interface Point {
@@ -258,7 +259,8 @@ export type AudioEvent =
   | { type: 'transitionStart' }
   | { type: 'transitionComplete' }
   | { type: 'entityInteract'; entityType: string }
-  | { type: 'streetChanged'; streetId: string };
+  | { type: 'streetChanged'; streetId: string }
+  | { type: 'footstep'; surface: string };
 
 export interface SoundKitMeta {
   id: string;

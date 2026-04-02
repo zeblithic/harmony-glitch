@@ -314,6 +314,9 @@ impl GameState {
                 // Player placed on ground — sync prev_on_ground to prevent
                 // spurious Land audio event on the first post-swoop tick.
                 self.prev_on_ground = true;
+                // Reset footstep accumulator so the teleported player doesn't
+                // immediately emit footsteps from pre-transition distance.
+                self.player.distance_since_footstep = 0.0;
             } else {
                 self.transition.reset();
             }
@@ -368,6 +371,24 @@ impl GameState {
                 audio_events.push(AudioEvent::Land);
             }
             self.prev_on_ground = self.player.on_ground;
+
+            // Footstep audio — emit when stride distance reached
+            while self.player.on_ground
+                && self.player.distance_since_footstep
+                    >= crate::physics::movement::FOOTSTEP_STRIDE
+            {
+                let surface = surface_at(
+                    self.player.x,
+                    self.player.y,
+                    self.player.half_width,
+                    street.platforms(),
+                );
+                audio_events.push(AudioEvent::Footstep {
+                    surface: surface.to_string(),
+                });
+                self.player.distance_since_footstep -=
+                    crate::physics::movement::FOOTSTEP_STRIDE;
+            }
 
             // --- Interaction system ---
             // Age and cull pickup feedback
@@ -813,6 +834,39 @@ pub fn read_save_state(path: &std::path::Path) -> Result<Option<SaveState>, Stri
     }
 }
 
+/// Find the surface material of the platform under the player.
+/// Mirrors the physics "highest platform wins" priority (most-negative Y)
+/// so overlapping platforms at a junction resolve to the same one the
+/// player is actually standing on.
+/// Returns "default" if on ground_y or no platform matches.
+fn surface_at(x: f64, y: f64, half_width: f64, platforms: &[crate::street::types::PlatformLine]) -> &str {
+    let mut best: Option<(f64, usize)> = None; // (plat_y, index)
+    for (i, platform) in platforms.iter().enumerate() {
+        if !platform.solid_from_top() {
+            continue;
+        }
+        // Use body-width overlap (matching physics collision in movement.rs)
+        // so platform edges within half_width still resolve correctly.
+        if x + half_width < platform.min_x() || x - half_width > platform.max_x() {
+            continue;
+        }
+        let plat_y = platform.y_at(x);
+        if (plat_y - y).abs() < 1.0 {
+            // Prefer the highest platform (most-negative Y), matching
+            // physics Phase 1 slope-following priority in movement.rs.
+            match best {
+                Some((best_y, _)) if plat_y < best_y => best = Some((plat_y, i)),
+                None => best = Some((plat_y, i)),
+                _ => {}
+            }
+        }
+    }
+    match best {
+        Some((_, idx)) => &platforms[idx].surface,
+        None => "default",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,6 +898,7 @@ mod tests {
                     end: Point { x: 2800.0, y: 0.0 },
                     pc_perm: None,
                     item_perm: None,
+                    surface: "default".into(),
                 }],
                 walls: vec![],
                 ladders: vec![],
@@ -985,6 +1040,7 @@ mod tests {
                     end: Point { x: 300.0, y: 0.0 },
                     pc_perm: None,
                     item_perm: None,
+                    surface: "default".into(),
                 }],
                 walls: vec![],
                 ladders: vec![],
@@ -2265,6 +2321,324 @@ mod tests {
             .pending_audio_events
             .iter()
             .any(|e| matches!(e, AudioEvent::StreetChanged { .. })));
+    }
+
+    #[test]
+    fn surface_at_finds_matching_platform() {
+        use crate::street::types::{PlatformLine, Point};
+
+        let platforms = vec![
+            PlatformLine {
+                id: "grass_plat".into(),
+                start: Point { x: -200.0, y: 0.0 },
+                end: Point { x: 0.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "grass".into(),
+            },
+            PlatformLine {
+                id: "stone_plat".into(),
+                start: Point { x: 0.0, y: 0.0 },
+                end: Point { x: 200.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "stone".into(),
+            },
+        ];
+
+        assert_eq!(surface_at(-100.0, 0.0, 15.0, &platforms), "grass");
+        assert_eq!(surface_at(100.0, 0.0, 15.0, &platforms), "stone");
+        assert_eq!(surface_at(500.0, 0.0, 15.0, &platforms), "default");
+    }
+
+    #[test]
+    fn surface_at_returns_default_for_no_platforms() {
+        assert_eq!(surface_at(0.0, 0.0, 15.0, &[]), "default");
+    }
+
+    #[test]
+    fn surface_at_prefers_highest_overlapping_platform() {
+        use crate::street::types::{PlatformLine, Point};
+
+        // Flat ground at y=0 (grass) and a slope starting at y=0 rising to y=-100 (stone).
+        // At x=500 both overlap — the slope is higher (more negative Y), so physics
+        // snaps to the slope. surface_at should return "stone", not "grass".
+        let platforms = vec![
+            PlatformLine {
+                id: "ground".into(),
+                start: Point { x: 0.0, y: 0.0 },
+                end: Point { x: 1000.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "grass".into(),
+            },
+            PlatformLine {
+                id: "slope".into(),
+                start: Point { x: 400.0, y: 0.0 },
+                end: Point { x: 800.0, y: -100.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "stone".into(),
+            },
+        ];
+
+        // At x=600 (midpoint of slope), slope y = -50, ground y = 0.
+        // Player snapped to slope at y=-50 — should return "stone".
+        assert_eq!(surface_at(600.0, -50.0, 15.0, &platforms), "stone");
+
+        // At x=400 (start of slope), both are at y=0 — slope should win
+        // since it matches and is encountered, but they're at the same Y.
+        // Either is acceptable; what matters is we don't return "default".
+        let result = surface_at(400.0, 0.0, 15.0, &platforms);
+        assert!(result == "grass" || result == "stone");
+    }
+
+    fn footstep_test_street() -> StreetData {
+        StreetData {
+            tsid: "LTEST".into(),
+            name: "Test".into(),
+            left: -500.0,
+            right: 500.0,
+            top: -200.0,
+            bottom: 0.0,
+            ground_y: 0.0,
+            gradient: None,
+            layers: vec![Layer {
+                name: "middleground".into(),
+                z: 0,
+                w: 1000.0,
+                h: 200.0,
+                is_middleground: true,
+                decos: vec![],
+                platform_lines: vec![PlatformLine {
+                    id: "plat".into(),
+                    start: Point { x: -500.0, y: 0.0 },
+                    end: Point { x: 500.0, y: 0.0 },
+                    pc_perm: Some(-1),
+                    item_perm: None,
+                    surface: "grass".into(),
+                }],
+                walls: vec![],
+                ladders: vec![],
+                filters: None,
+            }],
+            signposts: vec![],
+        }
+    }
+
+    fn count_footsteps(frame: &Option<RenderFrame>) -> usize {
+        frame.as_ref().map_or(0, |f| {
+            f.audio_events
+                .iter()
+                .filter(|e| matches!(e, AudioEvent::Footstep { .. }))
+                .count()
+        })
+    }
+
+    #[test]
+    fn footstep_emits_after_stride_distance() {
+        use crate::physics::movement::{InputState, FOOTSTEP_STRIDE, WALK_SPEED};
+
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(footstep_test_street(), vec![], vec![]);
+        state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
+        state.player.on_ground = true;
+        state.prev_on_ground = true;
+
+        let dt = 1.0 / 60.0;
+        // At WALK_SPEED px/s and dt=1/60 s, each tick moves WALK_SPEED/60 px.
+        // Ticks needed to cover one FOOTSTEP_STRIDE = ceil(FOOTSTEP_STRIDE / (WALK_SPEED * dt)).
+        let ticks_for_stride =
+            (FOOTSTEP_STRIDE / (WALK_SPEED * dt)).ceil() as usize + 5;
+
+        let walking_right = InputState {
+            left: false,
+            right: true,
+            jump: false,
+            interact: false,
+        };
+
+        let mut total_footsteps = 0usize;
+        let mut rng = rand::thread_rng();
+        for _ in 0..ticks_for_stride {
+            let frame = state.tick(dt, &walking_right, &mut rng);
+            total_footsteps += count_footsteps(&frame);
+        }
+
+        assert!(
+            total_footsteps >= 1,
+            "Expected at least one footstep after walking {ticks_for_stride} ticks; got {total_footsteps}"
+        );
+    }
+
+    #[test]
+    fn no_footstep_while_airborne() {
+        use crate::physics::movement::InputState;
+
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(footstep_test_street(), vec![], vec![]);
+        state.player = crate::physics::movement::PhysicsBody::new(0.0, -50.0);
+        state.player.on_ground = false;
+        state.player.vy = 100.0;
+        state.prev_on_ground = false;
+
+        let dt = 1.0 / 60.0;
+        let walking_right = InputState {
+            left: false,
+            right: true,
+            jump: false,
+            interact: false,
+        };
+
+        let mut total_footsteps = 0usize;
+        let mut rng = rand::thread_rng();
+        for _ in 0..60 {
+            let frame = state.tick(dt, &walking_right, &mut rng);
+            // Only count ticks where player was still airborne
+            if !state.player.on_ground {
+                total_footsteps += count_footsteps(&frame);
+            }
+        }
+
+        assert_eq!(
+            total_footsteps, 0,
+            "Expected no footsteps while airborne; got {total_footsteps}"
+        );
+    }
+
+    #[test]
+    fn accumulator_resets_on_stop() {
+        use crate::physics::movement::{InputState, FOOTSTEP_STRIDE, WALK_SPEED};
+
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(footstep_test_street(), vec![], vec![]);
+        state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
+        state.player.on_ground = true;
+        state.prev_on_ground = true;
+
+        let dt = 1.0 / 60.0;
+        // Walk for a few ticks — not enough to reach a full stride
+        let partial_ticks =
+            ((FOOTSTEP_STRIDE * 0.5) / (WALK_SPEED * dt)).ceil() as usize;
+
+        let walking_right = InputState {
+            left: false,
+            right: true,
+            jump: false,
+            interact: false,
+        };
+        let stopped = InputState {
+            left: false,
+            right: false,
+            jump: false,
+            interact: false,
+        };
+
+        let mut rng = rand::thread_rng();
+        for _ in 0..partial_ticks {
+            state.tick(dt, &walking_right, &mut rng);
+        }
+
+        // Stop — accumulator should reset to zero
+        state.tick(dt, &stopped, &mut rng);
+        let acc_after_stop = state.player.distance_since_footstep;
+        assert!(
+            acc_after_stop < 1.0,
+            "Expected accumulator near zero after stopping; got {acc_after_stop}"
+        );
+
+        // Walk again — footstep should come only after a fresh full stride, not
+        // immediately from leftover partial distance.
+        let ticks_for_stride =
+            (FOOTSTEP_STRIDE / (WALK_SPEED * dt)).ceil() as usize + 5;
+        let mut footstep_tick: Option<usize> = None;
+        for i in 0..ticks_for_stride {
+            let frame = state.tick(dt, &walking_right, &mut rng);
+            if count_footsteps(&frame) > 0 && footstep_tick.is_none() {
+                footstep_tick = Some(i);
+            }
+        }
+
+        // The footstep should arrive after a meaningful number of ticks
+        // (i.e. the partial distance was not carried over).
+        let ticks_floor = (FOOTSTEP_STRIDE * 0.4 / (WALK_SPEED * dt)) as usize;
+        if let Some(tick) = footstep_tick {
+            assert!(
+                tick >= ticks_floor,
+                "Footstep came too early (tick {tick}), suggests partial distance was not reset"
+            );
+        } else {
+            panic!("No footstep emitted after walking a full stride from reset");
+        }
+    }
+
+    #[test]
+    fn footstep_surface_is_grass() {
+        use crate::physics::movement::{InputState, FOOTSTEP_STRIDE, WALK_SPEED};
+
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+        );
+        state.load_street(footstep_test_street(), vec![], vec![]);
+        state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
+        state.player.on_ground = true;
+        state.prev_on_ground = true;
+
+        let dt = 1.0 / 60.0;
+        let ticks_for_stride =
+            (FOOTSTEP_STRIDE / (WALK_SPEED * dt)).ceil() as usize + 5;
+
+        let walking_right = InputState {
+            left: false,
+            right: true,
+            jump: false,
+            interact: false,
+        };
+
+        let mut rng = rand::thread_rng();
+        let mut footstep_surfaces: Vec<String> = vec![];
+        for _ in 0..ticks_for_stride {
+            if let Some(frame) = state.tick(dt, &walking_right, &mut rng) {
+                for event in &frame.audio_events {
+                    if let AudioEvent::Footstep { surface } = event {
+                        footstep_surfaces.push(surface.clone());
+                    }
+                }
+            }
+        }
+
+        assert!(
+            !footstep_surfaces.is_empty(),
+            "Expected at least one footstep event"
+        );
+        for surface in &footstep_surfaces {
+            assert_eq!(
+                surface, "grass",
+                "Expected surface 'grass', got '{surface}'"
+            );
+        }
     }
 }
 

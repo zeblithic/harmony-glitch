@@ -14,6 +14,9 @@ pub const TERMINAL_VELOCITY: f64 = 600.0; // px/s
 /// 10 px gives comfortable headroom. If this is reduced below the per-frame
 /// Y change of any slope, players will briefly detach until Phase 2 catches them.
 const SLOPE_SNAP_TOLERANCE: f64 = 10.0;
+/// Horizontal distance (px) the player must travel on ground before a footstep event fires.
+/// At WALK_SPEED (200 px/s), this gives ~5 footsteps per second.
+pub const FOOTSTEP_STRIDE: f64 = 40.0;
 
 /// Player physics state.
 #[derive(Debug, Clone)]
@@ -30,6 +33,8 @@ pub struct PhysicsBody {
     /// Previous tick's jump input — used for rising-edge detection
     /// so holding jump doesn't auto-repeat.
     prev_jump: bool,
+    /// Accumulated horizontal distance on ground since last footstep event.
+    pub distance_since_footstep: f64,
 }
 
 /// Input state from the player.
@@ -53,6 +58,7 @@ impl PhysicsBody {
             half_width: 15.0,
             height: 60.0,
             prev_jump: false,
+            distance_since_footstep: 0.0,
         }
     }
 
@@ -233,6 +239,13 @@ impl PhysicsBody {
         }
 
         self.prev_jump = input.jump;
+
+        // Footstep distance accumulator
+        if self.on_ground && self.vx.abs() > 0.1 {
+            self.distance_since_footstep += (self.x - prev_x).abs();
+        } else {
+            self.distance_since_footstep = 0.0;
+        }
     }
 }
 
@@ -248,6 +261,7 @@ mod tests {
             end: Point { x: 1000.0, y: 0.0 },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }]
     }
 
@@ -327,6 +341,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
         let walls = solid_wall(100.0, -100.0, 100.0);
 
@@ -749,6 +764,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         // Player starts ABOVE the slope surface (y=-52 is above plat_y=-50
@@ -797,6 +813,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         let slope_y_at_100 = -50.0;
@@ -842,6 +859,7 @@ mod tests {
                 end: Point { x: 100.0, y: -50.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "low".into(),
@@ -849,6 +867,7 @@ mod tests {
                 end: Point { x: 100.0, y: 0.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -880,6 +899,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         let mut body = PhysicsBody::new(50.0, -25.0); // On slope at x=50 (y_at(50) = -25)
@@ -916,6 +936,7 @@ mod tests {
                 end: Point { x: 1800.0, y: 0.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "hill".into(),
@@ -926,6 +947,7 @@ mod tests {
                 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -966,6 +988,7 @@ mod tests {
                 end: Point { x: 1000.0, y: 0.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "ceiling".into(),
@@ -979,6 +1002,7 @@ mod tests {
                 },
                 pc_perm: None, // Solid from both directions
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -1013,6 +1037,7 @@ mod tests {
                 end: Point { x: 1000.0, y: 0.0 },
                 pc_perm: Some(-1), // One-way from top
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "upper".into(),
@@ -1026,6 +1051,7 @@ mod tests {
                 },
                 pc_perm: Some(-1), // One-way from top
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -1072,6 +1098,7 @@ mod tests {
             end: Point { x: 100.0, y: -50.0 },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         let mut body = PhysicsBody::new(90.0, -50.0); // Near the right edge, on platform
