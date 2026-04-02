@@ -594,14 +594,27 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
         }
     }
 
+    // Build a depth-ordered display list: Replace overwrites the previous
+    // character at the same depth, matching SWF semantics.
+    let mut display_list: std::collections::BTreeMap<swf::Depth, &swf::PlaceObject> =
+        std::collections::BTreeMap::new();
+
+    for place in &placements {
+        match place.action {
+            swf::PlaceObjectAction::Place(_) | swf::PlaceObjectAction::Replace(_) => {
+                display_list.insert(place.depth, place);
+            }
+            swf::PlaceObjectAction::Modify => {}
+        }
+    }
+
     let mut all_defs = String::new();
     let mut all_body = String::new();
     let mut gradient_id = 0u32;
 
-    for place in &placements {
+    for place in display_list.values() {
         let char_id = match place.action {
-            swf::PlaceObjectAction::Place(id) => id,
-            swf::PlaceObjectAction::Replace(id) => id,
+            swf::PlaceObjectAction::Place(id) | swf::PlaceObjectAction::Replace(id) => id,
             swf::PlaceObjectAction::Modify => continue,
         };
 
@@ -628,7 +641,6 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
                 matrix_to_svg(m)
             )
             .unwrap();
-            // Indent the paths within the group
             for line in paths.lines() {
                 if !line.is_empty() {
                     writeln!(all_body, "  {}", line).unwrap();

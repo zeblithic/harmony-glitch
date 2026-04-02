@@ -264,11 +264,13 @@ async function run(inputDir, outputDir, name, animationMode, scale = 1) {
   // Pack
   const { frames, sheetWidth, sheetHeight } = shelfPack(images);
 
-  // Composite — use pre-rasterized buffer for SVGs, path for PNGs
-  const imageByName = new Map(images.map((i) => [i.name, i]));
+  // Composite — use pre-rasterized buffer for SVGs, file path for PNGs.
+  // Key by path (unique) not name (may have duplicates).
+  const bufferByPath = new Map(
+    images.filter((i) => i.buffer).map((i) => [i.path, i.buffer]),
+  );
   const composites = frames.map((f) => {
-    const img = imageByName.get(f.name);
-    const input = img?.buffer ?? f.path;
+    const input = bufferByPath.get(f.path) ?? f.path;
     return { input, left: f.x, top: f.y };
   });
 
