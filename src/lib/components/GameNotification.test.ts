@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render } from '@testing-library/svelte';
 import GameNotification from './GameNotification.svelte';
 import type { PickupFeedback } from '../types';
 
@@ -16,28 +16,36 @@ function makeFeedback(overrides?: Partial<PickupFeedback>): PickupFeedback {
   };
 }
 
+function getContainer(): HTMLElement {
+  return document.querySelector('.notification-container')!;
+}
+
 describe('GameNotification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders nothing when feedback is empty', () => {
+  it('renders live region container even when feedback is empty', () => {
     render(GameNotification, { props: { feedback: [] } });
-    expect(document.querySelector('.notification-container')).toBeNull();
+    const container = getContainer();
+    expect(container).toBeDefined();
+    expect(container.getAttribute('aria-live')).toBe('assertive');
+    expect(container.getAttribute('aria-atomic')).toBe('false');
+    expect(container.children).toHaveLength(0);
   });
 
-  it('renders nothing when all feedback is successful', () => {
+  it('renders no notification children when all feedback is successful', () => {
     const fb = makeFeedback({ success: true, text: '+3 x Cherry' });
     render(GameNotification, { props: { feedback: [fb] } });
-    expect(document.querySelector('.notification-container')).toBeNull();
+    expect(getContainer().children).toHaveLength(0);
   });
 
-  it('renders alert container for failure feedback', () => {
+  it('renders notification children for failure feedback', () => {
     const fb = makeFeedback();
     render(GameNotification, { props: { feedback: [fb] } });
-    const alert = document.querySelector('.notification-container')!;
-    expect(alert).toBeDefined();
-    expect(alert.textContent).toContain('Inventory full!');
+    const container = getContainer();
+    expect(container.children).toHaveLength(1);
+    expect(container.textContent).toContain('Inventory full!');
   });
 
   it('renders multiple failure messages', () => {
@@ -45,9 +53,10 @@ describe('GameNotification', () => {
     const fb2 = makeFeedback({ id: 2, text: 'Cannot pick up' });
     render(GameNotification, { props: { feedback: [fb1, fb2] } });
 
-    const alert = document.querySelector('.notification-container')!;
-    expect(alert.textContent).toContain('Inventory full!');
-    expect(alert.textContent).toContain('Cannot pick up');
+    const container = getContainer();
+    expect(container.children).toHaveLength(2);
+    expect(container.textContent).toContain('Inventory full!');
+    expect(container.textContent).toContain('Cannot pick up');
   });
 
   it('filters out successful feedback from display', () => {
@@ -55,17 +64,17 @@ describe('GameNotification', () => {
     const failure = makeFeedback({ id: 2, success: false, text: 'Inventory full!' });
     render(GameNotification, { props: { feedback: [success, failure] } });
 
-    const alert = document.querySelector('.notification-container')!;
-    expect(alert.textContent).not.toContain('+1 x Wood');
-    expect(alert.textContent).toContain('Inventory full!');
+    const container = getContainer();
+    expect(container.children).toHaveLength(1);
+    expect(container.textContent).not.toContain('+1 x Wood');
+    expect(container.textContent).toContain('Inventory full!');
   });
 
   it('applies opacity based on ageSecs', () => {
     const fb = makeFeedback({ ageSecs: 0.75 });
     render(GameNotification, { props: { feedback: [fb] } });
 
-    const alert = document.querySelector('.notification-container')!;
-    const notification = alert.querySelector('.notification') as HTMLElement;
+    const notification = getContainer().querySelector('.notification') as HTMLElement;
     expect(notification).toBeDefined();
     // opacity = max(0, 1 - 0.75/1.5) = 0.5
     expect(notification.style.opacity).toBe('0.5');

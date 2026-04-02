@@ -99,7 +99,6 @@
     border-radius: 8px;
     background: #2a2a4a;
     color: #e0e0e0;
-    outline: none;
     width: 260px;
     text-align: center;
   }
@@ -125,6 +124,11 @@
 
   button:hover:not(:disabled) {
     background: #4752c4;
+  }
+
+  button:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
   }
 
   button:disabled {

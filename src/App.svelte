@@ -176,7 +176,7 @@
       onClose={() => { inventoryOpen = false; }}
     />
     <div role="status" aria-live="polite" class="sr-only">
-      {#if transitionPending}Travelling to new area…{:else if currentStreet}{currentStreet.id}{/if}
+      {#if transitionPending}Travelling to {currentStreet.id.replace(/_/g, ' ')}…{/if}
     </div>
     <button type="button" class="back-btn" onclick={async () => {
       try {

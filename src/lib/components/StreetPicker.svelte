@@ -40,7 +40,7 @@
   <h1>Harmony Glitch</h1>
   <p class="subtitle">Choose a street to explore</p>
 
-  <p class="error" role="alert">{error ?? ''}</p>
+  <p class="error" class:hidden={!error} role="alert">{error ?? ''}</p>
 
   <div role="status" aria-live="polite" class="sr-only">
     {#if initialLoading}Loading streets…{:else if loading}Loading street, please wait…{/if}
@@ -92,6 +92,10 @@
   .error {
     color: #e74c3c;
     font-size: 0.85rem;
+  }
+
+  .error.hidden {
+    display: none;
   }
 
   .street-list {
