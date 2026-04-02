@@ -4,11 +4,12 @@
   import { sendInput, onRenderFrame, onChatMessage, startGame } from '../ipc';
   import type { StreetData, InputState, RenderFrame } from '../types';
 
-  let { street, debugMode = false, chatFocused = false, inventoryOpen = false, onFrame }: {
+  let { street, debugMode = false, chatFocused = false, inventoryOpen = false, uiOpen = false, onFrame }: {
     street: StreetData | null;
     debugMode?: boolean;
     chatFocused?: boolean;
     inventoryOpen?: boolean;
+    uiOpen?: boolean;
     onFrame?: (frame: RenderFrame) => void;
   } = $props();
 
@@ -22,14 +23,14 @@
   // Pass the literal to sendInput to avoid reading `keys` (which would create
   // a reactive dependency and cause an infinite re-run loop).
   $effect(() => {
-    if (chatFocused || inventoryOpen) {
+    if (chatFocused || inventoryOpen || uiOpen) {
       keys = { left: false, right: false, jump: false, interact: false };
       sendInput({ left: false, right: false, jump: false, interact: false }).catch(console.error);
     }
   });
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (chatFocused || inventoryOpen) return;
+    if (chatFocused || inventoryOpen || uiOpen) return;
     let changed = false;
     if (e.key === 'ArrowLeft' || e.key === 'a') { keys.left = true; changed = true; }
     if (e.key === 'ArrowRight' || e.key === 'd') { keys.right = true; changed = true; }
@@ -43,7 +44,7 @@
   }
 
   function handleKeyUp(e: KeyboardEvent) {
-    if (chatFocused || inventoryOpen) return;
+    if (chatFocused || inventoryOpen || uiOpen) return;
     let changed = false;
     if (e.key === 'ArrowLeft' || e.key === 'a') { keys.left = false; changed = true; }
     if (e.key === 'ArrowRight' || e.key === 'd') { keys.right = false; changed = true; }

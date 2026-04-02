@@ -7,6 +7,7 @@
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
   import GameNotification from './lib/components/GameNotification.svelte';
+  import VolumeSettings from './lib/components/VolumeSettings.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
@@ -20,6 +21,7 @@
   let debugMode = $state(false);
   let chatFocused = $state(false);
   let inventoryOpen = $state(false);
+  let volumeOpen = $state(false);
   let transitionPending = $state(false);
   let transitionAttempts = $state(0);
   const MAX_TRANSITION_ATTEMPTS = 3;
@@ -142,6 +144,12 @@
   if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
+    if (inventoryOpen) volumeOpen = false;
+  }
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused) {
+    e.preventDefault();
+    volumeOpen = !volumeOpen;
+    if (volumeOpen) inventoryOpen = false;
   }
 }} />
 
@@ -151,11 +159,16 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
     <GameNotification feedback={latestFrame?.pickupFeedback ?? []} />
+    <VolumeSettings
+      {audioManager}
+      visible={volumeOpen}
+      onClose={() => { volumeOpen = false; }}
+    />
     <InventoryPanel
       inventory={latestFrame?.inventory ?? null}
       {recipes}
