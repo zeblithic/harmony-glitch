@@ -9,6 +9,7 @@ export interface SoundEntry {
 export interface SoundKit {
   name: string;
   version: number;
+  cas?: string | null;
   sfxVolume: number;
   ambientVolume: number;
   events: Record<string, SoundEntry>;
@@ -267,10 +268,19 @@ export class AudioManager {
   }
 }
 
-export async function loadSoundKit(basePath: string): Promise<SoundKit> {
-  const response = await fetch(`${basePath}default-kit.json`);
-  if (!response.ok) {
-    throw new Error(`Failed to load sound kit: ${response.status}`);
+export function kitBasePath(kitId: string): string {
+  if (kitId === 'default') return '/assets/audio/';
+  return `soundkit://localhost/${kitId}/`;
+}
+
+export async function loadSoundKit(kitId: string): Promise<SoundKit> {
+  if (kitId === 'default') {
+    const response = await fetch('/assets/audio/default-kit.json');
+    if (!response.ok) {
+      throw new Error(`Failed to load default sound kit: ${response.status}`);
+    }
+    return response.json();
   }
-  return response.json();
+  const { readSoundKit } = await import('../ipc');
+  return readSoundKit(kitId);
 }
