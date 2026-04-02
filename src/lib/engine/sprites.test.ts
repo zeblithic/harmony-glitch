@@ -179,6 +179,55 @@ describe('SpriteManager', () => {
     });
   });
 
+  describe('atlas loading', () => {
+    it('makes item textures available after atlas loads', async () => {
+      const { Assets } = await import('pixi.js');
+      const mockAtlas = {
+        textures: {
+          apple: { width: 64, height: 64 },
+          cherry: { width: 16, height: 16 },
+        },
+      };
+      vi.mocked(Assets.load).mockImplementation(async (path: string) => {
+        if (path === 'sprites/items/items.json') return mockAtlas;
+        throw new Error('not found');
+      });
+
+      await manager.loadAtlas('items', 'sprites/items/items.json');
+
+      expect(manager.hasItemTexture('apple')).toBe(true);
+      expect(manager.hasItemTexture('cherry')).toBe(true);
+      expect(manager.hasItemTexture('nonexistent')).toBe(false);
+    });
+
+    it('individual PNGs still work when no atlas exists', async () => {
+      const { Assets } = await import('pixi.js');
+      vi.mocked(Assets.load).mockRejectedValue(new Error('not found'));
+
+      await manager.loadAtlas('items', 'sprites/items/items.json');
+
+      // No atlas loaded — hasItemTexture returns false
+      expect(manager.hasItemTexture('apple')).toBe(false);
+    });
+
+    it('entity atlas textures are available', async () => {
+      const { Assets } = await import('pixi.js');
+      const mockAtlas = {
+        textures: {
+          tree_fruit: { width: 60, height: 80 },
+        },
+      };
+      vi.mocked(Assets.load).mockImplementation(async (path: string) => {
+        if (path === 'sprites/entities/entities.json') return mockAtlas;
+        throw new Error('not found');
+      });
+
+      await manager.loadAtlas('entities', 'sprites/entities/entities.json');
+
+      expect(manager.hasEntityTexture('tree_fruit')).toBe(true);
+    });
+  });
+
   describe('missing texture dedup', () => {
     it('logs missing entity texture only once per spriteClass', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
