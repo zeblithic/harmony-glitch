@@ -120,6 +120,9 @@ export class AudioManager {
         case 'streetChanged':
           this.handleStreetChanged(event.streetId);
           break;
+        case 'footstep':
+          this.playSfx('footstep', event.surface);
+          break;
       }
     }
   }

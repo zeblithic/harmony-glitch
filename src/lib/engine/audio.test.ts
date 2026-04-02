@@ -39,6 +39,10 @@ function makeKit(): SoundKit {
       transitionStart: { default: 'sfx/transition-start.mp3' },
       transitionComplete: { default: 'sfx/transition-complete.mp3' },
       entityInteract: { default: 'sfx/interact.mp3' },
+      footstep: {
+        default: 'sfx/footstep-default.mp3',
+        variants: { grass: 'sfx/footstep-grass.mp3', stone: 'sfx/footstep-stone.mp3' },
+      },
     },
     ambient: {
       default: 'ambient/default.mp3',
@@ -299,6 +303,24 @@ describe('AudioManager', () => {
       expect(prefs.sfxMuted).toBe(false);
       expect(prefs.ambientMuted).toBe(true);
     });
+  });
+
+  it('plays footstep with surface variant', () => {
+    const manager = new AudioManager(makeKit(), '/audio/');
+    manager.processEvents([{ type: 'footstep', surface: 'grass' }]);
+
+    const grassHowl = findHowlBySrc('footstep-grass');
+    expect(grassHowl).toBeDefined();
+    expect(grassHowl!.play).toHaveBeenCalled();
+  });
+
+  it('falls back to default footstep for unknown surface', () => {
+    const manager = new AudioManager(makeKit(), '/audio/');
+    manager.processEvents([{ type: 'footstep', surface: 'marble' }]);
+
+    const defaultHowl = findHowlBySrc('footstep-default');
+    expect(defaultHowl).toBeDefined();
+    expect(defaultHowl!.play).toHaveBeenCalled();
   });
 
   describe('localStorage persistence', () => {
