@@ -8,11 +8,8 @@ pub struct ExtractedBitmap {
     pub rgba: Vec<u8>,
 }
 
-/// Parse a SWF file from raw bytes and extract the largest bitmap by pixel area.
-pub fn extract_largest_bitmap(swf_data: &[u8]) -> Option<ExtractedBitmap> {
-    let swf_buf = swf::decompress_swf(swf_data).ok()?;
-    let swf = swf::parse_swf(&swf_buf).ok()?;
-
+/// Extract the largest bitmap by pixel area from a parsed SWF.
+pub fn extract_largest_bitmap(swf: &swf::Swf) -> Option<ExtractedBitmap> {
     let mut largest: Option<ExtractedBitmap> = None;
     let mut largest_area: u64 = 0;
 

@@ -72,7 +72,7 @@ fn process_swf(
 
     if has_bitmaps {
         let output_path = output_path_no_ext.with_extension("png");
-        match bitmap::extract_largest_bitmap(swf_data) {
+        match bitmap::extract_largest_bitmap(&parsed) {
             Some(bm) => match bitmap::write_png(&output_path, &bm) {
                 Ok(()) => return ProcessResult::Bitmap,
                 Err(err) => {

@@ -84,16 +84,16 @@ fn walk_shape_edges(shape: &swf::Shape) -> StyleCollection {
     // Current pen position in twips
     let mut pen = TwipsPoint { x: 0, y: 0 };
 
-    // Active style IDs (0 = none). These are 1-based into the *current* table,
-    // but we store them with table_offset applied so they are globally unique.
+    // Active style IDs (0 = none). Stored with offset applied for global uniqueness.
     let mut fill0: u32 = 0;
     let mut fill1: u32 = 0;
     let mut line: u32 = 0;
 
-    // The current style tables and offset
+    // Separate offsets for fill and line namespaces
     let mut current_fill_styles = shape.styles.fill_styles.clone();
     let mut current_line_styles = shape.styles.line_styles.clone();
-    let mut table_offset: u32 = 0;
+    let mut fill_offset: u32 = 0;
+    let mut line_offset: u32 = 0;
 
     // Collect all styles globally indexed
     let mut all_fills: Vec<(u32, swf::FillStyle)> = Vec::new();
@@ -101,18 +101,19 @@ fn walk_shape_edges(shape: &swf::Shape) -> StyleCollection {
 
     // Add initial styles
     for (i, fs) in current_fill_styles.iter().enumerate() {
-        all_fills.push((table_offset + i as u32 + 1, fs.clone()));
+        all_fills.push((fill_offset + i as u32 + 1, fs.clone()));
     }
     for (i, ls) in current_line_styles.iter().enumerate() {
-        all_lines.push((table_offset + i as u32 + 1, ls.clone()));
+        all_lines.push((line_offset + i as u32 + 1, ls.clone()));
     }
 
     for record in &shape.shape {
         match record {
             swf::ShapeRecord::StyleChange(sc) => {
                 if let Some(ref new_styles) = sc.new_styles {
-                    // Advance offset past current tables
-                    table_offset += current_fill_styles.len().max(current_line_styles.len()) as u32;
+                    // Advance each offset past its own current table
+                    fill_offset += current_fill_styles.len() as u32;
+                    line_offset += current_line_styles.len() as u32;
                     current_fill_styles = new_styles.fill_styles.clone();
                     current_line_styles = new_styles.line_styles.clone();
 
@@ -123,10 +124,10 @@ fn walk_shape_edges(shape: &swf::Shape) -> StyleCollection {
 
                     // Add new styles to global collection
                     for (i, fs) in current_fill_styles.iter().enumerate() {
-                        all_fills.push((table_offset + i as u32 + 1, fs.clone()));
+                        all_fills.push((fill_offset + i as u32 + 1, fs.clone()));
                     }
                     for (i, ls) in current_line_styles.iter().enumerate() {
-                        all_lines.push((table_offset + i as u32 + 1, ls.clone()));
+                        all_lines.push((line_offset + i as u32 + 1, ls.clone()));
                     }
                 }
 
@@ -140,18 +141,18 @@ fn walk_shape_edges(shape: &swf::Shape) -> StyleCollection {
                     fill0 = if fs0 == 0 {
                         0
                     } else {
-                        table_offset + fs0
+                        fill_offset + fs0
                     };
                 }
                 if let Some(fs1) = sc.fill_style_1 {
                     fill1 = if fs1 == 0 {
                         0
                     } else {
-                        table_offset + fs1
+                        fill_offset + fs1
                     };
                 }
                 if let Some(ls) = sc.line_style {
-                    line = if ls == 0 { 0 } else { table_offset + ls };
+                    line = if ls == 0 { 0 } else { line_offset + ls };
                 }
             }
             swf::ShapeRecord::StraightEdge { delta } => {
