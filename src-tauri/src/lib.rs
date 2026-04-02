@@ -128,6 +128,9 @@ fn list_sound_kits(app: AppHandle) -> Result<Vec<SoundKitMeta>, String> {
         kits.push(SoundKitMeta { id, name });
     }
 
+    // Sort custom kits alphabetically by name (default stays first)
+    kits[1..].sort_by(|a, b| a.name.cmp(&b.name));
+
     Ok(kits)
 }
 
@@ -712,7 +715,7 @@ pub fn run() {
                     .unwrap();
             }
 
-            let bytes = match std::fs::read(&full_path) {
+            let bytes = match std::fs::read(&canonical_file) {
                 Ok(b) => b,
                 Err(_) => {
                     return http::Response::builder()
@@ -722,7 +725,7 @@ pub fn run() {
                 }
             };
 
-            let mime = match full_path.extension().and_then(|e| e.to_str()) {
+            let mime = match canonical_file.extension().and_then(|e| e.to_str()) {
                 Some("mp3") => "audio/mpeg",
                 Some("ogg") => "audio/ogg",
                 Some("wav") => "audio/wav",

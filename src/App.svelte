@@ -167,7 +167,10 @@
     }
   }
 
+  let switchingKit = false;
   async function switchKit(kitId: string) {
+    if (switchingKit) return;
+    switchingKit = true;
     selectedKitId = kitId;
     try {
       localStorage.setItem('selected-sound-kit', kitId);
@@ -194,6 +197,8 @@
           console.error('Fallback to default kit also failed:', e2);
         }
       }
+    } finally {
+      switchingKit = false;
     }
   }
 
