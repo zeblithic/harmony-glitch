@@ -26,29 +26,31 @@
   let sfxMuted = $state(false);
   let ambientMuted = $state(false);
 
+  // Dialog open/close — only depends on `visible`, not `audioManager`.
   $effect(() => {
     if (visible && dialogEl) {
       if (!dialogEl.open) {
-        // Only capture focus when transitioning from closed → open
         previousFocus = document.activeElement as HTMLElement | null;
-      }
-      // Sync state from AudioManager on open and when it changes
-      if (audioManager) {
-        sfxVolume = audioManager.getVolume('sfx');
-        ambientVolume = audioManager.getVolume('ambient');
-        sfxMuted = audioManager.isMuted('sfx');
-        ambientMuted = audioManager.isMuted('ambient');
-      }
-      if (!dialogEl.open) {
         dialogEl.showModal();
+        dialogEl.querySelector<HTMLElement>('input[type="range"]')?.focus();
       }
-      dialogEl.querySelector<HTMLElement>('input[type="range"]')?.focus();
       return () => {
         if (dialogEl?.open) dialogEl.close();
       };
     } else if (!visible && previousFocus) {
       previousFocus.focus();
       previousFocus = null;
+    }
+  });
+
+  // Sync volume state from AudioManager — runs on open and when audioManager changes
+  // (e.g. kit switch), without touching dialog/focus state.
+  $effect(() => {
+    if (visible && audioManager) {
+      sfxVolume = audioManager.getVolume('sfx');
+      ambientVolume = audioManager.getVolume('ambient');
+      sfxMuted = audioManager.isMuted('sfx');
+      ambientMuted = audioManager.isMuted('ambient');
     }
   });
 
