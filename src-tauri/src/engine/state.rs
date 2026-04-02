@@ -369,6 +369,23 @@ impl GameState {
             }
             self.prev_on_ground = self.player.on_ground;
 
+            // Footstep audio — emit when stride distance reached
+            if self.player.on_ground
+                && self.player.distance_since_footstep
+                    >= crate::physics::movement::FOOTSTEP_STRIDE
+            {
+                let surface = surface_at(
+                    self.player.x,
+                    self.player.y,
+                    street.platforms(),
+                );
+                audio_events.push(AudioEvent::Footstep {
+                    surface: surface.to_string(),
+                });
+                self.player.distance_since_footstep -=
+                    crate::physics::movement::FOOTSTEP_STRIDE;
+            }
+
             // --- Interaction system ---
             // Age and cull pickup feedback
             for fb in &mut self.pickup_feedback {
@@ -811,6 +828,23 @@ pub fn read_save_state(path: &std::path::Path) -> Result<Option<SaveState>, Stri
             Ok(None)
         }
     }
+}
+
+/// Find the surface material of the platform under the player.
+/// Returns "default" if on ground_y or no platform matches.
+fn surface_at(x: f64, y: f64, platforms: &[crate::street::types::PlatformLine]) -> &str {
+    for platform in platforms {
+        if !platform.solid_from_top() {
+            continue;
+        }
+        if x < platform.min_x() || x > platform.max_x() {
+            continue;
+        }
+        if (platform.y_at(x) - y).abs() < 1.0 {
+            return &platform.surface;
+        }
+    }
+    "default"
 }
 
 #[cfg(test)]
@@ -2267,6 +2301,39 @@ mod tests {
             .pending_audio_events
             .iter()
             .any(|e| matches!(e, AudioEvent::StreetChanged { .. })));
+    }
+
+    #[test]
+    fn surface_at_finds_matching_platform() {
+        use crate::street::types::{PlatformLine, Point};
+
+        let platforms = vec![
+            PlatformLine {
+                id: "grass_plat".into(),
+                start: Point { x: -200.0, y: 0.0 },
+                end: Point { x: 0.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "grass".into(),
+            },
+            PlatformLine {
+                id: "stone_plat".into(),
+                start: Point { x: 0.0, y: 0.0 },
+                end: Point { x: 200.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "stone".into(),
+            },
+        ];
+
+        assert_eq!(surface_at(-100.0, 0.0, &platforms), "grass");
+        assert_eq!(surface_at(100.0, 0.0, &platforms), "stone");
+        assert_eq!(surface_at(500.0, 0.0, &platforms), "default");
+    }
+
+    #[test]
+    fn surface_at_returns_default_for_no_platforms() {
+        assert_eq!(surface_at(0.0, 0.0, &[]), "default");
     }
 }
 
