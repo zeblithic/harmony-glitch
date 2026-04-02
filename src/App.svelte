@@ -23,6 +23,7 @@
   let inventoryOpen = $state(false);
   let volumeOpen = $state(false);
   let transitionPending = $state(false);
+  let transitionTarget = $state<string | null>(null);
   let transitionAttempts = $state(0);
   const MAX_TRANSITION_ATTEMPTS = 3;
   let identityReady = $state(false);
@@ -102,6 +103,7 @@
     // calls that push target_duration forward indefinitely, stalling the swoop.
     if (frame.transition && !transitionPending && transitionAttempts < MAX_TRANSITION_ATTEMPTS) {
       transitionPending = true;
+      transitionTarget = frame.transition.toStreet.replace(/_/g, ' ');
       transitionAttempts++;
       // Capture the generation at the time we start loading — if the swoop
       // times out and a new one starts, the stale promise will pass the old
@@ -125,6 +127,7 @@
     }
     if (!frame.transition) {
       transitionPending = false;
+      transitionTarget = null;
       transitionAttempts = 0;
     }
 
@@ -154,8 +157,11 @@
 }} />
 
 <main>
+  <div role="status" aria-live="polite" class="sr-only">
+    {#if checkingIdentity || resuming}Loading, please wait…{/if}
+  </div>
   {#if checkingIdentity || resuming}
-    <!-- Wait for identity check or auto-resume before showing anything -->
+    <!-- visual placeholder while loading -->
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
@@ -175,6 +181,9 @@
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
     />
+    <div role="status" aria-live="polite" class="sr-only">
+      {#if transitionPending && transitionTarget}Travelling to {transitionTarget}…{/if}
+    </div>
     <button type="button" class="back-btn" onclick={async () => {
       try {
         await stopGame();
@@ -216,5 +225,22 @@
 
   .back-btn:hover {
     background: rgba(88, 101, 242, 0.8);
+  }
+
+  .back-btn:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
+  }
+
+  :global(.sr-only) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

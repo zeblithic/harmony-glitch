@@ -77,6 +77,7 @@
   <dialog
     class="volume-panel"
     aria-label="Volume Settings"
+    aria-modal="true"
     bind:this={dialogEl}
     oncancel={handleCancel}
   >
@@ -189,6 +190,11 @@
 
   .close-btn:hover {
     color: #e0e0e0;
+  }
+
+  .close-btn:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
   }
 
   .channels {

@@ -92,9 +92,9 @@
 <div
   class="canvas-container"
   role="application"
-  aria-label="Harmony Glitch game — use arrow keys or WASD to move, Space to jump, E to interact, I for inventory, F3 for debug overlay"
+  aria-label="Harmony Glitch game — arrow keys or WASD to move, Space to jump, E to interact, I for inventory, P for volume settings, F3 for debug overlay"
 >
-  <canvas bind:this={canvasEl}></canvas>
+  <canvas bind:this={canvasEl} aria-hidden="true"></canvas>
 </div>
 
 <style>
