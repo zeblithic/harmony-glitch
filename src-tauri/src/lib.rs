@@ -44,6 +44,16 @@ struct PlayerIdentityWrapper {
     data_dir: std::path::PathBuf,
 }
 
+/// Path to the sound-kits directory, created on startup.
+struct SoundKitsDir(std::path::PathBuf);
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SoundKitMeta {
+    id: String,
+    name: String,
+}
+
 /// Shared network state — driven by the game loop, queried by commands.
 struct NetworkWrapper(Mutex<NetworkState>);
 
@@ -55,6 +65,54 @@ fn list_streets() -> Vec<String> {
     // For Phase A: return hardcoded demo street names.
     // Later: scan assets directory or query content network.
     vec!["demo_meadow".to_string(), "demo_heights".to_string()]
+}
+
+#[tauri::command]
+fn list_sound_kits(app: AppHandle) -> Result<Vec<SoundKitMeta>, String> {
+    let kits_dir = app.state::<SoundKitsDir>();
+    let mut kits = vec![SoundKitMeta {
+        id: "default".to_string(),
+        name: "Default".to_string(),
+    }];
+
+    let entries = match std::fs::read_dir(&kits_dir.0) {
+        Ok(e) => e,
+        Err(_) => return Ok(kits),
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let kit_json = path.join("kit.json");
+        if !kit_json.exists() {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&kit_json) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[sound-kits] Failed to read {}: {e}", kit_json.display());
+                continue;
+            }
+        };
+        let parsed: serde_json::Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[sound-kits] Invalid JSON in {}: {e}", kit_json.display());
+                continue;
+            }
+        };
+        let name = parsed
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unnamed")
+            .to_string();
+        let id = entry.file_name().to_string_lossy().to_string();
+        kits.push(SoundKitMeta { id, name });
+    }
+
+    Ok(kits)
 }
 
 #[tauri::command]
@@ -576,6 +634,11 @@ pub fn run() {
         .manage(GameLoopHandle(Mutex::new(None)))
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
+            let kits_dir = data_dir.join("sound-kits");
+            if let Err(e) = std::fs::create_dir_all(&kits_dir) {
+                eprintln!("[sound-kits] Failed to create {}: {e}", kits_dir.display());
+            }
+            app.manage(SoundKitsDir(kits_dir));
             let (player_identity, display_name, setup_complete) =
                 identity::persistence::load_or_create_profile(&data_dir)
                     .map_err(std::io::Error::other)?;
@@ -614,6 +677,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_streets,
+            list_sound_kits,
             load_street,
             send_input,
             start_game,
