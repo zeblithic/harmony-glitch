@@ -169,7 +169,13 @@
 
   let switchingKit = false;
   async function switchKit(kitId: string) {
-    if (switchingKit) return;
+    if (switchingKit) {
+      // Force the <select> back to the current kit so it doesn't desync
+      const current = selectedKitId;
+      selectedKitId = '';
+      selectedKitId = current;
+      return;
+    }
     switchingKit = true;
     selectedKitId = kitId;
     try {
