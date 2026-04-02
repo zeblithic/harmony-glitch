@@ -85,11 +85,8 @@ fn process_swf(
                 }
             },
             None => {
-                errors.push(format!(
-                    "WARN: skipped {} — no extractable bitmap found",
-                    swf_path.display()
-                ));
-                return ProcessResult::Skipped;
+                // Bitmap tags exist but none were decodable (e.g., Rgb15).
+                // Fall through to SVG path if shapes are available.
             }
         }
     }
