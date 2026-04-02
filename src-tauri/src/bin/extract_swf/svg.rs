@@ -220,41 +220,50 @@ struct SubPath {
 }
 
 /// Connect a bag of edges into closed sub-paths by matching end→start.
+/// Uses a HashMap keyed by start point for O(n) amortized performance.
 fn connect_edges(edges: &[Edge]) -> Vec<SubPath> {
     if edges.is_empty() {
         return Vec::new();
     }
 
+    // Build a multimap: start point → list of edge indices
+    let mut start_map: HashMap<TwipsPoint, Vec<usize>> = HashMap::new();
+    for (i, edge) in edges.iter().enumerate() {
+        start_map.entry(edge.start()).or_default().push(i);
+    }
+
     let mut used = vec![false; edges.len()];
     let mut paths = Vec::new();
 
-    while let Some(start_idx) = used.iter().position(|&u| !u) {
-        let mut path_edges = Vec::new();
-        used[start_idx] = true;
-        path_edges.push(edges[start_idx].clone());
+    for seed in 0..edges.len() {
+        if used[seed] {
+            continue;
+        }
 
-        let chain_start = edges[start_idx].start();
+        let mut path_edges = Vec::new();
+        used[seed] = true;
+        path_edges.push(edges[seed].clone());
+
+        let chain_start = edges[seed].start();
 
         loop {
             let current_end = path_edges.last().unwrap().end();
 
-            // If we've returned to the start, close the path
             if current_end == chain_start && path_edges.len() > 1 {
                 break;
             }
 
-            // Find an unused edge whose start matches current_end
-            let next = used
-                .iter()
-                .enumerate()
-                .position(|(i, &u)| !u && edges[i].start() == current_end);
+            // O(1) amortized lookup for next edge by start point
+            let next = start_map.get(&current_end).and_then(|indices| {
+                indices.iter().copied().find(|&i| !used[i])
+            });
 
             match next {
                 Some(i) => {
                     used[i] = true;
                     path_edges.push(edges[i].clone());
                 }
-                None => break, // No connecting edge found
+                None => break,
             }
         }
 
@@ -594,17 +603,35 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
         }
     }
 
-    // Build a depth-ordered display list: Replace overwrites the previous
-    // character at the same depth, matching SWF semantics.
-    let mut display_list: std::collections::BTreeMap<swf::Depth, &swf::PlaceObject> =
+    // Build a depth-ordered display list. Place/Replace set the character,
+    // Modify updates properties (e.g., matrix) of the existing entry.
+    struct DisplayEntry<'a> {
+        char_id: swf::CharacterId,
+        matrix: Option<&'a swf::Matrix>,
+    }
+
+    let mut display_list: std::collections::BTreeMap<swf::Depth, DisplayEntry> =
         std::collections::BTreeMap::new();
 
     for place in &placements {
         match place.action {
-            swf::PlaceObjectAction::Place(_) | swf::PlaceObjectAction::Replace(_) => {
-                display_list.insert(place.depth, place);
+            swf::PlaceObjectAction::Place(id) | swf::PlaceObjectAction::Replace(id) => {
+                display_list.insert(
+                    place.depth,
+                    DisplayEntry {
+                        char_id: id,
+                        matrix: place.matrix.as_ref(),
+                    },
+                );
             }
-            swf::PlaceObjectAction::Modify => {}
+            swf::PlaceObjectAction::Modify => {
+                // Update the matrix of an existing entry at this depth
+                if let Some(entry) = display_list.get_mut(&place.depth) {
+                    if place.matrix.is_some() {
+                        entry.matrix = place.matrix.as_ref();
+                    }
+                }
+            }
         }
     }
 
@@ -612,11 +639,8 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
     let mut all_body = String::new();
     let mut gradient_id = 0u32;
 
-    for place in display_list.values() {
-        let char_id = match place.action {
-            swf::PlaceObjectAction::Place(id) | swf::PlaceObjectAction::Replace(id) => id,
-            swf::PlaceObjectAction::Modify => continue,
-        };
+    for entry in display_list.values() {
+        let char_id = entry.char_id;
 
         let shape = match shapes.get(&char_id) {
             Some(s) => s,
@@ -627,14 +651,13 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
         all_defs.push_str(&defs);
 
         // Wrap in a <g> with transform if non-identity
-        let has_transform = place
+        let has_transform = entry
             .matrix
-            .as_ref()
             .map(|m| *m != swf::Matrix::IDENTITY)
             .unwrap_or(false);
 
         if has_transform {
-            let m = place.matrix.as_ref().unwrap();
+            let m = entry.matrix.unwrap();
             writeln!(
                 all_body,
                 r#"  <g transform="{}">"#,
