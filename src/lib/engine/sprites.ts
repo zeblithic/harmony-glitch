@@ -36,6 +36,24 @@ export class SpriteManager {
     } catch {
       console.warn('[SpriteManager] Avatar spritesheet not found, using fallback');
     }
+
+    // Load atlases if they exist — individual PNGs still work as fallback
+    await this.loadAtlas('items', 'sprites/items/items.json');
+    await this.loadAtlas('entities', 'sprites/entities/entities.json');
+  }
+
+  async loadAtlas(category: 'items' | 'entities', jsonPath: string): Promise<void> {
+    try {
+      const sheet = await Assets.load(jsonPath);
+      if (sheet?.textures) {
+        const prefix = category === 'items' ? 'item' : 'entity';
+        for (const [name, texture] of Object.entries(sheet.textures)) {
+          this.textureCache.set(`${prefix}:${name}`, texture as Texture);
+        }
+      }
+    } catch {
+      // Atlas not available — individual PNGs will be used as fallback
+    }
   }
 
   async loadStreetAssets(street: StreetData): Promise<void> {
