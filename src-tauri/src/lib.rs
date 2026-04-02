@@ -67,6 +67,21 @@ fn list_streets() -> Vec<String> {
     vec!["demo_meadow".to_string(), "demo_heights".to_string()]
 }
 
+/// Validate a sound kit ID: alphanumeric, hyphens, and underscores only.
+/// Rejects path traversal attempts.
+fn validate_kit_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Kit ID must not be empty".to_string());
+    }
+    if id.contains('.') || id.contains('/') || id.contains('\\') {
+        return Err(format!("Invalid kit ID: {id}"));
+    }
+    if !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err(format!("Invalid kit ID: {id}"));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn list_sound_kits(app: AppHandle) -> Result<Vec<SoundKitMeta>, String> {
     let kits_dir = app.state::<SoundKitsDir>();
@@ -113,6 +128,28 @@ fn list_sound_kits(app: AppHandle) -> Result<Vec<SoundKitMeta>, String> {
     }
 
     Ok(kits)
+}
+
+#[tauri::command]
+fn read_sound_kit(kit_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    if kit_id == "default" {
+        let kit: serde_json::Value =
+            serde_json::from_str(include_str!("../../assets/audio/default-kit.json"))
+                .map_err(|e| format!("Failed to parse bundled kit: {e}"))?;
+        return Ok(kit);
+    }
+
+    validate_kit_id(&kit_id)?;
+
+    let kits_dir = app.state::<SoundKitsDir>();
+    let kit_path = kits_dir.0.join(&kit_id).join("kit.json");
+
+    let content =
+        std::fs::read_to_string(&kit_path).map_err(|e| format!("Kit '{kit_id}' not found: {e}"))?;
+    let kit: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Invalid kit manifest: {e}"))?;
+
+    Ok(kit)
 }
 
 #[tauri::command]
@@ -567,6 +604,45 @@ fn load_entity_placement(name: &str) -> Result<String, String> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_kit_id_accepts_valid() {
+        assert!(validate_kit_id("retro-kit").is_ok());
+        assert!(validate_kit_id("my_kit_2").is_ok());
+        assert!(validate_kit_id("Default").is_ok());
+    }
+
+    #[test]
+    fn validate_kit_id_rejects_path_traversal() {
+        assert!(validate_kit_id("..").is_err());
+        assert!(validate_kit_id("../etc").is_err());
+        assert!(validate_kit_id("foo/bar").is_err());
+        assert!(validate_kit_id("foo\\bar").is_err());
+    }
+
+    #[test]
+    fn validate_kit_id_rejects_empty() {
+        assert!(validate_kit_id("").is_err());
+    }
+
+    #[test]
+    fn validate_kit_id_rejects_dots() {
+        assert!(validate_kit_id("my.kit").is_err());
+    }
+
+    #[test]
+    fn read_default_kit_parses() {
+        let json: serde_json::Value =
+            serde_json::from_str(include_str!("../../assets/audio/default-kit.json"))
+                .expect("bundled default-kit.json must be valid JSON");
+        assert_eq!(json["name"], "Default");
+        assert!(json["events"]["jump"]["default"].is_string());
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(MonotonicEpoch(Instant::now()))
@@ -678,6 +754,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_streets,
             list_sound_kits,
+            read_sound_kit,
             load_street,
             send_input,
             start_game,
