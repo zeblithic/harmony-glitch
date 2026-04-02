@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta } from './types';
+import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
   return invoke<string[]>('list_streets');
@@ -75,4 +76,12 @@ export async function getRecipes(): Promise<RecipeDef[]> {
 
 export async function craftRecipe(recipeId: string): Promise<void> {
   return invoke('craft_recipe', { recipeId });
+}
+
+export async function listSoundKits(): Promise<SoundKitMeta[]> {
+  return invoke<SoundKitMeta[]>('list_sound_kits');
+}
+
+export async function readSoundKit(kitId: string): Promise<SoundKit> {
+  return invoke<SoundKit>('read_sound_kit', { kitId });
 }
