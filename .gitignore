@@ -31,3 +31,6 @@ Thumbs.db
 .beads-credential-key
 .beads/
 .worktrees/
+
+# Asset pipeline intermediate files
+tools/asset-pipeline/extracted/
