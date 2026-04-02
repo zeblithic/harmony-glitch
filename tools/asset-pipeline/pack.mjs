@@ -182,11 +182,14 @@ export async function readImageMeta(filePath, name, scale = 1) {
   try {
     const ext = filePath.toLowerCase().endsWith('.svg') ? 'svg' : 'png';
     if (ext === 'svg') {
-      const meta = await sharp(filePath).metadata();
-      const width = Math.round((meta.width ?? 0) * scale);
-      const height = Math.round((meta.height ?? 0) * scale);
+      // Rasterize at scaled density so sharp renders the SVG at target
+      // resolution natively, rather than rasterizing at 72 DPI then upscaling.
+      const density = Math.round(72 * scale);
+      const buffer = await sharp(filePath, { density }).png().toBuffer();
+      const meta = await sharp(buffer).metadata();
+      const width = meta.width ?? 0;
+      const height = meta.height ?? 0;
       if (width === 0 || height === 0) return null;
-      const buffer = await sharp(filePath).resize({ width, height }).png().toBuffer();
       return { path: filePath, name, width, height, buffer };
     }
     const meta = await sharp(filePath).metadata();
