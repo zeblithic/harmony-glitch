@@ -63,6 +63,7 @@ function findHowlBySrc(substr: string): ReturnType<typeof vi.fn> | undefined {
 describe('AudioManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('resolves variant sound when available', () => {
@@ -222,5 +223,152 @@ describe('AudioManager', () => {
     manager.processEvents([{ type: 'jump' }]);
 
     expect(resumeFn).toHaveBeenCalled();
+  });
+
+  describe('getVolume / setMuted / isMuted', () => {
+    it('getVolume returns kit defaults initially', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.getVolume('sfx')).toBe(1.0);
+      expect(manager.getVolume('ambient')).toBe(0.5);
+    });
+
+    it('getVolume reflects setVolume changes', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setVolume('sfx', 0.3);
+      manager.setVolume('ambient', 0.8);
+      expect(manager.getVolume('sfx')).toBe(0.3);
+      expect(manager.getVolume('ambient')).toBe(0.8);
+    });
+
+    it('isMuted returns false initially', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.isMuted('sfx')).toBe(false);
+      expect(manager.isMuted('ambient')).toBe(false);
+    });
+
+    it('setMuted toggles mute state', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setMuted('sfx', true);
+      expect(manager.isMuted('sfx')).toBe(true);
+      expect(manager.isMuted('ambient')).toBe(false);
+
+      manager.setMuted('ambient', true);
+      expect(manager.isMuted('ambient')).toBe(true);
+    });
+
+    it('muted SFX plays at volume 0', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setMuted('sfx', true);
+      manager.processEvents([{ type: 'jump' }]);
+
+      const jumpHowl = findHowlBySrc('jump');
+      expect(jumpHowl!.volume).toHaveBeenCalledWith(0);
+    });
+
+    it('muted ambient sets currentAmbient volume to 0', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.processEvents([{ type: 'streetChanged', streetId: 'LADEMO001' }]);
+
+      const meadowHowl = findHowlBySrc('meadow');
+      manager.setMuted('ambient', true);
+      expect(meadowHowl!.volume).toHaveBeenCalledWith(0);
+    });
+
+    it('unmuting ambient restores volume', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setVolume('ambient', 0.6);
+      manager.processEvents([{ type: 'streetChanged', streetId: 'LADEMO001' }]);
+
+      manager.setMuted('ambient', true);
+      manager.setMuted('ambient', false);
+
+      const meadowHowl = findHowlBySrc('meadow');
+      // Last volume call should be the restored ambient volume
+      const volumeCalls = meadowHowl!.volume.mock.calls;
+      expect(volumeCalls[volumeCalls.length - 1][0]).toBe(0.6);
+    });
+
+    it('getPreferences returns current state', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setVolume('sfx', 0.7);
+      manager.setMuted('ambient', true);
+
+      const prefs = manager.getPreferences();
+      expect(prefs.sfxVolume).toBe(0.7);
+      expect(prefs.ambientVolume).toBe(0.5);
+      expect(prefs.sfxMuted).toBe(false);
+      expect(prefs.ambientMuted).toBe(true);
+    });
+  });
+
+  describe('localStorage persistence', () => {
+    it('saves preferences to localStorage on setVolume', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setVolume('sfx', 0.4);
+
+      const stored = JSON.parse(localStorage.getItem('audio-prefs')!);
+      expect(stored.sfxVolume).toBe(0.4);
+    });
+
+    it('saves preferences to localStorage on setMuted', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setMuted('sfx', true);
+
+      const stored = JSON.parse(localStorage.getItem('audio-prefs')!);
+      expect(stored.sfxMuted).toBe(true);
+    });
+
+    it('restores preferences from localStorage on construction', () => {
+      localStorage.setItem('audio-prefs', JSON.stringify({
+        sfxVolume: 0.4,
+        ambientVolume: 0.2,
+        sfxMuted: true,
+        ambientMuted: false,
+      }));
+
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.getVolume('sfx')).toBe(0.4);
+      expect(manager.getVolume('ambient')).toBe(0.2);
+      expect(manager.isMuted('sfx')).toBe(true);
+      expect(manager.isMuted('ambient')).toBe(false);
+    });
+
+    it('clamps out-of-range volume values from localStorage', () => {
+      localStorage.setItem('audio-prefs', JSON.stringify({
+        sfxVolume: 2.0,
+        ambientVolume: -0.5,
+        sfxMuted: false,
+        ambientMuted: false,
+      }));
+
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.getVolume('sfx')).toBe(1.0);
+      expect(manager.getVolume('ambient')).toBe(0.0);
+    });
+
+    it('falls back to defaults for invalid localStorage data', () => {
+      localStorage.setItem('audio-prefs', JSON.stringify({
+        sfxVolume: 'not a number',
+        ambientVolume: null,
+        sfxMuted: 'false',
+        ambientMuted: 42,
+      }));
+
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.getVolume('sfx')).toBe(1.0);
+      expect(manager.getVolume('ambient')).toBe(0.5);
+      expect(manager.isMuted('sfx')).toBe(false);
+      expect(manager.isMuted('ambient')).toBe(false);
+    });
+
+    it('handles corrupt JSON in localStorage gracefully', () => {
+      localStorage.setItem('audio-prefs', '{not valid json');
+
+      let manager!: AudioManager;
+      expect(() => {
+        manager = new AudioManager(makeKit(), '/audio/');
+      }).not.toThrow();
+      expect(manager.getVolume('sfx')).toBe(1.0);
+    });
   });
 });
