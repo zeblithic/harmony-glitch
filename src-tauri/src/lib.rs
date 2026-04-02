@@ -19,6 +19,7 @@ use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri::http;
 
 /// Shared monotonic epoch — all time fed to NetworkState is relative to this.
 struct MonotonicEpoch(Instant);
@@ -645,6 +646,97 @@ mod tests {
 
 pub fn run() {
     tauri::Builder::default()
+        .register_uri_scheme_protocol("soundkit", |ctx, request| -> http::Response<Vec<u8>> {
+            let app = ctx.app_handle();
+            let data_dir = match app.path().app_data_dir() {
+                Ok(d) => d,
+                Err(_) => {
+                    return http::Response::builder()
+                        .status(500)
+                        .body(Vec::new())
+                        .unwrap();
+                }
+            };
+            let kits_dir = data_dir.join("sound-kits");
+
+            let uri_path = request.uri().path();
+            let trimmed = uri_path.trim_start_matches('/');
+            let (kit_id, file_path) = match trimmed.split_once('/') {
+                Some((k, f)) => (k, f),
+                None => {
+                    return http::Response::builder()
+                        .status(400)
+                        .body(b"Invalid path".to_vec())
+                        .unwrap();
+                }
+            };
+
+            if validate_kit_id(kit_id).is_err() {
+                return http::Response::builder()
+                    .status(403)
+                    .body(b"Invalid kit ID".to_vec())
+                    .unwrap();
+            }
+
+            if file_path.contains("..") {
+                return http::Response::builder()
+                    .status(403)
+                    .body(b"Path traversal rejected".to_vec())
+                    .unwrap();
+            }
+
+            let full_path = kits_dir.join(kit_id).join(file_path);
+
+            let canonical_kits = match kits_dir.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return http::Response::builder()
+                        .status(404)
+                        .body(b"Kits directory not found".to_vec())
+                        .unwrap();
+                }
+            };
+            let canonical_file = match full_path.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return http::Response::builder()
+                        .status(404)
+                        .body(b"File not found".to_vec())
+                        .unwrap();
+                }
+            };
+            if !canonical_file.starts_with(&canonical_kits) {
+                return http::Response::builder()
+                    .status(403)
+                    .body(b"Access denied".to_vec())
+                    .unwrap();
+            }
+
+            let bytes = match std::fs::read(&full_path) {
+                Ok(b) => b,
+                Err(_) => {
+                    return http::Response::builder()
+                        .status(404)
+                        .body(b"File not found".to_vec())
+                        .unwrap();
+                }
+            };
+
+            let mime = match full_path.extension().and_then(|e| e.to_str()) {
+                Some("mp3") => "audio/mpeg",
+                Some("ogg") => "audio/ogg",
+                Some("wav") => "audio/wav",
+                Some("flac") => "audio/flac",
+                _ => "application/octet-stream",
+            };
+
+            http::Response::builder()
+                .status(200)
+                .header("Content-Type", mime)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(bytes)
+                .unwrap()
+        })
         .manage(MonotonicEpoch(Instant::now()))
         .manage({
             let item_defs = item::loader::parse_item_defs(include_str!("../../assets/items.json"))
