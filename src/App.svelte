@@ -157,7 +157,7 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
