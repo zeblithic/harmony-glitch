@@ -212,6 +212,109 @@ fn write_png(path: &Path, bitmap: &ExtractedBitmap) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+fn walk_swfs(
+    dir: &std::path::Path,
+    source_root: &std::path::Path,
+    output_root: &std::path::Path,
+    extracted: &mut u32,
+    skipped: &mut u32,
+    errors: &mut Vec<String>,
+) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(err) => {
+            errors.push(format!("Cannot read directory {}: {}", dir.display(), err));
+            *skipped += 1;
+            return;
+        }
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(err) => {
+                errors.push(format!("Directory entry error in {}: {}", dir.display(), err));
+                *skipped += 1;
+                continue;
+            }
+        };
+
+        let path = entry.path();
+        let file_type = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(err) => {
+                errors.push(format!("Cannot stat {}: {}", path.display(), err));
+                *skipped += 1;
+                continue;
+            }
+        };
+
+        if file_type.is_dir() {
+            walk_swfs(&path, source_root, output_root, extracted, skipped, errors);
+            continue;
+        }
+
+        // Only process .swf files
+        let is_swf = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("swf"))
+            .unwrap_or(false);
+        if !is_swf {
+            continue;
+        }
+
+        // Compute relative path from source root, then build output path with .png extension
+        let rel = match path.strip_prefix(source_root) {
+            Ok(r) => r,
+            Err(_) => {
+                errors.push(format!("Cannot relativize path: {}", path.display()));
+                *skipped += 1;
+                continue;
+            }
+        };
+        let output_path = output_root.join(rel).with_extension("png");
+
+        // Read SWF file
+        let swf_data = match std::fs::read(&path) {
+            Ok(d) => d,
+            Err(err) => {
+                errors.push(format!("WARN: skipped {} — read error: {}", path.display(), err));
+                *skipped += 1;
+                continue;
+            }
+        };
+
+        // Extract largest bitmap
+        let bitmap = match extract_largest_bitmap(&swf_data) {
+            Some(b) => b,
+            None => {
+                errors.push(format!("WARN: skipped {} — no extractable bitmap found", path.display()));
+                *skipped += 1;
+                continue;
+            }
+        };
+
+        // Create parent directories as needed
+        if let Some(parent) = output_path.parent() {
+            if let Err(err) = std::fs::create_dir_all(parent) {
+                errors.push(format!("WARN: skipped {} — cannot create output dir: {}", path.display(), err));
+                *skipped += 1;
+                continue;
+            }
+        }
+
+        // Write PNG
+        if let Err(err) = write_png(&output_path, &bitmap) {
+            errors.push(format!("WARN: skipped {} — write error: {}", path.display(), err));
+            *skipped += 1;
+            continue;
+        }
+
+        *extracted += 1;
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -225,7 +328,24 @@ fn main() {
         std::process::exit(1);
     });
 
-    println!("Source: {}", args.source.display());
-    println!("Output: {}", args.output.display());
-    println!("(extraction not yet implemented)");
+    let mut extracted: u32 = 0;
+    let mut skipped: u32 = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    walk_swfs(
+        &args.source,
+        &args.source,
+        &args.output,
+        &mut extracted,
+        &mut skipped,
+        &mut errors,
+    );
+
+    let total = extracted + skipped;
+
+    for warning in &errors {
+        eprintln!("{}", warning);
+    }
+
+    println!("Extracted {}/{} items ({} skipped)", extracted, total, skipped);
 }
