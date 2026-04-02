@@ -157,8 +157,11 @@
 }} />
 
 <main>
+  <div role="status" aria-live="polite" class="sr-only">
+    {#if checkingIdentity || resuming}Loading, please wait…{/if}
+  </div>
   {#if checkingIdentity || resuming}
-    <div role="status" aria-live="polite" class="sr-only">Loading, please wait…</div>
+    <!-- visual placeholder while loading -->
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}

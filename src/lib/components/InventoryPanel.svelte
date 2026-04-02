@@ -292,7 +292,7 @@
         aria-labelledby="tab-recipes"
         tabindex="0"
       >
-        <div class="recipe-list" role="listbox" aria-label="Recipes" tabindex="0" onkeydown={handleRecipeListKeyDown}>
+        <div class="recipe-list" role="listbox" aria-label="Recipes" tabindex="-1" onkeydown={handleRecipeListKeyDown}>
           {#each sortedRecipes as recipe (recipe.id)}
             {@const craftable = isRecipeCraftable(recipe)}
             <button
