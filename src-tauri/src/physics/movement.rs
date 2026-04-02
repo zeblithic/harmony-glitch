@@ -14,6 +14,9 @@ pub const TERMINAL_VELOCITY: f64 = 600.0; // px/s
 /// 10 px gives comfortable headroom. If this is reduced below the per-frame
 /// Y change of any slope, players will briefly detach until Phase 2 catches them.
 const SLOPE_SNAP_TOLERANCE: f64 = 10.0;
+/// Horizontal distance (px) the player must travel on ground before a footstep event fires.
+/// At WALK_SPEED (200 px/s), this gives ~5 footsteps per second.
+pub const FOOTSTEP_STRIDE: f64 = 40.0;
 
 /// Player physics state.
 #[derive(Debug, Clone)]
@@ -30,6 +33,8 @@ pub struct PhysicsBody {
     /// Previous tick's jump input — used for rising-edge detection
     /// so holding jump doesn't auto-repeat.
     prev_jump: bool,
+    /// Accumulated horizontal distance on ground since last footstep event.
+    pub distance_since_footstep: f64,
 }
 
 /// Input state from the player.
@@ -53,6 +58,7 @@ impl PhysicsBody {
             half_width: 15.0,
             height: 60.0,
             prev_jump: false,
+            distance_since_footstep: 0.0,
         }
     }
 
@@ -233,6 +239,13 @@ impl PhysicsBody {
         }
 
         self.prev_jump = input.jump;
+
+        // Footstep distance accumulator
+        if self.on_ground && self.vx.abs() > 0.1 {
+            self.distance_since_footstep += (self.x - prev_x).abs();
+        } else {
+            self.distance_since_footstep = 0.0;
+        }
     }
 }
 
