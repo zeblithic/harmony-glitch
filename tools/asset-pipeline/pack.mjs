@@ -171,9 +171,10 @@ export async function collectImages(dir) {
     const ext = lower.endsWith('.png') ? 'png' : lower.endsWith('.svg') ? 'svg' : null;
     if (ext) {
       const fullPath = path.join(entry.parentPath ?? entry.path, entry.name);
-      // Strip extension from the lowercased name to handle mixed-case extensions
-      // (e.g., APPLE.SVG → APPLE, not APPLE.SVG)
-      const name = path.basename(lower, '.' + ext);
+      // Strip the extension using the original filename's actual extension,
+      // preserving the stem's original case (e.g., MyItem.SVG → MyItem)
+      const actualExt = entry.name.slice(-(ext.length + 1)); // e.g., ".SVG" or ".png"
+      const name = path.basename(entry.name, actualExt);
       results.push({ path: fullPath, name, ext });
     }
   }
