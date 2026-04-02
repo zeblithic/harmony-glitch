@@ -37,6 +37,7 @@ export interface PlatformLine {
   end: Point;
   pcPerm: number | null;
   itemPerm: number | null;
+  surface: string;
 }
 
 export interface Point {
