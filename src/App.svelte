@@ -6,6 +6,7 @@
   import ChatInput from './lib/components/ChatInput.svelte';
   import IdentitySetup from './lib/components/IdentitySetup.svelte';
   import NetworkStatus from './lib/components/NetworkStatus.svelte';
+  import GameNotification from './lib/components/GameNotification.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
@@ -154,6 +155,7 @@
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
+    <GameNotification feedback={latestFrame?.pickupFeedback ?? []} />
     <InventoryPanel
       inventory={latestFrame?.inventory ?? null}
       {recipes}
