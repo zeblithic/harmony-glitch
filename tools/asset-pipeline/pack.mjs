@@ -223,6 +223,10 @@ if (isDirectRun) {
   }
 
   const scale = parseFloat(values.scale ?? '1');
+  if (!Number.isFinite(scale) || scale <= 0) {
+    console.error(`Error: --scale must be a positive number, got: ${values.scale}`);
+    process.exit(1);
+  }
   await run(values.input, values.output, values.name, values.animation ?? false, scale);
 }
 
@@ -258,8 +262,9 @@ async function run(inputDir, outputDir, name, animationMode, scale = 1) {
   const { frames, sheetWidth, sheetHeight } = shelfPack(images);
 
   // Composite — use pre-rasterized buffer for SVGs, path for PNGs
+  const imageByName = new Map(images.map((i) => [i.name, i]));
   const composites = frames.map((f) => {
-    const img = images.find((i) => i.name === f.name);
+    const img = imageByName.get(f.name);
     const input = img?.buffer ?? f.path;
     return { input, left: f.x, top: f.y };
   });

@@ -333,12 +333,12 @@ fn svg_color(c: &swf::Color) -> String {
 }
 
 /// Build SVG for a single shape, returning (defs_xml, paths_xml).
-fn shape_to_svg(shape: &swf::Shape) -> (String, String) {
+/// `gradient_id` is shared across all shapes in the SVG to avoid ID collisions.
+fn shape_to_svg(shape: &swf::Shape, gradient_id: &mut u32) -> (String, String) {
     let (groups, all_fills, all_lines) = walk_shape_edges(shape);
 
     let mut defs = String::new();
     let mut body = String::new();
-    let mut gradient_id = 0u32;
 
     // Build a lookup: style_id -> FillStyle
     let fill_map: HashMap<u32, &swf::FillStyle> = all_fills.iter().map(|(id, fs)| (*id, fs)).collect();
@@ -366,14 +366,14 @@ fn shape_to_svg(shape: &swf::Shape) -> (String, String) {
                 writeln!(body, "  {}", attrs).unwrap();
             }
             Some(swf::FillStyle::LinearGradient(g)) => {
-                let gid = format!("g{}", gradient_id);
-                gradient_id += 1;
+                let gid = format!("g{}", *gradient_id);
+                *gradient_id += 1;
                 write_linear_gradient(&mut defs, &gid, g);
                 writeln!(body, r#"  <path d="{}" fill="url(#{})"/>"#, d, gid).unwrap();
             }
             Some(swf::FillStyle::RadialGradient(g)) => {
-                let gid = format!("g{}", gradient_id);
-                gradient_id += 1;
+                let gid = format!("g{}", *gradient_id);
+                *gradient_id += 1;
                 write_radial_gradient(&mut defs, &gid, g, None);
                 writeln!(body, r#"  <path d="{}" fill="url(#{})"/>"#, d, gid).unwrap();
             }
@@ -381,8 +381,8 @@ fn shape_to_svg(shape: &swf::Shape) -> (String, String) {
                 gradient,
                 focal_point,
             }) => {
-                let gid = format!("g{}", gradient_id);
-                gradient_id += 1;
+                let gid = format!("g{}", *gradient_id);
+                *gradient_id += 1;
                 write_radial_gradient(&mut defs, &gid, gradient, Some(focal_point.to_f64()));
                 writeln!(body, r#"  <path d="{}" fill="url(#{})"/>"#, d, gid).unwrap();
             }
@@ -463,7 +463,7 @@ fn shape_to_svg(shape: &swf::Shape) -> (String, String) {
 
 /// Write a `<linearGradient>` element into the defs string.
 fn write_linear_gradient(defs: &mut String, id: &str, g: &swf::Gradient) {
-    let transform = gradient_transform_attr(&g.matrix);
+    let transform = matrix_to_svg(&g.matrix);
     let spread = spread_method(g.spread);
 
     write!(
@@ -490,7 +490,7 @@ fn write_radial_gradient(
     g: &swf::Gradient,
     focal_point: Option<f64>,
 ) {
-    let transform = gradient_transform_attr(&g.matrix);
+    let transform = matrix_to_svg(&g.matrix);
     let spread = spread_method(g.spread);
 
     write!(
@@ -538,23 +538,6 @@ fn write_gradient_stops(defs: &mut String, records: &[swf::GradientRecord]) {
     }
 }
 
-/// Build a `matrix(a,b,c,d,tx,ty)` string from an SWF Matrix.
-/// tx/ty are converted from twips to pixels.
-fn gradient_transform_attr(m: &swf::Matrix) -> String {
-    if *m == swf::Matrix::IDENTITY {
-        return String::new();
-    }
-    format!(
-        "matrix({},{},{},{},{},{})",
-        fmt_float(m.a.to_f64()),
-        fmt_float(m.b.to_f64()),
-        fmt_float(m.c.to_f64()),
-        fmt_float(m.d.to_f64()),
-        fmt_float(m.tx.to_pixels()),
-        fmt_float(m.ty.to_pixels()),
-    )
-}
-
 /// Convert GradientSpread to SVG spreadMethod value.
 fn spread_method(spread: swf::GradientSpread) -> &'static str {
     match spread {
@@ -564,8 +547,12 @@ fn spread_method(spread: swf::GradientSpread) -> &'static str {
     }
 }
 
-/// Format a Matrix as an SVG `matrix(a,b,c,d,tx,ty)` transform attribute value.
-fn matrix_to_svg_transform(m: &swf::Matrix) -> String {
+/// Format a Matrix as an SVG `matrix(a,b,c,d,tx,ty)` string.
+/// tx/ty are converted from twips to pixels. Returns empty string for identity.
+fn matrix_to_svg(m: &swf::Matrix) -> String {
+    if *m == swf::Matrix::IDENTITY {
+        return String::new();
+    }
     format!(
         "matrix({},{},{},{},{},{})",
         fmt_float(m.a.to_f64()),
@@ -608,6 +595,7 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
 
     let mut all_defs = String::new();
     let mut all_body = String::new();
+    let mut gradient_id = 0u32;
 
     for place in &placements {
         let char_id = match place.action {
@@ -621,7 +609,7 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
             None => continue,
         };
 
-        let (defs, paths) = shape_to_svg(shape);
+        let (defs, paths) = shape_to_svg(shape, &mut gradient_id);
         all_defs.push_str(&defs);
 
         // Wrap in a <g> with transform if non-identity
@@ -636,7 +624,7 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
             writeln!(
                 all_body,
                 r#"  <g transform="{}">"#,
-                matrix_to_svg_transform(m)
+                matrix_to_svg(m)
             )
             .unwrap();
             // Indent the paths within the group
@@ -865,7 +853,7 @@ mod tests {
     #[test]
     fn test_shape_to_svg_solid_color() {
         let shape = make_triangle_shape(FillStyle::Color(Color::RED));
-        let (defs, body) = shape_to_svg(&shape);
+        let (defs, body) = shape_to_svg(&shape, &mut 0);
 
         assert!(defs.is_empty(), "Solid color should not need defs");
         assert!(body.contains(r#"fill="rgb(255,0,0)""#), "Should have red fill: {}", body);
@@ -893,7 +881,7 @@ mod tests {
         };
 
         let shape = make_triangle_shape(FillStyle::LinearGradient(gradient));
-        let (defs, body) = shape_to_svg(&shape);
+        let (defs, body) = shape_to_svg(&shape, &mut 0);
 
         assert!(
             defs.contains("<linearGradient"),
@@ -960,7 +948,7 @@ mod tests {
             ],
         };
 
-        let (_defs, body) = shape_to_svg(&shape);
+        let (_defs, body) = shape_to_svg(&shape, &mut 0);
 
         assert!(
             body.contains(r#"stroke="rgb(0,255,0)""#),

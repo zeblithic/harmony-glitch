@@ -22,19 +22,55 @@ enum ProcessResult {
     Skipped,
 }
 
-/// Process a single SWF file: extract bitmap or convert to SVG stub.
+/// Process a single SWF file: extract bitmap or convert to SVG.
 ///
-/// If the SWF contains bitmap tags, extracts the largest bitmap and writes a PNG.
-/// If the SWF has DefineShape tags but no bitmaps, converts to an SVG stub.
-/// Otherwise, skips the file.
+/// Parses the SWF once, then decides: if bitmap tags exist, extract the largest
+/// bitmap as PNG. If only vector shapes, convert to SVG. Otherwise skip.
 fn process_swf(
     swf_data: &[u8],
     output_path_no_ext: &Path,
     errors: &mut Vec<String>,
     swf_path: &Path,
 ) -> ProcessResult {
-    if bitmap::has_bitmap_tags(swf_data) {
-        // Bitmap path: extract_largest_bitmap parses internally
+    // Parse once — used for both detection and conversion
+    let swf_buf = match swf::decompress_swf(swf_data) {
+        Ok(b) => b,
+        Err(err) => {
+            errors.push(format!(
+                "WARN: skipped {} — SWF decompress error: {}",
+                swf_path.display(),
+                err
+            ));
+            return ProcessResult::Skipped;
+        }
+    };
+    let parsed = match swf::parse_swf(&swf_buf) {
+        Ok(s) => s,
+        Err(err) => {
+            errors.push(format!(
+                "WARN: skipped {} — SWF parse error: {}",
+                swf_path.display(),
+                err
+            ));
+            return ProcessResult::Skipped;
+        }
+    };
+
+    // Check what tags are present
+    let has_bitmaps = parsed.tags.iter().any(|tag| {
+        matches!(
+            tag,
+            swf::Tag::DefineBitsLossless(_)
+                | swf::Tag::DefineBitsJpeg2 { .. }
+                | swf::Tag::DefineBitsJpeg3(_)
+        )
+    });
+    let has_shapes = parsed
+        .tags
+        .iter()
+        .any(|tag| matches!(tag, swf::Tag::DefineShape(_)));
+
+    if has_bitmaps {
         let output_path = output_path_no_ext.with_extension("png");
         match bitmap::extract_largest_bitmap(swf_data) {
             Some(bm) => match bitmap::write_png(&output_path, &bm) {
@@ -58,31 +94,8 @@ fn process_swf(
         }
     }
 
-    if bitmap::has_shape_tags(swf_data) {
-        // SVG path: parse the SWF and pass to the SVG converter
+    if has_shapes {
         let output_path = output_path_no_ext.with_extension("svg");
-        let swf_buf = match swf::decompress_swf(swf_data) {
-            Ok(b) => b,
-            Err(err) => {
-                errors.push(format!(
-                    "WARN: skipped {} — SWF decompress error: {}",
-                    swf_path.display(),
-                    err
-                ));
-                return ProcessResult::Skipped;
-            }
-        };
-        let parsed = match swf::parse_swf(&swf_buf) {
-            Ok(s) => s,
-            Err(err) => {
-                errors.push(format!(
-                    "WARN: skipped {} — SWF parse error: {}",
-                    swf_path.display(),
-                    err
-                ));
-                return ProcessResult::Skipped;
-            }
-        };
         let svg_content = svg::convert_swf_to_svg(&parsed);
         match std::fs::write(&output_path, svg_content) {
             Ok(()) => return ProcessResult::Svg,

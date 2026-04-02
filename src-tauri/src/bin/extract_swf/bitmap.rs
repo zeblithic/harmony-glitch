@@ -47,37 +47,6 @@ pub fn extract_largest_bitmap(swf_data: &[u8]) -> Option<ExtractedBitmap> {
     largest
 }
 
-/// Returns true if the SWF data contains any bitmap tags.
-pub fn has_bitmap_tags(swf_data: &[u8]) -> bool {
-    let Ok(swf_buf) = swf::decompress_swf(swf_data) else {
-        return false;
-    };
-    let Ok(swf) = swf::parse_swf(&swf_buf) else {
-        return false;
-    };
-    swf.tags.iter().any(|tag| {
-        matches!(
-            tag,
-            swf::Tag::DefineBitsLossless(_)
-                | swf::Tag::DefineBitsJpeg2 { .. }
-                | swf::Tag::DefineBitsJpeg3(_)
-        )
-    })
-}
-
-/// Returns true if the SWF data contains DefineShape tags.
-pub fn has_shape_tags(swf_data: &[u8]) -> bool {
-    let Ok(swf_buf) = swf::decompress_swf(swf_data) else {
-        return false;
-    };
-    let Ok(swf) = swf::parse_swf(&swf_buf) else {
-        return false;
-    };
-    swf.tags
-        .iter()
-        .any(|tag| matches!(tag, swf::Tag::DefineShape(_)))
-}
-
 /// Decode a DefineBitsLossless / DefineBitsLossless2 tag into RGBA pixels.
 fn decode_lossless(bitmap: &swf::DefineBitsLossless) -> Option<ExtractedBitmap> {
     let width = bitmap.width as u32;
