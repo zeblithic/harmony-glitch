@@ -60,6 +60,9 @@ pub struct PlatformLine {
     /// -1 = one-way from top, 1 = one-way from bottom, 0 = pass-through, None = solid
     pub pc_perm: Option<i32>,
     pub item_perm: Option<i32>,
+    /// Surface material for footstep sounds (e.g. "grass", "stone", "wood").
+    /// Defaults to "default" when not specified in street XML.
+    pub surface: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -245,6 +248,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         };
         assert!((p.y_at(100.0) - (-100.0)).abs() < 0.001);
     }
@@ -260,6 +264,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         };
         // Midpoint should be -150
         assert!((p.y_at(100.0) - (-150.0)).abs() < 0.001);
@@ -273,6 +278,7 @@ mod tests {
             end: Point { x: 100.0, y: 0.0 },
             pc_perm: Some(-1),
             item_perm: None,
+            surface: "default".into(),
         };
         assert!(p.solid_from_top());
         assert!(!p.solid_from_bottom());
@@ -286,6 +292,7 @@ mod tests {
             end: Point { x: 100.0, y: 0.0 },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         };
         assert!(p.solid_from_top());
         assert!(p.solid_from_bottom());
@@ -359,10 +366,25 @@ mod tests {
             end: Point { x: 100.0, y: 0.0 },
             pc_perm: Some(-1),
             item_perm: None,
+            surface: "default".into(),
         };
         let json = serde_json::to_string(&p).unwrap();
         assert!(json.contains("pcPerm"));
         assert!(json.contains("itemPerm"));
+    }
+
+    #[test]
+    fn platform_surface_serializes() {
+        let p = PlatformLine {
+            id: "p1".into(),
+            start: Point { x: 0.0, y: 0.0 },
+            end: Point { x: 100.0, y: 0.0 },
+            pc_perm: None,
+            item_perm: None,
+            surface: "grass".into(),
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains(r#""surface":"grass""#));
     }
 
     #[test]
