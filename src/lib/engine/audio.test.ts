@@ -19,7 +19,7 @@ vi.mock('howler', () => {
   };
 });
 
-import { AudioManager } from './audio';
+import { AudioManager, kitBasePath } from './audio';
 import type { SoundKit } from './audio';
 import { Howl, Howler } from 'howler';
 
@@ -370,5 +370,15 @@ describe('AudioManager', () => {
       }).not.toThrow();
       expect(manager.getVolume('sfx')).toBe(1.0);
     });
+  });
+});
+
+describe('kitBasePath', () => {
+  it('returns /assets/audio/ for default kit', () => {
+    expect(kitBasePath('default')).toBe('/assets/audio/');
+  });
+
+  it('returns soundkit:// URL for custom kit', () => {
+    expect(kitBasePath('retro-kit')).toBe('soundkit://localhost/retro-kit/');
   });
 });

@@ -19,6 +19,7 @@ use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri::http;
 
 /// Shared monotonic epoch — all time fed to NetworkState is relative to this.
 struct MonotonicEpoch(Instant);
@@ -44,6 +45,16 @@ struct PlayerIdentityWrapper {
     data_dir: std::path::PathBuf,
 }
 
+/// Path to the sound-kits directory, created on startup.
+struct SoundKitsDir(std::path::PathBuf);
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SoundKitMeta {
+    id: String,
+    name: String,
+}
+
 /// Shared network state — driven by the game loop, queried by commands.
 struct NetworkWrapper(Mutex<NetworkState>);
 
@@ -55,6 +66,99 @@ fn list_streets() -> Vec<String> {
     // For Phase A: return hardcoded demo street names.
     // Later: scan assets directory or query content network.
     vec!["demo_meadow".to_string(), "demo_heights".to_string()]
+}
+
+/// Validate a sound kit ID: alphanumeric, hyphens, and underscores only.
+/// Rejects path traversal attempts.
+fn validate_kit_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Kit ID must not be empty".to_string());
+    }
+    if id.contains('.') || id.contains('/') || id.contains('\\') {
+        return Err(format!("Invalid kit ID: {id}"));
+    }
+    if !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err(format!("Invalid kit ID: {id}"));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn list_sound_kits(app: AppHandle) -> Result<Vec<SoundKitMeta>, String> {
+    let kits_dir = app.state::<SoundKitsDir>();
+    let mut kits = vec![SoundKitMeta {
+        id: "default".to_string(),
+        name: "Default".to_string(),
+    }];
+
+    let entries = match std::fs::read_dir(&kits_dir.0) {
+        Ok(e) => e,
+        Err(_) => return Ok(kits),
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let kit_json = path.join("kit.json");
+        if !kit_json.exists() {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&kit_json) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[sound-kits] Failed to read {}: {e}", kit_json.display());
+                continue;
+            }
+        };
+        let parsed: serde_json::Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[sound-kits] Invalid JSON in {}: {e}", kit_json.display());
+                continue;
+            }
+        };
+        let name = parsed
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unnamed")
+            .to_string();
+        let id = entry.file_name().to_string_lossy().to_string();
+        // Skip directories whose names aren't valid kit IDs (e.g. dots, spaces)
+        // and skip "default" to avoid shadowing the built-in kit.
+        if id == "default" || validate_kit_id(&id).is_err() {
+            continue;
+        }
+        kits.push(SoundKitMeta { id, name });
+    }
+
+    // Sort custom kits alphabetically by name (default stays first)
+    kits[1..].sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(kits)
+}
+
+#[tauri::command]
+fn read_sound_kit(kit_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    if kit_id == "default" {
+        let kit: serde_json::Value =
+            serde_json::from_str(include_str!("../../assets/audio/default-kit.json"))
+                .map_err(|e| format!("Failed to parse bundled kit: {e}"))?;
+        return Ok(kit);
+    }
+
+    validate_kit_id(&kit_id)?;
+
+    let kits_dir = app.state::<SoundKitsDir>();
+    let kit_path = kits_dir.0.join(&kit_id).join("kit.json");
+
+    let content =
+        std::fs::read_to_string(&kit_path).map_err(|e| format!("Kit '{kit_id}' not found: {e}"))?;
+    let kit: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Invalid kit manifest: {e}"))?;
+
+    Ok(kit)
 }
 
 #[tauri::command]
@@ -509,8 +613,134 @@ fn load_entity_placement(name: &str) -> Result<String, String> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_kit_id_accepts_valid() {
+        assert!(validate_kit_id("retro-kit").is_ok());
+        assert!(validate_kit_id("my_kit_2").is_ok());
+        assert!(validate_kit_id("Default").is_ok());
+    }
+
+    #[test]
+    fn validate_kit_id_rejects_path_traversal() {
+        assert!(validate_kit_id("..").is_err());
+        assert!(validate_kit_id("../etc").is_err());
+        assert!(validate_kit_id("foo/bar").is_err());
+        assert!(validate_kit_id("foo\\bar").is_err());
+    }
+
+    #[test]
+    fn validate_kit_id_rejects_empty() {
+        assert!(validate_kit_id("").is_err());
+    }
+
+    #[test]
+    fn validate_kit_id_rejects_dots() {
+        assert!(validate_kit_id("my.kit").is_err());
+    }
+
+    #[test]
+    fn read_default_kit_parses() {
+        let json: serde_json::Value =
+            serde_json::from_str(include_str!("../../assets/audio/default-kit.json"))
+                .expect("bundled default-kit.json must be valid JSON");
+        assert_eq!(json["name"], "Default");
+        assert!(json["events"]["jump"]["default"].is_string());
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .register_uri_scheme_protocol("soundkit", |ctx, request| -> http::Response<Vec<u8>> {
+            let app = ctx.app_handle();
+            let kits_dir = app.state::<SoundKitsDir>().0.clone();
+
+            let uri_path = request.uri().path();
+            let trimmed = uri_path.trim_start_matches('/');
+            let (kit_id, file_path) = match trimmed.split_once('/') {
+                Some((k, f)) => (k, f),
+                None => {
+                    return http::Response::builder()
+                        .status(400)
+                        .body(b"Invalid path".to_vec())
+                        .unwrap();
+                }
+            };
+
+            if validate_kit_id(kit_id).is_err() {
+                return http::Response::builder()
+                    .status(403)
+                    .body(b"Invalid kit ID".to_vec())
+                    .unwrap();
+            }
+
+            // Percent-decode the file path so filenames with spaces/special chars work
+            let decoded_path = percent_encoding::percent_decode_str(file_path)
+                .decode_utf8()
+                .unwrap_or_default();
+
+            if decoded_path.contains("..") {
+                return http::Response::builder()
+                    .status(403)
+                    .body(b"Path traversal rejected".to_vec())
+                    .unwrap();
+            }
+
+            let full_path = kits_dir.join(kit_id).join(decoded_path.as_ref());
+
+            let canonical_kits = match kits_dir.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return http::Response::builder()
+                        .status(404)
+                        .body(b"Kits directory not found".to_vec())
+                        .unwrap();
+                }
+            };
+            let canonical_file = match full_path.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return http::Response::builder()
+                        .status(404)
+                        .body(b"File not found".to_vec())
+                        .unwrap();
+                }
+            };
+            if !canonical_file.starts_with(&canonical_kits) {
+                return http::Response::builder()
+                    .status(403)
+                    .body(b"Access denied".to_vec())
+                    .unwrap();
+            }
+
+            let bytes = match std::fs::read(&canonical_file) {
+                Ok(b) => b,
+                Err(_) => {
+                    return http::Response::builder()
+                        .status(404)
+                        .body(b"File not found".to_vec())
+                        .unwrap();
+                }
+            };
+
+            let mime = match canonical_file.extension().and_then(|e| e.to_str()) {
+                Some("mp3") => "audio/mpeg",
+                Some("ogg") => "audio/ogg",
+                Some("wav") => "audio/wav",
+                Some("flac") => "audio/flac",
+                _ => "application/octet-stream",
+            };
+
+            http::Response::builder()
+                .status(200)
+                .header("Content-Type", mime)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(bytes)
+                .unwrap()
+        })
         .manage(MonotonicEpoch(Instant::now()))
         .manage({
             let item_defs = item::loader::parse_item_defs(include_str!("../../assets/items.json"))
@@ -576,6 +806,11 @@ pub fn run() {
         .manage(GameLoopHandle(Mutex::new(None)))
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
+            let kits_dir = data_dir.join("sound-kits");
+            if let Err(e) = std::fs::create_dir_all(&kits_dir) {
+                eprintln!("[sound-kits] Failed to create {}: {e}", kits_dir.display());
+            }
+            app.manage(SoundKitsDir(kits_dir));
             let (player_identity, display_name, setup_complete) =
                 identity::persistence::load_or_create_profile(&data_dir)
                     .map_err(std::io::Error::other)?;
@@ -614,6 +849,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_streets,
+            list_sound_kits,
+            read_sound_kit,
             load_street,
             send_input,
             start_game,

@@ -9,13 +9,15 @@
   import GameNotification from './lib/components/GameNotification.svelte';
   import VolumeSettings from './lib/components/VolumeSettings.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef } from './lib/types';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta } from './lib/types';
   import { onMount } from 'svelte';
-  import { AudioManager, loadSoundKit, type SoundKit } from './lib/engine/audio';
+  import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
 
   let audioManager = $state<AudioManager | null>(null);
   let cachedKit: SoundKit | null = null;
+  let soundKits = $state<SoundKitMeta[]>([]);
+  let selectedKitId = $state('default');
   let currentStreet = $state<StreetData | null>(null);
   let latestFrame = $state<RenderFrame | null>(null);
   let debugMode = $state(false);
@@ -48,13 +50,41 @@
       console.error('Failed to load recipes:', e);
     }
 
+    // Load available sound kits
+    try {
+      soundKits = await listSoundKits();
+    } catch (e) {
+      console.error('Failed to list sound kits:', e);
+      soundKits = [{ id: 'default', name: 'Default' }];
+    }
+
+    // Restore saved kit selection
+    try {
+      const savedKit = localStorage.getItem('selected-sound-kit');
+      if (savedKit && soundKits.some((k) => k.id === savedKit)) {
+        selectedKitId = savedKit;
+      }
+    } catch { /* localStorage unavailable */ }
+
     // Initialize audio eagerly so handleStreetLoaded stays synchronous
     // (avoids race where StreetPicker re-enables before currentStreet is set)
     try {
-      cachedKit = await loadSoundKit('/assets/audio/');
-      audioManager = new AudioManager(cachedKit, '/assets/audio/');
+      cachedKit = await loadSoundKit(selectedKitId);
+      audioManager = new AudioManager(cachedKit, kitBasePath(selectedKitId));
     } catch (e) {
       console.error('Failed to initialize audio:', e);
+      if (selectedKitId !== 'default') {
+        selectedKitId = 'default';
+        try {
+          localStorage.setItem('selected-sound-kit', 'default');
+        } catch { /* localStorage unavailable */ }
+        try {
+          cachedKit = await loadSoundKit('default');
+          audioManager = new AudioManager(cachedKit, kitBasePath('default'));
+        } catch (e2) {
+          console.error('Fallback to default kit also failed:', e2);
+        }
+      }
     }
 
     // Auto-resume from save file if available.
@@ -85,7 +115,7 @@
     // Recreate AudioManager if it was disposed (Back button)
     if (!audioManager && cachedKit) {
       try {
-        audioManager = new AudioManager(cachedKit, '/assets/audio/');
+        audioManager = new AudioManager(cachedKit, kitBasePath(selectedKitId));
       } catch (e) {
         console.error('Failed to recreate audio:', e);
       }
@@ -137,6 +167,47 @@
     }
   }
 
+  let switchingKit = false;
+  async function switchKit(kitId: string) {
+    if (switchingKit) {
+      // Force the <select> back to the current kit so it doesn't desync
+      const current = selectedKitId;
+      selectedKitId = '';
+      selectedKitId = current;
+      return;
+    }
+    switchingKit = true;
+    selectedKitId = kitId;
+    try {
+      localStorage.setItem('selected-sound-kit', kitId);
+    } catch { /* localStorage unavailable */ }
+
+    try {
+      const kit = await loadSoundKit(kitId);
+      audioManager?.dispose();
+      cachedKit = kit;
+      audioManager = new AudioManager(kit, kitBasePath(kitId));
+    } catch (e) {
+      console.error(`Failed to load kit '${kitId}':`, e);
+      if (kitId !== 'default') {
+        selectedKitId = 'default';
+        try {
+          localStorage.setItem('selected-sound-kit', 'default');
+        } catch { /* localStorage unavailable */ }
+        try {
+          const fallback = await loadSoundKit('default');
+          audioManager?.dispose();
+          cachedKit = fallback;
+          audioManager = new AudioManager(fallback, kitBasePath('default'));
+        } catch (e2) {
+          console.error('Fallback to default kit also failed:', e2);
+        }
+      }
+    } finally {
+      switchingKit = false;
+    }
+  }
+
   function toggleDebug() {
     debugMode = !debugMode;
   }
@@ -173,7 +244,10 @@
     <VolumeSettings
       {audioManager}
       visible={volumeOpen}
+      {soundKits}
+      {selectedKitId}
       onClose={() => { volumeOpen = false; }}
+      onKitChange={switchKit}
     />
     <InventoryPanel
       inventory={latestFrame?.inventory ?? null}

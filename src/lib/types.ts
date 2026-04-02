@@ -259,3 +259,8 @@ export type AudioEvent =
   | { type: 'transitionComplete' }
   | { type: 'entityInteract'; entityType: string }
   | { type: 'streetChanged'; streetId: string };
+
+export interface SoundKitMeta {
+  id: string;
+  name: string;
+}

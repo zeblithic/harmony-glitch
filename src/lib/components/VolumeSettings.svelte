@@ -1,14 +1,21 @@
 <script lang="ts">
   import type { AudioManager } from '../engine/audio';
+  import type { SoundKitMeta } from '../types';
 
   let {
     audioManager,
     visible = false,
+    soundKits = [],
+    selectedKitId = 'default',
     onClose,
+    onKitChange,
   }: {
     audioManager: AudioManager | null;
     visible: boolean;
+    soundKits?: SoundKitMeta[];
+    selectedKitId?: string;
     onClose?: () => void;
+    onKitChange?: (kitId: string) => void;
   } = $props();
 
   let dialogEl: HTMLDialogElement | undefined = $state();
@@ -19,29 +26,31 @@
   let sfxMuted = $state(false);
   let ambientMuted = $state(false);
 
+  // Dialog open/close — only depends on `visible`, not `audioManager`.
   $effect(() => {
     if (visible && dialogEl) {
       if (!dialogEl.open) {
-        // Only capture focus when transitioning from closed → open
         previousFocus = document.activeElement as HTMLElement | null;
-      }
-      // Sync state from AudioManager on open and when it changes
-      if (audioManager) {
-        sfxVolume = audioManager.getVolume('sfx');
-        ambientVolume = audioManager.getVolume('ambient');
-        sfxMuted = audioManager.isMuted('sfx');
-        ambientMuted = audioManager.isMuted('ambient');
-      }
-      if (!dialogEl.open) {
         dialogEl.showModal();
+        dialogEl.querySelector<HTMLElement>('input[type="range"]')?.focus();
       }
-      dialogEl.querySelector<HTMLElement>('input[type="range"]')?.focus();
       return () => {
         if (dialogEl?.open) dialogEl.close();
       };
     } else if (!visible && previousFocus) {
       previousFocus.focus();
       previousFocus = null;
+    }
+  });
+
+  // Sync volume state from AudioManager — runs on open and when audioManager changes
+  // (e.g. kit switch), without touching dialog/focus state.
+  $effect(() => {
+    if (visible && audioManager) {
+      sfxVolume = audioManager.getVolume('sfx');
+      ambientVolume = audioManager.getVolume('ambient');
+      sfxMuted = audioManager.isMuted('sfx');
+      ambientMuted = audioManager.isMuted('ambient');
     }
   });
 
@@ -76,17 +85,35 @@
 {#if visible}
   <dialog
     class="volume-panel"
-    aria-label="Volume Settings"
+    aria-label="Audio Settings"
     aria-modal="true"
     bind:this={dialogEl}
     oncancel={handleCancel}
   >
     <div class="panel-header">
-      <h2>Volume</h2>
-      <button type="button" class="close-btn" aria-label="Close volume settings" onclick={() => onClose?.()}>
+      <h2>Audio Settings</h2>
+      <button type="button" class="close-btn" aria-label="Close audio settings" onclick={() => onClose?.()}>
         &times;
       </button>
     </div>
+
+    {#if soundKits.length > 0}
+      <div class="kit-selector">
+        <label for="kit-select">Sound Kit</label>
+        <select
+          id="kit-select"
+          value={selectedKitId}
+          onchange={(e) => onKitChange?.((e.target as HTMLSelectElement).value)}
+        >
+          {#each soundKits as kit (kit.id)}
+            <option value={kit.id}>{kit.name}</option>
+          {/each}
+        </select>
+        <p class="kit-hint">
+          Place custom kits in your sound-kits folder. CAS bundle support coming soon.
+        </p>
+      </div>
+    {/if}
 
     <div class="channels">
       <div class="channel">
@@ -280,5 +307,41 @@
   input[type="range"]:focus-visible {
     outline: 2px solid #5865f2;
     outline-offset: 2px;
+  }
+
+  .kit-selector {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #333;
+  }
+
+  .kit-selector label {
+    display: block;
+    font-size: 0.75rem;
+    color: #ccc;
+    margin-bottom: 6px;
+  }
+
+  .kit-selector select {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+    background: rgba(40, 40, 70, 0.6);
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    cursor: pointer;
+  }
+
+  .kit-selector select:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: -2px;
+  }
+
+  .kit-hint {
+    font-size: 0.6rem;
+    color: #666;
+    margin: 6px 0 0;
+    line-height: 1.3;
   }
 </style>
