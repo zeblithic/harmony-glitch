@@ -125,6 +125,11 @@ fn list_sound_kits(app: AppHandle) -> Result<Vec<SoundKitMeta>, String> {
             .unwrap_or("Unnamed")
             .to_string();
         let id = entry.file_name().to_string_lossy().to_string();
+        // Skip directories whose names aren't valid kit IDs (e.g. dots, spaces)
+        // and skip "default" to avoid shadowing the built-in kit.
+        if id == "default" || validate_kit_id(&id).is_err() {
+            continue;
+        }
         kits.push(SoundKitMeta { id, name });
     }
 
@@ -651,16 +656,7 @@ pub fn run() {
     tauri::Builder::default()
         .register_uri_scheme_protocol("soundkit", |ctx, request| -> http::Response<Vec<u8>> {
             let app = ctx.app_handle();
-            let data_dir = match app.path().app_data_dir() {
-                Ok(d) => d,
-                Err(_) => {
-                    return http::Response::builder()
-                        .status(500)
-                        .body(Vec::new())
-                        .unwrap();
-                }
-            };
-            let kits_dir = data_dir.join("sound-kits");
+            let kits_dir = app.state::<SoundKitsDir>().0.clone();
 
             let uri_path = request.uri().path();
             let trimmed = uri_path.trim_start_matches('/');
@@ -681,14 +677,19 @@ pub fn run() {
                     .unwrap();
             }
 
-            if file_path.contains("..") {
+            // Percent-decode the file path so filenames with spaces/special chars work
+            let decoded_path = percent_encoding::percent_decode_str(file_path)
+                .decode_utf8()
+                .unwrap_or_default();
+
+            if decoded_path.contains("..") {
                 return http::Response::builder()
                     .status(403)
                     .body(b"Path traversal rejected".to_vec())
                     .unwrap();
             }
 
-            let full_path = kits_dir.join(kit_id).join(file_path);
+            let full_path = kits_dir.join(kit_id).join(decoded_path.as_ref());
 
             let canonical_kits = match kits_dir.canonicalize() {
                 Ok(p) => p,
