@@ -26,6 +26,10 @@ pub enum AudioEvent {
     StreetChanged {
         street_id: String,
     },
+    #[serde(rename_all = "camelCase")]
+    Footstep {
+        surface: String,
+    },
 }
 
 #[cfg(test)]
@@ -87,6 +91,16 @@ mod tests {
     }
 
     #[test]
+    fn serialize_footstep() {
+        let event = AudioEvent::Footstep {
+            surface: "grass".into(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""type":"footstep""#));
+        assert!(json.contains(r#""surface":"grass""#));
+    }
+
+    #[test]
     fn roundtrip_all_variants() {
         let events = vec![
             AudioEvent::ItemPickup {
@@ -105,6 +119,9 @@ mod tests {
             },
             AudioEvent::StreetChanged {
                 street_id: "demo_meadow".into(),
+            },
+            AudioEvent::Footstep {
+                surface: "stone".into(),
             },
         ];
         for event in events {
