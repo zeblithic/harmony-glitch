@@ -179,13 +179,19 @@ fn parse_platform_lines(layer: &XmlValue) -> Vec<PlatformLine> {
                 .and_then(|v| v.as_int())
                 .map(|v| v as i32);
 
+            let surface = p
+                .get("surface")
+                .and_then(|v| v.as_str())
+                .unwrap_or("default")
+                .to_string();
+
             PlatformLine {
                 id: plat_id.clone(),
                 start,
                 end,
                 pc_perm,
                 item_perm,
-                surface: "default".into(),
+                surface,
             }
         })
         .collect();
@@ -630,6 +636,64 @@ mod tests {
             "demo_meadow should have signpost"
         );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO002");
+    }
+
+    #[test]
+    fn parse_platform_surface_from_xml() {
+        let xml = r#"
+        <game_object tsid="GTEST" label="Surface">
+          <object id="dynamic">
+            <str id="tsid">LSURF</str>
+            <str id="label">Surface Street</str>
+            <int id="l">-500</int>
+            <int id="r">500</int>
+            <int id="t">-200</int>
+            <int id="b">0</int>
+            <int id="ground_y">0</int>
+            <object id="layers">
+              <object id="middleground">
+                <int id="w">1000</int>
+                <int id="h">200</int>
+                <int id="z">0</int>
+                <str id="name">middleground</str>
+                <object id="platform_lines">
+                  <object id="plat_grass">
+                    <object id="start">
+                      <int id="x">-400</int>
+                      <int id="y">0</int>
+                    </object>
+                    <object id="end">
+                      <int id="x">0</int>
+                      <int id="y">0</int>
+                    </object>
+                    <str id="surface">grass</str>
+                  </object>
+                  <object id="plat_plain">
+                    <object id="start">
+                      <int id="x">0</int>
+                      <int id="y">0</int>
+                    </object>
+                    <object id="end">
+                      <int id="x">400</int>
+                      <int id="y">0</int>
+                    </object>
+                  </object>
+                </object>
+              </object>
+            </object>
+          </object>
+        </game_object>
+        "#;
+
+        let street = parse_street(xml).unwrap();
+        let platforms = street.platforms();
+        assert_eq!(platforms.len(), 2);
+
+        let grass = platforms.iter().find(|p| p.id == "plat_grass").unwrap();
+        assert_eq!(grass.surface, "grass");
+
+        let plain = platforms.iter().find(|p| p.id == "plat_plain").unwrap();
+        assert_eq!(plain.surface, "default");
     }
 
     #[test]
