@@ -23,6 +23,7 @@
   let inventoryOpen = $state(false);
   let volumeOpen = $state(false);
   let transitionPending = $state(false);
+  let transitionTarget = $state<string | null>(null);
   let transitionAttempts = $state(0);
   const MAX_TRANSITION_ATTEMPTS = 3;
   let identityReady = $state(false);
@@ -102,6 +103,7 @@
     // calls that push target_duration forward indefinitely, stalling the swoop.
     if (frame.transition && !transitionPending && transitionAttempts < MAX_TRANSITION_ATTEMPTS) {
       transitionPending = true;
+      transitionTarget = frame.transition.toStreet.replace(/_/g, ' ');
       transitionAttempts++;
       // Capture the generation at the time we start loading — if the swoop
       // times out and a new one starts, the stale promise will pass the old
@@ -125,6 +127,7 @@
     }
     if (!frame.transition) {
       transitionPending = false;
+      transitionTarget = null;
       transitionAttempts = 0;
     }
 
@@ -176,7 +179,7 @@
       onClose={() => { inventoryOpen = false; }}
     />
     <div role="status" aria-live="polite" class="sr-only">
-      {#if transitionPending}Travelling to {currentStreet.id.replace(/_/g, ' ')}…{/if}
+      {#if transitionPending && transitionTarget}Travelling to {transitionTarget}…{/if}
     </div>
     <button type="button" class="back-btn" onclick={async () => {
       try {
