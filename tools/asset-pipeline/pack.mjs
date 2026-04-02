@@ -193,21 +193,32 @@ async function run(inputDir, outputDir, name, animationMode) {
     process.exit(1);
   }
 
-  // Read metadata
-  const images = await Promise.all(
+  // Read metadata (skip corrupt/unreadable PNGs)
+  const imageResults = await Promise.all(
     pngs.map(async (filePath) => {
-      const meta = await sharp(filePath).metadata();
-      return {
-        path: filePath,
-        name: path.basename(filePath, '.png'),
-        width: meta.width,
-        height: meta.height,
-      };
+      try {
+        const meta = await sharp(filePath).metadata();
+        // Use path relative to inputDir to avoid basename collisions across subdirs
+        const rel = path.relative(inputDir, filePath);
+        const name = rel.replace(/\.png$/i, '').replace(/[\\/]/g, '_');
+        return {
+          path: filePath,
+          name,
+          width: meta.width,
+          height: meta.height,
+        };
+      } catch (err) {
+        console.warn(`WARN: skipped ${filePath} — ${err.message}`);
+        return null;
+      }
     }),
   );
+  const images = imageResults.filter(Boolean);
 
-  // Sort by height descending
-  images.sort((a, b) => b.height - a.height);
+  if (images.length === 0) {
+    console.error('No valid PNG files could be read');
+    process.exit(1);
+  }
 
   // Pack
   const { frames, sheetWidth, sheetHeight } = shelfPack(images);

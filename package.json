@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "extract-items": "cargo run --manifest-path src-tauri/Cargo.toml --bin extract-swf -- --source ${GLITCH_ART_PATH:-$HOME/work/tinyspeck/glitch-items} --output tools/asset-pipeline/extracted/items",
+    "extract-items": "cargo run --manifest-path src-tauri/Cargo.toml --features extract-swf --bin extract-swf -- --source ${GLITCH_ART_PATH:-$HOME/work/tinyspeck/glitch-items} --output tools/asset-pipeline/extracted/items",
     "pack-items": "node tools/asset-pipeline/pack.mjs --input tools/asset-pipeline/extracted/items --output assets/sprites/items --name items",
     "pipeline-items": "npm run extract-items && npm run pack-items"
   },

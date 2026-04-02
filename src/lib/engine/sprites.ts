@@ -38,8 +38,10 @@ export class SpriteManager {
     }
 
     // Load atlases if they exist — individual PNGs still work as fallback
-    await this.loadAtlas('items', 'sprites/items/items.json');
-    await this.loadAtlas('entities', 'sprites/entities/entities.json');
+    await Promise.all([
+      this.loadAtlas('items', 'sprites/items/items.json'),
+      this.loadAtlas('entities', 'sprites/entities/entities.json'),
+    ]);
   }
 
   async loadAtlas(category: 'items' | 'entities', jsonPath: string): Promise<void> {
