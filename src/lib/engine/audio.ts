@@ -244,7 +244,15 @@ export class AudioManager {
     try {
       const raw = localStorage.getItem('audio-prefs');
       if (!raw) return null;
-      return JSON.parse(raw) as AudioPreferences;
+      const parsed = JSON.parse(raw);
+      const clamp = (v: unknown, fallback: number) =>
+        typeof v === 'number' && isFinite(v) ? Math.max(0, Math.min(1, v)) : fallback;
+      return {
+        sfxVolume: clamp(parsed.sfxVolume, 1.0),
+        ambientVolume: clamp(parsed.ambientVolume, 0.5),
+        sfxMuted: typeof parsed.sfxMuted === 'boolean' ? parsed.sfxMuted : false,
+        ambientMuted: typeof parsed.ambientMuted === 'boolean' ? parsed.ambientMuted : false,
+      };
     } catch {
       return null;
     }

@@ -21,8 +21,11 @@
 
   $effect(() => {
     if (visible && dialogEl) {
-      previousFocus = document.activeElement as HTMLElement | null;
-      // Sync state from AudioManager when opening
+      if (!dialogEl.open) {
+        // Only capture focus when transitioning from closed → open
+        previousFocus = document.activeElement as HTMLElement | null;
+      }
+      // Sync state from AudioManager on open and when it changes
       if (audioManager) {
         sfxVolume = audioManager.getVolume('sfx');
         ambientVolume = audioManager.getVolume('ambient');
@@ -107,7 +110,6 @@
           step="0.01"
           value={sfxVolume}
           oninput={handleSfxVolume}
-          aria-label="SFX volume"
           class:muted={sfxMuted}
         />
       </div>
@@ -134,7 +136,6 @@
           step="0.01"
           value={ambientVolume}
           oninput={handleAmbientVolume}
-          aria-label="Ambient volume"
           class:muted={ambientMuted}
         />
       </div>
