@@ -144,10 +144,12 @@
   if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
+    if (inventoryOpen) volumeOpen = false;
   }
   if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
+    if (volumeOpen) inventoryOpen = false;
   }
 }} />
 
