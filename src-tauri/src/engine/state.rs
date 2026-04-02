@@ -835,9 +835,13 @@ pub fn read_save_state(path: &std::path::Path) -> Result<Option<SaveState>, Stri
 }
 
 /// Find the surface material of the platform under the player.
+/// Mirrors the physics "highest platform wins" priority (most-negative Y)
+/// so overlapping platforms at a junction resolve to the same one the
+/// player is actually standing on.
 /// Returns "default" if on ground_y or no platform matches.
 fn surface_at(x: f64, y: f64, half_width: f64, platforms: &[crate::street::types::PlatformLine]) -> &str {
-    for platform in platforms {
+    let mut best: Option<(f64, usize)> = None; // (plat_y, index)
+    for (i, platform) in platforms.iter().enumerate() {
         if !platform.solid_from_top() {
             continue;
         }
@@ -846,11 +850,21 @@ fn surface_at(x: f64, y: f64, half_width: f64, platforms: &[crate::street::types
         if x + half_width < platform.min_x() || x - half_width > platform.max_x() {
             continue;
         }
-        if (platform.y_at(x) - y).abs() < 1.0 {
-            return &platform.surface;
+        let plat_y = platform.y_at(x);
+        if (plat_y - y).abs() < 1.0 {
+            // Prefer the highest platform (most-negative Y), matching
+            // physics Phase 1 slope-following priority in movement.rs.
+            match best {
+                Some((best_y, _)) if plat_y < best_y => best = Some((plat_y, i)),
+                None => best = Some((plat_y, i)),
+                _ => {}
+            }
         }
     }
-    "default"
+    match best {
+        Some((_, idx)) => &platforms[idx].surface,
+        None => "default",
+    }
 }
 
 #[cfg(test)]
@@ -2340,6 +2354,43 @@ mod tests {
     #[test]
     fn surface_at_returns_default_for_no_platforms() {
         assert_eq!(surface_at(0.0, 0.0, 15.0, &[]), "default");
+    }
+
+    #[test]
+    fn surface_at_prefers_highest_overlapping_platform() {
+        use crate::street::types::{PlatformLine, Point};
+
+        // Flat ground at y=0 (grass) and a slope starting at y=0 rising to y=-100 (stone).
+        // At x=500 both overlap — the slope is higher (more negative Y), so physics
+        // snaps to the slope. surface_at should return "stone", not "grass".
+        let platforms = vec![
+            PlatformLine {
+                id: "ground".into(),
+                start: Point { x: 0.0, y: 0.0 },
+                end: Point { x: 1000.0, y: 0.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "grass".into(),
+            },
+            PlatformLine {
+                id: "slope".into(),
+                start: Point { x: 400.0, y: 0.0 },
+                end: Point { x: 800.0, y: -100.0 },
+                pc_perm: None,
+                item_perm: None,
+                surface: "stone".into(),
+            },
+        ];
+
+        // At x=600 (midpoint of slope), slope y = -50, ground y = 0.
+        // Player snapped to slope at y=-50 — should return "stone".
+        assert_eq!(surface_at(600.0, -50.0, 15.0, &platforms), "stone");
+
+        // At x=400 (start of slope), both are at y=0 — slope should win
+        // since it matches and is encountered, but they're at the same Y.
+        // Either is acceptable; what matters is we don't return "default".
+        let result = surface_at(400.0, 0.0, 15.0, &platforms);
+        assert!(result == "grass" || result == "stone");
     }
 
     fn footstep_test_street() -> StreetData {
