@@ -93,7 +93,7 @@ describe('VolumeSettings', () => {
     render(VolumeSettings, {
       props: { audioManager: am, visible: true },
     });
-    const muteBtn = screen.getByRole('button', { name: /mute sfx/i });
+    const muteBtn = screen.getByRole('button', { name: 'Mute SFX' });
     await fireEvent.click(muteBtn);
     expect(am.setMuted).toHaveBeenCalledWith('sfx', true);
   });
@@ -103,7 +103,7 @@ describe('VolumeSettings', () => {
     render(VolumeSettings, {
       props: { audioManager: am, visible: true },
     });
-    const muteBtn = screen.getByRole('button', { name: /mute ambient/i });
+    const muteBtn = screen.getByRole('button', { name: 'Mute ambient' });
     await fireEvent.click(muteBtn);
     expect(am.setMuted).toHaveBeenCalledWith('ambient', true);
   });

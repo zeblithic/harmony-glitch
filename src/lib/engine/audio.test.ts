@@ -302,10 +302,6 @@ describe('AudioManager', () => {
   });
 
   describe('localStorage persistence', () => {
-    beforeEach(() => {
-      localStorage.clear();
-    });
-
     it('saves preferences to localStorage on setVolume', () => {
       const manager = new AudioManager(makeKit(), '/audio/');
       manager.setVolume('sfx', 0.4);
@@ -368,8 +364,10 @@ describe('AudioManager', () => {
     it('handles corrupt JSON in localStorage gracefully', () => {
       localStorage.setItem('audio-prefs', '{not valid json');
 
-      expect(() => new AudioManager(makeKit(), '/audio/')).not.toThrow();
-      const manager = new AudioManager(makeKit(), '/audio/');
+      let manager!: AudioManager;
+      expect(() => {
+        manager = new AudioManager(makeKit(), '/audio/');
+      }).not.toThrow();
       expect(manager.getVolume('sfx')).toBe(1.0);
     });
   });
