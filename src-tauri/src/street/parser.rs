@@ -185,6 +185,7 @@ fn parse_platform_lines(layer: &XmlValue) -> Vec<PlatformLine> {
                 end,
                 pc_perm,
                 item_perm,
+                surface: "default".into(),
             }
         })
         .collect();

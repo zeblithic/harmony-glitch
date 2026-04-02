@@ -248,6 +248,7 @@ mod tests {
             end: Point { x: 1000.0, y: 0.0 },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }]
     }
 
@@ -327,6 +328,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
         let walls = solid_wall(100.0, -100.0, 100.0);
 
@@ -749,6 +751,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         // Player starts ABOVE the slope surface (y=-52 is above plat_y=-50
@@ -797,6 +800,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         let slope_y_at_100 = -50.0;
@@ -842,6 +846,7 @@ mod tests {
                 end: Point { x: 100.0, y: -50.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "low".into(),
@@ -849,6 +854,7 @@ mod tests {
                 end: Point { x: 100.0, y: 0.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -880,6 +886,7 @@ mod tests {
             },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         let mut body = PhysicsBody::new(50.0, -25.0); // On slope at x=50 (y_at(50) = -25)
@@ -916,6 +923,7 @@ mod tests {
                 end: Point { x: 1800.0, y: 0.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "hill".into(),
@@ -926,6 +934,7 @@ mod tests {
                 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -966,6 +975,7 @@ mod tests {
                 end: Point { x: 1000.0, y: 0.0 },
                 pc_perm: None,
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "ceiling".into(),
@@ -979,6 +989,7 @@ mod tests {
                 },
                 pc_perm: None, // Solid from both directions
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -1013,6 +1024,7 @@ mod tests {
                 end: Point { x: 1000.0, y: 0.0 },
                 pc_perm: Some(-1), // One-way from top
                 item_perm: None,
+                surface: "default".into(),
             },
             PlatformLine {
                 id: "upper".into(),
@@ -1026,6 +1038,7 @@ mod tests {
                 },
                 pc_perm: Some(-1), // One-way from top
                 item_perm: None,
+                surface: "default".into(),
             },
         ];
 
@@ -1072,6 +1085,7 @@ mod tests {
             end: Point { x: 100.0, y: -50.0 },
             pc_perm: None,
             item_perm: None,
+            surface: "default".into(),
         }];
 
         let mut body = PhysicsBody::new(90.0, -50.0); // Near the right edge, on platform
