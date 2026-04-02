@@ -314,6 +314,9 @@ impl GameState {
                 // Player placed on ground — sync prev_on_ground to prevent
                 // spurious Land audio event on the first post-swoop tick.
                 self.prev_on_ground = true;
+                // Reset footstep accumulator so the teleported player doesn't
+                // immediately emit footsteps from pre-transition distance.
+                self.player.distance_since_footstep = 0.0;
             } else {
                 self.transition.reset();
             }
@@ -377,6 +380,7 @@ impl GameState {
                 let surface = surface_at(
                     self.player.x,
                     self.player.y,
+                    self.player.half_width,
                     street.platforms(),
                 );
                 audio_events.push(AudioEvent::Footstep {
@@ -832,12 +836,14 @@ pub fn read_save_state(path: &std::path::Path) -> Result<Option<SaveState>, Stri
 
 /// Find the surface material of the platform under the player.
 /// Returns "default" if on ground_y or no platform matches.
-fn surface_at(x: f64, y: f64, platforms: &[crate::street::types::PlatformLine]) -> &str {
+fn surface_at(x: f64, y: f64, half_width: f64, platforms: &[crate::street::types::PlatformLine]) -> &str {
     for platform in platforms {
         if !platform.solid_from_top() {
             continue;
         }
-        if x < platform.min_x() || x > platform.max_x() {
+        // Use body-width overlap (matching physics collision in movement.rs)
+        // so platform edges within half_width still resolve correctly.
+        if x + half_width < platform.min_x() || x - half_width > platform.max_x() {
             continue;
         }
         if (platform.y_at(x) - y).abs() < 1.0 {
@@ -2326,14 +2332,14 @@ mod tests {
             },
         ];
 
-        assert_eq!(surface_at(-100.0, 0.0, &platforms), "grass");
-        assert_eq!(surface_at(100.0, 0.0, &platforms), "stone");
-        assert_eq!(surface_at(500.0, 0.0, &platforms), "default");
+        assert_eq!(surface_at(-100.0, 0.0, 15.0, &platforms), "grass");
+        assert_eq!(surface_at(100.0, 0.0, 15.0, &platforms), "stone");
+        assert_eq!(surface_at(500.0, 0.0, 15.0, &platforms), "default");
     }
 
     #[test]
     fn surface_at_returns_default_for_no_platforms() {
-        assert_eq!(surface_at(0.0, 0.0, &[]), "default");
+        assert_eq!(surface_at(0.0, 0.0, 15.0, &[]), "default");
     }
 
     fn footstep_test_street() -> StreetData {
