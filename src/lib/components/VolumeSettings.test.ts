@@ -33,13 +33,13 @@ describe('VolumeSettings', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('renders dialog with volume label when visible', () => {
+  it('renders dialog with Audio Settings label when visible', () => {
     render(VolumeSettings, {
       props: { audioManager: makeAudioManager(), visible: true },
     });
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeDefined();
-    expect(dialog.textContent).toContain('Volume');
+    expect(dialog.textContent).toContain('Audio Settings');
   });
 
   it('renders SFX and Ambient sliders', () => {
@@ -131,6 +131,70 @@ describe('VolumeSettings', () => {
     expect(() => {
       render(VolumeSettings, {
         props: { audioManager: null, visible: true },
+      });
+    }).not.toThrow();
+  });
+
+  it('renders kit selector with available kits', () => {
+    const kits = [
+      { id: 'default', name: 'Default' },
+      { id: 'retro', name: 'Retro Kit' },
+    ];
+    render(VolumeSettings, {
+      props: {
+        audioManager: makeAudioManager(),
+        visible: true,
+        soundKits: kits,
+        selectedKitId: 'default',
+      },
+    });
+    const select = screen.getByLabelText('Sound Kit');
+    expect(select).toBeDefined();
+    expect(select.querySelectorAll('option')).toHaveLength(2);
+  });
+
+  it('calls onKitChange when kit selection changes', async () => {
+    const kits = [
+      { id: 'default', name: 'Default' },
+      { id: 'retro', name: 'Retro Kit' },
+    ];
+    const onKitChange = vi.fn();
+    render(VolumeSettings, {
+      props: {
+        audioManager: makeAudioManager(),
+        visible: true,
+        soundKits: kits,
+        selectedKitId: 'default',
+        onKitChange,
+      },
+    });
+    const select = screen.getByLabelText('Sound Kit') as HTMLSelectElement;
+    await fireEvent.change(select, { target: { value: 'retro' } });
+    expect(onKitChange).toHaveBeenCalledWith('retro');
+  });
+
+  it('renders panel header as Audio Settings', () => {
+    render(VolumeSettings, {
+      props: {
+        audioManager: makeAudioManager(),
+        visible: true,
+        soundKits: [{ id: 'default', name: 'Default' }],
+        selectedKitId: 'default',
+      },
+    });
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.textContent).toContain('Audio Settings');
+  });
+
+  it('handles empty soundKits gracefully', () => {
+    expect(() => {
+      render(VolumeSettings, {
+        props: {
+          audioManager: makeAudioManager(),
+          visible: true,
+          soundKits: [],
+          selectedKitId: 'default',
+        },
       });
     }).not.toThrow();
   });
