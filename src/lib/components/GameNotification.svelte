@@ -9,7 +9,7 @@
 </script>
 
 {#if failureMessages.length > 0}
-  <div class="notification-container" role="alert">
+  <div class="notification-container" aria-live="assertive" aria-atomic="false">
     {#each failureMessages as msg (msg.id)}
       <div class="notification" style="opacity: {Math.max(0, 1 - msg.ageSecs / 1.5)}">
         {msg.text}

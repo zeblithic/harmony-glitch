@@ -108,6 +108,11 @@
     border-color: #5865f2;
   }
 
+  input:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
+  }
+
   button {
     padding: 10px 24px;
     border: none;

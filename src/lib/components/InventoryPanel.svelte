@@ -210,9 +210,11 @@
   <dialog
     class="inventory-panel"
     aria-label="Inventory"
+    aria-modal="true"
     bind:this={dialogEl}
     oncancel={handleCancel}
   >
+    <!-- svelte-ignore a11y_interactive_supports_focus -->
     <div class="tab-bar" role="tablist" aria-label="Inventory sections" onkeydown={handleTabKey}>
       <button
         type="button"
@@ -243,6 +245,7 @@
         id="panel-items"
         role="tabpanel"
         aria-labelledby="tab-items"
+        tabindex="0"
         onkeydown={handleItemsKeyDown}
       >
         <div class="slots" role="grid" aria-label="Inventory slots">
@@ -287,8 +290,9 @@
         id="panel-recipes"
         role="tabpanel"
         aria-labelledby="tab-recipes"
+        tabindex="0"
       >
-        <div class="recipe-list" role="listbox" aria-label="Recipes" onkeydown={handleRecipeListKeyDown}>
+        <div class="recipe-list" role="listbox" aria-label="Recipes" tabindex="0" onkeydown={handleRecipeListKeyDown}>
           {#each sortedRecipes as recipe (recipe.id)}
             {@const craftable = isRecipeCraftable(recipe)}
             <button
@@ -457,6 +461,7 @@
   }
 
   .slot:hover { border-color: #6a6a9a; }
+  .slot:focus-visible { outline: 2px solid #5865f2; outline-offset: -2px; }
   .slot.selected { border-color: #5865f2; box-shadow: 0 0 6px rgba(88, 101, 242, 0.4); }
   .slot.filled { background: rgba(50, 50, 80, 0.9); }
 
@@ -485,6 +490,7 @@
   }
 
   .drop-btn:hover { background: rgba(100, 80, 50, 0.9); }
+  .drop-btn:focus-visible { outline: 2px solid #5865f2; outline-offset: -2px; }
 
   .recipe-list {
     display: flex;
@@ -512,6 +518,7 @@
   .recipe-row.craftable { color: #e0e0e0; }
   .recipe-row.selected { border-color: #5865f2; background: rgba(50, 50, 90, 0.8); }
   .recipe-row:hover { background: rgba(50, 50, 80, 0.7); }
+  .recipe-row:focus-visible { outline: 2px solid #5865f2; outline-offset: -2px; }
   .recipe-name { flex: 1; }
   .recipe-badge { color: #666; font-size: 0.7rem; }
 
@@ -533,6 +540,7 @@
   }
 
   .craft-btn:hover:not(:disabled) { background: rgba(50, 100, 70, 0.9); }
+  .craft-btn:focus-visible { outline: 2px solid #5865f2; outline-offset: -2px; }
   .craft-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .craft-error {

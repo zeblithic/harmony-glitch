@@ -40,9 +40,11 @@
   <h1>Harmony Glitch</h1>
   <p class="subtitle">Choose a street to explore</p>
 
-  {#if error}
-    <p class="error">{error}</p>
-  {/if}
+  <p class="error" role="alert">{error ?? ''}</p>
+
+  <div role="status" aria-live="polite" class="sr-only">
+    {#if initialLoading}Loading streets…{:else if loading}Loading street, please wait…{/if}
+  </div>
 
   <div class="street-list">
     {#each streets as name}
@@ -113,6 +115,11 @@
   .street-btn:hover:not(:disabled) {
     background: #5865f2;
     border-color: #5865f2;
+  }
+
+  .street-btn:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
   }
 
   .street-btn:disabled {

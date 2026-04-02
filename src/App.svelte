@@ -155,7 +155,7 @@
 
 <main>
   {#if checkingIdentity || resuming}
-    <!-- Wait for identity check or auto-resume before showing anything -->
+    <div role="status" aria-live="polite" class="sr-only">Loading, please wait…</div>
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
@@ -175,6 +175,9 @@
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
     />
+    <div role="status" aria-live="polite" class="sr-only">
+      {#if transitionPending}Travelling to new area…{:else if currentStreet}{currentStreet.id}{/if}
+    </div>
     <button type="button" class="back-btn" onclick={async () => {
       try {
         await stopGame();
@@ -216,5 +219,22 @@
 
   .back-btn:hover {
     background: rgba(88, 101, 242, 0.8);
+  }
+
+  .back-btn:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
+  }
+
+  :global(.sr-only) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

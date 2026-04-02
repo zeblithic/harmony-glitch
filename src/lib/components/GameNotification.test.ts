@@ -23,19 +23,19 @@ describe('GameNotification', () => {
 
   it('renders nothing when feedback is empty', () => {
     render(GameNotification, { props: { feedback: [] } });
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.querySelector('.notification-container')).toBeNull();
   });
 
   it('renders nothing when all feedback is successful', () => {
     const fb = makeFeedback({ success: true, text: '+3 x Cherry' });
     render(GameNotification, { props: { feedback: [fb] } });
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.querySelector('.notification-container')).toBeNull();
   });
 
   it('renders alert container for failure feedback', () => {
     const fb = makeFeedback();
     render(GameNotification, { props: { feedback: [fb] } });
-    const alert = screen.getByRole('alert');
+    const alert = document.querySelector('.notification-container')!;
     expect(alert).toBeDefined();
     expect(alert.textContent).toContain('Inventory full!');
   });
@@ -45,7 +45,7 @@ describe('GameNotification', () => {
     const fb2 = makeFeedback({ id: 2, text: 'Cannot pick up' });
     render(GameNotification, { props: { feedback: [fb1, fb2] } });
 
-    const alert = screen.getByRole('alert');
+    const alert = document.querySelector('.notification-container')!;
     expect(alert.textContent).toContain('Inventory full!');
     expect(alert.textContent).toContain('Cannot pick up');
   });
@@ -55,7 +55,7 @@ describe('GameNotification', () => {
     const failure = makeFeedback({ id: 2, success: false, text: 'Inventory full!' });
     render(GameNotification, { props: { feedback: [success, failure] } });
 
-    const alert = screen.getByRole('alert');
+    const alert = document.querySelector('.notification-container')!;
     expect(alert.textContent).not.toContain('+1 x Wood');
     expect(alert.textContent).toContain('Inventory full!');
   });
@@ -64,7 +64,7 @@ describe('GameNotification', () => {
     const fb = makeFeedback({ ageSecs: 0.75 });
     render(GameNotification, { props: { feedback: [fb] } });
 
-    const alert = screen.getByRole('alert');
+    const alert = document.querySelector('.notification-container')!;
     const notification = alert.querySelector('.notification') as HTMLElement;
     expect(notification).toBeDefined();
     // opacity = max(0, 1 - 0.75/1.5) = 0.5
