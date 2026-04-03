@@ -21,8 +21,8 @@ impl FileBookStore {
     ///
     /// Creates the directory if it does not exist. Scans for `*.book` files and
     /// loads each one into the in-memory cache.
-    pub fn open(dir: PathBuf) -> Self {
-        fs::create_dir_all(&dir).expect("failed to create book store directory");
+    pub fn open(dir: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        fs::create_dir_all(&dir)?;
 
         let mut cache = HashMap::new();
 
@@ -44,11 +44,15 @@ impl FileBookStore {
                     Ok(d) => d,
                     Err(_) => continue,
                 };
+                if !cid.verify_hash(&data) {
+                    eprintln!("WARN: skipping corrupted book {}", stem);
+                    continue;
+                }
                 cache.insert(cid, data);
             }
         }
 
-        FileBookStore { dir, cache }
+        Ok(FileBookStore { dir, cache })
     }
 
     /// Compute the path for a book file given its ContentId.
@@ -115,10 +119,15 @@ mod tests {
     use super::*;
     use harmony_content::book::BookStore;
 
+    fn temp_store() -> (tempfile::TempDir, FileBookStore) {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileBookStore::open(dir.path().to_path_buf()).unwrap();
+        (dir, store)
+    }
+
     #[test]
     fn insert_and_get_round_trip() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut store = FileBookStore::open(dir.path().to_path_buf());
+        let (_dir, mut store) = temp_store();
         let data = b"hello harmony cas";
         let cid = store.insert(data).unwrap();
         assert_eq!(store.get(&cid).unwrap(), data);
@@ -126,16 +135,14 @@ mod tests {
 
     #[test]
     fn contains_after_insert() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut store = FileBookStore::open(dir.path().to_path_buf());
+        let (_dir, mut store) = temp_store();
         let cid = store.insert(b"some data for contains test").unwrap();
         assert!(store.contains(&cid));
     }
 
     #[test]
     fn get_unknown_returns_none() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = FileBookStore::open(dir.path().to_path_buf());
+        let (_dir, store) = temp_store();
         let cid = ContentId::for_book(b"not stored", ContentFlags::default()).unwrap();
         assert!(store.get(&cid).is_none());
         assert!(!store.contains(&cid));
@@ -143,8 +150,7 @@ mod tests {
 
     #[test]
     fn remove_returns_data_and_deletes() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut store = FileBookStore::open(dir.path().to_path_buf());
+        let (_dir, mut store) = temp_store();
         let data = b"data to be removed";
         let cid = store.insert(data).unwrap();
         let removed = store.remove(&cid).unwrap();
@@ -158,11 +164,11 @@ mod tests {
         let path = dir.path().to_path_buf();
         let data = b"persisted data";
         let cid = {
-            let mut store = FileBookStore::open(path.clone());
+            let mut store = FileBookStore::open(path.clone()).unwrap();
             store.insert(data).unwrap()
         };
         // Drop the store, then reopen at same path.
-        let store2 = FileBookStore::open(path);
+        let store2 = FileBookStore::open(path).unwrap();
         assert_eq!(store2.get(&cid).unwrap(), data);
     }
 
@@ -172,16 +178,33 @@ mod tests {
         let path = dir.path().to_path_buf();
         let data = b"file to delete from disk";
         let cid = {
-            let mut store = FileBookStore::open(path.clone());
+            let mut store = FileBookStore::open(path.clone()).unwrap();
             store.insert(data).unwrap()
         };
         // Reopen, remove, then reopen again.
         {
-            let mut store2 = FileBookStore::open(path.clone());
+            let mut store2 = FileBookStore::open(path.clone()).unwrap();
             store2.remove(&cid);
         }
-        let store3 = FileBookStore::open(path);
+        let store3 = FileBookStore::open(path).unwrap();
         assert!(store3.get(&cid).is_none());
+    }
+
+    #[test]
+    fn open_skips_corrupted_book_files() {
+        let dir = tempfile::tempdir().unwrap();
+        // Insert a valid book
+        let mut store = FileBookStore::open(dir.path().to_path_buf()).unwrap();
+        let cid = store.insert(b"valid data").unwrap();
+        drop(store);
+
+        // Corrupt the book file on disk
+        let book_path = dir.path().join(format!("{}.book", cid_to_hex(&cid)));
+        std::fs::write(&book_path, b"corrupted data").unwrap();
+
+        // Reopen — should skip the corrupted file
+        let store = FileBookStore::open(dir.path().to_path_buf()).unwrap();
+        assert!(store.get(&cid).is_none());
     }
 
     #[test]

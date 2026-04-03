@@ -198,7 +198,7 @@ fn main() {
             store,
         } => {
             let store_dir = store.unwrap_or_else(default_store_dir);
-            let mut book_store = FileBookStore::open(store_dir);
+            let mut book_store = FileBookStore::open(store_dir).expect("failed to open book store");
             let result = ingest(&input, &manifest, &mut book_store).expect("ingest failed");
             println!(
                 "Ingested {} files ({} new, {} unchanged)",
@@ -207,7 +207,7 @@ fn main() {
         }
         Command::Restore { manifest, output, store } => {
             let store_dir = store.unwrap_or_else(default_store_dir);
-            let book_store = FileBookStore::open(store_dir);
+            let book_store = FileBookStore::open(store_dir).expect("failed to open book store");
             let result = restore(&manifest, &output, &book_store)
                 .expect("restore failed");
             println!(
@@ -228,7 +228,7 @@ mod tests {
     }
 
     fn make_store(dir: &Path) -> FileBookStore {
-        FileBookStore::open(dir.join("store"))
+        FileBookStore::open(dir.join("store")).unwrap()
     }
 
     #[test]
