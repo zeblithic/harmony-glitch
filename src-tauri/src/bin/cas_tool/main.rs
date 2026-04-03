@@ -438,4 +438,51 @@ mod tests {
         assert!(output.exists(), "output dir should have been created");
         assert_eq!(std::fs::read(output.join("asset.bin")).unwrap(), data);
     }
+
+    #[test]
+    fn end_to_end_ingest_delete_restore_matches() {
+        let input_dir = tempfile::tempdir().unwrap();
+        let store_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let manifest_path = store_dir.path().join("manifest.json");
+
+        // Create files with realistic-ish content
+        let png_data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]; // PNG magic + junk
+        let json_data = br#"{"frames":{"cherry":{"frame":{"x":0,"y":0,"w":32,"h":32}}}}"#;
+        std::fs::write(input_dir.path().join("items.png"), &png_data).unwrap();
+        std::fs::write(input_dir.path().join("items.json"), &json_data[..]).unwrap();
+
+        // Ingest
+        let mut store = FileBookStore::open(store_dir.path().join("books")).unwrap();
+        let ingest_result = ingest(input_dir.path(), &manifest_path, &mut store).unwrap();
+        assert_eq!(ingest_result.total, 2);
+        assert_eq!(ingest_result.new, 2);
+
+        // "Delete" originals (simulating a fresh clone)
+        // Reopen store from disk to verify persistence
+        drop(store);
+        let store = FileBookStore::open(store_dir.path().join("books")).unwrap();
+
+        // Restore to a completely new directory
+        let result = restore(&manifest_path, output_dir.path(), &store).unwrap();
+        assert_eq!(result.total, 2);
+        assert_eq!(result.written, 2);
+
+        // Verify byte-for-byte match
+        assert_eq!(
+            std::fs::read(output_dir.path().join("items.png")).unwrap(),
+            png_data
+        );
+        assert_eq!(
+            std::fs::read(output_dir.path().join("items.json")).unwrap(),
+            json_data
+        );
+
+        // Verify CIDs in manifest match the data
+        let manifest = Manifest::load(&manifest_path).unwrap();
+        let cid_png = manifest.get_cid("items.png").unwrap().unwrap();
+        let cid_json = manifest.get_cid("items.json").unwrap().unwrap();
+        assert!(cid_png.verify_hash(&png_data));
+        assert!(cid_json.verify_hash(json_data));
+    }
 }
