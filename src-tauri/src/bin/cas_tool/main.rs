@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use harmony_content::book::BookStore;
 
 use crate::manifest::Manifest;
-use crate::store::{cid_to_hex, FileBookStore};
+use crate::store::{cid_to_hex, hex_to_cid, FileBookStore};
 
 #[derive(Parser)]
 #[command(name = "cas-tool", about = "Content-addressed storage for asset pipeline")]
@@ -116,6 +116,79 @@ fn ingest(
     Ok(result)
 }
 
+#[derive(Debug)]
+struct RestoreResult {
+    total: usize,
+    written: usize,
+    skipped: usize,
+}
+
+fn restore(
+    manifest_path: &Path,
+    output_dir: &Path,
+    store: &FileBookStore,
+) -> Result<RestoreResult, Box<dyn std::error::Error>> {
+    // 1. Check manifest exists, error if not
+    if !manifest_path.exists() {
+        return Err(format!("manifest not found: {}", manifest_path.display()).into());
+    }
+
+    // 2. Load manifest
+    let manifest = Manifest::load(manifest_path)?;
+
+    // 3. Error if manifest has no files
+    if manifest.files.is_empty() {
+        return Err("manifest contains no files".into());
+    }
+
+    // 4. FIRST PASS: verify ALL CIDs exist in the store before writing anything
+    let mut pairs: Vec<(String, harmony_content::cid::ContentId)> =
+        Vec::with_capacity(manifest.files.len());
+    for (filename, hex) in &manifest.files {
+        let cid = hex_to_cid(hex).map_err(|_| {
+            format!("invalid hex CID for '{}': '{}'", filename, hex)
+        })?;
+        if !store.contains(&cid) {
+            return Err(format!(
+                "missing book {} for file '{}'. Run the full pipeline to populate the store.",
+                hex, filename
+            )
+            .into());
+        }
+        pairs.push((filename.clone(), cid));
+    }
+
+    // 5. Create output directory (including parents)
+    std::fs::create_dir_all(output_dir)?;
+
+    // 6. SECOND PASS: write files
+    let mut result = RestoreResult {
+        total: pairs.len(),
+        written: 0,
+        skipped: 0,
+    };
+
+    for (filename, cid) in &pairs {
+        let out_path = output_dir.join(filename);
+        // a. If output file exists with correct byte length: skip
+        if out_path.exists() {
+            let data = store.get(cid).expect("CID verified in first pass");
+            let meta = std::fs::metadata(&out_path)?;
+            if meta.len() == data.len() as u64 {
+                result.skipped += 1;
+                continue;
+            }
+        }
+        // b. Otherwise write
+        let data = store.get(cid).expect("CID verified in first pass");
+        std::fs::write(&out_path, data)?;
+        result.written += 1;
+    }
+
+    // 7. Return RestoreResult
+    Ok(result)
+}
+
 fn main() {
     let cli = Cli::parse();
     match cli.command {
@@ -132,9 +205,15 @@ fn main() {
                 result.total, result.new, result.unchanged
             );
         }
-        Command::Restore { .. } => {
-            eprintln!("restore not yet implemented");
-            std::process::exit(1);
+        Command::Restore { manifest, output, store } => {
+            let store_dir = store.unwrap_or_else(default_store_dir);
+            let book_store = FileBookStore::open(store_dir);
+            let result = restore(&manifest, &output, &book_store)
+                .expect("restore failed");
+            println!(
+                "Restored {} files ({} written, {} already present)",
+                result.total, result.written, result.skipped
+            );
         }
     }
 }
@@ -142,7 +221,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use harmony_content::cid::ContentId;
+    use harmony_content::cid::{ContentFlags, ContentId};
 
     fn write_file(dir: &Path, name: &str, data: &[u8]) {
         std::fs::write(dir.join(name), data).unwrap();
@@ -258,5 +337,105 @@ mod tests {
 
         let result = ingest(&input, &manifest_path, &mut store);
         assert!(result.is_err(), "ingest of empty dir should return Err");
+    }
+
+    #[test]
+    fn restore_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = tmp.path().join("input");
+        std::fs::create_dir_all(&input).unwrap();
+
+        let data_png = b"fake atlas png bytes";
+        let data_json = b"{\"atlas\": true}";
+        write_file(&input, "atlas.png", data_png);
+        write_file(&input, "atlas.json", data_json);
+
+        let manifest_path = tmp.path().join("manifest.json");
+        let mut store = make_store(tmp.path());
+        ingest(&input, &manifest_path, &mut store).unwrap();
+
+        let output = tmp.path().join("output");
+        let result = restore(&manifest_path, &output, &store).unwrap();
+
+        assert_eq!(result.total, 2);
+        assert_eq!(result.written, 2);
+        assert_eq!(result.skipped, 0);
+
+        assert_eq!(std::fs::read(output.join("atlas.png")).unwrap(), data_png);
+        assert_eq!(std::fs::read(output.join("atlas.json")).unwrap(), data_json);
+    }
+
+    #[test]
+    fn restore_skips_existing_correct_size() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = tmp.path().join("input");
+        std::fs::create_dir_all(&input).unwrap();
+
+        let data = b"file content to skip";
+        write_file(&input, "file.txt", data);
+
+        let manifest_path = tmp.path().join("manifest.json");
+        let mut store = make_store(tmp.path());
+        ingest(&input, &manifest_path, &mut store).unwrap();
+
+        // Pre-create output file with same byte length
+        let output = tmp.path().join("output");
+        std::fs::create_dir_all(&output).unwrap();
+        // Write same-length content (but different bytes) to trigger skip-by-size
+        std::fs::write(output.join("file.txt"), data).unwrap();
+
+        let result = restore(&manifest_path, &output, &store).unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.written, 0);
+        assert_eq!(result.skipped, 1);
+    }
+
+    #[test]
+    fn restore_missing_cid_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Build a manifest manually with a CID not in the store
+        let fake_cid = ContentId::for_book(b"not stored", ContentFlags::default()).unwrap();
+        let fake_hex = cid_to_hex(&fake_cid);
+        let manifest_json = format!(
+            "{{\"files\":{{\"missing_file.txt\":\"{}\"}}}}",
+            fake_hex
+        );
+        let manifest_path = tmp.path().join("manifest.json");
+        std::fs::write(&manifest_path, &manifest_json).unwrap();
+
+        let store = make_store(tmp.path());
+        let output = tmp.path().join("output");
+
+        let err = restore(&manifest_path, &output, &store).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("missing_file.txt"),
+            "error should mention the filename, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn restore_creates_output_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = tmp.path().join("input");
+        std::fs::create_dir_all(&input).unwrap();
+
+        let data = b"content for nested restore";
+        write_file(&input, "asset.bin", data);
+
+        let manifest_path = tmp.path().join("manifest.json");
+        let mut store = make_store(tmp.path());
+        ingest(&input, &manifest_path, &mut store).unwrap();
+
+        // Use a deeply nested, nonexistent output directory
+        let output = tmp.path().join("a").join("b").join("c");
+        assert!(!output.exists(), "output dir should not exist yet");
+
+        let result = restore(&manifest_path, &output, &store).unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.written, 1);
+        assert!(output.exists(), "output dir should have been created");
+        assert_eq!(std::fs::read(output.join("asset.bin")).unwrap(), data);
     }
 }
