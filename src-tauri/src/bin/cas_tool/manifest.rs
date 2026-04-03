@@ -31,6 +31,8 @@ impl fmt::Display for ManifestError {
     }
 }
 
+impl std::error::Error for ManifestError {}
+
 impl From<std::io::Error> for ManifestError {
     fn from(e: std::io::Error) -> Self {
         ManifestError::Io(e)
