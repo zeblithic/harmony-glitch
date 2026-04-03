@@ -1,9 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFile, mkdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import sharp from 'sharp';
 import {
   nextPowerOfTwo,
   shelfPack,
   buildJson,
   groupAnimations,
+  collectImages,
+  readImageMeta,
 } from './pack.mjs';
 
 // ---------------------------------------------------------------------------
@@ -179,5 +185,70 @@ describe('groupAnimations', () => {
     expect(json.animations).toBeDefined();
     expect(json.animations.walk).toEqual(['walk_0', 'walk_1']);
     expect(json.animations.idle).toEqual(['idle_0']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SVG support
+// ---------------------------------------------------------------------------
+
+describe('SVG support', () => {
+  let dir;
+
+  beforeEach(async () => {
+    dir = join(tmpdir(), `pack-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(dir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('collectImages finds both PNG and SVG files', async () => {
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>';
+    await writeFile(join(dir, 'sprite.svg'), svgContent);
+    await sharp({
+      create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+    })
+      .png()
+      .toFile(join(dir, 'icon.png'));
+
+    const results = await collectImages(dir);
+
+    expect(results).toHaveLength(2);
+    const names = results.map((r) => r.name).sort();
+    expect(names).toEqual(['icon', 'sprite']);
+    const exts = results.map((r) => r.ext).sort();
+    expect(exts).toEqual(['png', 'svg']);
+  });
+
+  it('readImageMeta handles SVG files', async () => {
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>';
+    const svgPath = join(dir, 'sprite.svg');
+    await writeFile(svgPath, svgContent);
+
+    const meta = await readImageMeta(svgPath, 'sprite');
+
+    expect(meta).not.toBeNull();
+    expect(meta.name).toBe('sprite');
+    expect(meta.width).toBe(10);
+    expect(meta.height).toBe(10);
+    expect(meta.buffer).toBeInstanceOf(Buffer);
+  });
+
+  it('readImageMeta applies scale factor to SVGs', async () => {
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>';
+    const svgPath = join(dir, 'sprite.svg');
+    await writeFile(svgPath, svgContent);
+
+    const meta = await readImageMeta(svgPath, 'sprite', 2);
+
+    expect(meta).not.toBeNull();
+    expect(meta.width).toBe(20);
+    expect(meta.height).toBe(20);
+    expect(meta.buffer).toBeInstanceOf(Buffer);
   });
 });

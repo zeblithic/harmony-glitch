@@ -1,31 +1,15 @@
-use clap::Parser;
 use flate2::read::ZlibDecoder;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-#[derive(Parser)]
-#[command(name = "extract-swf", about = "Extract bitmaps from SWF files")]
-struct Args {
-    /// Source directory containing SWF files
-    #[arg(long)]
-    source: PathBuf,
-
-    /// Output directory for extracted PNGs
-    #[arg(long)]
-    output: PathBuf,
+pub struct ExtractedBitmap {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
 }
 
-struct ExtractedBitmap {
-    width: u32,
-    height: u32,
-    rgba: Vec<u8>,
-}
-
-/// Parse a SWF file from raw bytes and extract the largest bitmap by pixel area.
-fn extract_largest_bitmap(swf_data: &[u8]) -> Option<ExtractedBitmap> {
-    let swf_buf = swf::decompress_swf(swf_data).ok()?;
-    let swf = swf::parse_swf(&swf_buf).ok()?;
-
+/// Extract the largest bitmap by pixel area from a parsed SWF.
+pub fn extract_largest_bitmap(swf: &swf::Swf) -> Option<ExtractedBitmap> {
     let mut largest: Option<ExtractedBitmap> = None;
     let mut largest_area: u64 = 0;
 
@@ -88,9 +72,7 @@ fn decode_lossless(bitmap: &swf::DefineBitsLossless) -> Option<ExtractedBitmap> 
 
                 if is_v2 && a > 0 && a < 255 {
                     // Un-premultiply alpha
-                    let un = |c: u8| -> u8 {
-                        ((c as u16 * 255) / a as u16).min(255) as u8
-                    };
+                    let un = |c: u8| -> u8 { ((c as u16 * 255) / a as u16).min(255) as u8 };
                     rgba.extend_from_slice(&[un(r), un(g), un(b), a]);
                 } else if is_v2 {
                     rgba.extend_from_slice(&[r, g, b, a]);
@@ -209,7 +191,10 @@ fn strip_swf_jpeg_header(data: &[u8]) -> &[u8] {
 }
 
 /// Write RGBA pixel data as a PNG file.
-fn write_png(path: &Path, bitmap: &ExtractedBitmap) -> Result<(), Box<dyn std::error::Error>> {
+pub fn write_png(
+    path: &Path,
+    bitmap: &ExtractedBitmap,
+) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::create(path)?;
     let w = std::io::BufWriter::new(file);
     let mut encoder = png::Encoder::new(w, bitmap.width, bitmap.height);
@@ -218,142 +203,4 @@ fn write_png(path: &Path, bitmap: &ExtractedBitmap) -> Result<(), Box<dyn std::e
     let mut writer = encoder.write_header()?;
     writer.write_image_data(&bitmap.rgba)?;
     Ok(())
-}
-
-fn walk_swfs(
-    dir: &std::path::Path,
-    source_root: &std::path::Path,
-    output_root: &std::path::Path,
-    extracted: &mut u32,
-    skipped: &mut u32,
-    errors: &mut Vec<String>,
-) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(err) => {
-            errors.push(format!("Cannot read directory {}: {}", dir.display(), err));
-            *skipped += 1;
-            return;
-        }
-    };
-
-    for entry in entries {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(err) => {
-                errors.push(format!("Directory entry error in {}: {}", dir.display(), err));
-                *skipped += 1;
-                continue;
-            }
-        };
-
-        let path = entry.path();
-        let file_type = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(err) => {
-                errors.push(format!("Cannot stat {}: {}", path.display(), err));
-                *skipped += 1;
-                continue;
-            }
-        };
-
-        if file_type.is_dir() {
-            walk_swfs(&path, source_root, output_root, extracted, skipped, errors);
-            continue;
-        }
-
-        // Only process .swf files
-        let is_swf = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("swf"))
-            .unwrap_or(false);
-        if !is_swf {
-            continue;
-        }
-
-        // Compute relative path from source root, then build output path with .png extension
-        let rel = match path.strip_prefix(source_root) {
-            Ok(r) => r,
-            Err(_) => {
-                errors.push(format!("Cannot relativize path: {}", path.display()));
-                *skipped += 1;
-                continue;
-            }
-        };
-        let output_path = output_root.join(rel).with_extension("png");
-
-        // Read SWF file
-        let swf_data = match std::fs::read(&path) {
-            Ok(d) => d,
-            Err(err) => {
-                errors.push(format!("WARN: skipped {} — read error: {}", path.display(), err));
-                *skipped += 1;
-                continue;
-            }
-        };
-
-        // Extract largest bitmap
-        let bitmap = match extract_largest_bitmap(&swf_data) {
-            Some(b) => b,
-            None => {
-                errors.push(format!("WARN: skipped {} — no extractable bitmap found", path.display()));
-                *skipped += 1;
-                continue;
-            }
-        };
-
-        // Create parent directories as needed
-        if let Some(parent) = output_path.parent() {
-            if let Err(err) = std::fs::create_dir_all(parent) {
-                errors.push(format!("WARN: skipped {} — cannot create output dir: {}", path.display(), err));
-                *skipped += 1;
-                continue;
-            }
-        }
-
-        // Write PNG
-        if let Err(err) = write_png(&output_path, &bitmap) {
-            errors.push(format!("WARN: skipped {} — write error: {}", path.display(), err));
-            *skipped += 1;
-            continue;
-        }
-
-        *extracted += 1;
-    }
-}
-
-fn main() {
-    let args = Args::parse();
-
-    if !args.source.is_dir() {
-        eprintln!("Error: source directory does not exist: {}", args.source.display());
-        std::process::exit(1);
-    }
-
-    std::fs::create_dir_all(&args.output).unwrap_or_else(|e| {
-        eprintln!("Error: cannot create output directory: {e}");
-        std::process::exit(1);
-    });
-
-    let mut extracted: u32 = 0;
-    let mut skipped: u32 = 0;
-    let mut errors: Vec<String> = Vec::new();
-
-    walk_swfs(
-        &args.source,
-        &args.source,
-        &args.output,
-        &mut extracted,
-        &mut skipped,
-        &mut errors,
-    );
-
-    let total = extracted + skipped;
-
-    for warning in &errors {
-        eprintln!("{}", warning);
-    }
-
-    println!("Extracted {}/{} items ({} skipped)", extracted, total, skipped);
 }

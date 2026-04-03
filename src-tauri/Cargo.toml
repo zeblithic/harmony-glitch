@@ -5,7 +5,7 @@ edition = "2021"
 
 [[bin]]
 name = "extract-swf"
-path = "src/bin/extract_swf.rs"
+path = "src/bin/extract_swf/main.rs"
 required-features = ["extract-swf"]
 
 [dependencies]

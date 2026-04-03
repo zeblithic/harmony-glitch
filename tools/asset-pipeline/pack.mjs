@@ -159,6 +159,51 @@ export function buildJson(frames, name, sheetWidth, sheetHeight, animationMode) 
 }
 
 // ---------------------------------------------------------------------------
+// Image collection and metadata helpers
+// ---------------------------------------------------------------------------
+
+export async function collectImages(dir) {
+  const results = [];
+  const entries = await readdir(dir, { withFileTypes: true, recursive: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const lower = entry.name.toLowerCase();
+    const ext = lower.endsWith('.png') ? 'png' : lower.endsWith('.svg') ? 'svg' : null;
+    if (ext) {
+      const fullPath = path.join(entry.parentPath ?? entry.path, entry.name);
+      // Strip the extension using the original filename's actual extension,
+      // preserving the stem's original case (e.g., MyItem.SVG → MyItem)
+      const actualExt = entry.name.slice(-(ext.length + 1)); // e.g., ".SVG" or ".png"
+      const name = path.basename(entry.name, actualExt);
+      results.push({ path: fullPath, name, ext });
+    }
+  }
+  return results.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export async function readImageMeta(filePath, name, scale = 1) {
+  try {
+    const ext = filePath.toLowerCase().endsWith('.svg') ? 'svg' : 'png';
+    if (ext === 'svg') {
+      // Rasterize at scaled density so sharp renders the SVG at target
+      // resolution natively, rather than rasterizing at 72 DPI then upscaling.
+      const density = Math.round(72 * scale);
+      const buffer = await sharp(filePath, { density }).png().toBuffer();
+      const meta = await sharp(buffer).metadata();
+      const width = meta.width ?? 0;
+      const height = meta.height ?? 0;
+      if (width === 0 || height === 0) return null;
+      return { path: filePath, name, width, height, buffer };
+    }
+    const meta = await sharp(filePath).metadata();
+    return { path: filePath, name, width: meta.width, height: meta.height };
+  } catch (err) {
+    console.warn(`WARN: skipped ${filePath} — ${err.message}`);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // CLI — only runs when executed directly
 // ---------------------------------------------------------------------------
 
@@ -173,42 +218,35 @@ if (isDirectRun) {
       output: { type: 'string', short: 'o' },
       name: { type: 'string', short: 'n' },
       animation: { type: 'boolean', default: false },
+      scale: { type: 'string', short: 's', default: '1' },
     },
     strict: true,
   });
 
   if (!values.input || !values.output || !values.name) {
-    console.error('Usage: pack.mjs --input <dir> --output <dir> --name <name> [--animation]');
+    console.error('Usage: pack.mjs --input <dir> --output <dir> --name <name> [--animation] [--scale <n>]');
     process.exit(1);
   }
 
-  await run(values.input, values.output, values.name, values.animation ?? false);
+  const scale = parseFloat(values.scale ?? '1');
+  if (!Number.isFinite(scale) || scale <= 0) {
+    console.error(`Error: --scale must be a positive number, got: ${values.scale}`);
+    process.exit(1);
+  }
+  await run(values.input, values.output, values.name, values.animation ?? false, scale);
 }
 
-async function run(inputDir, outputDir, name, animationMode) {
-  // Collect PNGs recursively
-  const pngs = await collectPngs(inputDir);
-  if (pngs.length === 0) {
-    console.error(`No PNG files found in ${inputDir}`);
+async function run(inputDir, outputDir, name, animationMode, scale = 1) {
+  // Collect PNGs and SVGs recursively
+  const entries = await collectImages(inputDir);
+  if (entries.length === 0) {
+    console.error(`No PNG or SVG files found in ${inputDir}`);
     process.exit(1);
   }
 
-  // Read metadata (skip corrupt/unreadable PNGs)
+  // Read metadata (skip corrupt/unreadable files; rasterize SVGs)
   const imageResults = await Promise.all(
-    pngs.map(async (filePath) => {
-      try {
-        const meta = await sharp(filePath).metadata();
-        return {
-          path: filePath,
-          name: path.basename(filePath, '.png'),
-          width: meta.width,
-          height: meta.height,
-        };
-      } catch (err) {
-        console.warn(`WARN: skipped ${filePath} — ${err.message}`);
-        return null;
-      }
-    }),
+    entries.map(({ path: filePath, name: imgName }) => readImageMeta(filePath, imgName, scale)),
   );
   const images = imageResults.filter(Boolean);
 
@@ -222,19 +260,22 @@ async function run(inputDir, outputDir, name, animationMode) {
   }
 
   if (images.length === 0) {
-    console.error('No valid PNG files could be read');
+    console.error('No valid PNG or SVG files could be read');
     process.exit(1);
   }
 
   // Pack
   const { frames, sheetWidth, sheetHeight } = shelfPack(images);
 
-  // Composite
-  const composites = frames.map((f) => ({
-    input: f.path,
-    left: f.x,
-    top: f.y,
-  }));
+  // Composite — use pre-rasterized buffer for SVGs, file path for PNGs.
+  // Key by path (unique) not name (may have duplicates).
+  const bufferByPath = new Map(
+    images.filter((i) => i.buffer).map((i) => [i.path, i.buffer]),
+  );
+  const composites = frames.map((f) => {
+    const input = bufferByPath.get(f.path) ?? f.path;
+    return { input, left: f.x, top: f.y };
+  });
 
   await mkdir(outputDir, { recursive: true });
 
@@ -258,15 +299,4 @@ async function run(inputDir, outputDir, name, animationMode) {
 
   console.log(`Wrote ${outputPng} (${sheetWidth}x${sheetHeight})`);
   console.log(`Wrote ${outputJson} (${frames.length} frames)`);
-}
-
-async function collectPngs(dir) {
-  const results = [];
-  const entries = await readdir(dir, { withFileTypes: true, recursive: true });
-  for (const entry of entries) {
-    if (entry.isFile() && entry.name.toLowerCase().endsWith('.png')) {
-      results.push(path.join(entry.parentPath ?? entry.path, entry.name));
-    }
-  }
-  return results.sort();
 }
