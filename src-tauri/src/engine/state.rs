@@ -409,15 +409,16 @@ impl GameState {
 
             // --- Jukebox audio events ---
             {
-                let mut nearest_jukebox: Option<(String, f64)> = None;
+                let mut nearest_jukebox: Option<(String, f64, f64)> = None; // (entity_id, distance_factor, distance)
                 for entity in &self.world_entities {
                     if let Some(def) = self.entity_defs.get(&entity.entity_type) {
                         if let Some(audio_radius) = def.audio_radius {
-                            if def.playlist.is_some() {
+                            if def.playlist.is_some() && self.jukebox_states.contains_key(&entity.id) {
+                                let distance = (self.player.x - entity.x).abs();
                                 if let Some(factor) = jukebox::distance_factor(self.player.x, entity.x, audio_radius) {
-                                    let closer = nearest_jukebox.as_ref().is_none_or(|(_, f)| factor > *f);
+                                    let closer = nearest_jukebox.as_ref().is_none_or(|(_, _, d)| distance < *d);
                                     if closer {
-                                        nearest_jukebox = Some((entity.id.clone(), factor));
+                                        nearest_jukebox = Some((entity.id.clone(), factor, distance));
                                     }
                                 }
                             }
@@ -431,7 +432,7 @@ impl GameState {
                 }
 
                 // Emit JukeboxUpdate for the nearest jukebox only
-                if let Some((entity_id, factor)) = nearest_jukebox {
+                if let Some((entity_id, factor, _)) = nearest_jukebox {
                     if let Some(jb_state) = self.jukebox_states.get(&entity_id) {
                         if let Some(track_id) = jb_state.current_track_id() {
                             audio_events.push(AudioEvent::JukeboxUpdate {

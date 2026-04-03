@@ -203,9 +203,10 @@
     if (jukeboxOpen && jukeboxInfo && frame.audioEvents?.length) {
       for (const event of frame.audioEvents) {
         if (event.type === 'jukeboxUpdate' && event.entityId === jukeboxInfo.entityId) {
+          const trackIndex = jukeboxInfo.playlist.findIndex(t => t.id === event.trackId);
           jukeboxInfo = {
             ...jukeboxInfo,
-            currentTrackIndex: jukeboxInfo.playlist.findIndex(t => t.id === event.trackId),
+            currentTrackIndex: trackIndex >= 0 ? trackIndex : jukeboxInfo.currentTrackIndex,
             playing: event.playing,
             elapsedSecs: event.elapsedSecs,
           };
@@ -213,10 +214,16 @@
       }
     }
 
-    // Close jukebox panel if player walks out of interact range
-    if (jukeboxOpen && !frame.interactionPrompt) {
-      jukeboxOpen = false;
-      jukeboxInfo = null;
+    // Close jukebox panel if jukebox is no longer the interaction target
+    if (jukeboxOpen && jukeboxInfo) {
+      const hasPromptForJukebox = frame.interactionPrompt?.entityId === jukeboxInfo.entityId;
+      const hasJukeboxUpdate = frame.audioEvents?.some(
+        e => e.type === 'jukeboxUpdate' && e.entityId === jukeboxInfo!.entityId
+      );
+      if (!hasPromptForJukebox && !hasJukeboxUpdate) {
+        jukeboxOpen = false;
+        jukeboxInfo = null;
+      }
     }
   }
 
