@@ -69,6 +69,7 @@ impl JukeboxState {
         if index < self.playlist.len() {
             self.current_track_index = index;
             self.elapsed_secs = 0.0;
+            self.playing = true;
         }
     }
 
@@ -219,6 +220,7 @@ mod tests {
         state.select_track(1);
         assert_eq!(state.current_track_index, 1);
         assert!(state.elapsed_secs < f64::EPSILON);
+        assert!(state.playing);
     }
 
     #[test]
