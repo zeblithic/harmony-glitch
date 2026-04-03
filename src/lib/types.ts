@@ -209,6 +209,7 @@ export interface InteractionPrompt {
   targetX: number;
   targetY: number;
   actionable: boolean;
+  entityId?: string | null;
 }
 
 export interface PickupFeedback {

@@ -499,6 +499,9 @@ impl GameState {
                         Some(interaction::InteractionType::Rejected) => {
                             audio_events.push(AudioEvent::ActionFailed);
                         }
+                        Some(interaction::InteractionType::Jukebox { .. }) => {
+                            // Jukebox interaction is handled by the jukebox system; no audio event here
+                        }
                         None => {}
                     }
 

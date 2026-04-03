@@ -80,6 +80,20 @@ pub fn build_prompt(
             let entity = &entities[*index];
             let def = entity_defs.get(&entity.entity_type);
 
+            // Jukebox entities use "Listen" prompt, always actionable
+            if let Some(d) = def {
+                if d.playlist.is_some() {
+                    return InteractionPrompt {
+                        verb: d.verb.clone(),
+                        target_name: d.name.clone(),
+                        target_x: entity.x,
+                        target_y: entity.y,
+                        actionable: true,
+                        entity_id: Some(entity.id.clone()),
+                    };
+                }
+            }
+
             // Check entity state for cooldown/depletion
             if let Some(state) = entity_states.get(&entity.id) {
                 if state.depleted_until > game_time {
@@ -90,6 +104,7 @@ pub fn build_prompt(
                         target_x: entity.x,
                         target_y: entity.y,
                         actionable: false,
+                        entity_id: None,
                     };
                 }
                 if state.cooldown_until > game_time {
@@ -100,6 +115,7 @@ pub fn build_prompt(
                         target_x: entity.x,
                         target_y: entity.y,
                         actionable: false,
+                        entity_id: None,
                     };
                 }
             }
@@ -112,6 +128,7 @@ pub fn build_prompt(
                 target_x: entity.x,
                 target_y: entity.y,
                 actionable: true,
+                entity_id: None,
             }
         }
         NearestInteractable::GroundItem { index, .. } => {
@@ -131,6 +148,7 @@ pub fn build_prompt(
                 target_x: item.x,
                 target_y: item.y,
                 actionable: true,
+                entity_id: None,
             }
         }
     }
@@ -142,6 +160,7 @@ pub enum InteractionType {
     Entity { entity_type: String },
     GroundItem { item_id: String },
     Rejected,
+    Jukebox { entity_id: String },
 }
 
 /// Result of executing an interaction.
@@ -184,6 +203,14 @@ pub fn execute_interaction(
             let Some(def) = entity_defs.get(&entity.entity_type) else {
                 return result;
             };
+
+            // Jukebox entities don't harvest — return a Jukebox interaction type
+            if def.playlist.is_some() {
+                result.interaction_type = Some(InteractionType::Jukebox {
+                    entity_id: entity.id.clone(),
+                });
+                return result;
+            }
 
             // Lazy-init entity state on first interaction
             let state = entity_states
@@ -1253,5 +1280,119 @@ mod tests {
             0.0,
         );
         assert!(result.feedback.iter().any(|f| f.success));
+    }
+
+    #[test]
+    fn jukebox_entity_returns_jukebox_interaction_type() {
+        let item_defs = test_item_defs();
+        let mut entity_defs = EntityDefs::new();
+        entity_defs.insert(
+            "jukebox".into(),
+            EntityDef {
+                id: "jukebox".into(),
+                name: "Tavern Jukebox".into(),
+                verb: "Listen".into(),
+                yields: vec![],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "jukebox".into(),
+                interact_radius: 100.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
+                playlist: Some(vec!["track-a".into(), "track-b".into()]),
+                audio_radius: Some(400.0),
+            },
+        );
+        let mut inv = Inventory::new(4);
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut entity_states = HashMap::new();
+
+        let entities = vec![WorldEntity {
+            id: "jb1".into(),
+            entity_type: "jukebox".into(),
+            x: 0.0,
+            y: 0.0,
+        }];
+        let nearest = NearestInteractable::Entity {
+            index: 0,
+            distance: 0.0,
+        };
+
+        let result = execute_interaction(
+            &nearest,
+            &mut inv,
+            &entities,
+            &entity_defs,
+            &[],
+            &item_defs,
+            &mut rng,
+            &mut entity_states,
+            0.0,
+        );
+
+        assert!(result.feedback.is_empty());
+        assert!(result.spawned_items.is_empty());
+        match result.interaction_type {
+            Some(InteractionType::Jukebox { entity_id }) => {
+                assert_eq!(entity_id, "jb1");
+            }
+            other => panic!("Expected Jukebox interaction type, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jukebox_build_prompt_always_actionable() {
+        let item_defs = test_item_defs();
+        let mut entity_defs = EntityDefs::new();
+        entity_defs.insert(
+            "jukebox".into(),
+            EntityDef {
+                id: "jukebox".into(),
+                name: "Tavern Jukebox".into(),
+                verb: "Listen".into(),
+                yields: vec![],
+                cooldown_secs: 0.0,
+                max_harvests: 0,
+                respawn_secs: 0.0,
+                sprite_class: "jukebox".into(),
+                interact_radius: 100.0,
+                walk_speed: None,
+                wander_radius: None,
+                bob_amplitude: None,
+                bob_frequency: None,
+                playlist: Some(vec!["track-a".into(), "track-b".into()]),
+                audio_radius: Some(400.0),
+            },
+        );
+
+        let entities = vec![WorldEntity {
+            id: "jb1".into(),
+            entity_type: "jukebox".into(),
+            x: 50.0,
+            y: -10.0,
+        }];
+        let nearest = NearestInteractable::Entity {
+            index: 0,
+            distance: 5.0,
+        };
+        let entity_states = HashMap::new();
+
+        let prompt = build_prompt(
+            &nearest,
+            &entities,
+            &entity_defs,
+            &[],
+            &item_defs,
+            &entity_states,
+            0.0,
+        );
+
+        assert_eq!(prompt.verb, "Listen");
+        assert_eq!(prompt.target_name, "Tavern Jukebox");
+        assert!(prompt.actionable);
+        assert_eq!(prompt.entity_id, Some("jb1".into()));
     }
 }

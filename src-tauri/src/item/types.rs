@@ -260,6 +260,7 @@ pub struct InteractionPrompt {
     pub target_x: f64,
     pub target_y: f64,
     pub actionable: bool,
+    pub entity_id: Option<String>,
 }
 
 /// Floating feedback text after pickup.
