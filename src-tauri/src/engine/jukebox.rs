@@ -56,6 +56,11 @@ impl JukeboxState {
                     (self.current_track_index + 1) % self.playlist.len();
                 self.elapsed_secs = 0.0;
             }
+        } else {
+            // Track not in catalog — skip to next.
+            self.current_track_index =
+                (self.current_track_index + 1) % self.playlist.len();
+            self.elapsed_secs = 0.0;
         }
     }
 
@@ -89,6 +94,9 @@ impl JukeboxState {
 /// Returns `None` if the player is outside the audio radius, or
 /// `Some(volume)` where volume is in `[0.0, 1.0]` — 1.0 at the entity, 0.0 at the edge.
 pub fn distance_factor(player_x: f64, entity_x: f64, audio_radius: f64) -> Option<f64> {
+    if audio_radius <= 0.0 {
+        return None;
+    }
     let distance = (player_x - entity_x).abs();
     if distance >= audio_radius {
         None
@@ -122,7 +130,7 @@ pub fn validate_playlist(
 
 /// Deserialize a `TrackCatalog` from JSON.
 pub fn parse_catalog(json: &str) -> Result<TrackCatalog, String> {
-    serde_json::from_str(json).map_err(|e| e.to_string())
+    serde_json::from_str(json).map_err(|e| format!("Failed to parse music catalog: {e}"))
 }
 
 #[cfg(test)]
@@ -304,6 +312,21 @@ mod tests {
         let playlist = vec!["nonexistent_1".to_string(), "nonexistent_2".to_string()];
         let result = validate_playlist(playlist, &catalog, "test_jukebox");
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn tick_skips_track_missing_from_catalog() {
+        let catalog = make_catalog(); // has track_a and track_b
+        let mut state = JukeboxState::new(vec!["nonexistent".into(), "track_a".into()]);
+        state.tick(0.1, &catalog);
+        // Should skip nonexistent and land on track_a
+        assert_eq!(state.current_track_index, 1);
+        assert_eq!(state.current_track_id(), Some("track_a"));
+    }
+
+    #[test]
+    fn distance_factor_zero_radius_returns_none() {
+        assert_eq!(distance_factor(100.0, 100.0, 0.0), None);
     }
 
     #[test]
