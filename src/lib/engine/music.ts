@@ -87,9 +87,9 @@ export class JukeboxController {
           console.warn(`[JukeboxController] Failed to load track ${trackId}:`, err);
         },
         onload: () => {
-          howl.seek(elapsedSecs);
           if (playing) {
             howl.play();
+            howl.seek(elapsedSecs);
           }
         },
       });
@@ -101,6 +101,7 @@ export class JukeboxController {
   cleanup(): void {
     const now = performance.now();
     const staleThresholdMs = 600;
+    const stale: string[] = [];
 
     for (const [entityId, jukebox] of this.active.entries()) {
       if (now - jukebox.lastSeenAt > staleThresholdMs) {
@@ -110,8 +111,12 @@ export class JukeboxController {
           howl.stop();
           howl.unload();
         }, 500);
-        this.active.delete(entityId);
+        stale.push(entityId);
       }
+    }
+
+    for (const entityId of stale) {
+      this.active.delete(entityId);
     }
   }
 

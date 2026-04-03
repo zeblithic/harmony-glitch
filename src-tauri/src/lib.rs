@@ -549,11 +549,10 @@ fn get_jukebox_state(entity_id: String, app: AppHandle) -> Result<serde_json::Va
             jb.playlist.iter().map(|track_id| {
                 let track_def = state.track_catalog.tracks.get(track_id);
                 serde_json::json!({
-                    "trackId": track_id,
+                    "id": track_id,
                     "title": track_def.map(|t| t.title.as_str()).unwrap_or("Unknown"),
                     "artist": track_def.map(|t| t.artist.as_str()).unwrap_or("Unknown"),
                     "durationSecs": track_def.map(|t| t.duration_secs).unwrap_or(0.0),
-                    "file": track_def.map(|t| t.file.as_str()).unwrap_or(""),
                 })
             }).collect()
         })

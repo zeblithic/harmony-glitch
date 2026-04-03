@@ -556,7 +556,9 @@ impl GameState {
                             audio_events.push(AudioEvent::ActionFailed);
                         }
                         Some(interaction::InteractionType::Jukebox { .. }) => {
-                            // Jukebox interaction is handled by the jukebox system; no audio event here
+                            audio_events.push(AudioEvent::EntityInteract {
+                                entity_type: "jukebox".to_string(),
+                            });
                         }
                         None => {}
                     }
