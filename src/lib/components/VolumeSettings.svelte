@@ -25,6 +25,8 @@
   let ambientVolume = $state(0.5);
   let sfxMuted = $state(false);
   let ambientMuted = $state(false);
+  let musicVolume = $state(0.5);
+  let musicMuted = $state(false);
 
   // Dialog open/close — only depends on `visible`, not `audioManager`.
   $effect(() => {
@@ -51,6 +53,8 @@
       ambientVolume = audioManager.getVolume('ambient');
       sfxMuted = audioManager.isMuted('sfx');
       ambientMuted = audioManager.isMuted('ambient');
+      musicVolume = audioManager.getVolume('music');
+      musicMuted = audioManager.isMuted('music');
     }
   });
 
@@ -79,6 +83,17 @@
   function toggleAmbientMute() {
     ambientMuted = !ambientMuted;
     audioManager?.setMuted('ambient', ambientMuted);
+  }
+
+  function handleMusicVolume(e: Event) {
+    const value = parseFloat((e.target as HTMLInputElement).value);
+    musicVolume = value;
+    audioManager?.setVolume('music', value);
+  }
+
+  function toggleMusicMute() {
+    musicMuted = !musicMuted;
+    audioManager?.setMuted('music', musicMuted);
   }
 </script>
 
@@ -165,6 +180,32 @@
           value={ambientVolume}
           oninput={handleAmbientVolume}
           class:muted={ambientMuted}
+        />
+      </div>
+
+      <div class="channel">
+        <div class="channel-header">
+          <label for="music-slider">Music</label>
+          <button
+            type="button"
+            class="mute-btn"
+            class:muted={musicMuted}
+            aria-label={musicMuted ? 'Unmute music' : 'Mute music'}
+            aria-pressed={musicMuted}
+            onclick={toggleMusicMute}
+          >
+            {musicMuted ? 'Muted' : Math.round(musicVolume * 100) + '%'}
+          </button>
+        </div>
+        <input
+          id="music-slider"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={musicVolume}
+          oninput={handleMusicVolume}
+          class:muted={musicMuted}
         />
       </div>
     </div>
