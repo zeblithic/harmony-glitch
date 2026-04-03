@@ -1,3 +1,4 @@
+mod manifest;
 mod store;
 
 fn main() {
