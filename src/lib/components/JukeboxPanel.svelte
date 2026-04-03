@@ -23,7 +23,7 @@
   let dialogLabel = $derived(info ? `Jukebox: ${info.name}` : 'Jukebox');
 
   let progressPercent = $derived.by(() => {
-    if (!info || !info.playing || info.currentTrackIndex < 0) return 0;
+    if (!info || info.currentTrackIndex < 0) return 0;
     const track = info.playlist[info.currentTrackIndex];
     if (!track || track.durationSecs <= 0) return 0;
     return Math.min(100, (info.elapsedSecs / track.durationSecs) * 100);
