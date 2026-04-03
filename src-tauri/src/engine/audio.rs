@@ -30,6 +30,14 @@ pub enum AudioEvent {
     Footstep {
         surface: String,
     },
+    #[serde(rename_all = "camelCase")]
+    JukeboxUpdate {
+        entity_id: String,
+        track_id: String,
+        playing: bool,
+        distance_factor: f64,
+        elapsed_secs: f64,
+    },
 }
 
 #[cfg(test)]
@@ -101,6 +109,24 @@ mod tests {
     }
 
     #[test]
+    fn serialize_jukebox_update() {
+        let event = AudioEvent::JukeboxUpdate {
+            entity_id: "jukebox_1".into(),
+            track_id: "glitch-theme".into(),
+            playing: true,
+            distance_factor: 0.75,
+            elapsed_secs: 42.5,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""type":"jukeboxUpdate""#));
+        assert!(json.contains(r#""entityId":"jukebox_1""#));
+        assert!(json.contains(r#""trackId":"glitch-theme""#));
+        assert!(json.contains(r#""playing":true"#));
+        assert!(json.contains(r#""distanceFactor":0.75"#));
+        assert!(json.contains(r#""elapsedSecs":42.5"#));
+    }
+
+    #[test]
     fn roundtrip_all_variants() {
         let events = vec![
             AudioEvent::ItemPickup {
@@ -122,6 +148,13 @@ mod tests {
             },
             AudioEvent::Footstep {
                 surface: "stone".into(),
+            },
+            AudioEvent::JukeboxUpdate {
+                entity_id: "jukebox_1".into(),
+                track_id: "glitch-theme".into(),
+                playing: false,
+                distance_factor: 1.0,
+                elapsed_secs: 0.0,
             },
         ];
         for event in events {

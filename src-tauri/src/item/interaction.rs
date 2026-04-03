@@ -377,6 +377,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
         defs
@@ -999,6 +1001,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
         let mut inv = Inventory::new(16);
@@ -1204,6 +1208,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
         let mut inv = Inventory::new(16);

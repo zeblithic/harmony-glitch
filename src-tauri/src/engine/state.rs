@@ -1108,6 +1108,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
 
@@ -1456,6 +1458,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
 
@@ -1533,6 +1537,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
 
@@ -1583,6 +1589,8 @@ mod tests {
                 wander_radius: Some(120.0),
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
         defs.insert(
@@ -1601,6 +1609,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
         defs
@@ -1751,6 +1761,8 @@ mod tests {
                 wander_radius: Some(20.0), // Very small radius
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
 
@@ -1912,6 +1924,8 @@ mod tests {
                 wander_radius: None,
                 bob_amplitude: None,
                 bob_frequency: None,
+                playlist: None,
+                audio_radius: None,
             },
         );
 
@@ -1964,6 +1978,8 @@ mod tests {
                 wander_radius: Some(150.0),
                 bob_amplitude: Some(15.0),
                 bob_frequency: Some(1.5),
+                playlist: None,
+                audio_radius: None,
             },
         );
 
