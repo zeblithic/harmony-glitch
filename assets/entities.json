@@ -66,5 +66,17 @@
     "respawnSecs": 35.0,
     "spriteClass": "tree_wood",
     "interactRadius": 80
+  },
+  "jukebox_tavern": {
+    "name": "Tavern Jukebox",
+    "verb": "Listen",
+    "yields": [],
+    "cooldownSecs": 0,
+    "maxHarvests": 0,
+    "respawnSecs": 0,
+    "spriteClass": "jukebox",
+    "interactRadius": 100,
+    "playlist": [],
+    "audioRadius": 400
   }
 }

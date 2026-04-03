@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::avatar::types::{AnimationState, Direction};
 use crate::engine::audio::AudioEvent;
+use crate::engine::jukebox::{self, JukeboxState, TrackCatalog};
 use crate::engine::transition::{
     TransitionDirection, TransitionPhase, TransitionState, PRE_SUBSCRIBE_DISTANCE,
 };
@@ -51,6 +52,8 @@ pub struct GameState {
     pub game_time: f64,
     pub pending_audio_events: Vec<AudioEvent>,
     pub prev_on_ground: bool,
+    pub jukebox_states: std::collections::HashMap<String, JukeboxState>,
+    pub track_catalog: TrackCatalog,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -120,6 +123,7 @@ impl GameState {
         item_defs: ItemDefs,
         entity_defs: EntityDefs,
         recipe_defs: RecipeDefs,
+        track_catalog: TrackCatalog,
     ) -> Self {
         Self {
             player: PhysicsBody::new(0.0, -100.0),
@@ -147,6 +151,8 @@ impl GameState {
             game_time: 0.0,
             pending_audio_events: vec![],
             prev_on_ground: true,
+            jukebox_states: std::collections::HashMap::new(),
+            track_catalog,
         }
     }
 
@@ -187,6 +193,17 @@ impl GameState {
         self.next_item_id = max_loaded_numeric_id.max(self.next_item_id);
         self.pickup_feedback.clear();
         self.entity_states.clear(); // game_time intentionally NOT reset — it's session-global
+        self.jukebox_states.clear();
+        for entity in &self.world_entities {
+            if let Some(def) = self.entity_defs.get(&entity.entity_type) {
+                if let Some(ref playlist) = def.playlist {
+                    let valid = jukebox::validate_playlist(playlist.clone(), &self.track_catalog, &def.name);
+                    if !valid.is_empty() {
+                        self.jukebox_states.insert(entity.id.clone(), JukeboxState::new(valid));
+                    }
+                }
+            }
+        }
     }
 
     /// Execute a crafting recipe. On success, generates pickup feedback.
@@ -388,6 +405,45 @@ impl GameState {
                 });
                 self.player.distance_since_footstep -=
                     crate::physics::movement::FOOTSTEP_STRIDE;
+            }
+
+            // --- Jukebox audio events ---
+            {
+                let mut nearest_jukebox: Option<(String, f64)> = None;
+                for entity in &self.world_entities {
+                    if let Some(def) = self.entity_defs.get(&entity.entity_type) {
+                        if let Some(audio_radius) = def.audio_radius {
+                            if def.playlist.is_some() {
+                                if let Some(factor) = jukebox::distance_factor(self.player.x, entity.x, audio_radius) {
+                                    let closer = nearest_jukebox.as_ref().is_none_or(|(_, f)| factor > *f);
+                                    if closer {
+                                        nearest_jukebox = Some((entity.id.clone(), factor));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Tick all jukebox states (they play whether anyone listens or not)
+                for jb_state in self.jukebox_states.values_mut() {
+                    jb_state.tick(dt, &self.track_catalog);
+                }
+
+                // Emit JukeboxUpdate for the nearest jukebox only
+                if let Some((entity_id, factor)) = nearest_jukebox {
+                    if let Some(jb_state) = self.jukebox_states.get(&entity_id) {
+                        if let Some(track_id) = jb_state.current_track_id() {
+                            audio_events.push(AudioEvent::JukeboxUpdate {
+                                entity_id,
+                                track_id: track_id.to_string(),
+                                playing: jb_state.playing,
+                                distance_factor: factor,
+                                elapsed_secs: jb_state.elapsed_secs,
+                            });
+                        }
+                    }
+                }
             }
 
             // --- Interaction system ---
@@ -878,6 +934,10 @@ mod tests {
     use crate::street::types::*;
     use std::collections::HashMap;
 
+    fn empty_catalog() -> TrackCatalog {
+        TrackCatalog { tracks: HashMap::new() }
+    }
+
     fn test_street() -> StreetData {
         StreetData {
             tsid: "test".into(),
@@ -919,6 +979,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -934,6 +995,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let input = InputState::default();
         assert!(state
@@ -949,6 +1011,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
 
@@ -975,6 +1038,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -996,6 +1060,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -1020,6 +1085,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let small_street = StreetData {
             tsid: "small".into(),
@@ -1067,6 +1133,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         // Player should be at center of street
@@ -1116,7 +1183,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog());
         let street = test_street();
         let entities = vec![WorldEntity {
             id: "t1".into(),
@@ -1146,6 +1213,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -1163,6 +1231,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         assert_eq!(state.transition.phase, TransitionPhase::None);
     }
@@ -1177,6 +1246,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1211,6 +1281,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1247,6 +1318,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1293,6 +1365,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1326,6 +1399,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -1347,6 +1421,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state
             .entity_states
@@ -1367,6 +1442,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let mut street = test_street();
         street.tsid = "LADEMO001".into();
@@ -1466,7 +1542,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1545,7 +1621,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1624,7 +1700,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -1655,7 +1731,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1684,7 +1760,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -1716,7 +1792,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -1769,7 +1845,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "f1".into(),
             entity_type: "fast_npc".into(),
@@ -1805,7 +1881,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -1842,7 +1918,7 @@ mod tests {
         let mut facings = Vec::new();
         for seed in [1u64, 2, 3, 4, 5, 6, 7, 8] {
             let mut state =
-                GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone(), HashMap::new());
+                GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone(), HashMap::new(), empty_catalog());
             let entities = vec![WorldEntity {
                 id: "c1".into(),
                 entity_type: "chicken".into(),
@@ -1872,7 +1948,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1932,7 +2008,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1986,7 +2062,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "b1".into(),
             entity_type: "butterfly".into(),
@@ -2022,7 +2098,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs(); // chicken + fruit_tree, no bob fields
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -2066,7 +2142,7 @@ mod tests {
             crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
                 .unwrap();
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog());
         state.inventory.add("cherry", 10, &state.item_defs);
         state.inventory.add("grain", 5, &state.item_defs);
         state.inventory.add("pot", 1, &state.item_defs);
@@ -2095,7 +2171,7 @@ mod tests {
             crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
                 .unwrap();
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog());
 
         let result = state.craft_recipe("nonexistent");
         assert!(result.is_err());
@@ -2109,6 +2185,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -2129,6 +2206,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -2163,6 +2241,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
 
@@ -2193,6 +2272,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -2221,7 +2301,7 @@ mod tests {
             crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
                 .unwrap();
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog());
         state.load_street(test_street(), vec![], vec![]);
         // Clear the StreetChanged event from load_street
         state.pending_audio_events.clear();
@@ -2263,6 +2343,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         let mut street = test_street();
         street.tsid = "LADEMO001".into();
@@ -2333,6 +2414,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(test_street(), vec![], vec![]);
 
@@ -2464,6 +2546,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
@@ -2506,6 +2589,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, -50.0);
@@ -2547,6 +2631,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
@@ -2619,6 +2704,7 @@ mod tests {
             ItemDefs::new(),
             EntityDefs::new(),
             HashMap::new(),
+            empty_catalog(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
@@ -2665,6 +2751,11 @@ mod tests {
 mod save_tests {
     use super::*;
     use crate::item::types::ItemStack;
+    use std::collections::HashMap;
+
+    fn empty_catalog() -> TrackCatalog {
+        TrackCatalog { tracks: HashMap::new() }
+    }
 
     #[test]
     fn save_state_round_trip() {
@@ -2767,7 +2858,7 @@ mod save_tests {
         let item_defs = crate::item::types::ItemDefs::new();
         let entity_defs = crate::item::types::EntityDefs::new();
         let recipe_defs = crate::item::types::RecipeDefs::new();
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog());
 
         // Load a street to get bounds
         let xml = include_str!("../../../assets/streets/demo_meadow.xml");
@@ -2796,7 +2887,7 @@ mod save_tests {
         let item_defs = crate::item::types::ItemDefs::new();
         let entity_defs = crate::item::types::EntityDefs::new();
         let recipe_defs = crate::item::types::RecipeDefs::new();
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs);
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog());
         assert_eq!(state.inventory.slots.len(), 16);
 
         let save = SaveState {
