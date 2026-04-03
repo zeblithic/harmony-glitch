@@ -148,6 +148,16 @@ fn restore(
     let mut pairs: Vec<(String, harmony_content::cid::ContentId)> =
         Vec::with_capacity(manifest.files.len());
     for (filename, hex) in &manifest.files {
+        // Reject path traversal attempts in manifest filenames
+        let path = std::path::Path::new(filename);
+        if path.components().any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)))
+            || path.components().count() != 1
+        {
+            return Err(format!(
+                "unsafe filename in manifest: '{}' — only plain basenames are allowed",
+                filename
+            ).into());
+        }
         let cid = hex_to_cid(hex).map_err(|_| {
             format!("invalid hex CID for '{}': '{}'", filename, hex)
         })?;
@@ -414,6 +424,31 @@ mod tests {
         assert_eq!(result.written, 1, "corrupt file should be overwritten");
         assert_eq!(result.skipped, 0);
         assert_eq!(std::fs::read(output.join("file.txt")).unwrap(), data);
+    }
+
+    #[test]
+    fn restore_rejects_path_traversal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cid = ContentId::for_book(b"data", ContentFlags::default()).unwrap();
+        let hex = cid_to_hex(&cid);
+
+        for bad_name in ["../escape.txt", "sub/dir.txt", "/etc/passwd"] {
+            let manifest_json = format!("{{\"files\":{{\"{bad_name}\":\"{hex}\"}}}}\n");
+            let manifest_path = tmp.path().join("manifest.json");
+            std::fs::write(&manifest_path, &manifest_json).unwrap();
+
+            let mut store = make_store(tmp.path());
+            store.insert(b"data").unwrap();
+            let output = tmp.path().join("output");
+
+            let err = restore(&manifest_path, &output, &store).unwrap_err();
+            assert!(
+                err.to_string().contains("unsafe filename"),
+                "should reject '{}', got: {}",
+                bad_name,
+                err
+            );
+        }
     }
 
     #[test]
