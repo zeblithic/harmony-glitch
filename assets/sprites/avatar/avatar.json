@@ -1,0 +1,24 @@
+{
+  "frames": {
+    "idle_0": { "frame": {"x": 0, "y": 0, "w": 30, "h": 60} },
+    "idle_1": { "frame": {"x": 30, "y": 0, "w": 30, "h": 60} },
+    "walk_0": { "frame": {"x": 0, "y": 60, "w": 30, "h": 60} },
+    "walk_1": { "frame": {"x": 30, "y": 60, "w": 30, "h": 60} },
+    "walk_2": { "frame": {"x": 60, "y": 60, "w": 30, "h": 60} },
+    "walk_3": { "frame": {"x": 90, "y": 60, "w": 30, "h": 60} },
+    "jump_0": { "frame": {"x": 0, "y": 120, "w": 30, "h": 60} },
+    "fall_0": { "frame": {"x": 30, "y": 120, "w": 30, "h": 60} }
+  },
+  "animations": {
+    "idle": ["idle_0", "idle_1"],
+    "walking": ["walk_0", "walk_1", "walk_2", "walk_3"],
+    "jumping": ["jump_0"],
+    "falling": ["fall_0"]
+  },
+  "meta": {
+    "image": "avatar.png",
+    "format": "RGBA8888",
+    "size": { "w": 256, "h": 256 },
+    "scale": 1
+  }
+}

@@ -77,8 +77,9 @@ fn ingest(
         return Err("input directory contains no files".into());
     }
 
-    // 4. Load existing manifest (returns empty if file doesn't exist)
-    let mut manifest = Manifest::load(manifest_path)?;
+    // 4. Load existing manifest for comparison, build fresh manifest from current files
+    let old_manifest = Manifest::load(manifest_path)?;
+    let mut manifest = Manifest::new();
 
     let mut result = IngestResult {
         total: files.len(),
@@ -97,19 +98,21 @@ fn ingest(
         let cid = store.insert(&data)?;
         let cid_hex = cid_to_hex(&cid);
 
-        // c. Compare CID hex with existing manifest entry
-        let existing_hex = manifest.get_cid(&filename)?.map(|c| cid_to_hex(&c));
+        // c. Compare CID hex with previous manifest entry
+        let old_hex = old_manifest.files.get(&filename);
 
-        // d. If same: unchanged++. If different or new: update manifest, new++
-        if existing_hex.as_deref() == Some(cid_hex.as_str()) {
+        // d. If same: unchanged++. If different or new: new++
+        if old_hex == Some(&cid_hex) {
             result.unchanged += 1;
         } else {
-            manifest.set(filename, &cid);
             result.new += 1;
         }
+
+        // Always add to fresh manifest (stale entries from deleted files are dropped)
+        manifest.set(filename, &cid);
     }
 
-    // 6. Save manifest
+    // 6. Save manifest (replaces old manifest entirely)
     manifest.save(manifest_path)?;
 
     // 7. Return IngestResult
@@ -170,16 +173,16 @@ fn restore(
 
     for (filename, cid) in &pairs {
         let out_path = output_dir.join(filename);
-        // a. If output file exists with correct byte length: skip
+        // a. If output file exists and content matches CID hash: skip
         if out_path.exists() {
-            let data = store.get(cid).expect("CID verified in first pass");
-            let meta = std::fs::metadata(&out_path)?;
-            if meta.len() == data.len() as u64 {
-                result.skipped += 1;
-                continue;
+            if let Ok(existing) = std::fs::read(&out_path) {
+                if cid.verify_hash(&existing) {
+                    result.skipped += 1;
+                    continue;
+                }
             }
         }
-        // b. Otherwise write
+        // b. Otherwise write from book store
         let data = store.get(cid).expect("CID verified in first pass");
         std::fs::write(&out_path, data)?;
         result.written += 1;
@@ -366,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn restore_skips_existing_correct_size() {
+    fn restore_skips_existing_matching_hash() {
         let tmp = tempfile::tempdir().unwrap();
         let input = tmp.path().join("input");
         std::fs::create_dir_all(&input).unwrap();
@@ -378,16 +381,39 @@ mod tests {
         let mut store = make_store(tmp.path());
         ingest(&input, &manifest_path, &mut store).unwrap();
 
-        // Pre-create output file with same byte length
+        // Pre-create output file with correct content
         let output = tmp.path().join("output");
         std::fs::create_dir_all(&output).unwrap();
-        // Write same-length content (but different bytes) to trigger skip-by-size
         std::fs::write(output.join("file.txt"), data).unwrap();
 
         let result = restore(&manifest_path, &output, &store).unwrap();
         assert_eq!(result.total, 1);
         assert_eq!(result.written, 0);
         assert_eq!(result.skipped, 1);
+    }
+
+    #[test]
+    fn restore_overwrites_corrupt_same_size_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = tmp.path().join("input");
+        std::fs::create_dir_all(&input).unwrap();
+
+        let data = b"correct content here";
+        write_file(&input, "file.txt", data);
+
+        let manifest_path = tmp.path().join("manifest.json");
+        let mut store = make_store(tmp.path());
+        ingest(&input, &manifest_path, &mut store).unwrap();
+
+        // Pre-create output file with same length but different content
+        let output = tmp.path().join("output");
+        std::fs::create_dir_all(&output).unwrap();
+        std::fs::write(output.join("file.txt"), b"CORRUPT content here").unwrap();
+
+        let result = restore(&manifest_path, &output, &store).unwrap();
+        assert_eq!(result.written, 1, "corrupt file should be overwritten");
+        assert_eq!(result.skipped, 0);
+        assert_eq!(std::fs::read(output.join("file.txt")).unwrap(), data);
     }
 
     #[test]
@@ -437,6 +463,35 @@ mod tests {
         assert_eq!(result.written, 1);
         assert!(output.exists(), "output dir should have been created");
         assert_eq!(std::fs::read(output.join("asset.bin")).unwrap(), data);
+    }
+
+    #[test]
+    fn ingest_prunes_stale_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = tmp.path().join("input");
+        std::fs::create_dir_all(&input).unwrap();
+
+        write_file(&input, "keep.txt", b"kept");
+        write_file(&input, "remove.txt", b"will be removed");
+
+        let manifest_path = tmp.path().join("manifest.json");
+        let mut store = make_store(tmp.path());
+        ingest(&input, &manifest_path, &mut store).unwrap();
+
+        let m1 = Manifest::load(&manifest_path).unwrap();
+        assert_eq!(m1.files.len(), 2);
+
+        // Delete one file and re-ingest
+        std::fs::remove_file(input.join("remove.txt")).unwrap();
+        let result = ingest(&input, &manifest_path, &mut store).unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.unchanged, 1);
+
+        // Manifest should only have the kept file
+        let m2 = Manifest::load(&manifest_path).unwrap();
+        assert_eq!(m2.files.len(), 1);
+        assert!(m2.files.contains_key("keep.txt"));
+        assert!(!m2.files.contains_key("remove.txt"));
     }
 
     #[test]

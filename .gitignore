@@ -35,5 +35,5 @@ Thumbs.db
 # Asset pipeline intermediate files
 tools/asset-pipeline/extracted/
 
-# Asset pipeline outputs (restored from CAS)
-assets/sprites/
+# Asset pipeline outputs (restored from CAS — only atlas groups with manifests)
+assets/sprites/items/

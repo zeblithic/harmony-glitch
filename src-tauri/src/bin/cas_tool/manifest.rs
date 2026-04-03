@@ -16,6 +16,7 @@ pub struct Manifest {
 pub enum ManifestError {
     Io(std::io::Error),
     Json(serde_json::Error),
+    #[allow(dead_code)]
     InvalidHex { filename: String, hex: String },
 }
 
@@ -76,6 +77,7 @@ impl Manifest {
         self.files.insert(filename, cid_to_hex(cid))
     }
 
+    #[allow(dead_code)]
     pub fn get_cid(&self, filename: &str) -> Result<Option<ContentId>, ManifestError> {
         match self.files.get(filename) {
             None => Ok(None),
