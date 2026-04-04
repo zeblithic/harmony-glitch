@@ -136,8 +136,13 @@
     e.preventDefault();
     if (saving) return;
     if (firstRun) {
-      // ESC in first-run mode saves defaults and continues
-      handleSave();
+      // ESC in first-run mode saves defaults and continues.
+      // If avatar hasn't loaded yet (or failed), just advance.
+      if (pendingAppearance) {
+        handleSave();
+      } else {
+        onClose?.();
+      }
     } else {
       handleCancel();
     }
@@ -194,11 +199,11 @@
 </script>
 
 {#if visible}
-  <dialog class="avatar-editor" aria-label="Avatar Editor" aria-modal="true"
+  <dialog class="avatar-editor" aria-labelledby="avatar-editor-title" aria-modal="true"
     bind:this={dialogEl} oncancel={handleDialogCancel}>
 
     <div class="panel-header">
-      <h2>{firstRun ? 'Customize Your Glitchen' : 'Avatar Editor'}</h2>
+      <h2 id="avatar-editor-title">{firstRun ? 'Customize Your Glitchen' : 'Avatar Editor'}</h2>
       {#if !firstRun}
         <button type="button" class="close-btn" aria-label="Close avatar editor"
           onclick={handleCancel}>&times;</button>
@@ -309,7 +314,7 @@
 
     <div class="editor-footer">
       {#if firstRun}
-        <button type="button" class="cancel-btn" onclick={handleSave}>Skip</button>
+        <button type="button" class="cancel-btn" onclick={() => pendingAppearance ? handleSave() : onClose?.()}>Skip</button>
       {:else}
         <button type="button" class="cancel-btn" onclick={handleCancel}>Cancel</button>
       {/if}
@@ -320,7 +325,7 @@
     {#if error}
       <div class="error-msg" role="alert">{error}</div>
     {/if}
-    <p class="shortcut-hint" aria-hidden="true">Arrow keys navigate tabs</p>
+    <p class="shortcut-hint">Arrow keys navigate tabs</p>
   </dialog>
 {/if}
 
