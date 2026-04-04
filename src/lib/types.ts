@@ -306,7 +306,8 @@ export interface JukeboxInfo {
 export interface AvatarManifestItem {
   id: string;
   name: string;
-  sheet: string;
+  sheet?: string;
+  parts?: string[];
 }
 
 export interface AvatarManifest {
