@@ -250,6 +250,7 @@
               volumeOpen = false;
               jukeboxOpen = false;
               jukeboxInfo = null;
+              avatarEditorOpen = false;
             }).catch(e => console.error('Failed to get store state:', e));
           }
         }
@@ -362,10 +363,10 @@
     volumeOpen = !volumeOpen;
     if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
   }
-  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen) {
+  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     avatarEditorOpen = !avatarEditorOpen;
-    if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; }
+    if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
   if ((e.key === 'j' || e.key === 'J') && jukeboxOpen && !chatFocused) {
     e.preventDefault();
