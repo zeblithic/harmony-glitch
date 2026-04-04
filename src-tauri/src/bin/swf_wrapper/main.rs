@@ -4,23 +4,102 @@
 //! DefineSprite tags but never place them on the main timeline. This tool
 //! creates a new SWF that places ALL sprites on stage so they can be rendered
 //! by ruffle's exporter.
+//!
+//! Options:
+//!   --info                   Print SWF header info (stage bounds etc.) and exit
+//!   --match-stage <ref.swf>  Use ref SWF's stage bounds for the output
 
 use std::env;
 use std::fs;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        eprintln!("Usage: swf-wrapper <input.swf> <output.swf>");
+
+    // Parse flags and positional args
+    let mut positional: Vec<String> = Vec::new();
+    let mut match_stage_path: Option<String> = None;
+    let mut info_mode = false;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--info" => {
+                info_mode = true;
+                i += 1;
+            }
+            "--match-stage" => {
+                i += 1;
+                if i < args.len() {
+                    match_stage_path = Some(args[i].clone());
+                } else {
+                    eprintln!("--match-stage requires a path argument");
+                    std::process::exit(1);
+                }
+                i += 1;
+            }
+            _ => {
+                positional.push(args[i].clone());
+                i += 1;
+            }
+        }
+    }
+
+    if positional.is_empty() {
+        eprintln!(
+            "Usage: swf-wrapper [--info] [--match-stage <ref.swf>] <input.swf> [<output.swf>]"
+        );
         std::process::exit(1);
     }
 
-    let input_path = &args[1];
-    let output_path = &args[2];
+    let input_path = &positional[0];
 
     let data = fs::read(input_path).expect("Cannot read input SWF");
     let buf = swf::decompress_swf(&data[..]).expect("Cannot decompress SWF");
     let parsed = swf::parse_swf(&buf).expect("Cannot parse SWF");
+
+    // --info: print header info and exit
+    if info_mode {
+        let stage = parsed.header.stage_size();
+        let w = (stage.x_max - stage.x_min).to_pixels();
+        let h = (stage.y_max - stage.y_min).to_pixels();
+        println!(
+            r#"{{"version":{},"frame_rate":{},"num_frames":{},"stage_twips":{{"x_min":{},"x_max":{},"y_min":{},"y_max":{}}},"stage_px":{{"x_min":{:.1},"x_max":{:.1},"y_min":{:.1},"y_max":{:.1},"width":{:.1},"height":{:.1}}}}}"#,
+            parsed.header.version(),
+            parsed.header.frame_rate().to_f32(),
+            parsed.header.num_frames(),
+            stage.x_min.get(),
+            stage.x_max.get(),
+            stage.y_min.get(),
+            stage.y_max.get(),
+            stage.x_min.to_pixels(),
+            stage.x_max.to_pixels(),
+            stage.y_min.to_pixels(),
+            stage.y_max.to_pixels(),
+            w,
+            h,
+        );
+        return;
+    }
+
+    if positional.len() < 2 {
+        eprintln!(
+            "Usage: swf-wrapper [--info] [--match-stage <ref.swf>] <input.swf> <output.swf>"
+        );
+        std::process::exit(1);
+    }
+
+    let output_path = &positional[1];
+
+    // Determine stage size: use --match-stage reference or input's own stage
+    let stage_size = if let Some(ref ref_path) = match_stage_path {
+        let ref_data = fs::read(ref_path).expect("Cannot read reference SWF");
+        let ref_buf =
+            swf::decompress_swf(&ref_data[..]).expect("Cannot decompress reference SWF");
+        let ref_parsed = swf::parse_swf(&ref_buf).expect("Cannot parse reference SWF");
+        ref_parsed.header.stage_size().clone()
+    } else {
+        parsed.header.stage_size().clone()
+    };
 
     // Collect ALL DefineSprite IDs and find max frame count
     let mut sprites: Vec<(u16, u16)> = Vec::new();
@@ -40,7 +119,12 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Parse raw tag bytes, filtering out background/showframe/end
+    // Parse raw tag bytes, filtering out End/ShowFrame/SetBackgroundColor.
+    // PlaceObject tags from the original SWF are kept — most component SWFs
+    // have no main-timeline placements, and those that do (e.g., some hair SWFs)
+    // rely on them for shape positioning. The wrapper adds its own PlaceObject
+    // for each DefineSprite at identity, which may create a second instance at
+    // a different depth for SWFs with existing placements.
     let tag_data = &buf.data;
     let mut raw_tags: Vec<u8> = Vec::new();
     let mut pos: usize = 0;
@@ -118,7 +202,7 @@ fn main() {
     let header = swf::Header {
         compression: swf::Compression::Zlib,
         version: parsed.header.version(),
-        stage_size: parsed.header.stage_size().clone(),
+        stage_size,
         frame_rate: parsed.header.frame_rate(),
         num_frames: max_frames,
     };

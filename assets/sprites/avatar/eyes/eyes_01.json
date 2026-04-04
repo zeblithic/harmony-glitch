@@ -5,7 +5,18 @@
         "x": 0,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 304,
+        "y": 322,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "idle_01": {
@@ -13,7 +24,18 @@
         "x": 53,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 321,
+        "y": 329,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "idle_02": {
@@ -21,7 +43,18 @@
         "x": 106,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "idle_03": {
@@ -29,7 +62,18 @@
         "x": 159,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "idle_04": {
@@ -37,7 +81,18 @@
         "x": 212,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "idle_05": {
@@ -45,7 +100,18 @@
         "x": 265,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "idle_06": {
@@ -53,7 +119,18 @@
         "x": 318,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 330,
+        "y": 333,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "idle_07": {
@@ -61,7 +138,18 @@
         "x": 371,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 306,
+        "y": 323,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_00": {
@@ -69,7 +157,18 @@
         "x": 424,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 304,
+        "y": 322,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_01": {
@@ -77,7 +176,18 @@
         "x": 477,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 300,
+        "y": 314,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_02": {
@@ -85,7 +195,18 @@
         "x": 530,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 296,
+        "y": 306,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_03": {
@@ -93,7 +214,18 @@
         "x": 583,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 299,
+        "y": 313,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_04": {
@@ -101,7 +233,18 @@
         "x": 636,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 304,
+        "y": 322,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_05": {
@@ -109,7 +252,18 @@
         "x": 689,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 298,
+        "y": 314,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_06": {
@@ -117,7 +271,18 @@
         "x": 742,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 293,
+        "y": 306,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "walking_07": {
@@ -125,7 +290,18 @@
         "x": 795,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 298,
+        "y": 313,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "jumping_00": {
@@ -133,7 +309,18 @@
         "x": 848,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 358,
+        "y": 302,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "jumping_01": {
@@ -141,7 +328,18 @@
         "x": 901,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 357,
+        "y": 301,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "jumping_02": {
@@ -149,7 +347,18 @@
         "x": 954,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 356,
+        "y": 300,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "jumping_03": {
@@ -157,7 +366,18 @@
         "x": 1007,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 356,
+        "y": 300,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "jumping_04": {
@@ -165,7 +385,18 @@
         "x": 1060,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 355,
+        "y": 299,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "jumping_05": {
@@ -173,7 +404,18 @@
         "x": 1113,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 355,
+        "y": 298,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "jumping_06": {
@@ -181,55 +423,132 @@
         "x": 1166,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 355,
+        "y": 298,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "falling_00": {
       "frame": {
         "x": 1219,
         "y": 0,
-        "w": 51,
-        "h": 41
+        "w": 53,
+        "h": 43
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 355,
+        "y": 298,
+        "w": 53,
+        "h": 43
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "falling_01": {
       "frame": {
-        "x": 1270,
+        "x": 1272,
         "y": 0,
-        "w": 141,
-        "h": 41
+        "w": 55,
+        "h": 19
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 350,
+        "y": 298,
+        "w": 55,
+        "h": 19
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "falling_02": {
       "frame": {
-        "x": 1411,
+        "x": 1327,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 337,
+        "y": 298,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "falling_03": {
       "frame": {
-        "x": 1464,
+        "x": 1380,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 315,
+        "y": 296,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "falling_04": {
       "frame": {
-        "x": 1517,
+        "x": 1433,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 291,
+        "y": 295,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     },
     "falling_05": {
       "frame": {
-        "x": 1570,
+        "x": 1486,
         "y": 0,
         "w": 53,
-        "h": 41
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 275,
+        "y": 294,
+        "w": 53,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
       }
     }
   },
@@ -276,8 +595,8 @@
     "image": "eyes_01.png",
     "format": "RGBA8888",
     "size": {
-      "w": 1623,
-      "h": 41
+      "w": 1539,
+      "h": 52
     },
     "scale": 1
   }

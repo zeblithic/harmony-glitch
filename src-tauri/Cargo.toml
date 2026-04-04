@@ -18,6 +18,11 @@ name = "swf-wrapper"
 path = "src/bin/swf_wrapper/main.rs"
 required-features = ["swf-wrapper"]
 
+[[bin]]
+name = "extract-transforms"
+path = "src/bin/extract_transforms/main.rs"
+required-features = ["extract-transforms"]
+
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
@@ -44,6 +49,7 @@ percent-encoding = "2"
 [features]
 extract-swf = ["swf", "png", "flate2", "clap", "jpeg-decoder"]
 swf-wrapper = ["swf"]
+extract-transforms = ["swf"]
 cas-tool = ["clap", "dep:harmony-content"]
 
 [dev-dependencies]
