@@ -377,6 +377,7 @@ mod tests {
                 category: "food".into(),
                 stack_limit: 5,
                 icon: "cherry".into(),
+                base_cost: None,
             },
         );
         defs

@@ -13,6 +13,8 @@ pub struct ItemDef {
     pub category: String,
     pub stack_limit: u32,
     pub icon: String,
+    #[serde(default)]
+    pub base_cost: Option<u32>,
 }
 
 /// A stack of items in inventory.
@@ -135,6 +137,22 @@ pub struct RecipeItem {
 }
 
 pub type RecipeDefs = HashMap<String, RecipeDef>;
+
+/// A vendor store definition loaded from stores.json.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreDef {
+    pub name: String,
+    pub buy_multiplier: f64,
+    pub inventory: Vec<String>,
+}
+
+/// All store definitions, keyed by store ID.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoreCatalog {
+    #[serde(flatten)]
+    pub stores: HashMap<String, StoreDef>,
+}
 
 /// Error from a crafting attempt.
 #[derive(Debug, Clone)]
@@ -489,11 +507,39 @@ mod tests {
             category: "food".into(),
             stack_limit: 50,
             icon: "cherry".into(),
+            base_cost: None,
         };
         let json = serde_json::to_string(&def).unwrap();
         assert!(json.contains("stackLimit"));
         assert!(!json.contains("stack_limit"));
         // id is skip-serialized
         assert!(!json.contains(r#""id""#));
+    }
+
+    #[test]
+    fn item_def_with_base_cost() {
+        let json = r#"{
+            "name": "Cherry",
+            "description": "A cherry.",
+            "category": "food",
+            "stackLimit": 50,
+            "icon": "cherry",
+            "baseCost": 3
+        }"#;
+        let def: ItemDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.base_cost, Some(3));
+    }
+
+    #[test]
+    fn item_def_without_base_cost() {
+        let json = r#"{
+            "name": "Cherry",
+            "description": "A cherry.",
+            "category": "food",
+            "stackLimit": 50,
+            "icon": "cherry"
+        }"#;
+        let def: ItemDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.base_cost, None);
     }
 }

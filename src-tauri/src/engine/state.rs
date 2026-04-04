@@ -1175,6 +1175,7 @@ mod tests {
                 category: "food".into(),
                 stack_limit: 50,
                 icon: "cherry".into(),
+                base_cost: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -1534,6 +1535,7 @@ mod tests {
                 category: "food".into(),
                 stack_limit: 50,
                 icon: "cherry".into(),
+                base_cost: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -1613,6 +1615,7 @@ mod tests {
                 category: "food".into(),
                 stack_limit: 50,
                 icon: "cherry".into(),
+                base_cost: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2000,6 +2003,7 @@ mod tests {
                 category: "food".into(),
                 stack_limit: 50,
                 icon: "cherry".into(),
+                base_cost: None,
             },
         );
         let mut entity_defs = EntityDefs::new();

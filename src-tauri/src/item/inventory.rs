@@ -163,6 +163,7 @@ mod tests {
                 category: "food".into(),
                 stack_limit: 5,
                 icon: "cherry".into(),
+                base_cost: None,
             },
         );
         defs.insert(
@@ -174,6 +175,7 @@ mod tests {
                 category: "food".into(),
                 stack_limit: 10,
                 icon: "grain".into(),
+                base_cost: None,
             },
         );
         defs

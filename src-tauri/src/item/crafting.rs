@@ -130,6 +130,7 @@ mod tests {
                     category: "".into(),
                     stack_limit,
                     icon: id.into(),
+                    base_cost: None,
                 },
             );
         }

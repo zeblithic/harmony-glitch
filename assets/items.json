@@ -4,90 +4,103 @@
     "description": "A plump, juicy cherry from a Fruit Tree.",
     "category": "food",
     "stackLimit": 50,
-    "icon": "cherry"
+    "icon": "cherry",
+    "baseCost": 3
   },
   "grain": {
     "name": "Grain",
     "description": "Squeezed from a chicken. Don't ask.",
     "category": "food",
     "stackLimit": 50,
-    "icon": "grain"
+    "icon": "grain",
+    "baseCost": 3
   },
   "meat": {
     "name": "Meat",
     "description": "Nibbled off a friendly pig. It didn't seem to mind.",
     "category": "food",
     "stackLimit": 50,
-    "icon": "meat"
+    "icon": "meat",
+    "baseCost": 5
   },
   "milk": {
     "name": "Milk",
     "description": "Milked from a butterfly. Surprisingly creamy.",
     "category": "food",
     "stackLimit": 50,
-    "icon": "milk"
+    "icon": "milk",
+    "baseCost": 4
   },
   "bubble": {
     "name": "Bubble",
     "description": "A shimmering bubble harvested from a Bubble Tree.",
     "category": "material",
     "stackLimit": 50,
-    "icon": "bubble"
+    "icon": "bubble",
+    "baseCost": 2
   },
   "wood": {
     "name": "Wood",
     "description": "A sturdy plank from a Wood Tree.",
     "category": "material",
     "stackLimit": 50,
-    "icon": "wood"
+    "icon": "wood",
+    "baseCost": 4
   },
   "cherry_pie": {
     "name": "Cherry Pie",
     "description": "A delicious pie baked with fresh cherries.",
     "category": "food",
     "stackLimit": 10,
-    "icon": "cherry_pie"
+    "icon": "cherry_pie",
+    "baseCost": 20
   },
   "bread": {
     "name": "Bread",
     "description": "Simple baked bread. Hearty and filling.",
     "category": "food",
     "stackLimit": 20,
-    "icon": "bread"
+    "icon": "bread",
+    "baseCost": 16
   },
   "steak": {
     "name": "Steak",
     "description": "Grilled meat on a wood fire. Savory.",
     "category": "food",
     "stackLimit": 10,
-    "icon": "steak"
+    "icon": "steak",
+    "baseCost": 22
   },
   "butter": {
     "name": "Butter",
     "description": "Churned from fresh butterfly milk.",
     "category": "food",
     "stackLimit": 20,
-    "icon": "butter"
+    "icon": "butter",
+    "baseCost": 15
   },
   "bubble_wand": {
     "name": "Bubble Wand",
     "description": "A wand for blowing iridescent bubbles.",
     "category": "tool",
     "stackLimit": 1,
-    "icon": "bubble_wand"
+    "icon": "bubble_wand",
+    "baseCost": 18
   },
   "plank": {
     "name": "Plank",
     "description": "Processed lumber. Useful for building.",
     "category": "material",
     "stackLimit": 50,
-    "icon": "plank"
+    "icon": "plank",
+    "baseCost": 12
   },
   "pot": {
     "name": "Pot",
     "description": "A sturdy cooking pot. Required for most recipes.",
     "category": "tool",
     "stackLimit": 1,
-    "icon": "pot"
+    "icon": "pot",
+    "baseCost": 25
   }
 }
