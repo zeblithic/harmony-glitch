@@ -63,9 +63,10 @@
       }
       return () => {
         if (dialogEl?.open) dialogEl.close();
-        // Revert unsaved changes when closing by any means (C toggle,
-        // mutual exclusion from I/P, or the Cancel button/Escape key).
-        if (savedAppearance && renderer) {
+        // Revert unsaved changes when closing — unless a save is in-flight,
+        // in which case the save's .then() will update savedAppearance and
+        // the renderer already has the correct state.
+        if (!saving && savedAppearance && renderer) {
           pendingAppearance = { ...savedAppearance };
         }
       };
