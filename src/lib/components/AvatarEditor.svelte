@@ -138,30 +138,38 @@
   function handleGroupTabKey(e: KeyboardEvent) {
     const groups = Object.keys(TAB_GROUPS);
     const idx = groups.indexOf(activeTabGroup);
+    let nextIdx = idx;
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      switchTabGroup(groups[(idx + 1) % groups.length]);
-      // Focus the newly active tab
-      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+      nextIdx = (idx + 1) % groups.length;
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      switchTabGroup(groups[(idx - 1 + groups.length) % groups.length]);
-      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+      nextIdx = (idx - 1 + groups.length) % groups.length;
+    } else {
+      return;
     }
+    switchTabGroup(groups[nextIdx]);
+    // Focus by ID — avoids stale DOM from querying aria-selected before flush
+    const target = (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>(`#tab-${groups[nextIdx]}`);
+    target?.focus();
   }
 
   function handleSubTabKey(e: KeyboardEvent) {
     const cats = TAB_GROUPS[activeTabGroup];
     const idx = cats.indexOf(activeCategory);
+    let nextIdx = idx;
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      activeCategory = cats[(idx + 1) % cats.length];
-      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+      nextIdx = (idx + 1) % cats.length;
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      activeCategory = cats[(idx - 1 + cats.length) % cats.length];
-      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+      nextIdx = (idx - 1 + cats.length) % cats.length;
+    } else {
+      return;
     }
+    activeCategory = cats[nextIdx];
+    const target = (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>(`#subtab-${cats[nextIdx]}`);
+    target?.focus();
   }
 
   function displayName(s: string): string {
@@ -199,6 +207,7 @@
         onkeydown={handleSubTabKey}>
         {#each TAB_GROUPS[activeTabGroup] as cat}
           <button type="button" role="tab"
+            id="subtab-{cat}"
             aria-selected={activeCategory === cat}
             tabindex={activeCategory === cat ? 0 : -1}
             class="sub-tab" class:active={activeCategory === cat}

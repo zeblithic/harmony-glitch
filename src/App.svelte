@@ -216,6 +216,7 @@
               jukeboxCloseFrames = 0;
               inventoryOpen = false;
               volumeOpen = false;
+              avatarEditorOpen = false;
             }).catch(e => console.error('Failed to get jukebox state:', e));
           }
         }
