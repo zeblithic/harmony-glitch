@@ -497,7 +497,7 @@ fn validate_jukebox_proximity(state: &engine::state::GameState, entity_id: &str)
     let entity = state.world_entities.iter().find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type);
-    let radius = def.map(|d| d.interact_radius).unwrap_or(0.0);
+    let radius = def.map(|d| d.interact_radius).unwrap_or(60.0);
     let dx = state.player.x - entity.x;
     let dy = state.player.y - entity.y;
     let dist = (dx * dx + dy * dy).sqrt();
