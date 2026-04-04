@@ -13,6 +13,11 @@ name = "cas-tool"
 path = "src/bin/cas_tool/main.rs"
 required-features = ["cas-tool"]
 
+[[bin]]
+name = "swf-wrapper"
+path = "src/bin/swf_wrapper/main.rs"
+required-features = ["swf-wrapper"]
+
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
@@ -38,6 +43,7 @@ percent-encoding = "2"
 
 [features]
 extract-swf = ["swf", "png", "flate2", "clap", "jpeg-decoder"]
+swf-wrapper = ["swf"]
 cas-tool = ["clap", "dep:harmony-content"]
 
 [dev-dependencies]
