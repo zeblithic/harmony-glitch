@@ -170,6 +170,10 @@
         "coat.gloveOffside": {
           "x": 24.65,
           "y": 84.4
+        },
+        "bracelet.braceletClose": {
+          "x": 38.25,
+          "y": 86.9
         }
       },
       {
@@ -337,6 +341,10 @@
         "coat.gloveOffside": {
           "x": 26.65,
           "y": 84.85
+        },
+        "bracelet.braceletClose": {
+          "x": 37.25,
+          "y": 86.5
         }
       },
       {
@@ -504,6 +512,10 @@
         "coat.gloveOffside": {
           "x": 32.7,
           "y": 86.2
+        },
+        "bracelet.braceletClose": {
+          "x": 34.15,
+          "y": 85.2
         }
       },
       {
@@ -671,6 +683,10 @@
         "coat.gloveOffside": {
           "x": 41.85,
           "y": 86.85
+        },
+        "bracelet.braceletClose": {
+          "x": 23.75,
+          "y": 86.5
         }
       },
       {
@@ -838,6 +854,10 @@
         "coat.gloveOffside": {
           "x": 44.85,
           "y": 87.1
+        },
+        "bracelet.braceletClose": {
+          "x": 20.3,
+          "y": 86.95
         }
       },
       {
@@ -1005,6 +1025,10 @@
         "coat.gloveOffside": {
           "x": 43.25,
           "y": 86.75
+        },
+        "bracelet.braceletClose": {
+          "x": 22.15,
+          "y": 86.95
         }
       },
       {
@@ -1172,6 +1196,10 @@
         "coat.gloveOffside": {
           "x": 38.5,
           "y": 85.7
+        },
+        "bracelet.braceletClose": {
+          "x": 27.7,
+          "y": 86.75
         }
       },
       {
@@ -1339,6 +1367,10 @@
         "coat.gloveOffside": {
           "x": 28.15,
           "y": 84.75
+        },
+        "bracelet.braceletClose": {
+          "x": 35.65,
+          "y": 86.85
         }
       }
     ],
@@ -1508,6 +1540,10 @@
         "coat.gloveOffside": {
           "x": 61.35,
           "y": 56.95
+        },
+        "bracelet.braceletClose": {
+          "x": 54.15,
+          "y": 64.8
         }
       },
       {
@@ -1675,6 +1711,10 @@
         "coat.gloveOffside": {
           "x": 59.35,
           "y": 52.5
+        },
+        "bracelet.braceletClose": {
+          "x": 51.9,
+          "y": 58.9
         }
       },
       {
@@ -1842,6 +1882,10 @@
         "coat.gloveOffside": {
           "x": 57.3,
           "y": 48.0
+        },
+        "bracelet.braceletClose": {
+          "x": 49.6,
+          "y": 53.0
         }
       },
       {
@@ -2009,6 +2053,10 @@
         "coat.gloveOffside": {
           "x": 54.65,
           "y": 45.0
+        },
+        "bracelet.braceletClose": {
+          "x": 46.5,
+          "y": 48.55
         }
       },
       {
@@ -2176,6 +2224,10 @@
         "coat.gloveOffside": {
           "x": 52.2,
           "y": 43.65
+        },
+        "bracelet.braceletClose": {
+          "x": 43.15,
+          "y": 46.2
         }
       },
       {
@@ -2343,6 +2395,10 @@
         "coat.gloveOffside": {
           "x": 50.6,
           "y": 42.75
+        },
+        "bracelet.braceletClose": {
+          "x": 40.75,
+          "y": 44.65
         }
       },
       {
@@ -2510,6 +2566,10 @@
         "coat.gloveOffside": {
           "x": 49.8,
           "y": 42.25
+        },
+        "bracelet.braceletClose": {
+          "x": 39.7,
+          "y": 43.85
         }
       }
     ],
@@ -2679,6 +2739,10 @@
         "coat.gloveOffside": {
           "x": 49.75,
           "y": 42.3
+        },
+        "bracelet.braceletClose": {
+          "x": 39.5,
+          "y": 43.75
         }
       },
       {
@@ -2846,6 +2910,10 @@
         "coat.gloveOffside": {
           "x": 49.85,
           "y": 42.85
+        },
+        "bracelet.braceletClose": {
+          "x": 39.9,
+          "y": 44.2
         }
       },
       {
@@ -3013,6 +3081,10 @@
         "coat.gloveOffside": {
           "x": 50.05,
           "y": 44.45
+        },
+        "bracelet.braceletClose": {
+          "x": 41.05,
+          "y": 45.45
         }
       },
       {
@@ -3180,6 +3252,10 @@
         "coat.gloveOffside": {
           "x": 50.5,
           "y": 47.3
+        },
+        "bracelet.braceletClose": {
+          "x": 42.95,
+          "y": 47.7
         }
       },
       {
@@ -3347,6 +3423,10 @@
         "coat.gloveOffside": {
           "x": 48.7,
           "y": 50.85
+        },
+        "bracelet.braceletClose": {
+          "x": 42.15,
+          "y": 52.3
         }
       },
       {
@@ -3514,6 +3594,10 @@
         "coat.gloveOffside": {
           "x": 47.4,
           "y": 53.3
+        },
+        "bracelet.braceletClose": {
+          "x": 41.75,
+          "y": 54.95
         }
       }
     ],
@@ -3683,6 +3767,10 @@
         "coat.gloveOffside": {
           "x": 39.35,
           "y": 88.5
+        },
+        "bracelet.braceletClose": {
+          "x": 25.2,
+          "y": 88.15
         }
       },
       {
@@ -3850,6 +3938,10 @@
         "coat.gloveOffside": {
           "x": 40.9,
           "y": 89.25
+        },
+        "bracelet.braceletClose": {
+          "x": 22.5,
+          "y": 85.2
         }
       },
       {
@@ -4017,6 +4109,10 @@
         "coat.gloveOffside": {
           "x": 41.85,
           "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 19.95,
+          "y": 82.45
         }
       },
       {
@@ -4184,6 +4280,10 @@
         "coat.gloveOffside": {
           "x": 41.85,
           "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 20.6,
+          "y": 83.15
         }
       },
       {
@@ -4351,6 +4451,10 @@
         "coat.gloveOffside": {
           "x": 41.85,
           "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 19.95,
+          "y": 82.45
         }
       },
       {
@@ -4518,6 +4622,10 @@
         "coat.gloveOffside": {
           "x": 41.85,
           "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 20.6,
+          "y": 83.15
         }
       },
       {
@@ -4685,6 +4793,10 @@
         "coat.gloveOffside": {
           "x": 41.7,
           "y": 89.6
+        },
+        "bracelet.braceletClose": {
+          "x": 20.35,
+          "y": 82.85
         }
       },
       {
@@ -4852,6 +4964,10 @@
         "coat.gloveOffside": {
           "x": 39.55,
           "y": 88.5
+        },
+        "bracelet.braceletClose": {
+          "x": 24.85,
+          "y": 87.85
         }
       }
     ]
