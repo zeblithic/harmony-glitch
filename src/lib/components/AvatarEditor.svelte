@@ -59,6 +59,11 @@
       }
       return () => {
         if (dialogEl?.open) dialogEl.close();
+        // Revert unsaved changes when closing by any means (C toggle,
+        // mutual exclusion from I/P, or the Cancel button/Escape key).
+        if (savedAppearance && renderer) {
+          pendingAppearance = { ...savedAppearance };
+        }
       };
     } else if (!visible && previousFocus) {
       previousFocus.focus();
