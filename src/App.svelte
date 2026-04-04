@@ -144,7 +144,7 @@
     currentStreet = street;
   }
 
-  async function handleFrame(frame: RenderFrame) {
+  function handleFrame(frame: RenderFrame) {
     latestFrame = frame;
 
     // When a transition appears, pre-load the target street immediately.
@@ -215,21 +215,28 @@
     }
 
     // Detect vendor interaction via audio events
-    const vendorInteract = frame.audioEvents?.find(
-      (e) => e.type === 'entityInteract' && e.entityType === 'vendor'
-    );
-    if (vendorInteract && frame.interactionPrompt?.entityId) {
-      const eid = frame.interactionPrompt.entityId;
-      try {
-        storeState = await getStoreState(eid);
-        shopOpen = true;
-        inventoryOpen = false;
-        volumeOpen = false;
-        jukeboxOpen = false;
-        jukeboxInfo = null;
-        shopCloseFrames = 0;
-      } catch (e) {
-        console.error('Failed to get store state:', e);
+    if (frame.audioEvents?.length) {
+      for (const event of frame.audioEvents) {
+        if (event.type === 'entityInteract' && event.entityType === 'vendor') {
+          if (shopOpen) {
+            shopOpen = false;
+            storeState = null;
+            shopCloseFrames = 0;
+          } else if (frame.interactionPrompt?.entityId) {
+            const eid = frame.interactionPrompt.entityId;
+            getStoreState(eid).then(state => {
+              // Guard: player may have walked away while the IPC was in flight
+              if (latestFrame?.interactionPrompt?.entityId !== eid) return;
+              storeState = state;
+              shopOpen = true;
+              shopCloseFrames = 0;
+              inventoryOpen = false;
+              volumeOpen = false;
+              jukeboxOpen = false;
+              jukeboxInfo = null;
+            }).catch(e => console.error('Failed to get store state:', e));
+          }
+        }
       }
     }
 
