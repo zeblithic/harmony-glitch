@@ -47,21 +47,24 @@ impl JukeboxState {
 
         self.elapsed_secs += dt;
 
-        // Check if the current track has finished.
-        let current_id = &self.playlist[self.current_track_index];
-        if let Some(track) = catalog.tracks.get(current_id) {
-            if self.elapsed_secs >= track.duration_secs {
-                // Carry over excess time so the playback clock doesn't drift.
-                let excess = self.elapsed_secs - track.duration_secs;
+        // Advance through tracks until elapsed fits within the current track.
+        // Loop guard: at most one full pass through the playlist to prevent
+        // infinite loops if all tracks have zero or missing durations.
+        let max_advances = self.playlist.len();
+        for _ in 0..max_advances {
+            let current_id = &self.playlist[self.current_track_index];
+            if let Some(track) = catalog.tracks.get(current_id) {
+                if self.elapsed_secs < track.duration_secs {
+                    break;
+                }
+                self.elapsed_secs -= track.duration_secs;
                 self.current_track_index =
                     (self.current_track_index + 1) % self.playlist.len();
-                self.elapsed_secs = excess;
+            } else {
+                // Track not in catalog — skip to next without consuming time.
+                self.current_track_index =
+                    (self.current_track_index + 1) % self.playlist.len();
             }
-        } else {
-            // Track not in catalog — skip to next.
-            self.current_track_index =
-                (self.current_track_index + 1) % self.playlist.len();
-            self.elapsed_secs = 0.0;
         }
     }
 
@@ -208,6 +211,17 @@ mod tests {
         state.tick(20.0, &catalog);
         assert_eq!(state.current_track_index, 0);
         assert!(state.elapsed_secs < f64::EPSILON);
+    }
+
+    #[test]
+    fn tick_skips_multiple_tracks_on_large_dt() {
+        let catalog = make_catalog();
+        // track_a=10s, track_b=20s — tick 31s should skip both and land on track_a with 1s
+        let mut state =
+            JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
+        state.tick(31.0, &catalog);
+        assert_eq!(state.current_track_index, 0); // wrapped back to track_a
+        assert!((state.elapsed_secs - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
