@@ -409,13 +409,21 @@ impl GameState {
 
             // --- Jukebox audio events ---
             {
+                // Tick all jukebox states first so emitted events reflect post-tick state
+                for jb_state in self.jukebox_states.values_mut() {
+                    jb_state.tick(dt, &self.track_catalog);
+                }
+
+                // Find nearest jukebox within audio_radius (2D Euclidean distance)
                 let mut nearest_jukebox: Option<(String, f64, f64)> = None; // (entity_id, distance_factor, distance)
                 for entity in &self.world_entities {
                     if let Some(def) = self.entity_defs.get(&entity.entity_type) {
                         if let Some(audio_radius) = def.audio_radius {
                             if def.playlist.is_some() && self.jukebox_states.contains_key(&entity.id) {
-                                let distance = (self.player.x - entity.x).abs();
-                                if let Some(factor) = jukebox::distance_factor(self.player.x, entity.x, audio_radius) {
+                                let dx = self.player.x - entity.x;
+                                let dy = self.player.y - entity.y;
+                                let distance = (dx * dx + dy * dy).sqrt();
+                                if let Some(factor) = jukebox::distance_factor(self.player.x, self.player.y, entity.x, entity.y, audio_radius) {
                                     let closer = nearest_jukebox.as_ref().is_none_or(|(_, _, d)| distance < *d);
                                     if closer {
                                         nearest_jukebox = Some((entity.id.clone(), factor, distance));
@@ -424,11 +432,6 @@ impl GameState {
                             }
                         }
                     }
-                }
-
-                // Tick all jukebox states (they play whether anyone listens or not)
-                for jb_state in self.jukebox_states.values_mut() {
-                    jb_state.tick(dt, &self.track_catalog);
                 }
 
                 // Emit JukeboxUpdate for the nearest jukebox only

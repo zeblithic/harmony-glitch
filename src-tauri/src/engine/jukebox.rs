@@ -97,11 +97,20 @@ impl JukeboxState {
 
 /// Returns `None` if the player is outside the audio radius, or
 /// `Some(volume)` where volume is in `[0.0, 1.0]` — 1.0 at the entity, 0.0 at the edge.
-pub fn distance_factor(player_x: f64, entity_x: f64, audio_radius: f64) -> Option<f64> {
+/// Uses 2D Euclidean distance to match proximity_scan.
+pub fn distance_factor(
+    player_x: f64,
+    player_y: f64,
+    entity_x: f64,
+    entity_y: f64,
+    audio_radius: f64,
+) -> Option<f64> {
     if audio_radius <= 0.0 {
         return None;
     }
-    let distance = (player_x - entity_x).abs();
+    let dx = player_x - entity_x;
+    let dy = player_y - entity_y;
+    let distance = (dx * dx + dy * dy).sqrt();
     if distance >= audio_radius {
         None
     } else {
@@ -273,21 +282,21 @@ mod tests {
 
     #[test]
     fn distance_factor_at_entity_is_one() {
-        let result = distance_factor(100.0, 100.0, 500.0);
+        let result = distance_factor(100.0, 0.0, 100.0, 0.0, 500.0);
         assert_eq!(result, Some(1.0));
     }
 
     #[test]
     fn distance_factor_at_radius_is_zero() {
         // Exactly at the radius edge => distance == radius => None
-        let result = distance_factor(600.0, 100.0, 500.0);
+        let result = distance_factor(600.0, 0.0, 100.0, 0.0, 500.0);
         assert_eq!(result, None);
     }
 
     #[test]
     fn distance_factor_halfway() {
         // distance = 250, radius = 500 => 1 - 250/500 = 0.5
-        let result = distance_factor(350.0, 100.0, 500.0);
+        let result = distance_factor(350.0, 0.0, 100.0, 0.0, 500.0);
         assert!(result.is_some());
         let v = result.unwrap();
         assert!((v - 0.5).abs() < 1e-10);
@@ -295,18 +304,27 @@ mod tests {
 
     #[test]
     fn distance_factor_beyond_radius_is_none() {
-        let result = distance_factor(700.0, 100.0, 500.0);
+        let result = distance_factor(700.0, 0.0, 100.0, 0.0, 500.0);
         assert_eq!(result, None);
     }
 
     #[test]
     fn distance_factor_negative_direction() {
         // player to the left of entity — distance is still absolute
-        let result = distance_factor(-150.0, 100.0, 500.0);
+        let result = distance_factor(-150.0, 0.0, 100.0, 0.0, 500.0);
         // distance = 250, same as halfway test
         assert!(result.is_some());
         let v = result.unwrap();
         assert!((v - 0.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn distance_factor_2d_uses_euclidean() {
+        // dx=300, dy=400 => distance=500, radius=500 => exactly at edge => None
+        assert_eq!(distance_factor(300.0, 400.0, 0.0, 0.0, 500.0), None);
+        // dx=200, dy=150 => distance=250, radius=500 => factor=0.5
+        let f = distance_factor(200.0, 150.0, 0.0, 0.0, 500.0).unwrap();
+        assert!((f - 0.5).abs() < 1e-10);
     }
 
     #[test]
@@ -341,7 +359,7 @@ mod tests {
 
     #[test]
     fn distance_factor_zero_radius_returns_none() {
-        assert_eq!(distance_factor(100.0, 100.0, 0.0), None);
+        assert_eq!(distance_factor(100.0, 0.0, 100.0, 0.0, 0.0), None);
     }
 
     #[test]
