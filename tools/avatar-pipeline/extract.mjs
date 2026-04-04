@@ -201,12 +201,16 @@ async function trimWithMetadata(inputPath, outputPath, containerPos, useContaine
     ssY = extractY;
   }
 
+  // Clamp to sourceSize bounds so trim metadata stays valid for PixiJS
+  const clampedX = Math.max(0, Math.min(ssX, BODY_FRAME_W - contentMeta.width));
+  const clampedY = Math.max(0, Math.min(ssY, BODY_FRAME_H - contentMeta.height));
+
   return {
     width: contentMeta.width,
     height: contentMeta.height,
     spriteSourceSize: {
-      x: Math.max(0, ssX),
-      y: Math.max(0, ssY),
+      x: clampedX,
+      y: clampedY,
       w: contentMeta.width,
       h: contentMeta.height,
     },
