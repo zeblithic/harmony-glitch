@@ -77,6 +77,7 @@ export class JukeboxController {
 
       const entry = this.catalog.tracks[trackId];
       if (!entry) {
+        this.active.delete(entityId);
         console.warn(`[JukeboxController] Unknown track: ${trackId}`);
         return;
       }
