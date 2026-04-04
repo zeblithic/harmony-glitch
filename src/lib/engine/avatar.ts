@@ -32,6 +32,8 @@ const LAYER_ORDER: { slot: string; category: string; part?: string }[] = [
   { slot: 'dress', category: 'dress', part: 'dressSleeveUpperOffside' },
   { slot: 'dress', category: 'dress', part: 'dressSleeveLowerOffside' },
   { slot: 'dress', category: 'dress', part: 'dressOffside' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveUpperOffside' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveLowerOffside' },
   { slot: 'coat', category: 'coat', part: 'coatOffside' },
   // Main torso layers
   { slot: 'pants', category: 'pants', part: 'pantsTop' },
@@ -54,6 +56,8 @@ const LAYER_ORDER: { slot: string; category: string; part?: string }[] = [
   { slot: 'shirt', category: 'shirt', part: 'sleeveLowerClose' },
   { slot: 'dress', category: 'dress', part: 'dressSleeveUpperClose' },
   { slot: 'dress', category: 'dress', part: 'dressSleeveLowerClose' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveUpperClose' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveLowerClose' },
   { slot: 'shoes', category: 'shoes', part: 'shoeUpperClose' },
   { slot: 'shoes', category: 'shoes', part: 'shoeToeClose' },
   { slot: 'shoes', category: 'shoes', part: 'shoeClose' },
