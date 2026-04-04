@@ -10,8 +10,10 @@
   import VolumeSettings from './lib/components/VolumeSettings.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
   import JukeboxPanel from './lib/components/JukeboxPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo } from './lib/types';
+  import ShopPanel from './lib/components/ShopPanel.svelte';
+  import CurrantHud from './lib/components/CurrantHud.svelte';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState } from './lib/types';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
   import { LocalMusicSource, type TrackCatalog } from './lib/engine/music';
@@ -37,6 +39,9 @@
   let jukeboxOpen = $state(false);
   let jukeboxInfo = $state<JukeboxInfo | null>(null);
   let jukeboxCloseFrames = 0; // frames since jukebox lost interaction prompt
+  let shopOpen = $state(false);
+  let storeState = $state<StoreState | null>(null);
+  let shopCloseFrames = 0;
   let musicCatalog = $state<TrackCatalog>({ tracks: {} });
 
   onMount(async () => {
@@ -139,7 +144,7 @@
     currentStreet = street;
   }
 
-  function handleFrame(frame: RenderFrame) {
+  async function handleFrame(frame: RenderFrame) {
     latestFrame = frame;
 
     // When a transition appears, pre-load the target street immediately.
@@ -201,9 +206,30 @@
               jukeboxCloseFrames = 0;
               inventoryOpen = false;
               volumeOpen = false;
+              shopOpen = false;
+              storeState = null;
             }).catch(e => console.error('Failed to get jukebox state:', e));
           }
         }
+      }
+    }
+
+    // Detect vendor interaction via audio events
+    const vendorInteract = frame.audioEvents?.find(
+      (e) => e.type === 'entityInteract' && e.entityType === 'vendor'
+    );
+    if (vendorInteract && frame.interactionPrompt?.entityId) {
+      const eid = frame.interactionPrompt.entityId;
+      try {
+        storeState = await getStoreState(eid);
+        shopOpen = true;
+        inventoryOpen = false;
+        volumeOpen = false;
+        jukeboxOpen = false;
+        jukeboxInfo = null;
+        shopCloseFrames = 0;
+      } catch (e) {
+        console.error('Failed to get store state:', e);
       }
     }
 
@@ -235,6 +261,20 @@
           jukeboxOpen = false;
           jukeboxInfo = null;
           jukeboxCloseFrames = 0;
+        }
+      }
+    }
+
+    // Close shop panel when the player walks out of interact_radius.
+    // Same 2-frame debounce as jukebox to ride through one-frame null gaps.
+    if (shopOpen && storeState) {
+      if (frame.interactionPrompt?.entityId === storeState.entityId) {
+        shopCloseFrames = 0;
+      } else {
+        shopCloseFrames++;
+        if (shopCloseFrames >= 2) {
+          shopOpen = false;
+          storeState = null;
         }
       }
     }
@@ -288,12 +328,12 @@
 
 <svelte:window onkeydown={(e) => {
   if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
-  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen) {
+  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
-    if (inventoryOpen) volumeOpen = false;
+    if (inventoryOpen) { volumeOpen = false; shopOpen = false; storeState = null; }
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen) {
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
     if (volumeOpen) inventoryOpen = false;
@@ -315,7 +355,7 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || inventoryOpen || shopOpen} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
@@ -342,6 +382,30 @@
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
     />
+    <ShopPanel
+      {storeState}
+      visible={shopOpen}
+      onClose={() => { shopOpen = false; storeState = null; }}
+      onBuy={async (itemId, count) => {
+        if (!storeState) return;
+        try {
+          await vendorBuy(storeState.entityId, itemId, count);
+          storeState = await getStoreState(storeState.entityId);
+        } catch (e) {
+          console.error('Buy failed:', e);
+        }
+      }}
+      onSell={async (itemId, count) => {
+        if (!storeState) return;
+        try {
+          await vendorSell(storeState.entityId, itemId, count);
+          storeState = await getStoreState(storeState.entityId);
+        } catch (e) {
+          console.error('Sell failed:', e);
+        }
+      }}
+    />
+    <CurrantHud currants={latestFrame?.currants ?? 0} />
     <div role="status" aria-live="polite" class="sr-only">
       {#if transitionPending && transitionTarget}Travelling to {transitionTarget}…{/if}
     </div>
@@ -358,6 +422,8 @@
         jukeboxOpen = false;
         jukeboxInfo = null;
         jukeboxCloseFrames = 0;
+        shopOpen = false;
+        storeState = null;
       }
     }}>
       Back
