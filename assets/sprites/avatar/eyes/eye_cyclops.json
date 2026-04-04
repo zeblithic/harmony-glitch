@@ -1,0 +1,603 @@
+{
+  "frames": {
+    "idle_00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 304,
+        "y": 322,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "idle_01": {
+      "frame": {
+        "x": 180,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 321,
+        "y": 329,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "idle_02": {
+      "frame": {
+        "x": 360,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "idle_03": {
+      "frame": {
+        "x": 540,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "idle_04": {
+      "frame": {
+        "x": 720,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "idle_05": {
+      "frame": {
+        "x": 900,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 331,
+        "y": 334,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "idle_06": {
+      "frame": {
+        "x": 1080,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 330,
+        "y": 333,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "idle_07": {
+      "frame": {
+        "x": 1260,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 306,
+        "y": 323,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_00": {
+      "frame": {
+        "x": 1440,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 304,
+        "y": 322,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_01": {
+      "frame": {
+        "x": 1620,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 300,
+        "y": 314,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_02": {
+      "frame": {
+        "x": 1800,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 296,
+        "y": 306,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_03": {
+      "frame": {
+        "x": 1980,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 299,
+        "y": 313,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_04": {
+      "frame": {
+        "x": 2160,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 304,
+        "y": 322,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_05": {
+      "frame": {
+        "x": 2340,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 298,
+        "y": 314,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_06": {
+      "frame": {
+        "x": 2520,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 293,
+        "y": 306,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "walking_07": {
+      "frame": {
+        "x": 2700,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 298,
+        "y": 313,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "jumping_00": {
+      "frame": {
+        "x": 2880,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 358,
+        "y": 302,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "jumping_01": {
+      "frame": {
+        "x": 3060,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 357,
+        "y": 301,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "jumping_02": {
+      "frame": {
+        "x": 3240,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 356,
+        "y": 300,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "jumping_03": {
+      "frame": {
+        "x": 3420,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 356,
+        "y": 300,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "jumping_04": {
+      "frame": {
+        "x": 3600,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 355,
+        "y": 299,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "jumping_05": {
+      "frame": {
+        "x": 3780,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 355,
+        "y": 298,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "jumping_06": {
+      "frame": {
+        "x": 3960,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 355,
+        "y": 298,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "falling_00": {
+      "frame": {
+        "x": 4140,
+        "y": 0,
+        "w": 191,
+        "h": 52
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 353,
+        "y": 298,
+        "w": 191,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "falling_01": {
+      "frame": {
+        "x": 4331,
+        "y": 0,
+        "w": 177,
+        "h": 65
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 350,
+        "y": 298,
+        "w": 177,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "falling_02": {
+      "frame": {
+        "x": 4508,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 337,
+        "y": 298,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "falling_03": {
+      "frame": {
+        "x": 4688,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 315,
+        "y": 296,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "falling_04": {
+      "frame": {
+        "x": 4868,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 291,
+        "y": 295,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    },
+    "falling_05": {
+      "frame": {
+        "x": 5048,
+        "y": 0,
+        "w": 180,
+        "h": 73
+      },
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 275,
+        "y": 294,
+        "w": 180,
+        "h": 73
+      },
+      "sourceSize": {
+        "w": 544,
+        "h": 1013
+      }
+    }
+  },
+  "animations": {
+    "idle": [
+      "idle_00",
+      "idle_01",
+      "idle_02",
+      "idle_03",
+      "idle_04",
+      "idle_05",
+      "idle_06",
+      "idle_07"
+    ],
+    "walking": [
+      "walking_00",
+      "walking_01",
+      "walking_02",
+      "walking_03",
+      "walking_04",
+      "walking_05",
+      "walking_06",
+      "walking_07"
+    ],
+    "jumping": [
+      "jumping_00",
+      "jumping_01",
+      "jumping_02",
+      "jumping_03",
+      "jumping_04",
+      "jumping_05",
+      "jumping_06"
+    ],
+    "falling": [
+      "falling_00",
+      "falling_01",
+      "falling_02",
+      "falling_03",
+      "falling_04",
+      "falling_05"
+    ]
+  },
+  "meta": {
+    "image": "eye_cyclops.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 5228,
+      "h": 73
+    },
+    "scale": 1
+  }
+}

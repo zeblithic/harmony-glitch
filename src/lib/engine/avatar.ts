@@ -1,6 +1,6 @@
 import { Assets, AnimatedSprite, Container, Graphics } from 'pixi.js';
-import type { Spritesheet, Texture } from 'pixi.js';
-import type { AnimationState, AvatarAppearance, Direction } from '../types';
+import type { Spritesheet } from 'pixi.js';
+import type { AnimationState, AvatarAppearance, AvatarManifest, Direction } from '../types';
 
 const ANIMATION_SPEEDS: Record<AnimationState, number> = {
   idle: 0.08,
@@ -11,22 +11,68 @@ const ANIMATION_SPEEDS: Record<AnimationState, number> = {
 
 /**
  * Z-order for avatar layers (back to front).
- * Each entry maps a slot name to the category path used for asset loading.
+ * Wardrobe slots have sub-part entries for multi-part rendering — offside
+ * limbs behind the body, close limbs in front. Entries with a `part` field
+ * use the sprite sheet at `{category}/{itemId}.{part}.json`. Entries without
+ * `part` use `{category}/{itemId}.json` (vanity items, single-sprite fallback).
  */
-const LAYER_ORDER: { slot: string; category: string }[] = [
+const LAYER_ORDER: { slot: string; category: string; part?: string }[] = [
   { slot: 'body', category: 'base' },
+  // Offside layers (behind body)
+  { slot: 'shoes', category: 'shoes', part: 'bootFootOffside' },
+  { slot: 'shoes', category: 'shoes', part: 'bootUpperOffside' },
+  { slot: 'shoes', category: 'shoes', part: 'shoeUpperOffside' },
+  { slot: 'shoes', category: 'shoes', part: 'shoeToeOffside' },
+  { slot: 'shoes', category: 'shoes', part: 'shoeOffside' },
+  { slot: 'pants', category: 'pants', part: 'pantsFootOffside' },
+  { slot: 'pants', category: 'pants', part: 'pantsLegLowerOffside' },
+  { slot: 'pants', category: 'pants', part: 'pantsLegUpperOffside' },
+  { slot: 'shirt', category: 'shirt', part: 'sleeveUpperOffside' },
+  { slot: 'shirt', category: 'shirt', part: 'sleeveLowerOffside' },
+  { slot: 'dress', category: 'dress', part: 'dressSleeveUpperOffside' },
+  { slot: 'dress', category: 'dress', part: 'dressSleeveLowerOffside' },
+  { slot: 'dress', category: 'dress', part: 'dressOffside' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveUpperOffside' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveLowerOffside' },
+  { slot: 'coat', category: 'coat', part: 'coatOffside' },
+  // Main torso layers
+  { slot: 'pants', category: 'pants', part: 'pantsTop' },
+  { slot: 'shirt', category: 'shirt', part: 'shirtTorso' },
+  { slot: 'dress', category: 'dress', part: 'dress' },
+  { slot: 'skirt', category: 'skirt', part: 'skirt' },
+  { slot: 'coat', category: 'coat', part: 'coatClose' },
+  // Single-sprite fallback for items without parts (loads {itemId}.json)
   { slot: 'shoes', category: 'shoes' },
   { slot: 'pants', category: 'pants' },
   { slot: 'shirt', category: 'shirt' },
   { slot: 'dress', category: 'dress' },
   { slot: 'skirt', category: 'skirt' },
   { slot: 'coat', category: 'coat' },
+  // Close layers (in front of body)
+  { slot: 'pants', category: 'pants', part: 'pantsLegUpperClose' },
+  { slot: 'pants', category: 'pants', part: 'pantsLegLowerClose' },
+  { slot: 'pants', category: 'pants', part: 'pantsFootClose' },
+  { slot: 'shirt', category: 'shirt', part: 'sleeveUpperClose' },
+  { slot: 'shirt', category: 'shirt', part: 'sleeveLowerClose' },
+  { slot: 'dress', category: 'dress', part: 'dressSleeveUpperClose' },
+  { slot: 'dress', category: 'dress', part: 'dressSleeveLowerClose' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveUpperClose' },
+  { slot: 'coat', category: 'coat', part: 'coatSleeveLowerClose' },
+  { slot: 'shoes', category: 'shoes', part: 'shoeUpperClose' },
+  { slot: 'shoes', category: 'shoes', part: 'shoeToeClose' },
+  { slot: 'shoes', category: 'shoes', part: 'shoeClose' },
+  { slot: 'shoes', category: 'shoes', part: 'bootUpperClose' },
+  { slot: 'shoes', category: 'shoes', part: 'bootFootClose' },
+  // Face and head
   { slot: 'eyes', category: 'eyes' },
   { slot: 'nose', category: 'nose' },
   { slot: 'mouth', category: 'mouth' },
   { slot: 'ears', category: 'ears' },
   { slot: 'hair', category: 'hair' },
+  { slot: 'hat', category: 'hat', part: 'sideHat' },
+  { slot: 'hat', category: 'hat', part: 'sideHeaddressClose' },
   { slot: 'hat', category: 'hat' },
+  { slot: 'bracelet', category: 'bracelet', part: 'braceletClose' },
   { slot: 'bracelet', category: 'bracelet' },
 ];
 
@@ -49,11 +95,9 @@ const DISPLAY_SCALE = 90 / 1013;
  * Loads per-slot sprite sheets, composites them into a Container with correct
  * z-order, applies color tinting, and synchronizes animation across all layers.
  *
- * NOTE: Currently only the body layer renders correctly. Equipment and vanity
- * layers require extraction pipeline changes to produce sprite sheets in a
- * shared coordinate space (consistent stage size + trim data). The layer
- * infrastructure is fully wired — once the pipeline is fixed, layers will
- * composite automatically.
+ * Wardrobe items may have multiple sub-parts (e.g., shoes → shoeClose +
+ * shoeOffside). The manifest's `parts` array determines which sub-sprite
+ * sheets to load. Items without `parts` load a single sprite sheet.
  */
 export class AvatarCompositor {
   private container: Container;
@@ -61,6 +105,7 @@ export class AvatarCompositor {
   private sheets: Map<string, Spritesheet> = new Map();
   private appearance: AvatarAppearance | null = null;
   private currentAnimation: AnimationState | null = null;
+  private manifest: AvatarManifest | null = null;
 
   constructor() {
     this.container = new Container();
@@ -79,6 +124,14 @@ export class AvatarCompositor {
     const prev = this.appearance;
     this.appearance = appearance;
 
+    // Load manifest on first use
+    if (!this.manifest) {
+      try {
+        const resp = await fetch('/assets/sprites/avatar/manifest.json');
+        if (resp.ok) this.manifest = await resp.json();
+      } catch { /* manifest unavailable */ }
+    }
+
     // Build slot→itemId maps for diffing
     const newSlots = this.buildSlotMap(appearance);
     const oldSlots = prev ? this.buildSlotMap(prev) : new Map<string, string>();
@@ -90,7 +143,6 @@ export class AvatarCompositor {
         changed.push(slot);
       }
     }
-    // Check for removed slots
     for (const [slot] of oldSlots) {
       if (!newSlots.has(slot)) {
         changed.push(slot);
@@ -101,55 +153,40 @@ export class AvatarCompositor {
 
     // Load/unload changed slots
     await Promise.all(changed.map(async (slot) => {
-      // Remove old layer
-      const oldSprite = this.layers.get(slot);
-      if (oldSprite) {
-        oldSprite.stop();
-        oldSprite.destroy();
-        this.layers.delete(slot);
-      }
-      const oldSheet = this.sheets.get(slot);
-      if (oldSheet) {
-        this.sheets.delete(slot);
-      }
+      // Remove old layers for this slot (including sub-parts)
+      this.removeSlotLayers(slot);
 
-      // Load new layer
       const newId = newSlots.get(slot);
       if (!newId) return;
 
-      const entry = LAYER_ORDER.find(l => l.slot === slot);
-      if (!entry) return;
+      // Determine which sprite sheets to load for this slot
+      const sheetPaths = this.resolveSheetPaths(slot, newId);
 
-      const sheetPath = slot === 'body'
-        ? `sprites/avatar/${entry.category}/body.json`
-        : `sprites/avatar/${entry.category}/${newId}.json`;
+      for (const { key, path: sheetPath } of sheetPaths) {
+        try {
+          const sheet: Spritesheet = await Assets.load(sheetPath);
+          this.sheets.set(key, sheet);
 
-      try {
-        const sheet: Spritesheet = await Assets.load(sheetPath);
-        this.sheets.set(slot, sheet);
+          const anim = this.currentAnimation ?? 'idle';
+          const textures = sheet.animations[anim];
+          if (!textures || textures.length === 0) continue;
 
-        const anim = this.currentAnimation ?? 'idle';
-        const textures = sheet.animations[anim];
-        if (!textures || textures.length === 0) return;
+          const sprite = new AnimatedSprite({
+            textures,
+            animationSpeed: ANIMATION_SPEEDS[anim],
+            loop: true,
+          });
+          sprite.anchor.set(0.5, 1);
+          sprite.play();
 
-        const sprite = new AnimatedSprite({
-          textures,
-          animationSpeed: ANIMATION_SPEEDS[anim],
-          loop: true,
-        });
-        sprite.anchor.set(0.5, 1);
-        sprite.play();
-
-        this.layers.set(slot, sprite);
-      } catch {
-        // Sheet not found — skip this layer
+          this.layers.set(key, sprite);
+        } catch {
+          // Sheet not found — skip this layer
+        }
       }
     }));
 
-    // Apply tints
     this.applyTints(appearance);
-
-    // Rebuild container children in z-order
     this.rebuildChildren();
   }
 
@@ -162,8 +199,8 @@ export class AvatarCompositor {
     if (animation === this.currentAnimation) return;
     this.currentAnimation = animation;
 
-    for (const [slot, sprite] of this.layers) {
-      const sheet = this.sheets.get(slot);
+    for (const [key, sprite] of this.layers) {
+      const sheet = this.sheets.get(key);
       if (!sheet) continue;
 
       const textures = sheet.animations[animation];
@@ -188,20 +225,15 @@ export class AvatarCompositor {
 
   /**
    * Build a map of slot→itemId from an appearance.
-   * Body is always present. Vanity slots are always present.
-   * Wardrobe slots are optional (may be null).
    */
   private buildSlotMap(appearance: AvatarAppearance): Map<string, string> {
     const slots = new Map<string, string>();
-    // Body is always present
     slots.set('body', 'body');
-    // Vanity — always present
     slots.set('eyes', appearance.eyes);
     slots.set('ears', appearance.ears);
     slots.set('nose', appearance.nose);
     slots.set('mouth', appearance.mouth);
     slots.set('hair', appearance.hair);
-    // Wardrobe — optional
     if (appearance.hat) slots.set('hat', appearance.hat);
     if (appearance.coat) slots.set('coat', appearance.coat);
     if (appearance.shirt) slots.set('shirt', appearance.shirt);
@@ -213,13 +245,65 @@ export class AvatarCompositor {
     return slots;
   }
 
+  /**
+   * Resolve which sprite sheet(s) to load for a slot.
+   * Multi-part items (with manifest `parts`) load one sheet per part.
+   * Single-part items load one sheet.
+   */
+  private resolveSheetPaths(slot: string, itemId: string): { key: string; path: string }[] {
+    if (slot === 'body') {
+      return [{ key: 'body', path: 'sprites/avatar/base/body.json' }];
+    }
+
+    const category = LAYER_ORDER.find(l => l.slot === slot)?.category ?? slot;
+
+    // Check manifest for parts
+    const manifestItem = this.manifest?.categories[category]?.items?.find(
+      (i: { id: string }) => i.id === itemId,
+    );
+    const parts = manifestItem?.parts;
+
+    if (parts && parts.length > 0) {
+      // Multi-part: one sheet per sub-sprite
+      return parts.map((part: string) => ({
+        key: `${slot}.${part}`,
+        path: `sprites/avatar/${category}/${itemId}.${part}.json`,
+      }));
+    }
+
+    // Single-part (vanity items, or wardrobe fallback)
+    return [{ key: slot, path: `sprites/avatar/${category}/${itemId}.json` }];
+  }
+
+  /**
+   * Remove all layers and sheets for a slot (including sub-parts).
+   */
+  private removeSlotLayers(slot: string): void {
+    const keysToRemove: string[] = [];
+    for (const key of this.layers.keys()) {
+      if (key === slot || key.startsWith(`${slot}.`)) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      const sprite = this.layers.get(key);
+      if (sprite) {
+        sprite.stop();
+        sprite.destroy();
+        this.layers.delete(key);
+      }
+      this.sheets.delete(key);
+    }
+  }
+
   private applyTints(appearance: AvatarAppearance): void {
     const skinTint = parseInt(appearance.skinColor, 16);
     const hairTint = parseInt(appearance.hairColor, 16);
     const resolvedSkin = Number.isNaN(skinTint) ? 0xffffff : skinTint;
     const resolvedHair = Number.isNaN(hairTint) ? 0xffffff : hairTint;
 
-    for (const [slot, sprite] of this.layers) {
+    for (const [key, sprite] of this.layers) {
+      const slot = key.split('.')[0];
       if (SKIN_TINT_SLOTS.has(slot)) {
         sprite.tint = resolvedSkin;
       } else if (HAIR_TINT_SLOTS.has(slot)) {
@@ -230,30 +314,30 @@ export class AvatarCompositor {
 
   /**
    * Clear and re-add children in LAYER_ORDER z-order.
-   * Also adds a fallback rectangle if no layers loaded.
+   * For each LAYER_ORDER entry, the layer key is either `slot.part` (multi-part)
+   * or `slot` (single-part). Only one of these will have a loaded layer — the
+   * multi-part entries are skipped for single-part items and vice versa.
    */
   private rebuildChildren(): void {
     this.container.removeChildren();
 
     let hasLayers = false;
-    for (const { slot } of LAYER_ORDER) {
-      const sprite = this.layers.get(slot);
+    for (const { slot, part } of LAYER_ORDER) {
+      const key = part ? `${slot}.${part}` : slot;
+      const sprite = this.layers.get(key);
       if (sprite) {
         this.container.addChild(sprite);
         hasLayers = true;
       }
     }
 
-    // Fallback: blue rectangle if nothing loaded
     if (!hasLayers) {
       const g = new Graphics();
       g.rect(-15, -60, 30, 60);
       g.fill(0x5865f2);
       this.container.addChild(g);
-      // Reset scale for fallback (it's already in world units)
       this.container.scale.set(1);
     } else {
-      // Restore compositor scale in case a previous fallback set it to 1
       this.container.scale.set(DISPLAY_SCALE);
     }
   }

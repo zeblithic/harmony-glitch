@@ -31,29 +31,149 @@
           "x": 28.15,
           "y": 31.5
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 95.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 28.45,
+          "y": 68.0
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 32.4,
+          "y": 77.55
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 37.65,
+          "y": 66.65
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 29.9,
+          "y": 76.25
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 28.25,
           "y": 96.25
         },
-        "dress": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegLowerClose": {
+          "x": 22.9,
+          "y": 105.25
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegUpperOffside": {
+          "x": 37.4,
+          "y": 92.6
         },
-        "coat": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegLowerOffside": {
+          "x": 41.2,
+          "y": 104.65
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 20.65,
           "y": 108.75
+        },
+        "pants.pantsFootOffside": {
+          "x": 42.85,
+          "y": 108.6
+        },
+        "shoes.shoeClose": {
+          "x": 20.65,
+          "y": 108.75
+        },
+        "shoes.shoeOffside": {
+          "x": 42.85,
+          "y": 108.6
+        },
+        "shoes.shoeUpperClose": {
+          "x": 20.25,
+          "y": 109.15
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 43.5,
+          "y": 109.45
+        },
+        "shoes.shoeToeClose": {
+          "x": 20.65,
+          "y": 108.75
+        },
+        "shoes.shoeToeOffside": {
+          "x": 42.85,
+          "y": 108.6
+        },
+        "shoes.bootFootClose": {
+          "x": 20.65,
+          "y": 108.75
+        },
+        "shoes.bootFootOffside": {
+          "x": 42.85,
+          "y": 108.6
+        },
+        "shoes.bootUpperClose": {
+          "x": 20.25,
+          "y": 109.15
+        },
+        "shoes.bootUpperOffside": {
+          "x": 43.5,
+          "y": 109.45
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 28.45,
+          "y": 68.0
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 32.4,
+          "y": 77.55
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 37.65,
+          "y": 66.65
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 29.9,
+          "y": 76.25
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.gloveClose": {
+          "x": 38.25,
+          "y": 86.9
+        },
+        "coat.gloveOffside": {
+          "x": 24.65,
+          "y": 84.4
+        },
+        "bracelet.braceletClose": {
+          "x": 38.25,
+          "y": 86.9
         }
       },
       {
@@ -82,29 +202,149 @@
           "x": 27.65,
           "y": 30.55
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 94.95
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 28.3,
+          "y": 67.45
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 31.05,
+          "y": 77.3
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 37.3,
+          "y": 66.1
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 30.95,
+          "y": 76.4
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "pants.pantsLegUpperClose": {
           "x": 28.75,
           "y": 95.65
         },
-        "dress": {
-          "x": 32.6,
-          "y": 94.95
+        "pants.pantsLegLowerClose": {
+          "x": 24.05,
+          "y": 104.7
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 94.95
+        "pants.pantsLegUpperOffside": {
+          "x": 37.05,
+          "y": 92.15
         },
-        "coat": {
-          "x": 32.6,
-          "y": 94.95
+        "pants.pantsLegLowerOffside": {
+          "x": 39.6,
+          "y": 104.25
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 21.6,
           "y": 108.05
+        },
+        "pants.pantsFootOffside": {
+          "x": 41.35,
+          "y": 108.95
+        },
+        "shoes.shoeClose": {
+          "x": 21.6,
+          "y": 108.05
+        },
+        "shoes.shoeOffside": {
+          "x": 41.35,
+          "y": 108.95
+        },
+        "shoes.shoeUpperClose": {
+          "x": 21.1,
+          "y": 108.55
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 41.4,
+          "y": 109.15
+        },
+        "shoes.shoeToeClose": {
+          "x": 21.6,
+          "y": 108.05
+        },
+        "shoes.shoeToeOffside": {
+          "x": 41.35,
+          "y": 108.95
+        },
+        "shoes.bootFootClose": {
+          "x": 21.6,
+          "y": 108.05
+        },
+        "shoes.bootFootOffside": {
+          "x": 41.35,
+          "y": 108.95
+        },
+        "shoes.bootUpperClose": {
+          "x": 21.1,
+          "y": 108.55
+        },
+        "shoes.bootUpperOffside": {
+          "x": 41.4,
+          "y": 109.15
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 28.3,
+          "y": 67.45
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 31.05,
+          "y": 77.3
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 37.3,
+          "y": 66.1
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 30.95,
+          "y": 76.4
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.gloveClose": {
+          "x": 37.25,
+          "y": 86.5
+        },
+        "coat.gloveOffside": {
+          "x": 26.65,
+          "y": 84.85
+        },
+        "bracelet.braceletClose": {
+          "x": 37.25,
+          "y": 86.5
         }
       },
       {
@@ -133,29 +373,149 @@
           "x": 27.15,
           "y": 29.45
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 93.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 27.6,
+          "y": 65.7
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 27.05,
+          "y": 76.8
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 36.3,
+          "y": 64.6
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 34.3,
+          "y": 76.65
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 29.95,
           "y": 93.7
         },
-        "dress": {
-          "x": 32.6,
-          "y": 93.9
+        "pants.pantsLegLowerClose": {
+          "x": 27.0,
+          "y": 103.15
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 93.9
+        "pants.pantsLegUpperOffside": {
+          "x": 35.95,
+          "y": 90.75
         },
-        "coat": {
-          "x": 32.6,
-          "y": 93.9
+        "pants.pantsLegLowerOffside": {
+          "x": 34.55,
+          "y": 102.85
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 24.55,
           "y": 106.0
+        },
+        "pants.pantsFootOffside": {
+          "x": 34.8,
+          "y": 108.1
+        },
+        "shoes.shoeClose": {
+          "x": 24.55,
+          "y": 106.0
+        },
+        "shoes.shoeOffside": {
+          "x": 34.8,
+          "y": 108.1
+        },
+        "shoes.shoeUpperClose": {
+          "x": 23.55,
+          "y": 106.3
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 34.75,
+          "y": 108.05
+        },
+        "shoes.shoeToeClose": {
+          "x": 24.55,
+          "y": 106.0
+        },
+        "shoes.shoeToeOffside": {
+          "x": 34.8,
+          "y": 108.1
+        },
+        "shoes.bootFootClose": {
+          "x": 24.55,
+          "y": 106.0
+        },
+        "shoes.bootFootOffside": {
+          "x": 34.8,
+          "y": 108.1
+        },
+        "shoes.bootUpperClose": {
+          "x": 23.55,
+          "y": 106.3
+        },
+        "shoes.bootUpperOffside": {
+          "x": 34.75,
+          "y": 108.05
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 27.6,
+          "y": 65.7
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 27.05,
+          "y": 76.8
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 36.3,
+          "y": 64.6
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 34.3,
+          "y": 76.65
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.gloveClose": {
+          "x": 34.15,
+          "y": 85.2
+        },
+        "coat.gloveOffside": {
+          "x": 32.7,
+          "y": 86.2
+        },
+        "bracelet.braceletClose": {
+          "x": 34.15,
+          "y": 85.2
         }
       },
       {
@@ -184,29 +544,149 @@
           "x": 27.6,
           "y": 30.4
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 94.85
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 27.9,
+          "y": 66.8
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 24.35,
+          "y": 76.5
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 36.4,
+          "y": 66.25
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 39.05,
+          "y": 78.05
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "pants.pantsLegUpperClose": {
           "x": 32.0,
           "y": 95.6
         },
-        "dress": {
-          "x": 32.6,
-          "y": 94.85
+        "pants.pantsLegLowerClose": {
+          "x": 33.65,
+          "y": 106.6
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 94.85
+        "pants.pantsLegUpperOffside": {
+          "x": 34.35,
+          "y": 91.8
         },
-        "coat": {
-          "x": 32.6,
-          "y": 94.85
+        "pants.pantsLegLowerOffside": {
+          "x": 28.95,
+          "y": 102.05
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 33.75,
           "y": 111.65
+        },
+        "pants.pantsFootOffside": {
+          "x": 27.45,
+          "y": 106.85
+        },
+        "shoes.shoeClose": {
+          "x": 33.75,
+          "y": 111.65
+        },
+        "shoes.shoeOffside": {
+          "x": 27.45,
+          "y": 106.85
+        },
+        "shoes.shoeUpperClose": {
+          "x": 33.75,
+          "y": 111.55
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 27.25,
+          "y": 106.85
+        },
+        "shoes.shoeToeClose": {
+          "x": 33.75,
+          "y": 111.65
+        },
+        "shoes.shoeToeOffside": {
+          "x": 27.45,
+          "y": 106.85
+        },
+        "shoes.bootFootClose": {
+          "x": 33.75,
+          "y": 111.65
+        },
+        "shoes.bootFootOffside": {
+          "x": 27.45,
+          "y": 106.85
+        },
+        "shoes.bootUpperClose": {
+          "x": 33.75,
+          "y": 111.55
+        },
+        "shoes.bootUpperOffside": {
+          "x": 27.25,
+          "y": 106.85
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 27.9,
+          "y": 66.8
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 24.35,
+          "y": 76.5
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 36.4,
+          "y": 66.25
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 39.05,
+          "y": 78.05
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 94.85
+        },
+        "coat.gloveClose": {
+          "x": 23.75,
+          "y": 86.5
+        },
+        "coat.gloveOffside": {
+          "x": 41.85,
+          "y": 86.85
+        },
+        "bracelet.braceletClose": {
+          "x": 23.75,
+          "y": 86.5
         }
       },
       {
@@ -235,29 +715,149 @@
           "x": 28.15,
           "y": 31.5
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 95.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 28.0,
+          "y": 67.1
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 23.45,
+          "y": 76.35
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 36.5,
+          "y": 66.8
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 40.6,
+          "y": 78.45
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 32.75,
           "y": 96.2
         },
-        "dress": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegLowerClose": {
+          "x": 35.95,
+          "y": 107.8
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegUpperOffside": {
+          "x": 33.75,
+          "y": 92.2
         },
-        "coat": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegLowerOffside": {
+          "x": 26.95,
+          "y": 101.8
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 36.8,
           "y": 113.45
+        },
+        "pants.pantsFootOffside": {
+          "x": 24.8,
+          "y": 106.3
+        },
+        "shoes.shoeClose": {
+          "x": 36.8,
+          "y": 113.45
+        },
+        "shoes.shoeOffside": {
+          "x": 24.8,
+          "y": 106.3
+        },
+        "shoes.shoeUpperClose": {
+          "x": 37.1,
+          "y": 113.3
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 24.6,
+          "y": 106.35
+        },
+        "shoes.shoeToeClose": {
+          "x": 36.8,
+          "y": 113.45
+        },
+        "shoes.shoeToeOffside": {
+          "x": 24.8,
+          "y": 106.3
+        },
+        "shoes.bootFootClose": {
+          "x": 36.8,
+          "y": 113.45
+        },
+        "shoes.bootFootOffside": {
+          "x": 24.8,
+          "y": 106.3
+        },
+        "shoes.bootUpperClose": {
+          "x": 37.1,
+          "y": 113.3
+        },
+        "shoes.bootUpperOffside": {
+          "x": 24.6,
+          "y": 106.35
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 28.0,
+          "y": 67.1
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 23.45,
+          "y": 76.35
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 36.5,
+          "y": 66.8
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 40.6,
+          "y": 78.45
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.gloveClose": {
+          "x": 20.3,
+          "y": 86.95
+        },
+        "coat.gloveOffside": {
+          "x": 44.85,
+          "y": 87.1
+        },
+        "bracelet.braceletClose": {
+          "x": 20.3,
+          "y": 86.95
         }
       },
       {
@@ -286,29 +886,149 @@
           "x": 27.5,
           "y": 30.55
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 94.95
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 27.8,
+          "y": 66.7
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 24.35,
+          "y": 76.2
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 36.35,
+          "y": 66.25
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 39.1,
+          "y": 78.15
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "pants.pantsLegUpperClose": {
           "x": 31.8,
           "y": 95.25
         },
-        "dress": {
-          "x": 32.6,
-          "y": 94.95
+        "pants.pantsLegLowerClose": {
+          "x": 32.9,
+          "y": 107.0
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 94.95
+        "pants.pantsLegUpperOffside": {
+          "x": 34.35,
+          "y": 91.45
         },
-        "coat": {
-          "x": 32.6,
-          "y": 94.95
+        "pants.pantsLegLowerOffside": {
+          "x": 28.2,
+          "y": 101.1
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 32.8,
           "y": 112.8
+        },
+        "pants.pantsFootOffside": {
+          "x": 26.0,
+          "y": 105.45
+        },
+        "shoes.shoeClose": {
+          "x": 32.8,
+          "y": 112.8
+        },
+        "shoes.shoeOffside": {
+          "x": 26.0,
+          "y": 105.45
+        },
+        "shoes.shoeUpperClose": {
+          "x": 32.95,
+          "y": 112.75
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 25.75,
+          "y": 105.45
+        },
+        "shoes.shoeToeClose": {
+          "x": 32.8,
+          "y": 112.8
+        },
+        "shoes.shoeToeOffside": {
+          "x": 26.0,
+          "y": 105.45
+        },
+        "shoes.bootFootClose": {
+          "x": 32.8,
+          "y": 112.8
+        },
+        "shoes.bootFootOffside": {
+          "x": 26.0,
+          "y": 105.45
+        },
+        "shoes.bootUpperClose": {
+          "x": 32.95,
+          "y": 112.75
+        },
+        "shoes.bootUpperOffside": {
+          "x": 25.75,
+          "y": 105.45
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 27.8,
+          "y": 66.7
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 24.35,
+          "y": 76.2
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 36.35,
+          "y": 66.25
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 39.1,
+          "y": 78.15
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 94.95
+        },
+        "coat.gloveClose": {
+          "x": 22.15,
+          "y": 86.95
+        },
+        "coat.gloveOffside": {
+          "x": 43.25,
+          "y": 86.75
+        },
+        "bracelet.braceletClose": {
+          "x": 22.15,
+          "y": 86.95
         }
       },
       {
@@ -337,29 +1057,149 @@
           "x": 26.85,
           "y": 29.45
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 93.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 27.35,
+          "y": 65.55
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 27.2,
+          "y": 75.75
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 36.0,
+          "y": 64.65
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 34.5,
+          "y": 76.95
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 30.85,
           "y": 94.2
         },
-        "dress": {
-          "x": 32.6,
-          "y": 93.9
+        "pants.pantsLegLowerClose": {
+          "x": 29.7,
+          "y": 106.3
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 93.9
+        "pants.pantsLegUpperOffside": {
+          "x": 36.05,
+          "y": 89.2
         },
-        "coat": {
-          "x": 32.6,
-          "y": 93.9
+        "pants.pantsLegLowerOffside": {
+          "x": 32.2,
+          "y": 98.95
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.45,
           "y": 112.3
+        },
+        "pants.pantsFootOffside": {
+          "x": 29.3,
+          "y": 103.1
+        },
+        "shoes.shoeClose": {
+          "x": 28.45,
+          "y": 112.3
+        },
+        "shoes.shoeOffside": {
+          "x": 29.3,
+          "y": 103.1
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.9,
+          "y": 111.95
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 29.0,
+          "y": 102.25
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.45,
+          "y": 112.3
+        },
+        "shoes.shoeToeOffside": {
+          "x": 29.3,
+          "y": 103.1
+        },
+        "shoes.bootFootClose": {
+          "x": 28.45,
+          "y": 112.3
+        },
+        "shoes.bootFootOffside": {
+          "x": 29.3,
+          "y": 103.1
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.9,
+          "y": 111.95
+        },
+        "shoes.bootUpperOffside": {
+          "x": 29.0,
+          "y": 102.25
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 27.35,
+          "y": 65.55
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 27.2,
+          "y": 75.75
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 36.0,
+          "y": 64.65
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 34.5,
+          "y": 76.95
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 93.9
+        },
+        "coat.gloveClose": {
+          "x": 27.7,
+          "y": 86.75
+        },
+        "coat.gloveOffside": {
+          "x": 38.5,
+          "y": 85.7
+        },
+        "bracelet.braceletClose": {
+          "x": 27.7,
+          "y": 86.75
         }
       },
       {
@@ -388,29 +1228,149 @@
           "x": 27.5,
           "y": 30.4
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.55,
           "y": 94.85
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 28.2,
+          "y": 67.45
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 31.05,
+          "y": 77.1
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 37.3,
+          "y": 66.15
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 31.0,
+          "y": 76.4
+        },
+        "pants.pantsTop": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "pants.pantsLegUpperClose": {
           "x": 29.6,
           "y": 95.25
         },
-        "dress": {
-          "x": 32.55,
-          "y": 94.85
+        "pants.pantsLegLowerClose": {
+          "x": 26.3,
+          "y": 105.75
         },
-        "skirt": {
-          "x": 32.55,
-          "y": 94.85
+        "pants.pantsLegUpperOffside": {
+          "x": 37.1,
+          "y": 91.75
         },
-        "coat": {
-          "x": 32.55,
-          "y": 94.85
+        "pants.pantsLegLowerOffside": {
+          "x": 38.95,
+          "y": 103.25
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 24.55,
           "y": 110.5
+        },
+        "pants.pantsFootOffside": {
+          "x": 39.45,
+          "y": 107.25
+        },
+        "shoes.shoeClose": {
+          "x": 24.55,
+          "y": 110.5
+        },
+        "shoes.shoeOffside": {
+          "x": 39.45,
+          "y": 107.25
+        },
+        "shoes.shoeUpperClose": {
+          "x": 24.6,
+          "y": 110.5
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 39.9,
+          "y": 107.6
+        },
+        "shoes.shoeToeClose": {
+          "x": 24.55,
+          "y": 110.5
+        },
+        "shoes.shoeToeOffside": {
+          "x": 39.45,
+          "y": 107.25
+        },
+        "shoes.bootFootClose": {
+          "x": 24.55,
+          "y": 110.5
+        },
+        "shoes.bootFootOffside": {
+          "x": 39.45,
+          "y": 107.25
+        },
+        "shoes.bootUpperClose": {
+          "x": 24.6,
+          "y": 110.5
+        },
+        "shoes.bootUpperOffside": {
+          "x": 39.9,
+          "y": 107.6
+        },
+        "coat.coatClose": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "coat.coatOffside": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "dress.dress": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "dress.dressOffside": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 28.2,
+          "y": 67.45
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 31.05,
+          "y": 77.1
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 37.3,
+          "y": 66.15
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 31.0,
+          "y": 76.4
+        },
+        "skirt.skirt": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "coat.cape": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "coat.necklace": {
+          "x": 32.55,
+          "y": 94.85
+        },
+        "coat.gloveClose": {
+          "x": 35.65,
+          "y": 86.85
+        },
+        "coat.gloveOffside": {
+          "x": 28.15,
+          "y": 84.75
+        },
+        "bracelet.braceletClose": {
+          "x": 35.65,
+          "y": 86.85
         }
       }
     ],
@@ -441,29 +1401,149 @@
           "x": 35.0,
           "y": 28.95
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 39.1,
           "y": 93.35
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.2,
+          "y": 64.35
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 43.7,
+          "y": 68.65
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 42.5,
+          "y": 65.25
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 55.7,
+          "y": 64.9
+        },
+        "pants.pantsTop": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "pants.pantsLegUpperClose": {
           "x": 36.15,
           "y": 93.9
         },
-        "dress": {
-          "x": 39.1,
-          "y": 93.35
+        "pants.pantsLegLowerClose": {
+          "x": 32.4,
+          "y": 104.25
         },
-        "skirt": {
-          "x": 39.1,
-          "y": 93.35
+        "pants.pantsLegUpperOffside": {
+          "x": 42.35,
+          "y": 90.05
         },
-        "coat": {
-          "x": 39.1,
-          "y": 93.35
+        "pants.pantsLegLowerOffside": {
+          "x": 39.15,
+          "y": 101.25
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 30.8,
           "y": 108.9
+        },
+        "pants.pantsFootOffside": {
+          "x": 38.0,
+          "y": 106.5
+        },
+        "shoes.shoeClose": {
+          "x": 30.8,
+          "y": 108.9
+        },
+        "shoes.shoeOffside": {
+          "x": 38.0,
+          "y": 106.5
+        },
+        "shoes.shoeUpperClose": {
+          "x": 30.3,
+          "y": 108.95
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 38.5,
+          "y": 106.2
+        },
+        "shoes.shoeToeClose": {
+          "x": 30.8,
+          "y": 108.9
+        },
+        "shoes.shoeToeOffside": {
+          "x": 38.0,
+          "y": 106.5
+        },
+        "shoes.bootFootClose": {
+          "x": 30.8,
+          "y": 108.9
+        },
+        "shoes.bootFootOffside": {
+          "x": 38.0,
+          "y": 106.5
+        },
+        "shoes.bootUpperClose": {
+          "x": 30.3,
+          "y": 108.95
+        },
+        "shoes.bootUpperOffside": {
+          "x": 38.5,
+          "y": 106.2
+        },
+        "coat.coatClose": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "coat.coatOffside": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "dress.dress": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "dress.dressOffside": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.2,
+          "y": 64.35
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 43.7,
+          "y": 68.65
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 42.5,
+          "y": 65.25
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 55.7,
+          "y": 64.9
+        },
+        "skirt.skirt": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "coat.cape": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "coat.necklace": {
+          "x": 39.1,
+          "y": 93.35
+        },
+        "coat.gloveClose": {
+          "x": 54.15,
+          "y": 64.8
+        },
+        "coat.gloveOffside": {
+          "x": 61.35,
+          "y": 56.95
+        },
+        "bracelet.braceletClose": {
+          "x": 54.15,
+          "y": 64.8
         }
       },
       {
@@ -492,29 +1572,149 @@
           "x": 34.8,
           "y": 28.85
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 39.55,
           "y": 93.2
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.2,
+          "y": 64.35
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 43.45,
+          "y": 64.5
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 43.05,
+          "y": 64.7
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 54.55,
+          "y": 60.8
+        },
+        "pants.pantsTop": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "pants.pantsLegUpperClose": {
           "x": 36.9,
           "y": 93.75
         },
-        "dress": {
-          "x": 39.55,
-          "y": 93.2
+        "pants.pantsLegLowerClose": {
+          "x": 32.35,
+          "y": 103.6
         },
-        "skirt": {
-          "x": 39.55,
-          "y": 93.2
+        "pants.pantsLegUpperOffside": {
+          "x": 42.45,
+          "y": 89.95
         },
-        "coat": {
-          "x": 39.55,
-          "y": 93.2
+        "pants.pantsLegLowerOffside": {
+          "x": 38.85,
+          "y": 100.95
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 29.95,
           "y": 107.55
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.25,
+          "y": 105.95
+        },
+        "shoes.shoeClose": {
+          "x": 29.95,
+          "y": 107.55
+        },
+        "shoes.shoeOffside": {
+          "x": 37.25,
+          "y": 105.95
+        },
+        "shoes.shoeUpperClose": {
+          "x": 29.4,
+          "y": 107.35
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.6,
+          "y": 105.65
+        },
+        "shoes.shoeToeClose": {
+          "x": 29.95,
+          "y": 107.55
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.25,
+          "y": 105.95
+        },
+        "shoes.bootFootClose": {
+          "x": 29.95,
+          "y": 107.55
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.25,
+          "y": 105.95
+        },
+        "shoes.bootUpperClose": {
+          "x": 29.4,
+          "y": 107.35
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.6,
+          "y": 105.65
+        },
+        "coat.coatClose": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "coat.coatOffside": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "dress.dress": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "dress.dressOffside": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.2,
+          "y": 64.35
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 43.45,
+          "y": 64.5
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 43.05,
+          "y": 64.7
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 54.55,
+          "y": 60.8
+        },
+        "skirt.skirt": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "coat.cape": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "coat.necklace": {
+          "x": 39.55,
+          "y": 93.2
+        },
+        "coat.gloveClose": {
+          "x": 51.9,
+          "y": 58.9
+        },
+        "coat.gloveOffside": {
+          "x": 59.35,
+          "y": 52.5
+        },
+        "bracelet.braceletClose": {
+          "x": 51.9,
+          "y": 58.9
         }
       },
       {
@@ -543,29 +1743,149 @@
           "x": 34.75,
           "y": 28.75
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 40.0,
           "y": 93.1
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.25,
+          "y": 64.3
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 43.3,
+          "y": 60.3
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 43.4,
+          "y": 64.3
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 53.35,
+          "y": 56.65
+        },
+        "pants.pantsTop": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "pants.pantsLegUpperClose": {
           "x": 37.45,
           "y": 93.55
         },
-        "dress": {
-          "x": 40.0,
-          "y": 93.1
+        "pants.pantsLegLowerClose": {
+          "x": 32.25,
+          "y": 103.1
         },
-        "skirt": {
-          "x": 40.0,
-          "y": 93.1
+        "pants.pantsLegUpperOffside": {
+          "x": 42.55,
+          "y": 89.9
         },
-        "coat": {
-          "x": 40.0,
-          "y": 93.1
+        "pants.pantsLegLowerOffside": {
+          "x": 38.55,
+          "y": 100.75
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 29.25,
           "y": 106.5
+        },
+        "pants.pantsFootOffside": {
+          "x": 36.6,
+          "y": 105.55
+        },
+        "shoes.shoeClose": {
+          "x": 29.25,
+          "y": 106.5
+        },
+        "shoes.shoeOffside": {
+          "x": 36.6,
+          "y": 105.55
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.7,
+          "y": 106.25
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 36.85,
+          "y": 105.25
+        },
+        "shoes.shoeToeClose": {
+          "x": 29.25,
+          "y": 106.5
+        },
+        "shoes.shoeToeOffside": {
+          "x": 36.6,
+          "y": 105.55
+        },
+        "shoes.bootFootClose": {
+          "x": 29.25,
+          "y": 106.5
+        },
+        "shoes.bootFootOffside": {
+          "x": 36.6,
+          "y": 105.55
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.7,
+          "y": 106.25
+        },
+        "shoes.bootUpperOffside": {
+          "x": 36.85,
+          "y": 105.25
+        },
+        "coat.coatClose": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "coat.coatOffside": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "dress.dress": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "dress.dressOffside": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.25,
+          "y": 64.3
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 43.3,
+          "y": 60.3
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 43.4,
+          "y": 64.3
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 53.35,
+          "y": 56.65
+        },
+        "skirt.skirt": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "coat.cape": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "coat.necklace": {
+          "x": 40.0,
+          "y": 93.1
+        },
+        "coat.gloveClose": {
+          "x": 49.6,
+          "y": 53.0
+        },
+        "coat.gloveOffside": {
+          "x": 57.3,
+          "y": 48.0
+        },
+        "bracelet.braceletClose": {
+          "x": 49.6,
+          "y": 53.0
         }
       },
       {
@@ -594,29 +1914,149 @@
           "x": 34.65,
           "y": 28.75
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 40.35,
           "y": 93.0
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.35,
+          "y": 64.3
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 41.85,
+          "y": 57.3
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 43.9,
+          "y": 64.0
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 51.55,
+          "y": 53.9
+        },
+        "pants.pantsTop": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "pants.pantsLegUpperClose": {
           "x": 38.0,
           "y": 93.35
         },
-        "dress": {
-          "x": 40.35,
-          "y": 93.0
+        "pants.pantsLegLowerClose": {
+          "x": 32.2,
+          "y": 102.75
         },
-        "skirt": {
-          "x": 40.35,
-          "y": 93.0
+        "pants.pantsLegUpperOffside": {
+          "x": 42.65,
+          "y": 89.85
         },
-        "coat": {
-          "x": 40.35,
-          "y": 93.0
+        "pants.pantsLegLowerOffside": {
+          "x": 38.3,
+          "y": 100.5
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.65,
           "y": 105.55
+        },
+        "pants.pantsFootOffside": {
+          "x": 36.0,
+          "y": 105.2
+        },
+        "shoes.shoeClose": {
+          "x": 28.65,
+          "y": 105.55
+        },
+        "shoes.shoeOffside": {
+          "x": 36.0,
+          "y": 105.2
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.15,
+          "y": 105.2
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 36.2,
+          "y": 105.0
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.65,
+          "y": 105.55
+        },
+        "shoes.shoeToeOffside": {
+          "x": 36.0,
+          "y": 105.2
+        },
+        "shoes.bootFootClose": {
+          "x": 28.65,
+          "y": 105.55
+        },
+        "shoes.bootFootOffside": {
+          "x": 36.0,
+          "y": 105.2
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.15,
+          "y": 105.2
+        },
+        "shoes.bootUpperOffside": {
+          "x": 36.2,
+          "y": 105.0
+        },
+        "coat.coatClose": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "coat.coatOffside": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "dress.dress": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "dress.dressOffside": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.35,
+          "y": 64.3
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 41.85,
+          "y": 57.3
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 43.9,
+          "y": 64.0
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 51.55,
+          "y": 53.9
+        },
+        "skirt.skirt": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "coat.cape": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "coat.necklace": {
+          "x": 40.35,
+          "y": 93.0
+        },
+        "coat.gloveClose": {
+          "x": 46.5,
+          "y": 48.55
+        },
+        "coat.gloveOffside": {
+          "x": 54.65,
+          "y": 45.0
+        },
+        "bracelet.braceletClose": {
+          "x": 46.5,
+          "y": 48.55
         }
       },
       {
@@ -645,29 +2085,149 @@
           "x": 34.55,
           "y": 28.6
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 40.6,
           "y": 92.95
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.25,
+          "y": 64.3
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 39.85,
+          "y": 55.95
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 44.05,
+          "y": 63.7
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 49.6,
+          "y": 52.85
+        },
+        "pants.pantsTop": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "pants.pantsLegUpperClose": {
           "x": 38.3,
           "y": 93.3
         },
-        "dress": {
-          "x": 40.6,
-          "y": 92.95
+        "pants.pantsLegLowerClose": {
+          "x": 32.2,
+          "y": 102.4
         },
-        "skirt": {
-          "x": 40.6,
-          "y": 92.95
+        "pants.pantsLegUpperOffside": {
+          "x": 42.7,
+          "y": 89.75
         },
-        "coat": {
-          "x": 40.6,
-          "y": 92.95
+        "pants.pantsLegLowerOffside": {
+          "x": 38.2,
+          "y": 100.4
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.25,
           "y": 104.95
+        },
+        "pants.pantsFootOffside": {
+          "x": 35.65,
+          "y": 104.9
+        },
+        "shoes.shoeClose": {
+          "x": 28.25,
+          "y": 104.95
+        },
+        "shoes.shoeOffside": {
+          "x": 35.65,
+          "y": 104.9
+        },
+        "shoes.shoeUpperClose": {
+          "x": 27.8,
+          "y": 104.45
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 35.7,
+          "y": 104.75
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.25,
+          "y": 104.95
+        },
+        "shoes.shoeToeOffside": {
+          "x": 35.65,
+          "y": 104.9
+        },
+        "shoes.bootFootClose": {
+          "x": 28.25,
+          "y": 104.95
+        },
+        "shoes.bootFootOffside": {
+          "x": 35.65,
+          "y": 104.9
+        },
+        "shoes.bootUpperClose": {
+          "x": 27.8,
+          "y": 104.45
+        },
+        "shoes.bootUpperOffside": {
+          "x": 35.7,
+          "y": 104.75
+        },
+        "coat.coatClose": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "coat.coatOffside": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "dress.dress": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "dress.dressOffside": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.25,
+          "y": 64.3
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 39.85,
+          "y": 55.95
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 44.05,
+          "y": 63.7
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 49.6,
+          "y": 52.85
+        },
+        "skirt.skirt": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "coat.cape": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "coat.necklace": {
+          "x": 40.6,
+          "y": 92.95
+        },
+        "coat.gloveClose": {
+          "x": 43.15,
+          "y": 46.2
+        },
+        "coat.gloveOffside": {
+          "x": 52.2,
+          "y": 43.65
+        },
+        "bracelet.braceletClose": {
+          "x": 43.15,
+          "y": 46.2
         }
       },
       {
@@ -696,29 +2256,149 @@
           "x": 34.55,
           "y": 28.55
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 40.75,
           "y": 92.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.3,
+          "y": 64.35
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 38.45,
+          "y": 55.0
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 44.3,
+          "y": 63.5
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 48.35,
+          "y": 52.15
+        },
+        "pants.pantsTop": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 38.55,
           "y": 93.25
         },
-        "dress": {
-          "x": 40.75,
-          "y": 92.9
+        "pants.pantsLegLowerClose": {
+          "x": 32.15,
+          "y": 102.15
         },
-        "skirt": {
-          "x": 40.75,
-          "y": 92.9
+        "pants.pantsLegUpperOffside": {
+          "x": 42.8,
+          "y": 89.75
         },
-        "coat": {
-          "x": 40.75,
-          "y": 92.9
+        "pants.pantsLegLowerOffside": {
+          "x": 38.1,
+          "y": 100.3
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 27.95,
           "y": 104.45
+        },
+        "pants.pantsFootOffside": {
+          "x": 35.4,
+          "y": 104.75
+        },
+        "shoes.shoeClose": {
+          "x": 27.95,
+          "y": 104.45
+        },
+        "shoes.shoeOffside": {
+          "x": 35.4,
+          "y": 104.75
+        },
+        "shoes.shoeUpperClose": {
+          "x": 27.5,
+          "y": 104.0
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 35.45,
+          "y": 104.6
+        },
+        "shoes.shoeToeClose": {
+          "x": 27.95,
+          "y": 104.45
+        },
+        "shoes.shoeToeOffside": {
+          "x": 35.4,
+          "y": 104.75
+        },
+        "shoes.bootFootClose": {
+          "x": 27.95,
+          "y": 104.45
+        },
+        "shoes.bootFootOffside": {
+          "x": 35.4,
+          "y": 104.75
+        },
+        "shoes.bootUpperClose": {
+          "x": 27.5,
+          "y": 104.0
+        },
+        "shoes.bootUpperOffside": {
+          "x": 35.45,
+          "y": 104.6
+        },
+        "coat.coatClose": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "coat.coatOffside": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "dress.dress": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "dress.dressOffside": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.3,
+          "y": 64.35
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 38.45,
+          "y": 55.0
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 44.3,
+          "y": 63.5
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 48.35,
+          "y": 52.15
+        },
+        "skirt.skirt": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "coat.cape": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "coat.necklace": {
+          "x": 40.75,
+          "y": 92.9
+        },
+        "coat.gloveClose": {
+          "x": 40.75,
+          "y": 44.65
+        },
+        "coat.gloveOffside": {
+          "x": 50.6,
+          "y": 42.75
+        },
+        "bracelet.braceletClose": {
+          "x": 40.75,
+          "y": 44.65
         }
       },
       {
@@ -747,29 +2427,149 @@
           "x": 34.55,
           "y": 28.55
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 40.85,
           "y": 92.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.3,
+          "y": 64.25
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 37.75,
+          "y": 54.55
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 44.4,
+          "y": 63.4
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 47.7,
+          "y": 51.75
+        },
+        "pants.pantsTop": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 38.7,
           "y": 93.15
         },
-        "dress": {
-          "x": 40.85,
-          "y": 92.9
+        "pants.pantsLegLowerClose": {
+          "x": 32.15,
+          "y": 102.05
         },
-        "skirt": {
-          "x": 40.85,
-          "y": 92.9
+        "pants.pantsLegUpperOffside": {
+          "x": 42.75,
+          "y": 89.75
         },
-        "coat": {
-          "x": 40.85,
-          "y": 92.9
+        "pants.pantsLegLowerOffside": {
+          "x": 38.05,
+          "y": 100.3
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 27.8,
           "y": 104.25
+        },
+        "pants.pantsFootOffside": {
+          "x": 35.25,
+          "y": 104.6
+        },
+        "shoes.shoeClose": {
+          "x": 27.8,
+          "y": 104.25
+        },
+        "shoes.shoeOffside": {
+          "x": 35.25,
+          "y": 104.6
+        },
+        "shoes.shoeUpperClose": {
+          "x": 27.4,
+          "y": 103.75
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 35.25,
+          "y": 104.5
+        },
+        "shoes.shoeToeClose": {
+          "x": 27.8,
+          "y": 104.25
+        },
+        "shoes.shoeToeOffside": {
+          "x": 35.25,
+          "y": 104.6
+        },
+        "shoes.bootFootClose": {
+          "x": 27.8,
+          "y": 104.25
+        },
+        "shoes.bootFootOffside": {
+          "x": 35.25,
+          "y": 104.6
+        },
+        "shoes.bootUpperClose": {
+          "x": 27.4,
+          "y": 103.75
+        },
+        "shoes.bootUpperOffside": {
+          "x": 35.25,
+          "y": 104.5
+        },
+        "coat.coatClose": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "coat.coatOffside": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "dress.dress": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "dress.dressOffside": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.3,
+          "y": 64.25
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 37.75,
+          "y": 54.55
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 44.4,
+          "y": 63.4
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 47.7,
+          "y": 51.75
+        },
+        "skirt.skirt": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "coat.cape": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "coat.necklace": {
+          "x": 40.85,
+          "y": 92.9
+        },
+        "coat.gloveClose": {
+          "x": 39.7,
+          "y": 43.85
+        },
+        "coat.gloveOffside": {
+          "x": 49.8,
+          "y": 42.25
+        },
+        "bracelet.braceletClose": {
+          "x": 39.7,
+          "y": 43.85
         }
       }
     ],
@@ -800,29 +2600,149 @@
           "x": 34.55,
           "y": 28.5
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 40.9,
           "y": 92.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 34.25,
+          "y": 64.3
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 37.6,
+          "y": 54.55
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 44.4,
+          "y": 63.4
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 47.65,
+          "y": 51.7
+        },
+        "pants.pantsTop": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 38.75,
           "y": 93.2
         },
-        "dress": {
-          "x": 40.9,
-          "y": 92.9
+        "pants.pantsLegLowerClose": {
+          "x": 32.15,
+          "y": 102.05
         },
-        "skirt": {
-          "x": 40.9,
-          "y": 92.9
+        "pants.pantsLegUpperOffside": {
+          "x": 42.8,
+          "y": 89.75
         },
-        "coat": {
-          "x": 40.9,
-          "y": 92.9
+        "pants.pantsLegLowerOffside": {
+          "x": 38.05,
+          "y": 100.25
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 27.7,
           "y": 104.2
+        },
+        "pants.pantsFootOffside": {
+          "x": 35.25,
+          "y": 104.65
+        },
+        "shoes.shoeClose": {
+          "x": 27.7,
+          "y": 104.2
+        },
+        "shoes.shoeOffside": {
+          "x": 35.25,
+          "y": 104.65
+        },
+        "shoes.shoeUpperClose": {
+          "x": 27.35,
+          "y": 103.75
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 35.3,
+          "y": 104.5
+        },
+        "shoes.shoeToeClose": {
+          "x": 27.7,
+          "y": 104.2
+        },
+        "shoes.shoeToeOffside": {
+          "x": 35.25,
+          "y": 104.65
+        },
+        "shoes.bootFootClose": {
+          "x": 27.7,
+          "y": 104.2
+        },
+        "shoes.bootFootOffside": {
+          "x": 35.25,
+          "y": 104.65
+        },
+        "shoes.bootUpperClose": {
+          "x": 27.35,
+          "y": 103.75
+        },
+        "shoes.bootUpperOffside": {
+          "x": 35.3,
+          "y": 104.5
+        },
+        "coat.coatClose": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "coat.coatOffside": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "dress.dress": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "dress.dressOffside": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 34.25,
+          "y": 64.3
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 37.6,
+          "y": 54.55
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 44.4,
+          "y": 63.4
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 47.65,
+          "y": 51.7
+        },
+        "skirt.skirt": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "coat.cape": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "coat.necklace": {
+          "x": 40.9,
+          "y": 92.9
+        },
+        "coat.gloveClose": {
+          "x": 39.5,
+          "y": 43.75
+        },
+        "coat.gloveOffside": {
+          "x": 49.75,
+          "y": 42.3
+        },
+        "bracelet.braceletClose": {
+          "x": 39.5,
+          "y": 43.75
         }
       },
       {
@@ -851,29 +2771,149 @@
           "x": 34.0,
           "y": 28.45
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 40.35,
           "y": 92.85
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 33.75,
+          "y": 64.25
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 37.8,
+          "y": 54.85
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 43.7,
+          "y": 63.4
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 47.8,
+          "y": 52.0
+        },
+        "pants.pantsTop": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "pants.pantsLegUpperClose": {
           "x": 38.05,
           "y": 93.05
         },
-        "dress": {
-          "x": 40.35,
-          "y": 92.85
+        "pants.pantsLegLowerClose": {
+          "x": 31.75,
+          "y": 102.35
         },
-        "skirt": {
-          "x": 40.35,
-          "y": 92.85
+        "pants.pantsLegUpperOffside": {
+          "x": 42.35,
+          "y": 89.65
         },
-        "coat": {
-          "x": 40.35,
-          "y": 92.85
+        "pants.pantsLegLowerOffside": {
+          "x": 38.15,
+          "y": 100.35
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 27.6,
           "y": 104.65
+        },
+        "pants.pantsFootOffside": {
+          "x": 35.35,
+          "y": 104.8
+        },
+        "shoes.shoeClose": {
+          "x": 27.6,
+          "y": 104.65
+        },
+        "shoes.shoeOffside": {
+          "x": 35.35,
+          "y": 104.8
+        },
+        "shoes.shoeUpperClose": {
+          "x": 27.2,
+          "y": 104.35
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 35.5,
+          "y": 104.7
+        },
+        "shoes.shoeToeClose": {
+          "x": 27.6,
+          "y": 104.65
+        },
+        "shoes.shoeToeOffside": {
+          "x": 35.35,
+          "y": 104.8
+        },
+        "shoes.bootFootClose": {
+          "x": 27.6,
+          "y": 104.65
+        },
+        "shoes.bootFootOffside": {
+          "x": 35.35,
+          "y": 104.8
+        },
+        "shoes.bootUpperClose": {
+          "x": 27.2,
+          "y": 104.35
+        },
+        "shoes.bootUpperOffside": {
+          "x": 35.5,
+          "y": 104.7
+        },
+        "coat.coatClose": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "coat.coatOffside": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "dress.dress": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "dress.dressOffside": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 33.75,
+          "y": 64.25
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 37.8,
+          "y": 54.85
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 43.7,
+          "y": 63.4
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 47.8,
+          "y": 52.0
+        },
+        "skirt.skirt": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "coat.cape": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "coat.necklace": {
+          "x": 40.35,
+          "y": 92.85
+        },
+        "coat.gloveClose": {
+          "x": 39.9,
+          "y": 44.2
+        },
+        "coat.gloveOffside": {
+          "x": 49.85,
+          "y": 42.85
+        },
+        "bracelet.braceletClose": {
+          "x": 39.9,
+          "y": 44.2
         }
       },
       {
@@ -902,29 +2942,149 @@
           "x": 32.3,
           "y": 28.45
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 38.35,
           "y": 92.8
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 32.2,
+          "y": 64.15
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 38.35,
+          "y": 56.0
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 41.45,
+          "y": 63.4
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 48.0,
+          "y": 53.1
+        },
+        "pants.pantsTop": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "pants.pantsLegUpperClose": {
           "x": 35.95,
           "y": 92.5
         },
-        "dress": {
-          "x": 38.35,
-          "y": 92.8
+        "pants.pantsLegLowerClose": {
+          "x": 30.65,
+          "y": 103.2
         },
-        "skirt": {
-          "x": 38.35,
-          "y": 92.8
+        "pants.pantsLegUpperOffside": {
+          "x": 40.5,
+          "y": 89.45
         },
-        "coat": {
-          "x": 38.35,
-          "y": 92.8
+        "pants.pantsLegLowerOffside": {
+          "x": 38.2,
+          "y": 100.7
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 27.05,
           "y": 106.2
+        },
+        "pants.pantsFootOffside": {
+          "x": 36.1,
+          "y": 105.25
+        },
+        "shoes.shoeClose": {
+          "x": 27.05,
+          "y": 106.2
+        },
+        "shoes.shoeOffside": {
+          "x": 36.1,
+          "y": 105.25
+        },
+        "shoes.shoeUpperClose": {
+          "x": 26.65,
+          "y": 105.95
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 36.2,
+          "y": 105.3
+        },
+        "shoes.shoeToeClose": {
+          "x": 27.05,
+          "y": 106.2
+        },
+        "shoes.shoeToeOffside": {
+          "x": 36.1,
+          "y": 105.25
+        },
+        "shoes.bootFootClose": {
+          "x": 27.05,
+          "y": 106.2
+        },
+        "shoes.bootFootOffside": {
+          "x": 36.1,
+          "y": 105.25
+        },
+        "shoes.bootUpperClose": {
+          "x": 26.65,
+          "y": 105.95
+        },
+        "shoes.bootUpperOffside": {
+          "x": 36.2,
+          "y": 105.3
+        },
+        "coat.coatClose": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "coat.coatOffside": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "dress.dress": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "dress.dressOffside": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 32.2,
+          "y": 64.15
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 38.35,
+          "y": 56.0
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 41.45,
+          "y": 63.4
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 48.0,
+          "y": 53.1
+        },
+        "skirt.skirt": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "coat.cape": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "coat.necklace": {
+          "x": 38.35,
+          "y": 92.8
+        },
+        "coat.gloveClose": {
+          "x": 41.05,
+          "y": 45.45
+        },
+        "coat.gloveOffside": {
+          "x": 50.05,
+          "y": 44.45
+        },
+        "bracelet.braceletClose": {
+          "x": 41.05,
+          "y": 45.45
         }
       },
       {
@@ -953,29 +3113,149 @@
           "x": 29.6,
           "y": 28.3
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 35.1,
           "y": 92.7
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 29.7,
+          "y": 63.95
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 39.35,
+          "y": 57.9
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 37.9,
+          "y": 63.3
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 48.5,
+          "y": 54.9
+        },
+        "pants.pantsTop": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "pants.pantsLegUpperClose": {
           "x": 32.35,
           "y": 91.6
         },
-        "dress": {
-          "x": 35.1,
-          "y": 92.7
+        "pants.pantsLegLowerClose": {
+          "x": 28.65,
+          "y": 104.85
         },
-        "skirt": {
-          "x": 35.1,
-          "y": 92.7
+        "pants.pantsLegUpperOffside": {
+          "x": 37.6,
+          "y": 89.0
         },
-        "coat": {
-          "x": 35.1,
-          "y": 92.7
+        "pants.pantsLegLowerOffside": {
+          "x": 38.35,
+          "y": 101.35
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 26.05,
           "y": 109.0
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.4,
+          "y": 105.95
+        },
+        "shoes.shoeClose": {
+          "x": 26.05,
+          "y": 109.0
+        },
+        "shoes.shoeOffside": {
+          "x": 37.4,
+          "y": 105.95
+        },
+        "shoes.shoeUpperClose": {
+          "x": 25.75,
+          "y": 108.9
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.3,
+          "y": 106.3
+        },
+        "shoes.shoeToeClose": {
+          "x": 26.05,
+          "y": 109.0
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.4,
+          "y": 105.95
+        },
+        "shoes.bootFootClose": {
+          "x": 26.05,
+          "y": 109.0
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.4,
+          "y": 105.95
+        },
+        "shoes.bootUpperClose": {
+          "x": 25.75,
+          "y": 108.9
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.3,
+          "y": 106.3
+        },
+        "coat.coatClose": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "coat.coatOffside": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "dress.dress": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "dress.dressOffside": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 29.7,
+          "y": 63.95
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 39.35,
+          "y": 57.9
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 37.9,
+          "y": 63.3
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 48.5,
+          "y": 54.9
+        },
+        "skirt.skirt": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "coat.cape": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "coat.necklace": {
+          "x": 35.1,
+          "y": 92.7
+        },
+        "coat.gloveClose": {
+          "x": 42.95,
+          "y": 47.7
+        },
+        "coat.gloveOffside": {
+          "x": 50.5,
+          "y": 47.3
+        },
+        "bracelet.braceletClose": {
+          "x": 42.95,
+          "y": 47.7
         }
       },
       {
@@ -1004,29 +3284,149 @@
           "x": 26.6,
           "y": 28.15
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 31.6,
           "y": 92.5
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 26.8,
+          "y": 63.7
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 37.65,
+          "y": 62.0
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 33.9,
+          "y": 63.15
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 46.25,
+          "y": 59.3
+        },
+        "pants.pantsTop": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "pants.pantsLegUpperClose": {
           "x": 28.6,
           "y": 90.65
         },
-        "dress": {
-          "x": 31.6,
-          "y": 92.5
+        "pants.pantsLegLowerClose": {
+          "x": 29.0,
+          "y": 102.5
         },
-        "skirt": {
-          "x": 31.6,
-          "y": 92.5
+        "pants.pantsLegUpperOffside": {
+          "x": 34.35,
+          "y": 88.7
         },
-        "coat": {
-          "x": 31.6,
-          "y": 92.5
+        "pants.pantsLegLowerOffside": {
+          "x": 38.8,
+          "y": 99.8
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 25.85,
           "y": 106.25
+        },
+        "pants.pantsFootOffside": {
+          "x": 38.0,
+          "y": 103.85
+        },
+        "shoes.shoeClose": {
+          "x": 25.85,
+          "y": 106.25
+        },
+        "shoes.shoeOffside": {
+          "x": 38.0,
+          "y": 103.85
+        },
+        "shoes.shoeUpperClose": {
+          "x": 25.75,
+          "y": 106.2
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 38.2,
+          "y": 104.65
+        },
+        "shoes.shoeToeClose": {
+          "x": 25.85,
+          "y": 106.25
+        },
+        "shoes.shoeToeOffside": {
+          "x": 38.0,
+          "y": 103.85
+        },
+        "shoes.bootFootClose": {
+          "x": 25.85,
+          "y": 106.25
+        },
+        "shoes.bootFootOffside": {
+          "x": 38.0,
+          "y": 103.85
+        },
+        "shoes.bootUpperClose": {
+          "x": 25.75,
+          "y": 106.2
+        },
+        "shoes.bootUpperOffside": {
+          "x": 38.2,
+          "y": 104.65
+        },
+        "coat.coatClose": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "coat.coatOffside": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "dress.dress": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "dress.dressOffside": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 26.8,
+          "y": 63.7
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 37.65,
+          "y": 62.0
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 33.9,
+          "y": 63.15
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 46.25,
+          "y": 59.3
+        },
+        "skirt.skirt": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "coat.cape": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "coat.necklace": {
+          "x": 31.6,
+          "y": 92.5
+        },
+        "coat.gloveClose": {
+          "x": 42.15,
+          "y": 52.3
+        },
+        "coat.gloveOffside": {
+          "x": 48.7,
+          "y": 50.85
+        },
+        "bracelet.braceletClose": {
+          "x": 42.15,
+          "y": 52.3
         }
       },
       {
@@ -1055,29 +3455,149 @@
           "x": 24.6,
           "y": 28.05
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 29.25,
           "y": 92.4
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 24.95,
+          "y": 63.6
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 36.65,
+          "y": 64.5
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 31.2,
+          "y": 63.05
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 44.65,
+          "y": 62.35
+        },
+        "pants.pantsTop": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "pants.pantsLegUpperClose": {
           "x": 25.95,
           "y": 90.0
         },
-        "dress": {
-          "x": 29.25,
-          "y": 92.4
+        "pants.pantsLegLowerClose": {
+          "x": 29.2,
+          "y": 100.6
         },
-        "skirt": {
-          "x": 29.25,
-          "y": 92.4
+        "pants.pantsLegUpperOffside": {
+          "x": 32.2,
+          "y": 88.5
         },
-        "coat": {
-          "x": 29.25,
-          "y": 92.4
+        "pants.pantsLegLowerOffside": {
+          "x": 39.25,
+          "y": 98.45
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 25.85,
           "y": 104.1
+        },
+        "pants.pantsFootOffside": {
+          "x": 38.5,
+          "y": 102.1
+        },
+        "shoes.shoeClose": {
+          "x": 25.85,
+          "y": 104.1
+        },
+        "shoes.shoeOffside": {
+          "x": 38.5,
+          "y": 102.1
+        },
+        "shoes.shoeUpperClose": {
+          "x": 25.65,
+          "y": 103.95
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 38.9,
+          "y": 103.35
+        },
+        "shoes.shoeToeClose": {
+          "x": 25.85,
+          "y": 104.1
+        },
+        "shoes.shoeToeOffside": {
+          "x": 38.5,
+          "y": 102.1
+        },
+        "shoes.bootFootClose": {
+          "x": 25.85,
+          "y": 104.1
+        },
+        "shoes.bootFootOffside": {
+          "x": 38.5,
+          "y": 102.1
+        },
+        "shoes.bootUpperClose": {
+          "x": 25.65,
+          "y": 103.95
+        },
+        "shoes.bootUpperOffside": {
+          "x": 38.9,
+          "y": 103.35
+        },
+        "coat.coatClose": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "coat.coatOffside": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "dress.dress": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "dress.dressOffside": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 24.95,
+          "y": 63.6
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 36.65,
+          "y": 64.5
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 31.2,
+          "y": 63.05
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 44.65,
+          "y": 62.35
+        },
+        "skirt.skirt": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "coat.cape": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "coat.necklace": {
+          "x": 29.25,
+          "y": 92.4
+        },
+        "coat.gloveClose": {
+          "x": 41.75,
+          "y": 54.95
+        },
+        "coat.gloveOffside": {
+          "x": 47.4,
+          "y": 53.3
+        },
+        "bracelet.braceletClose": {
+          "x": 41.75,
+          "y": 54.95
         }
       }
     ],
@@ -1108,29 +3628,149 @@
           "x": 28.15,
           "y": 31.5
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 95.9
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 27.45,
+          "y": 67.0
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 25.5,
+          "y": 77.15
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 37.65,
+          "y": 66.65
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 38.0,
+          "y": 78.9
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "pants.pantsLegUpperClose": {
           "x": 29.65,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegLowerClose": {
+          "x": 29.3,
+          "y": 107.45
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegUpperOffside": {
+          "x": 35.9,
+          "y": 92.5
         },
-        "coat": {
-          "x": 32.6,
-          "y": 95.9
+        "pants.pantsLegLowerOffside": {
+          "x": 36.4,
+          "y": 104.6
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.45,
+          "y": 109.6
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.45,
+          "y": 109.6
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 27.45,
+          "y": 67.0
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 25.5,
+          "y": 77.15
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 37.65,
+          "y": 66.65
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 38.0,
+          "y": 78.9
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 95.9
+        },
+        "coat.gloveClose": {
+          "x": 25.2,
+          "y": 88.15
+        },
+        "coat.gloveOffside": {
+          "x": 39.35,
+          "y": 88.5
+        },
+        "bracelet.braceletClose": {
+          "x": 25.2,
+          "y": 88.15
         }
       },
       {
@@ -1159,29 +3799,149 @@
           "x": 30.3,
           "y": 32.4
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 96.2
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 28.75,
+          "y": 67.0
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 21.9,
+          "y": 74.2
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 39.4,
+          "y": 67.35
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 39.65,
+          "y": 79.6
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "pants.pantsLegUpperClose": {
           "x": 29.95,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.6,
-          "y": 96.2
+        "pants.pantsLegLowerClose": {
+          "x": 29.4,
+          "y": 107.45
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 96.2
+        "pants.pantsLegUpperOffside": {
+          "x": 35.8,
+          "y": 92.5
         },
-        "coat": {
-          "x": 32.6,
-          "y": 96.2
+        "pants.pantsLegLowerOffside": {
+          "x": 37.1,
+          "y": 104.4
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.8,
+          "y": 112.45
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.6,
+          "y": 109.4
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.8,
+          "y": 112.45
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.6,
+          "y": 109.4
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 28.75,
+          "y": 67.0
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 21.9,
+          "y": 74.2
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 39.4,
+          "y": 67.35
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 39.65,
+          "y": 79.6
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 96.2
+        },
+        "coat.gloveClose": {
+          "x": 22.5,
+          "y": 85.2
+        },
+        "coat.gloveOffside": {
+          "x": 40.9,
+          "y": 89.25
+        },
+        "bracelet.braceletClose": {
+          "x": 22.5,
+          "y": 85.2
         }
       },
       {
@@ -1210,29 +3970,149 @@
           "x": 31.55,
           "y": 32.95
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 96.35
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 30.25,
+          "y": 67.05
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 18.55,
+          "y": 71.5
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "pants.pantsLegUpperClose": {
           "x": 30.15,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerClose": {
+          "x": 29.55,
+          "y": 107.45
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegUpperOffside": {
+          "x": 35.75,
+          "y": 92.5
         },
-        "coat": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerOffside": {
+          "x": 37.55,
+          "y": 104.3
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 30.25,
+          "y": 67.05
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 18.55,
+          "y": 71.5
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.gloveClose": {
+          "x": 19.95,
+          "y": 82.45
+        },
+        "coat.gloveOffside": {
+          "x": 41.85,
+          "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 19.95,
+          "y": 82.45
         }
       },
       {
@@ -1261,29 +4141,149 @@
           "x": 31.55,
           "y": 32.95
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 96.35
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 30.2,
+          "y": 66.8
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 19.4,
+          "y": 72.2
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "pants.pantsLegUpperClose": {
           "x": 30.15,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerClose": {
+          "x": 29.55,
+          "y": 107.45
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegUpperOffside": {
+          "x": 35.75,
+          "y": 92.5
         },
-        "coat": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerOffside": {
+          "x": 37.55,
+          "y": 104.3
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 30.2,
+          "y": 66.8
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 19.4,
+          "y": 72.2
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.gloveClose": {
+          "x": 20.6,
+          "y": 83.15
+        },
+        "coat.gloveOffside": {
+          "x": 41.85,
+          "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 20.6,
+          "y": 83.15
         }
       },
       {
@@ -1312,29 +4312,149 @@
           "x": 31.55,
           "y": 32.95
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 96.35
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 30.25,
+          "y": 67.05
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 18.55,
+          "y": 71.5
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "pants.pantsLegUpperClose": {
           "x": 30.15,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerClose": {
+          "x": 29.55,
+          "y": 107.45
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegUpperOffside": {
+          "x": 35.75,
+          "y": 92.5
         },
-        "coat": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerOffside": {
+          "x": 37.55,
+          "y": 104.3
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 30.25,
+          "y": 67.05
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 18.55,
+          "y": 71.5
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.gloveClose": {
+          "x": 19.95,
+          "y": 82.45
+        },
+        "coat.gloveOffside": {
+          "x": 41.85,
+          "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 19.95,
+          "y": 82.45
         }
       },
       {
@@ -1363,29 +4483,149 @@
           "x": 31.55,
           "y": 32.95
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 96.35
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 30.2,
+          "y": 66.8
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 19.4,
+          "y": 72.2
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "pants.pantsLegUpperClose": {
           "x": 30.15,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerClose": {
+          "x": 29.55,
+          "y": 107.45
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegUpperOffside": {
+          "x": 35.75,
+          "y": 92.5
         },
-        "coat": {
-          "x": 32.6,
-          "y": 96.35
+        "pants.pantsLegLowerOffside": {
+          "x": 37.55,
+          "y": 104.3
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.85,
+          "y": 112.45
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 30.2,
+          "y": 66.8
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 19.4,
+          "y": 72.2
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 40.4,
+          "y": 67.75
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 40.6,
+          "y": 80.0
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 96.35
+        },
+        "coat.gloveClose": {
+          "x": 20.6,
+          "y": 83.15
+        },
+        "coat.gloveOffside": {
+          "x": 41.85,
+          "y": 89.65
+        },
+        "bracelet.braceletClose": {
+          "x": 20.6,
+          "y": 83.15
         }
       },
       {
@@ -1414,29 +4654,149 @@
           "x": 31.4,
           "y": 32.9
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.6,
           "y": 96.3
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 29.8,
+          "y": 67.15
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 19.05,
+          "y": 71.9
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 40.25,
+          "y": 67.7
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 40.45,
+          "y": 79.95
+        },
+        "pants.pantsTop": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "pants.pantsLegUpperClose": {
           "x": 30.1,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.6,
-          "y": 96.3
+        "pants.pantsLegLowerClose": {
+          "x": 29.55,
+          "y": 107.4
         },
-        "skirt": {
-          "x": 32.6,
-          "y": 96.3
+        "pants.pantsLegUpperOffside": {
+          "x": 35.75,
+          "y": 92.5
         },
-        "coat": {
-          "x": 32.6,
-          "y": 96.3
+        "pants.pantsLegLowerOffside": {
+          "x": 37.5,
+          "y": 104.3
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.95,
+          "y": 112.45
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.95,
+          "y": 112.45
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.75,
+          "y": 109.4
+        },
+        "coat.coatClose": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "coat.coatOffside": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "dress.dress": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "dress.dressOffside": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 29.8,
+          "y": 67.15
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 19.05,
+          "y": 71.9
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 40.25,
+          "y": 67.7
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 40.45,
+          "y": 79.95
+        },
+        "skirt.skirt": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "coat.cape": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "coat.necklace": {
+          "x": 32.6,
+          "y": 96.3
+        },
+        "coat.gloveClose": {
+          "x": 20.35,
+          "y": 82.85
+        },
+        "coat.gloveOffside": {
+          "x": 41.7,
+          "y": 89.6
+        },
+        "bracelet.braceletClose": {
+          "x": 20.35,
+          "y": 82.85
         }
       },
       {
@@ -1465,29 +4825,149 @@
           "x": 28.45,
           "y": 31.65
         },
-        "shirt": {
+        "shirt.shirtTorso": {
           "x": 32.55,
           "y": 96.0
         },
-        "pants": {
+        "shirt.sleeveUpperClose": {
+          "x": 27.6,
+          "y": 67.0
+        },
+        "shirt.sleeveLowerClose": {
+          "x": 25.15,
+          "y": 76.85
+        },
+        "shirt.sleeveUpperOffside": {
+          "x": 37.9,
+          "y": 66.75
+        },
+        "shirt.sleeveLowerOffside": {
+          "x": 38.25,
+          "y": 79.0
+        },
+        "pants.pantsTop": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "pants.pantsLegUpperClose": {
           "x": 29.7,
           "y": 96.4
         },
-        "dress": {
-          "x": 32.55,
-          "y": 96.0
+        "pants.pantsLegLowerClose": {
+          "x": 29.3,
+          "y": 107.35
         },
-        "skirt": {
-          "x": 32.55,
-          "y": 96.0
+        "pants.pantsLegUpperOffside": {
+          "x": 35.85,
+          "y": 92.55
         },
-        "coat": {
-          "x": 32.55,
-          "y": 96.0
+        "pants.pantsLegLowerOffside": {
+          "x": 36.45,
+          "y": 104.5
         },
-        "shoes": {
+        "pants.pantsFootClose": {
           "x": 28.8,
           "y": 112.4
+        },
+        "pants.pantsFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.shoeUpperClose": {
+          "x": 28.9,
+          "y": 112.4
+        },
+        "shoes.shoeUpperOffside": {
+          "x": 37.4,
+          "y": 109.7
+        },
+        "shoes.shoeToeClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.shoeToeOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootFootClose": {
+          "x": 28.8,
+          "y": 112.4
+        },
+        "shoes.bootFootOffside": {
+          "x": 37.05,
+          "y": 109.15
+        },
+        "shoes.bootUpperClose": {
+          "x": 28.9,
+          "y": 112.4
+        },
+        "shoes.bootUpperOffside": {
+          "x": 37.4,
+          "y": 109.7
+        },
+        "coat.coatClose": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "coat.coatOffside": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "dress.dress": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "dress.dressOffside": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "dress.dressSleeveUpperClose": {
+          "x": 27.6,
+          "y": 67.0
+        },
+        "dress.dressSleeveLowerClose": {
+          "x": 25.15,
+          "y": 76.85
+        },
+        "dress.dressSleeveUpperOffside": {
+          "x": 37.9,
+          "y": 66.75
+        },
+        "dress.dressSleeveLowerOffside": {
+          "x": 38.25,
+          "y": 79.0
+        },
+        "skirt.skirt": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "coat.cape": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "coat.necklace": {
+          "x": 32.55,
+          "y": 96.0
+        },
+        "coat.gloveClose": {
+          "x": 24.85,
+          "y": 87.85
+        },
+        "coat.gloveOffside": {
+          "x": 39.55,
+          "y": 88.5
+        },
+        "bracelet.braceletClose": {
+          "x": 24.85,
+          "y": 87.85
         }
       }
     ]

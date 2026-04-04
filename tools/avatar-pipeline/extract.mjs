@@ -54,12 +54,63 @@ const ANIMATIONS = {
 const VANITY_CATEGORIES = ['eyes', 'ears', 'nose', 'mouth', 'hair'];
 const WARDROBE_CATEGORIES = ['hat', 'coat', 'shirt', 'pants', 'dress', 'skirt', 'shoes', 'bracelet'];
 
-// Categories that map to specific container names in avatar-transforms.json
-const CATEGORY_CONTAINERS = {
-  eyes: 'eyes', ears: 'ears', nose: 'nose', mouth: 'mouth',
-  hair: 'hair', hat: 'hat', shirt: 'shirt', pants: 'pants',
-  dress: 'dress', coat: 'coat', shoes: 'shoes', bracelet: 'bracelet',
-  skirt: 'skirt',
+// Whitelist of SymbolClass name prefixes that are side-view wardrobe art per category.
+// Names not matching these (or starting with "back") are skipped.
+const WARDROBE_ART_PREFIXES = {
+  shirt: ['shirtTorso', 'sleeveUpper', 'sleeveLower'],
+  pants: ['pantsTop', 'pantsLeg', 'pantsFoot'],
+  shoes: ['shoeClose', 'shoeOffside', 'shoeUpper', 'shoeToe', 'bootUpper', 'bootFoot'],
+  coat:  ['coatClose', 'coatOffside', 'coatSleeve'],
+  dress: ['dress'],
+  skirt: ['skirt'],
+  hat:   ['sideHat', 'sideHeaddress'],
+  bracelet: ['braceletClose'],
+};
+
+// Map SymbolClass sub-sprite names to their transform keys in avatar-transforms.json.
+// These tell the pipeline which container position to use for each sub-sprite.
+const SUBPART_TRANSFORM_KEYS = {
+  shirtTorso: 'shirt.shirtTorso',
+  sleeveUpperClose: 'shirt.sleeveUpperClose',
+  sleeveLowerClose: 'shirt.sleeveLowerClose',
+  sleeveUpperOffside: 'shirt.sleeveUpperOffside',
+  sleeveLowerOffside: 'shirt.sleeveLowerOffside',
+  pantsTop: 'pants.pantsTop',
+  pantsLegUpperClose: 'pants.pantsLegUpperClose',
+  pantsLegLowerClose: 'pants.pantsLegLowerClose',
+  pantsLegUpperOffside: 'pants.pantsLegUpperOffside',
+  pantsLegLowerOffside: 'pants.pantsLegLowerOffside',
+  pantsFootClose: 'pants.pantsFootClose',
+  pantsFootOffside: 'pants.pantsFootOffside',
+  shoeClose: 'shoes.shoeClose',
+  shoeOffside: 'shoes.shoeOffside',
+  shoeUpperClose: 'shoes.shoeUpperClose',
+  shoeUpperOffside: 'shoes.shoeUpperOffside',
+  shoeToeClose: 'shoes.shoeToeClose',
+  shoeToeOffside: 'shoes.shoeToeOffside',
+  bootUpperClose: 'shoes.bootUpperClose',
+  bootUpperOffside: 'shoes.bootUpperOffside',
+  bootFootClose: 'shoes.bootFootClose',
+  bootFootOffside: 'shoes.bootFootOffside',
+  coatClose: 'coat.coatClose',
+  coatOffside: 'coat.coatOffside',
+  // Coat sleeves share shirt sleeve containers
+  coatSleeveUpperClose: 'shirt.sleeveUpperClose',
+  coatSleeveLowerClose: 'shirt.sleeveLowerClose',
+  coatSleeveUpperOffside: 'shirt.sleeveUpperOffside',
+  coatSleeveLowerOffside: 'shirt.sleeveLowerOffside',
+  dress: 'dress.dress',
+  dressOffside: 'dress.dressOffside',
+  dressSleeveUpperClose: 'dress.dressSleeveUpperClose',
+  dressSleeveLowerClose: 'dress.dressSleeveLowerClose',
+  dressSleeveUpperOffside: 'dress.dressSleeveUpperOffside',
+  dressSleeveLowerOffside: 'dress.dressSleeveLowerOffside',
+  skirt: 'skirt.skirt',
+  braceletClose: 'bracelet.braceletClose',
+  // Hat sub-parts — share the hat container position for placement.
+  // LAYER_ORDER must have { slot: 'hat', part: 'sideHat' } etc. to render.
+  sideHat: 'hat',
+  sideHeaddressClose: 'hat',
 };
 
 // Threshold (pixels) for detecting content "at origin" vs "already positioned"
@@ -343,37 +394,171 @@ function getContainerPositions(transforms, category, anim) {
   return animFrames.map((f) => f[category] || null);
 }
 
+/**
+ * Discover side-view sub-sprites in a wardrobe SWF using --list-sprites.
+ * Returns an array of { name, transformKey } for each side-view art sprite,
+ * or null if the SWF has no named exports (vanity items).
+ */
+function discoverSubSprites(swfPath, category) {
+  const prefixes = WARDROBE_ART_PREFIXES[category];
+  if (!prefixes) return null;
+
+  let listOutput;
+  try {
+    listOutput = JSON.parse(run(SWF_WRAPPER, ['--list-sprites', swfPath]));
+  } catch {
+    return null;
+  }
+
+  const parts = [];
+  for (const sprite of listOutput.sprites || []) {
+    const name = sprite.name;
+    // Skip back-view sprites
+    if (name.startsWith('back')) continue;
+    // Check against whitelist
+    if (prefixes.some(p => name.startsWith(p))) {
+      const transformKey = SUBPART_TRANSFORM_KEYS[name];
+      if (transformKey) {
+        parts.push({ name, transformKey });
+      }
+    }
+  }
+  return parts.length > 0 ? parts : null;
+}
+
+/**
+ * Extract a single sub-sprite from a wardrobe SWF.
+ * Wraps only the named sprite, renders all animation frames, and packs
+ * into a sprite sheet named {itemName}.{partName}.json.
+ */
+async function extractSubSprite(swfPath, category, itemName, partName, transformKey, transforms) {
+  const tempDir = path.join(TEMP_DIR, category, itemName, partName);
+  const wrappedSwf = path.join(tempDir, 'wrapped.swf');
+  await mkdir(tempDir, { recursive: true });
+
+  // Wrap only this sub-sprite
+  const wrapArgs = ['--sprite-name', partName];
+  if (existsSync(BODY_SWF)) wrapArgs.push('--match-stage', BODY_SWF);
+  wrapArgs.push(swfPath, wrappedSwf);
+
+  let info;
+  try {
+    info = JSON.parse(run(SWF_WRAPPER, wrapArgs));
+  } catch {
+    return null;
+  }
+
+  const isAnimated = info.max_frames > 1;
+  const framesDir = path.join(tempDir, 'frames');
+  await mkdir(framesDir, { recursive: true });
+
+  // Sub-sprites rendered individually always need container offsets
+  // (they're at origin since --sprite-name places only one sprite at (0,0))
+  const useContainerOffset = true;
+
+  for (const [anim, { start, count, step }] of Object.entries(ANIMATIONS)) {
+    const animDir = path.join(framesDir, anim);
+    await mkdir(animDir, { recursive: true });
+
+    const positions = getContainerPositions(transforms, transformKey, anim);
+
+    let frameIdx = 0;
+    for (let f = 0; f < count; f += step) {
+      const frameNum = start + f;
+      const containerPos = positions?.[frameIdx] || null;
+
+      const rawFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
+      try {
+        run(RUFFLE_EXPORTER, [
+          wrappedSwf, rawFile,
+          '--skipframes', String(isAnimated ? frameNum : 0),
+          '--frames', '1',
+          '--scale', String(SCALE),
+          '--silent',
+        ], { stdio: 'pipe' });
+      } catch { /* skip */ }
+
+      if (existsSync(rawFile)) {
+        const croppedFile = rawFile.replace('_raw.png', '.png');
+        const metaFile = rawFile.replace('_raw.png', '.meta.json');
+        try {
+          const result = await trimWithMetadata(rawFile, croppedFile, containerPos, useContainerOffset);
+          if (result) {
+            await writeFile(metaFile, JSON.stringify({ spriteSourceSize: result.spriteSourceSize }));
+          }
+          await rm(rawFile);
+        } catch {
+          await rm(rawFile).catch(() => {});
+        }
+      }
+      frameIdx++;
+    }
+  }
+
+  const outputDir = path.join(OUTPUT_DIR, category);
+  const sheetName = `${itemName}.${partName}`;
+  return packSpriteSheet(sheetName, framesDir, outputDir, true);
+}
+
 /** Extract a single SWF item through the full pipeline. */
 async function extractItem(swfPath, category, itemName, transforms) {
   const tempItemDir = path.join(TEMP_DIR, category, itemName);
-  const wrappedSwf = path.join(tempItemDir, 'wrapped.swf');
   await mkdir(tempItemDir, { recursive: true });
 
-  // Step 1: Wrap SWF (place sprites on stage, match body's stage bounds)
-  let info;
+  // Step 1: Check for multi-part wardrobe sub-sprites
+  const subSprites = discoverSubSprites(swfPath, category);
+
+  if (subSprites && subSprites.length > 0) {
+    // Multi-part wardrobe item: try extracting each sub-sprite separately
+    const parts = [];
+    for (const { name, transformKey } of subSprites) {
+      const result = await extractSubSprite(swfPath, category, itemName, name, transformKey, transforms);
+      if (result) {
+        parts.push(name);
+        console.log(`    ${category}/${itemName}.${name}: ${result.frames} frames, ${result.width}x${result.height}`);
+      }
+    }
+    if (parts.length > 0) {
+      return { parts };
+    }
+    // All named sub-sprites rendered empty (e.g., shirts with class stubs).
+    // Fall through to single-sprite extraction below.
+  }
+
+  // Single-sprite item (vanity, or wardrobe without named exports)
+  const wrappedSwf = path.join(tempItemDir, 'wrapped.swf');
   const wrapArgs = [swfPath, wrappedSwf];
   if (existsSync(BODY_SWF)) {
     wrapArgs.splice(0, 0, '--match-stage', BODY_SWF);
   }
+
+  let info;
   try {
-    const out = run(SWF_WRAPPER, wrapArgs);
-    info = JSON.parse(out);
-  } catch (e) {
+    info = JSON.parse(run(SWF_WRAPPER, wrapArgs));
+  } catch {
     console.error(`  SKIP ${category}/${itemName}: wrapper failed`);
     return null;
   }
 
   const isAnimated = info.max_frames > 1;
-  const containerKey = CATEGORY_CONTAINERS[category] || category;
+  // For single-sprite wardrobe fallback, map plain category to its primary
+  // sub-part transform key (the expanded transforms only have dotted keys).
+  const PRIMARY_SUBPART = {
+    shirt: 'shirt.shirtTorso',
+    pants: 'pants.pantsTop',
+    shoes: 'shoes.shoeClose',
+    coat: 'coat.coatClose',
+    dress: 'dress.dress',
+    skirt: 'skirt.skirt',
+    hat: 'hat',
+    bracelet: 'bracelet.braceletClose',
+  };
+  const containerKey = PRIMARY_SUBPART[category] || category;
 
-  // Step 2: Render frames with ruffle exporter
   const framesDir = path.join(tempItemDir, 'frames');
   await mkdir(framesDir, { recursive: true });
 
-  // Render a probe frame to determine positioning strategy for this component.
-  // Components whose content renders at the SWF origin need container offsets;
-  // components with self-positioned content (e.g., hair SWFs with main-timeline
-  // PlaceObject) don't.
+  // Probe to determine positioning strategy
   const probeFile = path.join(tempItemDir, 'probe_raw.png');
   try {
     run(RUFFLE_EXPORTER, [
@@ -394,38 +579,6 @@ async function extractItem(swfPath, category, itemName, transforms) {
     await rm(probeFile).catch(() => {});
   }
 
-  // Helper: render and trim a single frame
-  async function renderFrame(animDir, frameIdx, frameNum, containerPos) {
-    const rawFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
-    try {
-      run(RUFFLE_EXPORTER, [
-        wrappedSwf, rawFile,
-        '--skipframes', String(frameNum),
-        '--frames', '1',
-        '--scale', String(SCALE),
-        '--silent',
-      ], { stdio: 'pipe' });
-    } catch {
-      return;
-    }
-
-    if (!existsSync(rawFile)) return;
-
-    const croppedFile = rawFile.replace('_raw.png', '.png');
-    const metaFile = rawFile.replace('_raw.png', '.meta.json');
-    try {
-      const result = await trimWithMetadata(rawFile, croppedFile, containerPos, useContainerOffset);
-      if (result) {
-        await writeFile(metaFile, JSON.stringify({
-          spriteSourceSize: result.spriteSourceSize,
-        }));
-      }
-      await rm(rawFile);
-    } catch {
-      await rm(rawFile).catch(() => {});
-    }
-  }
-
   for (const [anim, { start, count, step }] of Object.entries(ANIMATIONS)) {
     const animDir = path.join(framesDir, anim);
     await mkdir(animDir, { recursive: true });
@@ -437,17 +590,34 @@ async function extractItem(swfPath, category, itemName, transforms) {
       const frameNum = start + f;
       const containerPos = positions?.[frameIdx] || null;
 
-      // Animated items: render each sampled frame from the 1233-frame timeline.
-      // Static items (max_frames=1): always render frame 0 — the wrapped SWF
-      // only has 1 ShowFrame, so skipframes beyond that would produce blank output.
-      // Each static frame still gets its own per-frame container offset for
-      // correct positioning as the body pose changes.
-      await renderFrame(animDir, frameIdx, isAnimated ? frameNum : 0, containerPos);
+      const rawFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
+      try {
+        run(RUFFLE_EXPORTER, [
+          wrappedSwf, rawFile,
+          '--skipframes', String(isAnimated ? frameNum : 0),
+          '--frames', '1',
+          '--scale', String(SCALE),
+          '--silent',
+        ], { stdio: 'pipe' });
+      } catch { /* skip */ }
+
+      if (existsSync(rawFile)) {
+        const croppedFile = rawFile.replace('_raw.png', '.png');
+        const metaFile = rawFile.replace('_raw.png', '.meta.json');
+        try {
+          const result = await trimWithMetadata(rawFile, croppedFile, containerPos, useContainerOffset);
+          if (result) {
+            await writeFile(metaFile, JSON.stringify({ spriteSourceSize: result.spriteSourceSize }));
+          }
+          await rm(rawFile);
+        } catch {
+          await rm(rawFile).catch(() => {});
+        }
+      }
       frameIdx++;
     }
   }
 
-  // Step 3: Pack into sprite sheet with trim metadata
   const outputCategoryDir = path.join(OUTPUT_DIR, category);
   const result = await packSpriteSheet(itemName, framesDir, outputCategoryDir, true);
 
@@ -597,11 +767,16 @@ async function main() {
       const result = await extractItem(swfPath, cat, itemName, transforms);
 
       if (result) {
-        items.push({
+        const entry = {
           id: itemName,
           name: itemName.replace(/_/g, ' '),
-          sheet: `${cat}/${itemName}.json`,
-        });
+        };
+        if (result.parts) {
+          entry.parts = result.parts;
+        } else {
+          entry.sheet = `${cat}/${itemName}.json`;
+        }
+        items.push(entry);
       }
       processed++;
     }

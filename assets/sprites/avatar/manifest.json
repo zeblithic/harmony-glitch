@@ -6,16 +6,6 @@
           "id": "eye_cyclops",
           "name": "eye cyclops",
           "sheet": "eyes/eye_cyclops.json"
-        },
-        {
-          "id": "eyes_01",
-          "name": "eyes 01",
-          "sheet": "eyes/eyes_01.json"
-        },
-        {
-          "id": "eyes_02",
-          "name": "eyes 02",
-          "sheet": "eyes/eyes_02.json"
         }
       ]
     },
@@ -25,16 +15,6 @@
           "id": "ears_0001",
           "name": "ears 0001",
           "sheet": "ears/ears_0001.json"
-        },
-        {
-          "id": "ears_0002",
-          "name": "ears 0002",
-          "sheet": "ears/ears_0002.json"
-        },
-        {
-          "id": "ears_0003",
-          "name": "ears 0003",
-          "sheet": "ears/ears_0003.json"
         }
       ]
     },
@@ -44,16 +24,6 @@
           "id": "nose_0001",
           "name": "nose 0001",
           "sheet": "nose/nose_0001.json"
-        },
-        {
-          "id": "nose_0006",
-          "name": "nose 0006",
-          "sheet": "nose/nose_0006.json"
-        },
-        {
-          "id": "nose_0009",
-          "name": "nose 0009",
-          "sheet": "nose/nose_0009.json"
         }
       ]
     },
@@ -63,16 +33,6 @@
           "id": "mouth_01",
           "name": "mouth 01",
           "sheet": "mouth/mouth_01.json"
-        },
-        {
-          "id": "mouth_02",
-          "name": "mouth 02",
-          "sheet": "mouth/mouth_02.json"
-        },
-        {
-          "id": "mouth_08",
-          "name": "mouth 08",
-          "sheet": "mouth/mouth_08.json"
         }
       ]
     },
@@ -82,16 +42,6 @@
           "id": "BrowPatch",
           "name": "BrowPatch",
           "sheet": "hair/BrowPatch.json"
-        },
-        {
-          "id": "BrowStache",
-          "name": "BrowStache",
-          "sheet": "hair/BrowStache.json"
-        },
-        {
-          "id": "Buzzcut",
-          "name": "Buzzcut",
-          "sheet": "hair/Buzzcut.json"
         }
       ]
     },
@@ -100,17 +50,9 @@
         {
           "id": "Cthulhu_mask",
           "name": "Cthulhu mask",
-          "sheet": "hat/Cthulhu_mask.json"
-        },
-        {
-          "id": "FoxHat_Tester",
-          "name": "FoxHat Tester",
-          "sheet": "hat/FoxHat_Tester.json"
-        },
-        {
-          "id": "Garden_gnome_hat",
-          "name": "Garden gnome hat",
-          "sheet": "hat/Garden_gnome_hat.json"
+          "parts": [
+            "sideHeaddressClose"
+          ]
         }
       ]
     },
@@ -119,17 +61,13 @@
         {
           "id": "Boardwalk_Empire_Overcoat",
           "name": "Boardwalk Empire Overcoat",
-          "sheet": "coat/Boardwalk_Empire_Overcoat.json"
-        },
-        {
-          "id": "Fisherman_vest",
-          "name": "Fisherman vest",
-          "sheet": "coat/Fisherman_vest.json"
-        },
-        {
-          "id": "Fur_lined_Coat",
-          "name": "Fur lined Coat",
-          "sheet": "coat/Fur_lined_Coat.json"
+          "parts": [
+            "coatSleeveLowerClose",
+            "coatSleeveUpperClose",
+            "coatClose",
+            "coatSleeveLowerOffside",
+            "coatSleeveUpperOffside"
+          ]
         }
       ]
     },
@@ -139,16 +77,6 @@
           "id": "Bandana_Tank",
           "name": "Bandana Tank",
           "sheet": "shirt/Bandana_Tank.json"
-        },
-        {
-          "id": "Boardwalk_Empire_ladies_shirt",
-          "name": "Boardwalk Empire ladies shirt",
-          "sheet": "shirt/Boardwalk_Empire_ladies_shirt.json"
-        },
-        {
-          "id": "Candy_Cane_Sweater",
-          "name": "Candy Cane Sweater",
-          "sheet": "shirt/Candy_Cane_Sweater.json"
         }
       ]
     },
@@ -157,17 +85,11 @@
         {
           "id": "Boardwalk_Empire_ladies_pants",
           "name": "Boardwalk Empire ladies pants",
-          "sheet": "pants/Boardwalk_Empire_ladies_pants.json"
-        },
-        {
-          "id": "GlitchamaphoneButterflyPants",
-          "name": "GlitchamaphoneButterflyPants",
-          "sheet": "pants/GlitchamaphoneButterflyPants.json"
-        },
-        {
-          "id": "GlitchamaphoneChickenPants",
-          "name": "GlitchamaphoneChickenPants",
-          "sheet": "pants/GlitchamaphoneChickenPants.json"
+          "parts": [
+            "pantsLegUpperClose",
+            "pantsTop",
+            "pantsLegUpperOffside"
+          ]
         }
       ]
     },
@@ -176,17 +98,9 @@
         {
           "id": "Flapper_Dress",
           "name": "Flapper Dress",
-          "sheet": "dress/Flapper_Dress.json"
-        },
-        {
-          "id": "Layered_Lolita",
-          "name": "Layered Lolita",
-          "sheet": "dress/Layered_Lolita.json"
-        },
-        {
-          "id": "Nevermore_Dress",
-          "name": "Nevermore Dress",
-          "sheet": "dress/Nevermore_Dress.json"
+          "parts": [
+            "dress"
+          ]
         }
       ]
     },
@@ -195,17 +109,9 @@
         {
           "id": "Flower_Skirt",
           "name": "Flower Skirt",
-          "sheet": "skirt/Flower_Skirt.json"
-        },
-        {
-          "id": "Hawaii_long",
-          "name": "Hawaii long",
-          "sheet": "skirt/Hawaii_long.json"
-        },
-        {
-          "id": "Leather_Skirt",
-          "name": "Leather Skirt",
-          "sheet": "skirt/Leather_Skirt.json"
+          "parts": [
+            "skirt"
+          ]
         }
       ]
     },
@@ -214,17 +120,10 @@
         {
           "id": "Men_DressShoes",
           "name": "Men DressShoes",
-          "sheet": "shoes/Men_DressShoes.json"
-        },
-        {
-          "id": "Nevermore_Shoes",
-          "name": "Nevermore Shoes",
-          "sheet": "shoes/Nevermore_Shoes.json"
-        },
-        {
-          "id": "Skywalker_Boots",
-          "name": "Skywalker Boots",
-          "sheet": "shoes/Skywalker_Boots.json"
+          "parts": [
+            "shoeOffside",
+            "shoeClose"
+          ]
         }
       ]
     },
@@ -233,12 +132,9 @@
         {
           "id": "bracelet_B010",
           "name": "bracelet B010",
-          "sheet": "bracelet/bracelet_B010.json"
-        },
-        {
-          "id": "bracelet_B010_grey",
-          "name": "bracelet B010 grey",
-          "sheet": "bracelet/bracelet_B010_grey.json"
+          "parts": [
+            "braceletClose"
+          ]
         }
       ]
     }
