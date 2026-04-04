@@ -219,18 +219,27 @@
       }
     }
 
-    // Close jukebox panel when the player leaves audio_radius.
-    // We use JukeboxUpdate events as the keep-alive signal rather than
-    // interactionPrompt, because a closer non-jukebox entity (e.g. a tree)
-    // can steal the prompt even while the player is still in jukebox range.
-    // IPC commands validate interact_radius server-side independently.
+    // Close jukebox panel when the player leaves range.
+    // For jukeboxes with tracks, use JukeboxUpdate events as keep-alive
+    // (avoids false close when a closer entity steals the interaction prompt).
+    // For empty-playlist jukeboxes (no JukeboxState, no events), fall back
+    // to the interaction prompt — it's the only signal available.
     if (jukeboxOpen && jukeboxInfo) {
-      const hasUpdate = frame.audioEvents?.some(
-        e => e.type === 'jukeboxUpdate' && e.entityId === jukeboxInfo!.entityId
-      );
-      if (!hasUpdate) {
-        jukeboxOpen = false;
-        jukeboxInfo = null;
+      const hasPlaylist = jukeboxInfo.playlist.length > 0;
+      if (hasPlaylist) {
+        const hasUpdate = frame.audioEvents?.some(
+          e => e.type === 'jukeboxUpdate' && e.entityId === jukeboxInfo!.entityId
+        );
+        if (!hasUpdate) {
+          jukeboxOpen = false;
+          jukeboxInfo = null;
+        }
+      } else {
+        // Empty playlist — no JukeboxUpdate events are emitted, use prompt
+        if (frame.interactionPrompt?.entityId !== jukeboxInfo.entityId) {
+          jukeboxOpen = false;
+          jukeboxInfo = null;
+        }
       }
     }
   }
