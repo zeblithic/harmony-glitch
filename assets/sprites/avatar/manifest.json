@@ -244,15 +244,15 @@
     }
   },
   "defaults": {
-    "eyes": "eyes_01",
+    "eyes": "eye_cyclops",
     "ears": "ears_0001",
     "nose": "nose_0001",
     "mouth": "mouth_01",
-    "hair": "hair_01",
+    "hair": "BrowPatch",
     "skin_color": "D4C159",
     "hair_color": "4A3728",
-    "shirt": "hawaiian_shirt",
-    "pants": "cargo_pants",
-    "shoes": "campers"
+    "shirt": "Bandana_Tank",
+    "pants": "Boardwalk_Empire_ladies_pants",
+    "shoes": "Men_DressShoes"
   }
 }

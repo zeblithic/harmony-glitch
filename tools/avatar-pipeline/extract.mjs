@@ -132,26 +132,35 @@ async function packSpriteSheet(itemName, framesDir, outputDir) {
     })
   );
 
-  // Simple horizontal strip packing (all frames in a row)
+  // Resize all frames to uniform height, then pack horizontally
   const maxH = Math.max(...frameMeta.map(f => f.height));
+  const resizedFrames = await Promise.all(
+    frameMeta.map(async (f) => {
+      const resized = await sharp(f.path)
+        .resize({ height: maxH, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+      const meta = await sharp(resized).metadata();
+      return { ...f, resized, renderedWidth: meta.width, renderedHeight: meta.height };
+    })
+  );
+
   let totalW = 0;
-  for (const f of frameMeta) {
+  for (const f of resizedFrames) {
     f.x = totalW;
     f.y = 0;
     frames[f.name] = {
-      frame: { x: f.x, y: f.y, w: f.width, h: f.height },
+      frame: { x: f.x, y: f.y, w: f.renderedWidth, h: f.renderedHeight },
     };
-    totalW += f.width;
+    totalW += f.renderedWidth;
   }
 
   // Composite all frames into a single sprite sheet
-  const composites = await Promise.all(
-    frameMeta.map(async (f) => ({
-      input: await sharp(f.path).resize({ height: maxH, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer(),
-      left: f.x,
-      top: 0,
-    }))
-  );
+  const composites = resizedFrames.map((f) => ({
+    input: f.resized,
+    left: f.x,
+    top: 0,
+  }));
 
   const sheetPng = await sharp({
     create: { width: totalW, height: maxH, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
@@ -427,12 +436,18 @@ async function main() {
     }
   }
 
-  // Set defaults
+  // Set defaults — derive from extracted items when possible
   manifest.defaults = {
-    eyes: 'eyes_01', ears: 'ears_0001', nose: 'nose_0001',
-    mouth: 'mouth_01', hair: 'hair_01',
-    skin_color: 'D4C159', hair_color: '4A3728',
-    shirt: 'hawaiian_shirt', pants: 'cargo_pants', shoes: 'campers',
+    eyes: manifest.categories.eyes?.items[0]?.id ?? null,
+    ears: manifest.categories.ears?.items[0]?.id ?? null,
+    nose: manifest.categories.nose?.items[0]?.id ?? null,
+    mouth: manifest.categories.mouth?.items[0]?.id ?? null,
+    hair: manifest.categories.hair?.items[0]?.id ?? null,
+    skin_color: 'D4C159',
+    hair_color: '4A3728',
+    shirt: manifest.categories.shirt?.items[0]?.id ?? null,
+    pants: manifest.categories.pants?.items[0]?.id ?? null,
+    shoes: manifest.categories.shoes?.items[0]?.id ?? null,
   };
 
   // Write manifest

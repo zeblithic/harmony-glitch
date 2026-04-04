@@ -23,7 +23,7 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 quick-xml = "0.37"
-swf = { path = "../../../ruffle-rs/ruffle/swf", optional = true }
+swf = { version = "0.2", optional = true }
 png = { version = "0.17", optional = true }
 flate2 = { version = "1", optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
