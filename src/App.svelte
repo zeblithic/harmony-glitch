@@ -12,8 +12,10 @@
   import JukeboxPanel from './lib/components/JukeboxPanel.svelte';
   import ShopPanel from './lib/components/ShopPanel.svelte';
   import CurrantHud from './lib/components/CurrantHud.svelte';
+  import AvatarEditor from './lib/components/AvatarEditor.svelte';
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState } from './lib/types';
+  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest } from './lib/types';
+  import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
   import { LocalMusicSource, type TrackCatalog } from './lib/engine/music';
@@ -43,6 +45,9 @@
   let storeState = $state<StoreState | null>(null);
   let shopCloseFrames = 0;
   let musicCatalog = $state<TrackCatalog>({ tracks: {} });
+  let avatarEditorOpen = $state(false);
+  let avatarManifest = $state<AvatarManifest | null>(null);
+  let gameRenderer = $state<GameRenderer | null>(null);
 
   onMount(async () => {
     try {
@@ -77,6 +82,16 @@
       }
     } catch (e) {
       console.error('Failed to load music catalog:', e);
+    }
+
+    // Load avatar manifest
+    try {
+      const avatarResponse = await fetch('/assets/sprites/avatar/manifest.json');
+      if (avatarResponse.ok) {
+        avatarManifest = await avatarResponse.json();
+      }
+    } catch (e) {
+      console.error('Failed to load avatar manifest:', e);
     }
 
     // Restore saved kit selection
@@ -208,6 +223,7 @@
               volumeOpen = false;
               shopOpen = false;
               storeState = null;
+              avatarEditorOpen = false;
             }).catch(e => console.error('Failed to get jukebox state:', e));
           }
         }
@@ -339,12 +355,17 @@
   if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
-    if (inventoryOpen) { volumeOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
+    if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
   if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
-    if (volumeOpen) inventoryOpen = false;
+    if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
+  }
+  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen) {
+    e.preventDefault();
+    avatarEditorOpen = !avatarEditorOpen;
+    if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; }
   }
   if ((e.key === 'j' || e.key === 'J') && jukeboxOpen && !chatFocused) {
     e.preventDefault();
@@ -363,7 +384,7 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen || avatarEditorOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
@@ -416,6 +437,12 @@
       }}
     />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
+    <AvatarEditor
+      visible={avatarEditorOpen}
+      manifest={avatarManifest}
+      renderer={gameRenderer}
+      onClose={() => { avatarEditorOpen = false; }}
+    />
     <div role="status" aria-live="polite" class="sr-only">
       {#if transitionPending && transitionTarget}Travelling to {transitionTarget}…{/if}
     </div>
@@ -427,8 +454,10 @@
       } finally {
         audioManager?.dispose();
         audioManager = null;
+        gameRenderer = null;
         currentStreet = null;
         latestFrame = null;
+        avatarEditorOpen = false;
         jukeboxOpen = false;
         jukeboxInfo = null;
         jukeboxCloseFrames = 0;

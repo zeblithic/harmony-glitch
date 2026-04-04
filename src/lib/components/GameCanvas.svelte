@@ -4,13 +4,14 @@
   import { sendInput, onRenderFrame, onChatMessage, startGame, getAvatar } from '../ipc';
   import type { StreetData, InputState, RenderFrame } from '../types';
 
-  let { street, debugMode = false, chatFocused = false, inventoryOpen = false, uiOpen = false, onFrame }: {
+  let { street, debugMode = false, chatFocused = false, inventoryOpen = false, uiOpen = false, onFrame, onRendererReady }: {
     street: StreetData | null;
     debugMode?: boolean;
     chatFocused?: boolean;
     inventoryOpen?: boolean;
     uiOpen?: boolean;
     onFrame?: (frame: RenderFrame) => void;
+    onRendererReady?: (renderer: GameRenderer) => void;
   } = $props();
 
   let canvasEl: HTMLCanvasElement;
@@ -59,6 +60,7 @@
     const r = new GameRenderer();
     await r.init(canvasEl);
     renderer = r; // Set *after* init so $effect only fires with a ready instance
+    onRendererReady?.(r);
 
     const unlisten = await onRenderFrame((frame) => {
       r.updateFrame(frame);
@@ -98,7 +100,7 @@
 <div
   class="canvas-container"
   role="application"
-  aria-label="Harmony Glitch game — arrow keys or WASD to move, Space to jump, E to interact, I for inventory, P for volume settings, F3 for debug overlay"
+  aria-label="Harmony Glitch game — arrow keys or WASD to move, Space to jump, E to interact, I for inventory, C for avatar editor, P for volume settings, F3 for debug overlay"
 >
   <canvas bind:this={canvasEl} aria-hidden="true"></canvas>
 </div>

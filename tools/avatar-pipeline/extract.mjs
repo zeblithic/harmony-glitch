@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 /**
  * Avatar extraction pipeline — extracts Glitch avatar SWF art into
- * PixiJS-compatible sprite sheets.
+ * PixiJS-compatible sprite sheets with trim metadata for layer composition.
  *
- * Pipeline: SWF → swf-wrapper → ruffle exporter → crop → sprite sheet + manifest
+ * Pipeline: SWF → swf-wrapper → ruffle exporter → trim → sprite sheet + manifest
+ *
+ * Components are rendered at the base body's stage size so all layers share
+ * the same coordinate space (544×1013 at 8x). Per-frame container positions
+ * from Avatar.swf are used to place components at the correct body position
+ * via PixiJS trim metadata (spriteSourceSize + sourceSize).
  *
  * Usage:
  *   node extract.mjs                          # Extract all categories
@@ -16,7 +21,7 @@
 
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
-import { readdir, mkdir, writeFile, rm } from 'node:fs/promises';
+import { readdir, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -34,6 +39,8 @@ const GLITCH_AVATARS = process.env.GLITCH_AVATARS
   || path.resolve(REPO_ROOT, '../../tinyspeck/glitch-avatars');
 const OUTPUT_DIR = path.join(REPO_ROOT, 'assets/sprites/avatar');
 const TEMP_DIR = path.join(REPO_ROOT, '.avatar-pipeline-tmp');
+const TRANSFORMS_PATH = path.join(import.meta.dirname, 'avatar-transforms.json');
+const BODY_SWF = path.join(GLITCH_AVATARS, 'base_avatar/Avatar.swf');
 
 // All Glitch avatar SWFs share this 1233-frame timeline.
 // We sample key frames for each animation state.
@@ -46,6 +53,17 @@ const ANIMATIONS = {
 
 const VANITY_CATEGORIES = ['eyes', 'ears', 'nose', 'mouth', 'hair'];
 const WARDROBE_CATEGORIES = ['hat', 'coat', 'shirt', 'pants', 'dress', 'skirt', 'shoes', 'bracelet'];
+
+// Categories that map to specific container names in avatar-transforms.json
+const CATEGORY_CONTAINERS = {
+  eyes: 'eyes', ears: 'ears', nose: 'nose', mouth: 'mouth',
+  hair: 'hair', hat: 'hat', shirt: 'shirt', pants: 'pants',
+  dress: 'dress', coat: 'coat', shoes: 'shoes', bracelet: 'bracelet',
+  skirt: 'skirt',
+};
+
+// Threshold (pixels) for detecting content "at origin" vs "already positioned"
+const ORIGIN_THRESHOLD = 16;
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -70,6 +88,25 @@ if (opts.help) {
 const SCALE = parseFloat(opts.scale);
 const LIMIT = parseInt(opts.limit, 10);
 
+// Body frame dimensions at current scale (used as sourceSize for all layers).
+// Derived from the actual body SWF stage bounds via swf-wrapper --info so the
+// sourceSize always matches ruffle's output regardless of --scale.
+let BODY_FRAME_W, BODY_FRAME_H;
+function initBodyDimensions() {
+  try {
+    const info = JSON.parse(run(SWF_WRAPPER, ['--info', BODY_SWF]));
+    // Use integer twips values (20 twips per pixel) to avoid float precision
+    // loss from the 1-decimal-place stage_px fields.
+    const tw = info.stage_twips;
+    BODY_FRAME_W = Math.round((tw.x_max - tw.x_min) * SCALE / 20);
+    BODY_FRAME_H = Math.round((tw.y_max - tw.y_min) * SCALE / 20);
+  } catch {
+    // Fallback if body SWF is missing (e.g., --item on a component only)
+    BODY_FRAME_W = Math.round(68 * SCALE);
+    BODY_FRAME_H = Math.round(126.65 * SCALE);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -79,23 +116,112 @@ function run(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, ...opts });
 }
 
-/** Auto-crop a PNG to its non-transparent content bounds, with padding. */
-async function autoCrop(inputPath, outputPath, padding = 2) {
-  // Use sharp's trim to remove uniform borders
-  // We trim the white (or near-white) background + transparent areas
-  const trimmed = await sharp(inputPath)
-    .trim({ background: '#ffffff', threshold: 20 })
-    .extend({ top: padding, bottom: padding, left: padding, right: padding, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+/**
+ * Find content bounds in a rendered frame (non-white, non-transparent pixels).
+ * Returns { x, y, w, h } or null if no content.
+ */
+async function findContentBounds(inputPath) {
+  const { data, info } = await sharp(inputPath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  let minX = info.width, minY = info.height, maxX = 0, maxY = 0;
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      const idx = (y * info.width + x) * 4;
+      const a = data[idx + 3];
+      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+      if (a > 10 && (r < 245 || g < 245 || b < 245)) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX) return null;
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+/**
+ * Trim a rendered frame: remove white background, crop to content bounds,
+ * add padding, and return the trimmed buffer + trim metadata.
+ *
+ * @param {string} inputPath - Path to raw rendered PNG
+ * @param {string} outputPath - Path to write trimmed PNG
+ * @param {{x: number, y: number}|null} containerPos - Container position (stage coords).
+ *   Applied when useContainerOffset is true.
+ * @param {boolean} useContainerOffset - Whether to use the container position
+ *   for spriteSourceSize (true for components at origin, false for self-positioned ones).
+ * @param {number} padding - Transparent padding around content
+ * @returns {{ width, height, spriteSourceSize: {x,y,w,h} } | null}
+ */
+async function trimWithMetadata(inputPath, outputPath, containerPos, useContainerOffset, padding = 2) {
+  const bounds = await findContentBounds(inputPath);
+  if (!bounds) return null;
+
+  // Read the image and make white pixels transparent
+  const { data, info } = await sharp(inputPath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const buf = Buffer.from(data);
+  for (let i = 0; i < buf.length; i += 4) {
+    if (buf[i] > 245 && buf[i + 1] > 245 && buf[i + 2] > 245) {
+      buf[i + 3] = 0;
+    }
+  }
+
+  // Extract just the content region + padding
+  const extractX = Math.max(0, bounds.x - padding);
+  const extractY = Math.max(0, bounds.y - padding);
+  const extractW = Math.min(info.width - extractX, bounds.w + 2 * padding);
+  const extractH = Math.min(info.height - extractY, bounds.h + 2 * padding);
+
+  const contentImg = await sharp(buf, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .extract({ left: extractX, top: extractY, width: extractW, height: extractH })
     .png()
     .toBuffer();
 
-  const meta = await sharp(trimmed).metadata();
-  await sharp(trimmed).toFile(outputPath);
-  return { width: meta.width, height: meta.height };
+  const contentMeta = await sharp(contentImg).metadata();
+  await sharp(contentImg).toFile(outputPath);
+
+  // Compute spriteSourceSize: where this content sits within the source frame
+  let ssX, ssY;
+  if (useContainerOffset && containerPos) {
+    // Content at origin → place at container position
+    ssX = Math.round(containerPos.x * SCALE) - padding;
+    ssY = Math.round(containerPos.y * SCALE) - padding;
+  } else {
+    // Content already at body position → use its rendered position
+    ssX = extractX;
+    ssY = extractY;
+  }
+
+  // Clamp to sourceSize bounds so trim metadata stays valid for PixiJS
+  const clampedX = Math.max(0, Math.min(ssX, BODY_FRAME_W - contentMeta.width));
+  const clampedY = Math.max(0, Math.min(ssY, BODY_FRAME_H - contentMeta.height));
+
+  return {
+    width: contentMeta.width,
+    height: contentMeta.height,
+    spriteSourceSize: {
+      x: clampedX,
+      y: clampedY,
+      w: contentMeta.width,
+      h: contentMeta.height,
+    },
+  };
 }
 
-/** Build a PixiJS sprite sheet JSON from a set of animation frame PNGs. */
-async function packSpriteSheet(itemName, framesDir, outputDir) {
+/**
+ * Build a PixiJS sprite sheet JSON from trimmed frame PNGs with trim metadata.
+ * All frames share the same sourceSize (body frame dimensions).
+ */
+async function packSpriteSheet(itemName, framesDir, outputDir, hasTrimData = false) {
   const frames = {};
   const animations = {};
   const framePngs = [];
@@ -106,7 +232,7 @@ async function packSpriteSheet(itemName, framesDir, outputDir) {
     if (!existsSync(animDir)) continue;
 
     const files = (await readdir(animDir))
-      .filter(f => f.endsWith('.png'))
+      .filter(f => f.endsWith('.png') && !f.includes('_raw'))
       .sort();
 
     if (files.length === 0) continue;
@@ -115,7 +241,11 @@ async function packSpriteSheet(itemName, framesDir, outputDir) {
     for (const file of files) {
       const frameName = `${anim}_${path.basename(file, '.png')}`;
       animations[anim].push(frameName);
-      framePngs.push({ name: frameName, path: path.join(animDir, file) });
+      framePngs.push({
+        name: frameName,
+        path: path.join(animDir, file),
+        metaPath: path.join(animDir, file.replace('.png', '.meta.json')),
+      });
     }
   }
 
@@ -125,36 +255,48 @@ async function packSpriteSheet(itemName, framesDir, outputDir) {
   const frameMeta = await Promise.all(
     framePngs.map(async (f) => {
       const meta = await sharp(f.path).metadata();
-      return { ...f, width: meta.width, height: meta.height };
+      let trimData = null;
+      if (hasTrimData && existsSync(f.metaPath)) {
+        trimData = JSON.parse(await readFile(f.metaPath, 'utf-8'));
+      }
+      return { ...f, width: meta.width, height: meta.height, trimData };
     })
   );
 
-  // Resize all frames to uniform height, then pack horizontally
+  // Pack frames at their actual sizes (no resize — trim metadata records the
+  // correct position within the shared sourceSize canvas).
   const maxH = Math.max(...frameMeta.map(f => f.height));
-  const resizedFrames = await Promise.all(
+  const readyFrames = await Promise.all(
     frameMeta.map(async (f) => {
-      const resized = await sharp(f.path)
-        .resize({ height: maxH, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png()
-        .toBuffer();
-      const meta = await sharp(resized).metadata();
-      return { ...f, resized, renderedWidth: meta.width, renderedHeight: meta.height };
+      const buf = await sharp(f.path).png().toBuffer();
+      return { ...f, buffer: buf };
     })
   );
 
   let totalW = 0;
-  for (const f of resizedFrames) {
+  for (const f of readyFrames) {
     f.x = totalW;
     f.y = 0;
-    frames[f.name] = {
-      frame: { x: f.x, y: f.y, w: f.renderedWidth, h: f.renderedHeight },
+    const frameEntry = {
+      frame: { x: f.x, y: f.y, w: f.width, h: f.height },
     };
-    totalW += f.renderedWidth;
+
+    if (f.trimData) {
+      frameEntry.trimmed = true;
+      frameEntry.spriteSourceSize = f.trimData.spriteSourceSize;
+      frameEntry.sourceSize = { w: BODY_FRAME_W, h: BODY_FRAME_H };
+    } else {
+      // Body frames: not trimmed, sourceSize = frame size
+      frameEntry.sourceSize = { w: f.width, h: f.height };
+    }
+
+    frames[f.name] = frameEntry;
+    totalW += f.width;
   }
 
   // Composite all frames into a single sprite sheet
-  const composites = resizedFrames.map((f) => ({
-    input: f.resized,
+  const composites = readyFrames.map((f) => ({
+    input: f.buffer,
     left: f.x,
     top: 0,
   }));
@@ -191,16 +333,30 @@ async function packSpriteSheet(itemName, framesDir, outputDir) {
 // Extraction
 // ---------------------------------------------------------------------------
 
+/**
+ * Get the per-frame container position for a category and animation.
+ * Returns an array of {x, y} in stage coords, one per sampled frame.
+ */
+function getContainerPositions(transforms, category, anim) {
+  const animFrames = transforms.animations[anim];
+  if (!animFrames) return null;
+  return animFrames.map((f) => f[category] || null);
+}
+
 /** Extract a single SWF item through the full pipeline. */
-async function extractItem(swfPath, category, itemName) {
+async function extractItem(swfPath, category, itemName, transforms) {
   const tempItemDir = path.join(TEMP_DIR, category, itemName);
   const wrappedSwf = path.join(tempItemDir, 'wrapped.swf');
   await mkdir(tempItemDir, { recursive: true });
 
-  // Step 1: Wrap SWF (place sprites on stage)
+  // Step 1: Wrap SWF (place sprites on stage, match body's stage bounds)
   let info;
+  const wrapArgs = [swfPath, wrappedSwf];
+  if (existsSync(BODY_SWF)) {
+    wrapArgs.splice(0, 0, '--match-stage', BODY_SWF);
+  }
   try {
-    const out = run(SWF_WRAPPER, [swfPath, wrappedSwf]);
+    const out = run(SWF_WRAPPER, wrapArgs);
     info = JSON.parse(out);
   } catch (e) {
     console.error(`  SKIP ${category}/${itemName}: wrapper failed`);
@@ -208,80 +364,92 @@ async function extractItem(swfPath, category, itemName) {
   }
 
   const isAnimated = info.max_frames > 1;
+  const containerKey = CATEGORY_CONTAINERS[category] || category;
 
   // Step 2: Render frames with ruffle exporter
   const framesDir = path.join(tempItemDir, 'frames');
   await mkdir(framesDir, { recursive: true });
 
-  if (isAnimated) {
-    // Animated items (vanity): render specific frames per animation state
-    for (const [anim, { start, count, step }] of Object.entries(ANIMATIONS)) {
-      const animDir = path.join(framesDir, anim);
-      await mkdir(animDir, { recursive: true });
+  // Render a probe frame to determine positioning strategy for this component.
+  // Components whose content renders at the SWF origin need container offsets;
+  // components with self-positioned content (e.g., hair SWFs with main-timeline
+  // PlaceObject) don't.
+  const probeFile = path.join(tempItemDir, 'probe_raw.png');
+  try {
+    run(RUFFLE_EXPORTER, [
+      wrappedSwf, probeFile,
+      '--skipframes', String(ANIMATIONS.idle.start),
+      '--frames', '1',
+      '--scale', String(SCALE),
+      '--silent',
+    ], { stdio: 'pipe' });
+  } catch { /* ignore */ }
 
-      let frameIdx = 0;
-      for (let f = 0; f < count; f += step) {
-        const frameNum = start + f;
-        const outFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
-        try {
-          run(RUFFLE_EXPORTER, [
-            wrappedSwf, outFile,
-            '--skipframes', String(frameNum),
-            '--frames', '1',
-            '--scale', String(SCALE),
-            '--silent',
-          ], { stdio: 'pipe' });
-        } catch {
-          // Some frames may fail — skip
-        }
-        frameIdx++;
-      }
+  let useContainerOffset = true;
+  if (existsSync(probeFile)) {
+    const probeBounds = await findContentBounds(probeFile);
+    if (probeBounds && (probeBounds.x >= ORIGIN_THRESHOLD || probeBounds.y >= ORIGIN_THRESHOLD)) {
+      useContainerOffset = false;
     }
-  } else {
-    // Static items (wardrobe): all body parts at a single pose
-    // Render frame 0 for each animation state (static items look the same at every frame)
-    for (const anim of Object.keys(ANIMATIONS)) {
-      const animDir = path.join(framesDir, anim);
-      await mkdir(animDir, { recursive: true });
-      const outFile = path.join(animDir, '00_raw.png');
-      try {
-        run(RUFFLE_EXPORTER, [
-          wrappedSwf, outFile,
-          '--frames', '1',
-          '--scale', String(SCALE),
-          '--silent',
-        ], { stdio: 'pipe' });
-      } catch {
-        // Skip on failure
+    await rm(probeFile).catch(() => {});
+  }
+
+  // Helper: render and trim a single frame
+  async function renderFrame(animDir, frameIdx, frameNum, containerPos) {
+    const rawFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
+    try {
+      run(RUFFLE_EXPORTER, [
+        wrappedSwf, rawFile,
+        '--skipframes', String(frameNum),
+        '--frames', '1',
+        '--scale', String(SCALE),
+        '--silent',
+      ], { stdio: 'pipe' });
+    } catch {
+      return;
+    }
+
+    if (!existsSync(rawFile)) return;
+
+    const croppedFile = rawFile.replace('_raw.png', '.png');
+    const metaFile = rawFile.replace('_raw.png', '.meta.json');
+    try {
+      const result = await trimWithMetadata(rawFile, croppedFile, containerPos, useContainerOffset);
+      if (result) {
+        await writeFile(metaFile, JSON.stringify({
+          spriteSourceSize: result.spriteSourceSize,
+        }));
       }
+      await rm(rawFile);
+    } catch {
+      await rm(rawFile).catch(() => {});
     }
   }
 
-  // Step 3: Auto-crop each rendered frame
-  for (const anim of Object.keys(ANIMATIONS)) {
+  for (const [anim, { start, count, step }] of Object.entries(ANIMATIONS)) {
     const animDir = path.join(framesDir, anim);
-    if (!existsSync(animDir)) continue;
+    await mkdir(animDir, { recursive: true });
 
-    const rawFiles = (await readdir(animDir)).filter(f => f.endsWith('_raw.png'));
-    for (const rawFile of rawFiles) {
-      const croppedFile = rawFile.replace('_raw.png', '.png');
-      try {
-        await autoCrop(
-          path.join(animDir, rawFile),
-          path.join(animDir, croppedFile),
-        );
-        // Remove raw file
-        await rm(path.join(animDir, rawFile));
-      } catch {
-        // Crop failed — likely all-white image (no content)
-        await rm(path.join(animDir, rawFile)).catch(() => {});
-      }
+    const positions = getContainerPositions(transforms, containerKey, anim);
+
+    let frameIdx = 0;
+    for (let f = 0; f < count; f += step) {
+      const frameNum = start + f;
+      const containerPos = positions?.[frameIdx] || null;
+
+      // Animated items: render each sampled frame from the 1233-frame timeline.
+      // Static items (max_frames=1): always render frame 0 — the wrapped SWF
+      // only has 1 ShowFrame, so skipframes beyond that would produce blank output.
+      // Each static frame still gets its own per-frame container offset for
+      // correct positioning as the body pose changes.
+      await renderFrame(animDir, frameIdx, isAnimated ? frameNum : 0, containerPos);
+      frameIdx++;
     }
   }
 
-  // Step 4: Pack into sprite sheet
+  // Step 3: Pack into sprite sheet with trim metadata
   const outputCategoryDir = path.join(OUTPUT_DIR, category);
-  const result = await packSpriteSheet(itemName, framesDir, outputCategoryDir);
+  const result = await packSpriteSheet(itemName, framesDir, outputCategoryDir, true);
 
   if (result) {
     console.log(`  ${category}/${itemName}: ${result.frames} frames, ${result.width}x${result.height}`);
@@ -295,8 +463,7 @@ async function extractItem(swfPath, category, itemName) {
 /** Extract the base avatar body (renders directly, no wrapper needed). */
 async function extractBaseBody() {
   console.log('=== Base Avatar Body ===');
-  const baseSwf = path.join(GLITCH_AVATARS, 'base_avatar/Avatar.swf');
-  if (!existsSync(baseSwf)) {
+  if (!existsSync(BODY_SWF)) {
     console.error('Base avatar SWF not found');
     return;
   }
@@ -316,7 +483,7 @@ async function extractBaseBody() {
       const outFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}.png`);
       try {
         run(RUFFLE_EXPORTER, [
-          baseSwf, outFile,
+          BODY_SWF, outFile,
           '--skipframes', String(frameNum),
           '--frames', '1',
           '--scale', String(SCALE),
@@ -329,9 +496,9 @@ async function extractBaseBody() {
     }
   }
 
-  // Pack base body sprite sheet (no crop needed — base avatar has tight bounds)
+  // Pack base body sprite sheet (no trim — body fills the full frame)
   const outputDir = path.join(OUTPUT_DIR, 'base');
-  const result = await packSpriteSheet('body', framesDir, outputDir);
+  const result = await packSpriteSheet('body', framesDir, outputDir, false);
   if (result) {
     console.log(`  base/body: ${result.frames} frames, ${result.width}x${result.height}`);
   }
@@ -356,6 +523,17 @@ async function main() {
   if (!existsSync(GLITCH_AVATARS)) {
     console.error(`glitch-avatars repo not found at ${GLITCH_AVATARS}`);
     process.exit(1);
+  }
+
+  initBodyDimensions();
+
+  // Load avatar transforms (per-frame container positions)
+  let transforms = { animations: {} };
+  if (existsSync(TRANSFORMS_PATH)) {
+    transforms = JSON.parse(await readFile(TRANSFORMS_PATH, 'utf-8'));
+    console.log('Loaded avatar transforms');
+  } else {
+    console.warn('Warning: avatar-transforms.json not found — components will not have position data');
   }
 
   await mkdir(TEMP_DIR, { recursive: true });
@@ -383,7 +561,7 @@ async function main() {
       console.error(`SWF not found: ${swfPath}`);
       process.exit(1);
     }
-    await extractItem(swfPath, cat, name);
+    await extractItem(swfPath, cat, name, transforms);
     await rm(TEMP_DIR, { recursive: true, force: true });
     return;
   }
@@ -416,7 +594,7 @@ async function main() {
 
       const itemName = path.basename(swfFile, '.swf');
       const swfPath = path.join(catDir, swfFile);
-      const result = await extractItem(swfPath, cat, itemName);
+      const result = await extractItem(swfPath, cat, itemName, transforms);
 
       if (result) {
         items.push({

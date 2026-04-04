@@ -326,3 +326,14 @@ export interface SellableItem {
   count: number;
   sellPrice: number;
 }
+
+export interface AvatarManifestItem {
+  id: string;
+  name: string;
+  sheet: string;
+}
+
+export interface AvatarManifest {
+  categories: Record<string, { items: AvatarManifestItem[] }>;
+  defaults: Record<string, string>;
+}
