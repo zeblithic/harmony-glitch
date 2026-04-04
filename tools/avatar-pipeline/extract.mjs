@@ -107,7 +107,8 @@ const SUBPART_TRANSFORM_KEYS = {
   dressSleeveLowerOffside: 'dress.dressSleeveLowerOffside',
   skirt: 'skirt.skirt',
   braceletClose: 'bracelet.braceletClose',
-  // Vanity fallbacks
+  // Hat sub-parts — share the hat container position for placement.
+  // LAYER_ORDER must have { slot: 'hat', part: 'sideHat' } etc. to render.
   sideHat: 'hat',
   sideHeaddressClose: 'hat',
 };
@@ -540,8 +541,19 @@ async function extractItem(swfPath, category, itemName, transforms) {
   }
 
   const isAnimated = info.max_frames > 1;
-  // For single-sprite items, use the simple category key for transforms
-  const containerKey = category;
+  // For single-sprite wardrobe fallback, map plain category to its primary
+  // sub-part transform key (the expanded transforms only have dotted keys).
+  const PRIMARY_SUBPART = {
+    shirt: 'shirt.shirtTorso',
+    pants: 'pants.pantsTop',
+    shoes: 'shoes.shoeClose',
+    coat: 'coat.coatClose',
+    dress: 'dress.dress',
+    skirt: 'skirt.skirt',
+    hat: 'hat',
+    bracelet: 'bracelet.braceletClose',
+  };
+  const containerKey = PRIMARY_SUBPART[category] || category;
 
   const framesDir = path.join(tempItemDir, 'frames');
   await mkdir(framesDir, { recursive: true });
