@@ -10,8 +10,10 @@
   import VolumeSettings from './lib/components/VolumeSettings.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
   import JukeboxPanel from './lib/components/JukeboxPanel.svelte';
+  import AvatarEditor from './lib/components/AvatarEditor.svelte';
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo } from './lib/types';
+  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, AvatarManifest } from './lib/types';
+  import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
   import { LocalMusicSource, type TrackCatalog } from './lib/engine/music';
@@ -38,6 +40,9 @@
   let jukeboxInfo = $state<JukeboxInfo | null>(null);
   let jukeboxCloseFrames = 0; // frames since jukebox lost interaction prompt
   let musicCatalog = $state<TrackCatalog>({ tracks: {} });
+  let avatarEditorOpen = $state(false);
+  let avatarManifest = $state<AvatarManifest | null>(null);
+  let gameRenderer = $state<GameRenderer | null>(null);
 
   onMount(async () => {
     try {
@@ -72,6 +77,16 @@
       }
     } catch (e) {
       console.error('Failed to load music catalog:', e);
+    }
+
+    // Load avatar manifest
+    try {
+      const avatarResponse = await fetch('/assets/sprites/avatar/manifest.json');
+      if (avatarResponse.ok) {
+        avatarManifest = await avatarResponse.json();
+      }
+    } catch (e) {
+      console.error('Failed to load avatar manifest:', e);
     }
 
     // Restore saved kit selection
@@ -201,6 +216,7 @@
               jukeboxCloseFrames = 0;
               inventoryOpen = false;
               volumeOpen = false;
+              avatarEditorOpen = false;
             }).catch(e => console.error('Failed to get jukebox state:', e));
           }
         }
@@ -291,12 +307,17 @@
   if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
-    if (inventoryOpen) volumeOpen = false;
+    if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; }
   }
   if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
-    if (volumeOpen) inventoryOpen = false;
+    if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
+  }
+  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen) {
+    e.preventDefault();
+    avatarEditorOpen = !avatarEditorOpen;
+    if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; }
   }
   if ((e.key === 'j' || e.key === 'J') && jukeboxOpen && !chatFocused) {
     e.preventDefault();
@@ -315,7 +336,7 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || avatarEditorOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
@@ -342,6 +363,12 @@
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
     />
+    <AvatarEditor
+      visible={avatarEditorOpen}
+      manifest={avatarManifest}
+      renderer={gameRenderer}
+      onClose={() => { avatarEditorOpen = false; }}
+    />
     <div role="status" aria-live="polite" class="sr-only">
       {#if transitionPending && transitionTarget}Travelling to {transitionTarget}…{/if}
     </div>
@@ -353,8 +380,10 @@
       } finally {
         audioManager?.dispose();
         audioManager = null;
+        gameRenderer = null;
         currentStreet = null;
         latestFrame = null;
+        avatarEditorOpen = false;
         jukeboxOpen = false;
         jukeboxInfo = null;
         jukeboxCloseFrames = 0;
