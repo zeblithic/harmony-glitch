@@ -179,7 +179,7 @@ mod tests {
     fn parse_bundled_entities_json() {
         let json = include_str!("../../../assets/entities.json");
         let defs = parse_entity_defs(json).unwrap();
-        assert_eq!(defs.len(), 7);
+        assert_eq!(defs.len(), 9);
         assert!(defs.contains_key("fruit_tree"));
         assert!(defs.contains_key("chicken"));
         assert!(defs.contains_key("pig"));
@@ -187,6 +187,8 @@ mod tests {
         assert!(defs.contains_key("bubble_tree"));
         assert!(defs.contains_key("wood_tree"));
         assert!(defs.contains_key("jukebox_tavern"));
+        assert!(defs.contains_key("vendor_grocery"));
+        assert!(defs.contains_key("vendor_hardware"));
     }
 
     #[test]

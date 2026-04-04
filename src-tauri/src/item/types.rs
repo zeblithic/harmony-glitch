@@ -45,6 +45,8 @@ pub struct EntityDef {
     pub bob_frequency: Option<f64>,
     pub playlist: Option<Vec<String>>,
     pub audio_radius: Option<f64>,
+    #[serde(default)]
+    pub store: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -541,5 +543,38 @@ mod tests {
         }"#;
         let def: ItemDef = serde_json::from_str(json).unwrap();
         assert_eq!(def.base_cost, None);
+    }
+
+    #[test]
+    fn entity_def_with_store() {
+        let json = r#"{
+            "name": "Grocery Vendor",
+            "verb": "Shop",
+            "yields": [],
+            "cooldownSecs": 0,
+            "maxHarvests": 0,
+            "respawnSecs": 0,
+            "spriteClass": "vendor",
+            "interactRadius": 100,
+            "store": "grocery"
+        }"#;
+        let def: EntityDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.store, Some("grocery".to_string()));
+    }
+
+    #[test]
+    fn entity_def_without_store() {
+        let json = r#"{
+            "name": "Fruit Tree",
+            "verb": "Harvest",
+            "yields": [{ "item": "cherry", "min": 1, "max": 3 }],
+            "cooldownSecs": 5.0,
+            "maxHarvests": 3,
+            "respawnSecs": 30.0,
+            "spriteClass": "tree_fruit",
+            "interactRadius": 80
+        }"#;
+        let def: EntityDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.store, None);
     }
 }
