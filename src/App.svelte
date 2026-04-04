@@ -176,9 +176,10 @@
       transitionAttempts = 0;
     }
 
-    // Process audio events
-    if (frame.audioEvents?.length && audioManager) {
-      audioManager.processEvents(frame.audioEvents);
+    // Process audio events — always call processEvents so cleanup() runs
+    // even when no events arrive (player walked out of all jukebox ranges)
+    if (audioManager) {
+      audioManager.processEvents(frame.audioEvents ?? []);
     }
 
     // Detect jukebox interaction via audio events
@@ -271,12 +272,12 @@
 
 <svelte:window onkeydown={(e) => {
   if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
-  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused) {
+  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) volumeOpen = false;
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused) {
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
     if (volumeOpen) inventoryOpen = false;

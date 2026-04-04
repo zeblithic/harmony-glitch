@@ -58,7 +58,9 @@ export class JukeboxController {
       existing.lastSeenAt = now;
       existing.howl.volume(distanceFactor * this.getVolume());
       if (playing) {
-        if (!existing.howl.playing()) {
+        // Only call play() once the Howl has finished loading — calling it
+        // while loading queues duplicate instances that all fire on load.
+        if (existing.howl.state() === 'loaded' && !existing.howl.playing()) {
           existing.howl.play();
         }
       } else {
