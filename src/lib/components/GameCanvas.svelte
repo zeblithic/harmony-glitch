@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { GameRenderer } from '../engine/renderer';
-  import { sendInput, onRenderFrame, onChatMessage, startGame } from '../ipc';
+  import { sendInput, onRenderFrame, onChatMessage, startGame, getAvatar } from '../ipc';
   import type { StreetData, InputState, RenderFrame } from '../types';
 
   let { street, debugMode = false, chatFocused = false, inventoryOpen = false, uiOpen = false, onFrame }: {
@@ -73,6 +73,12 @@
 
     if (street) {
       await r.buildScene(street);
+      try {
+        const appearance = await getAvatar();
+        await r.applyAppearance(appearance);
+      } catch (e) {
+        console.warn('[GameCanvas] Failed to load avatar appearance:', e);
+      }
       startGame().catch(console.error);
     }
   });

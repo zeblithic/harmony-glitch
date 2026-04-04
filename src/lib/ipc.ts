@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, AvatarAppearance } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -84,4 +84,12 @@ export async function listSoundKits(): Promise<SoundKitMeta[]> {
 
 export async function readSoundKit(kitId: string): Promise<SoundKit> {
   return invoke<SoundKit>('read_sound_kit', { kitId });
+}
+
+export async function getAvatar(): Promise<AvatarAppearance> {
+  return invoke<AvatarAppearance>('get_avatar');
+}
+
+export async function setAvatar(appearance: AvatarAppearance): Promise<AvatarAppearance> {
+  return invoke<AvatarAppearance>('set_avatar', { appearance });
 }

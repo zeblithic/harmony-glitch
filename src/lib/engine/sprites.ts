@@ -1,42 +1,23 @@
 import {
   Assets,
-  AnimatedSprite,
   Container,
   Graphics,
   Sprite,
   Text,
 } from 'pixi.js';
-import type { Spritesheet, Texture } from 'pixi.js';
+import type { Texture } from 'pixi.js';
 import type {
-  AnimationState,
   Deco,
-  Direction,
   StreetData,
   WorldEntityFrame,
   WorldItemFrame,
 } from '../types';
 
-const ANIMATION_SPEEDS: Record<AnimationState, number> = {
-  idle: 0.08,
-  walking: 0.15,
-  jumping: 0.1,
-  falling: 0.1,
-};
-
 export class SpriteManager {
   private textureCache: Map<string, Texture> = new Map();
-  private avatarSheet: Spritesheet | null = null;
   private warnedMissing: Set<string> = new Set();
-  private currentAvatarAnimation: AnimationState | null = null;
-  private avatarAnimatedSprite: AnimatedSprite | null = null;
 
   async init(): Promise<void> {
-    try {
-      this.avatarSheet = await Assets.load('sprites/avatar/avatar.json');
-    } catch {
-      console.warn('[SpriteManager] Avatar spritesheet not found, using fallback');
-    }
-
     // Load atlases if they exist — individual PNGs still work as fallback
     await Promise.all([
       this.loadAtlas('items', 'sprites/items/items.json'),
@@ -97,60 +78,6 @@ export class SpriteManager {
   /** Check if an item texture has been async-loaded into cache. */
   hasItemTexture(icon: string): boolean {
     return this.textureCache.has(`item:${icon}`);
-  }
-
-  createAvatar(): Container {
-    // Stop and destroy previous AnimatedSprite to unsubscribe from PixiJS Ticker.
-    // removeChildren() detaches from scene graph but Ticker holds a strong ref.
-    if (this.avatarAnimatedSprite) {
-      this.avatarAnimatedSprite.stop();
-      this.avatarAnimatedSprite.destroy();
-      this.avatarAnimatedSprite = null;
-      this.currentAvatarAnimation = null;
-    }
-
-    const container = new Container();
-
-    if (this.avatarSheet) {
-      const idleTextures = this.avatarSheet.animations['idle'];
-      if (idleTextures) {
-        const animated = new AnimatedSprite({
-          textures: idleTextures,
-          animationSpeed: ANIMATION_SPEEDS.idle,
-          loop: true,
-        });
-        animated.anchor.set(0.5, 1);
-        animated.play();
-        container.addChild(animated);
-        this.avatarAnimatedSprite = animated;
-        this.currentAvatarAnimation = 'idle';
-        return container;
-      }
-    }
-
-    // Fallback: blue rect 30x60
-    const g = new Graphics();
-    g.rect(-15, -60, 30, 60);
-    g.fill(0x5865f2);
-    container.addChild(g);
-    this.avatarAnimatedSprite = null;
-    this.currentAvatarAnimation = null;
-    return container;
-  }
-
-  updateAvatar(container: Container, animation: AnimationState, facing: Direction): void {
-    container.scale.x = facing === 'right' ? 1 : -1;
-
-    if (!this.avatarAnimatedSprite || !this.avatarSheet) return;
-    if (animation === this.currentAvatarAnimation) return;
-
-    const textures = this.avatarSheet.animations[animation];
-    if (textures) {
-      this.avatarAnimatedSprite.textures = textures;
-      this.avatarAnimatedSprite.animationSpeed = ANIMATION_SPEEDS[animation];
-      this.avatarAnimatedSprite.play();
-      this.currentAvatarAnimation = animation;
-    }
   }
 
   createDeco(deco: Deco): Container {
@@ -299,9 +226,6 @@ export class SpriteManager {
 
   destroy(): void {
     this.textureCache.clear();
-    this.avatarSheet = null;
-    this.avatarAnimatedSprite = null;
-    this.currentAvatarAnimation = null;
     this.warnedMissing.clear();
   }
 }
