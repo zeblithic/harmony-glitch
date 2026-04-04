@@ -16,8 +16,8 @@ const mockStoreState: StoreState = {
   entityId: 'vendor_1',
   name: 'Grocery Vendor',
   vendorInventory: [
-    { itemId: 'cherry', name: 'Cherry', baseCost: 3 },
-    { itemId: 'grain', name: 'Grain', baseCost: 3 },
+    { itemId: 'cherry', name: 'Cherry', baseCost: 3, stackLimit: 50 },
+    { itemId: 'grain', name: 'Grain', baseCost: 3, stackLimit: 50 },
   ],
   playerInventory: [
     { itemId: 'cherry', name: 'Cherry', count: 12, sellPrice: 2 },

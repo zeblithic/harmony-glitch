@@ -602,6 +602,7 @@ fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Valu
             "itemId": item_id,
             "name": item_def.name,
             "baseCost": base_cost,
+            "stackLimit": item_def.stack_limit,
         }))
     }).collect();
 

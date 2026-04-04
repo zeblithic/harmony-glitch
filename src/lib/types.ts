@@ -317,6 +317,7 @@ export interface StoreItem {
   itemId: string;
   name: string;
   baseCost: number;
+  stackLimit: number;
 }
 
 export interface SellableItem {

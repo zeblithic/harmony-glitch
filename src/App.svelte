@@ -282,6 +282,7 @@
         if (shopCloseFrames >= 2) {
           shopOpen = false;
           storeState = null;
+          shopCloseFrames = 0;
         }
       }
     }

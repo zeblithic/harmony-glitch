@@ -52,15 +52,13 @@
     onClose?.();
   }
 
-  function handleBuyClick(itemId: string, baseCost: number, e: MouseEvent) {
+  function handleBuyClick(itemId: string, baseCost: number, stackLimit: number, e: MouseEvent) {
     if (!storeState) return;
     if (e.shiftKey) {
-      // Buy as many as we can afford. The backend will reject if inventory
-      // is full, in which case the user can buy smaller amounts.
+      // Buy as many as we can afford, capped by the item's stack limit.
+      // The backend may still reject if inventory is full.
       const maxAffordable = Math.floor(storeState.currants / baseCost);
-      // Cap at stack limit (50 is the max in this game) to avoid
-      // requesting absurdly large counts
-      const count = Math.min(maxAffordable, 50);
+      const count = Math.min(maxAffordable, stackLimit);
       if (count > 0) onBuy?.(itemId, count);
     } else {
       onBuy?.(itemId, 1);
@@ -146,7 +144,7 @@
                 class="action-btn buy-btn"
                 aria-label="Buy {item.name}"
                 disabled={storeState.currants < item.baseCost}
-                onclick={(e) => handleBuyClick(item.itemId, item.baseCost, e)}
+                onclick={(e) => handleBuyClick(item.itemId, item.baseCost, item.stackLimit, e)}
               >
                 Buy
               </button>
