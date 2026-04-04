@@ -201,7 +201,7 @@ impl GameState {
         for entity in &self.world_entities {
             if let Some(def) = self.entity_defs.get(&entity.entity_type) {
                 if let Some(ref playlist) = def.playlist {
-                    let valid = jukebox::validate_playlist(playlist.clone(), &self.track_catalog, &def.name);
+                    let valid = jukebox::validate_playlist(playlist, &self.track_catalog, &def.name);
                     if !valid.is_empty() {
                         self.jukebox_states.insert(entity.id.clone(), JukeboxState::new(valid));
                     }

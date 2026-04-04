@@ -190,6 +190,7 @@
           if (jukeboxOpen) {
             jukeboxOpen = false;
             jukeboxInfo = null;
+            jukeboxCloseFrames = 0;
           } else if (frame.interactionPrompt?.entityId) {
             const eid = frame.interactionPrompt.entityId;
             getJukeboxState(eid).then(info => {
@@ -197,6 +198,7 @@
               if (latestFrame?.interactionPrompt?.entityId !== eid) return;
               jukeboxInfo = info;
               jukeboxOpen = true;
+              jukeboxCloseFrames = 0;
               inventoryOpen = false;
               volumeOpen = false;
             }).catch(e => console.error('Failed to get jukebox state:', e));
@@ -300,6 +302,7 @@
     e.preventDefault();
     jukeboxOpen = false;
     jukeboxInfo = null;
+    jukeboxCloseFrames = 0;
   }
 }} />
 
@@ -328,7 +331,7 @@
     <JukeboxPanel
       info={jukeboxInfo}
       visible={jukeboxOpen}
-      onClose={() => { jukeboxOpen = false; jukeboxInfo = null; }}
+      onClose={() => { jukeboxOpen = false; jukeboxInfo = null; jukeboxCloseFrames = 0; }}
       onPlay={(eid) => jukeboxPlay(eid).catch(e => console.error('jukebox play:', e))}
       onPause={(eid) => jukeboxPause(eid).catch(e => console.error('jukebox pause:', e))}
       onSelectTrack={(eid, idx) => jukeboxSelectTrack(eid, idx).catch(e => console.error('jukebox select:', e))}
@@ -354,6 +357,7 @@
         latestFrame = null;
         jukeboxOpen = false;
         jukeboxInfo = null;
+        jukeboxCloseFrames = 0;
       }
     }}>
       Back

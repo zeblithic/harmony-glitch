@@ -99,14 +99,14 @@ impl JukeboxState {
 /// Filters a playlist to only tracks that exist in the catalog.
 /// Logs a warning for each missing track ID.
 pub fn validate_playlist(
-    playlist: Vec<String>,
+    playlist: &[String],
     catalog: &TrackCatalog,
     entity_name: &str,
 ) -> Vec<String> {
     playlist
-        .into_iter()
+        .iter()
         .filter(|id| {
-            if catalog.tracks.contains_key(id) {
+            if catalog.tracks.contains_key(id.as_str()) {
                 true
             } else {
                 eprintln!(
@@ -116,6 +116,7 @@ pub fn validate_playlist(
                 false
             }
         })
+        .cloned()
         .collect()
 }
 
@@ -266,7 +267,7 @@ mod tests {
             "ghost_track".to_string(),
             "track_b".to_string(),
         ];
-        let result = validate_playlist(playlist, &catalog, "test_jukebox");
+        let result = validate_playlist(&playlist, &catalog, "test_jukebox");
         assert_eq!(result, vec!["track_a".to_string(), "track_b".to_string()]);
     }
 
@@ -274,7 +275,7 @@ mod tests {
     fn validate_playlist_empty_on_all_unknown() {
         let catalog = make_catalog();
         let playlist = vec!["nonexistent_1".to_string(), "nonexistent_2".to_string()];
-        let result = validate_playlist(playlist, &catalog, "test_jukebox");
+        let result = validate_playlist(&playlist, &catalog, "test_jukebox");
         assert!(result.is_empty());
     }
 
