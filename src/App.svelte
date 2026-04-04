@@ -338,6 +338,8 @@
         audioManager = null;
         currentStreet = null;
         latestFrame = null;
+        jukeboxOpen = false;
+        jukeboxInfo = null;
       }
     }}>
       Back

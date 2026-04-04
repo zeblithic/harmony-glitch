@@ -500,7 +500,9 @@ fn jukebox_play(entity_id: String, app: AppHandle) -> Result<(), String> {
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type);
     let radius = def.map(|d| d.interact_radius).unwrap_or(0.0);
-    let dist = (state.player.x - entity.x).abs();
+    let dx = state.player.x - entity.x;
+    let dy = state.player.y - entity.y;
+    let dist = (dx * dx + dy * dy).sqrt();
     if dist > radius { return Err("Too far from jukebox".to_string()); }
     if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.play(); }
     Ok(())
@@ -514,7 +516,9 @@ fn jukebox_pause(entity_id: String, app: AppHandle) -> Result<(), String> {
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type);
     let radius = def.map(|d| d.interact_radius).unwrap_or(0.0);
-    let dist = (state.player.x - entity.x).abs();
+    let dx = state.player.x - entity.x;
+    let dy = state.player.y - entity.y;
+    let dist = (dx * dx + dy * dy).sqrt();
     if dist > radius { return Err("Too far from jukebox".to_string()); }
     if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.pause(); }
     Ok(())
@@ -528,7 +532,9 @@ fn jukebox_select_track(entity_id: String, track_index: usize, app: AppHandle) -
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type);
     let radius = def.map(|d| d.interact_radius).unwrap_or(0.0);
-    let dist = (state.player.x - entity.x).abs();
+    let dx = state.player.x - entity.x;
+    let dy = state.player.y - entity.y;
+    let dist = (dx * dx + dy * dy).sqrt();
     if dist > radius { return Err("Too far from jukebox".to_string()); }
     if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.select_track(track_index); }
     Ok(())
