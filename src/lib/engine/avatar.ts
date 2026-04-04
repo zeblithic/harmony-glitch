@@ -216,12 +216,14 @@ export class AvatarCompositor {
   private applyTints(appearance: AvatarAppearance): void {
     const skinTint = parseInt(appearance.skinColor, 16);
     const hairTint = parseInt(appearance.hairColor, 16);
+    const resolvedSkin = Number.isNaN(skinTint) ? 0xffffff : skinTint;
+    const resolvedHair = Number.isNaN(hairTint) ? 0xffffff : hairTint;
 
     for (const [slot, sprite] of this.layers) {
       if (SKIN_TINT_SLOTS.has(slot)) {
-        sprite.tint = skinTint;
+        sprite.tint = resolvedSkin;
       } else if (HAIR_TINT_SLOTS.has(slot)) {
-        sprite.tint = hairTint;
+        sprite.tint = resolvedHair;
       }
     }
   }
@@ -250,6 +252,9 @@ export class AvatarCompositor {
       this.container.addChild(g);
       // Reset scale for fallback (it's already in world units)
       this.container.scale.set(1);
+    } else {
+      // Restore compositor scale in case a previous fallback set it to 1
+      this.container.scale.set(DISPLAY_SCALE);
     }
   }
 }
