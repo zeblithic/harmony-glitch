@@ -395,18 +395,20 @@
       onClose={() => { shopOpen = false; storeState = null; shopCloseFrames = 0; }}
       onBuy={async (itemId, count) => {
         if (!storeState) return;
+        const eid = storeState.entityId;
         try {
-          await vendorBuy(storeState.entityId, itemId, count);
-          storeState = await getStoreState(storeState.entityId);
+          await vendorBuy(eid, itemId, count);
+          storeState = await getStoreState(eid);
         } catch (e) {
           console.error('Buy failed:', e);
         }
       }}
       onSell={async (itemId, count) => {
         if (!storeState) return;
+        const eid = storeState.entityId;
         try {
-          await vendorSell(storeState.entityId, itemId, count);
-          storeState = await getStoreState(storeState.entityId);
+          await vendorSell(eid, itemId, count);
+          storeState = await getStoreState(eid);
         } catch (e) {
           console.error('Sell failed:', e);
         }

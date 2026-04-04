@@ -20,21 +20,20 @@
   let activeTab = $state<'buy' | 'sell'>('buy');
 
   $effect(() => {
-    if (!dialogEl) return;
-    if (visible) {
+    if (visible && dialogEl) {
       if (!dialogEl.open) {
         previousFocus = document.activeElement as HTMLElement | null;
         dialogEl.showModal();
         const first = dialogEl.querySelector('button, [tabindex]') as HTMLElement | null;
         first?.focus();
       }
-    } else {
-      if (dialogEl.open) {
-        dialogEl.close();
-        previousFocus?.focus();
-        previousFocus = null;
-        activeTab = 'buy';
-      }
+      return () => {
+        if (dialogEl?.open) dialogEl.close();
+      };
+    } else if (!visible && previousFocus) {
+      previousFocus.focus();
+      previousFocus = null;
+      activeTab = 'buy';
     }
   });
 
