@@ -51,10 +51,11 @@ impl JukeboxState {
         let current_id = &self.playlist[self.current_track_index];
         if let Some(track) = catalog.tracks.get(current_id) {
             if self.elapsed_secs >= track.duration_secs {
-                // Advance to next track, wrapping around.
+                // Carry over excess time so the playback clock doesn't drift.
+                let excess = self.elapsed_secs - track.duration_secs;
                 self.current_track_index =
                     (self.current_track_index + 1) % self.playlist.len();
-                self.elapsed_secs = 0.0;
+                self.elapsed_secs = excess;
             }
         } else {
             // Track not in catalog — skip to next.
@@ -189,10 +190,10 @@ mod tests {
         let catalog = make_catalog();
         let mut state =
             JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
-        // track_a is 10s; tick past it
-        state.tick(10.0, &catalog);
+        // track_a is 10s; tick 10.5s — should advance with 0.5s carried over
+        state.tick(10.5, &catalog);
         assert_eq!(state.current_track_index, 1);
-        assert!(state.elapsed_secs < f64::EPSILON);
+        assert!((state.elapsed_secs - 0.5).abs() < f64::EPSILON);
     }
 
     #[test]
