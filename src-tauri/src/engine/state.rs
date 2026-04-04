@@ -1,7 +1,7 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::avatar::types::{AnimationState, Direction};
+use crate::avatar::types::{AnimationState, AvatarAppearance, Direction};
 use crate::engine::audio::AudioEvent;
 use crate::engine::jukebox::{self, JukeboxState, TrackCatalog};
 use crate::engine::transition::{
@@ -26,6 +26,8 @@ pub struct SaveState {
     pub y: f64,
     pub facing: Direction,
     pub inventory: Vec<Option<ItemStack>>,
+    #[serde(default)]
+    pub avatar: AvatarAppearance,
 }
 
 /// The complete game state.
@@ -54,6 +56,7 @@ pub struct GameState {
     pub prev_on_ground: bool,
     pub jukebox_states: std::collections::HashMap<String, JukeboxState>,
     pub track_catalog: TrackCatalog,
+    pub avatar: AvatarAppearance,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -153,6 +156,7 @@ impl GameState {
             prev_on_ground: true,
             jukebox_states: std::collections::HashMap::new(),
             track_catalog,
+            avatar: AvatarAppearance::default(),
         }
     }
 
@@ -679,6 +683,7 @@ impl GameState {
             y: self.player.y,
             facing: self.facing,
             inventory: self.inventory.slots.clone(),
+            avatar: self.avatar.clone(),
         })
     }
 
@@ -707,6 +712,7 @@ impl GameState {
             );
         }
         self.inventory.slots.resize(capacity, None);
+        self.avatar = save.avatar.clone();
     }
 
     fn tick_entities(&mut self, dt: f64, rng: &mut impl Rng) {
@@ -2756,6 +2762,7 @@ mod tests {
 #[cfg(test)]
 mod save_tests {
     use super::*;
+    use crate::avatar::types::AvatarAppearance;
     use crate::item::types::ItemStack;
     use std::collections::HashMap;
 
@@ -2775,6 +2782,7 @@ mod save_tests {
                 None,
                 Some(ItemStack { item_id: "grain".to_string(), count: 2 }),
             ],
+            avatar: AvatarAppearance::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2795,6 +2803,7 @@ mod save_tests {
             y: 0.0,
             facing: Direction::Left,
             inventory: vec![Some(ItemStack { item_id: "cherry".to_string(), count: 1 })],
+            avatar: AvatarAppearance::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -2809,6 +2818,7 @@ mod save_tests {
             y: 0.0,
             facing: Direction::Left,
             inventory: vec![None; 16],
+            avatar: AvatarAppearance::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2830,6 +2840,7 @@ mod save_tests {
                 Some(ItemStack { item_id: "cherry".to_string(), count: 3 }),
                 None,
             ],
+            avatar: AvatarAppearance::default(),
         };
 
         write_save_state(&path, &save).unwrap();
@@ -2878,6 +2889,7 @@ mod save_tests {
             y: -99999.0,
             facing: Direction::Left,
             inventory: vec![],
+            avatar: AvatarAppearance::default(),
         };
         state.restore_save(&save);
 
@@ -2904,6 +2916,7 @@ mod save_tests {
             inventory: vec![
                 Some(ItemStack { item_id: "cherry".to_string(), count: 5 }),
             ],
+            avatar: AvatarAppearance::default(),
         };
         state.restore_save(&save);
 

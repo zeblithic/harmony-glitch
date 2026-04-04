@@ -6,7 +6,7 @@ pub mod network;
 pub mod physics;
 pub mod street;
 
-use avatar::types::Direction;
+use avatar::types::{AvatarAppearance, Direction};
 use engine::state::GameState;
 use network::state::{NetworkAction, NetworkState};
 use network::transport::{UdpTransport, DEFAULT_PORT};
@@ -175,6 +175,21 @@ fn get_saved_state(app: AppHandle) -> Result<Option<serde_json::Value>, String> 
         }
         None => Ok(None),
     }
+}
+
+#[tauri::command]
+fn get_avatar(app: AppHandle) -> Result<AvatarAppearance, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    Ok(state.avatar.clone())
+}
+
+#[tauri::command]
+fn set_avatar(appearance: AvatarAppearance, app: AppHandle) -> Result<AvatarAppearance, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.avatar = appearance;
+    Ok(state.avatar.clone())
 }
 
 /// Save the current game state to disk. Non-fatal on failure.
@@ -949,6 +964,8 @@ pub fn run() {
             jukebox_pause,
             jukebox_select_track,
             get_jukebox_state,
+            get_avatar,
+            set_avatar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

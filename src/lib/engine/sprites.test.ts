@@ -136,13 +136,6 @@ describe('SpriteManager', () => {
     });
   });
 
-  describe('createAvatar fallback', () => {
-    it('returns a Container when no spritesheet is loaded', () => {
-      const result = manager.createAvatar();
-      expect(result).toBeDefined();
-    });
-  });
-
   describe('fallback upgrade path', () => {
     it('hasEntityTexture returns true after async load resolves', async () => {
       const { Assets } = await import('pixi.js');

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -100,4 +100,12 @@ export async function jukeboxSelectTrack(entityId: string, trackIndex: number): 
 
 export async function getJukeboxState(entityId: string): Promise<JukeboxInfo> {
   return invoke<JukeboxInfo>('get_jukebox_state', { entityId });
+}
+
+export async function getAvatar(): Promise<AvatarAppearance> {
+  return invoke<AvatarAppearance>('get_avatar');
+}
+
+export async function setAvatar(appearance: AvatarAppearance): Promise<AvatarAppearance> {
+  return invoke<AvatarAppearance>('set_avatar', { appearance });
 }
