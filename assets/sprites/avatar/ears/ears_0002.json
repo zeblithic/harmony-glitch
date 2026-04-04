@@ -1,0 +1,59 @@
+{
+  "frames": {
+    "idle_00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 44,
+        "h": 75
+      }
+    },
+    "walking_00": {
+      "frame": {
+        "x": 44,
+        "y": 0,
+        "w": 44,
+        "h": 75
+      }
+    },
+    "jumping_00": {
+      "frame": {
+        "x": 88,
+        "y": 0,
+        "w": 44,
+        "h": 75
+      }
+    },
+    "falling_00": {
+      "frame": {
+        "x": 132,
+        "y": 0,
+        "w": 44,
+        "h": 75
+      }
+    }
+  },
+  "animations": {
+    "idle": [
+      "idle_00"
+    ],
+    "walking": [
+      "walking_00"
+    ],
+    "jumping": [
+      "jumping_00"
+    ],
+    "falling": [
+      "falling_00"
+    ]
+  },
+  "meta": {
+    "image": "ears_0002.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 176,
+      "h": 75
+    },
+    "scale": 1
+  }
+}

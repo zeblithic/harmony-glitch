@@ -1,0 +1,59 @@
+{
+  "frames": {
+    "idle_00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 145,
+        "h": 131
+      }
+    },
+    "walking_00": {
+      "frame": {
+        "x": 145,
+        "y": 0,
+        "w": 145,
+        "h": 131
+      }
+    },
+    "jumping_00": {
+      "frame": {
+        "x": 290,
+        "y": 0,
+        "w": 145,
+        "h": 131
+      }
+    },
+    "falling_00": {
+      "frame": {
+        "x": 435,
+        "y": 0,
+        "w": 145,
+        "h": 131
+      }
+    }
+  },
+  "animations": {
+    "idle": [
+      "idle_00"
+    ],
+    "walking": [
+      "walking_00"
+    ],
+    "jumping": [
+      "jumping_00"
+    ],
+    "falling": [
+      "falling_00"
+    ]
+  },
+  "meta": {
+    "image": "GlitchamaphoneButterflyPants.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 580,
+      "h": 131
+    },
+    "scale": 1
+  }
+}

@@ -95,8 +95,11 @@ let BODY_FRAME_W, BODY_FRAME_H;
 function initBodyDimensions() {
   try {
     const info = JSON.parse(run(SWF_WRAPPER, ['--info', BODY_SWF]));
-    BODY_FRAME_W = Math.round(info.stage_px.width * SCALE);
-    BODY_FRAME_H = Math.round(info.stage_px.height * SCALE);
+    // Use integer twips values (20 twips per pixel) to avoid float precision
+    // loss from the 1-decimal-place stage_px fields.
+    const tw = info.stage_twips;
+    BODY_FRAME_W = Math.round((tw.x_max - tw.x_min) * SCALE / 20);
+    BODY_FRAME_H = Math.round((tw.y_max - tw.y_min) * SCALE / 20);
   } catch {
     // Fallback if body SWF is missing (e.g., --item on a component only)
     BODY_FRAME_W = Math.round(68 * SCALE);

@@ -1,0 +1,59 @@
+{
+  "frames": {
+    "idle_00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 133,
+        "h": 135
+      }
+    },
+    "walking_00": {
+      "frame": {
+        "x": 133,
+        "y": 0,
+        "w": 133,
+        "h": 135
+      }
+    },
+    "jumping_00": {
+      "frame": {
+        "x": 266,
+        "y": 0,
+        "w": 133,
+        "h": 135
+      }
+    },
+    "falling_00": {
+      "frame": {
+        "x": 399,
+        "y": 0,
+        "w": 133,
+        "h": 135
+      }
+    }
+  },
+  "animations": {
+    "idle": [
+      "idle_00"
+    ],
+    "walking": [
+      "walking_00"
+    ],
+    "jumping": [
+      "jumping_00"
+    ],
+    "falling": [
+      "falling_00"
+    ]
+  },
+  "meta": {
+    "image": "Candy_Cane_Sweater.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 532,
+      "h": 135
+    },
+    "scale": 1
+  }
+}
