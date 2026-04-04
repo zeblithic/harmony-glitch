@@ -588,7 +588,11 @@ impl GameState {
                                 entity_type: "jukebox".to_string(),
                             });
                         }
-                        Some(interaction::InteractionType::Vendor { .. }) => {}
+                        Some(interaction::InteractionType::Vendor { .. }) => {
+                            audio_events.push(AudioEvent::EntityInteract {
+                                entity_type: "vendor".to_string(),
+                            });
+                        }
                         None => {}
                     }
 

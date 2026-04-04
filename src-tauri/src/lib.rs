@@ -508,7 +508,7 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
 }
 
 /// Validate that the player is within interact_radius of the given entity.
-fn validate_jukebox_proximity(state: &engine::state::GameState, entity_id: &str) -> Result<(), String> {
+fn validate_entity_proximity(state: &engine::state::GameState, entity_id: &str) -> Result<(), String> {
     let entity = state.world_entities.iter().find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type);
@@ -516,7 +516,7 @@ fn validate_jukebox_proximity(state: &engine::state::GameState, entity_id: &str)
     let dx = state.player.x - entity.x;
     let dy = state.player.y - entity.y;
     let dist = (dx * dx + dy * dy).sqrt();
-    if dist > radius { return Err("Too far from jukebox".to_string()); }
+    if dist > radius { return Err("Too far".to_string()); }
     Ok(())
 }
 
@@ -524,7 +524,7 @@ fn validate_jukebox_proximity(state: &engine::state::GameState, entity_id: &str)
 fn jukebox_play(entity_id: String, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    validate_jukebox_proximity(&state, &entity_id)?;
+    validate_entity_proximity(&state, &entity_id)?;
     if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.play(); }
     Ok(())
 }
@@ -533,7 +533,7 @@ fn jukebox_play(entity_id: String, app: AppHandle) -> Result<(), String> {
 fn jukebox_pause(entity_id: String, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    validate_jukebox_proximity(&state, &entity_id)?;
+    validate_entity_proximity(&state, &entity_id)?;
     if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.pause(); }
     Ok(())
 }
@@ -542,7 +542,7 @@ fn jukebox_pause(entity_id: String, app: AppHandle) -> Result<(), String> {
 fn jukebox_select_track(entity_id: String, track_index: usize, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    validate_jukebox_proximity(&state, &entity_id)?;
+    validate_entity_proximity(&state, &entity_id)?;
     if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.select_track(track_index); }
     Ok(())
 }
@@ -579,6 +579,133 @@ fn get_jukebox_state(entity_id: String, app: AppHandle) -> Result<serde_json::Va
         "playing": jb.map(|j| j.playing).unwrap_or(false),
         "elapsedSecs": jb.map(|j| j.elapsed_secs).unwrap_or(0.0),
     }))
+}
+
+#[tauri::command]
+fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+        .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
+    let def = state.entity_defs.get(&entity.entity_type)
+        .ok_or_else(|| format!("Unknown entity type: {}", entity.entity_type))?;
+    let store_id = def.store.as_ref()
+        .ok_or_else(|| format!("Entity '{}' is not a vendor", entity.entity_type))?;
+    let store = state.store_catalog.stores.get(store_id)
+        .ok_or_else(|| format!("Unknown store: {store_id}"))?;
+
+    let vendor_inventory: Vec<serde_json::Value> = store.inventory.iter().filter_map(|item_id| {
+        let item_def = state.item_defs.get(item_id)?;
+        let base_cost = item_def.base_cost?;
+        Some(serde_json::json!({
+            "itemId": item_id,
+            "name": item_def.name,
+            "baseCost": base_cost,
+        }))
+    }).collect();
+
+    // Build player sellable inventory: deduplicate by item_id
+    let mut seen = std::collections::HashMap::<String, u32>::new();
+    for stack in state.inventory.slots.iter().flatten() {
+        *seen.entry(stack.item_id.clone()).or_insert(0) += stack.count;
+    }
+    let player_inventory: Vec<serde_json::Value> = seen.iter().filter_map(|(item_id, &count)| {
+        let sell = item::vendor::sell_price(item_id, &state.item_defs, store)?;
+        let item_def = state.item_defs.get(item_id)?;
+        Some(serde_json::json!({
+            "itemId": item_id,
+            "name": item_def.name,
+            "count": count,
+            "sellPrice": sell,
+        }))
+    }).collect();
+
+    Ok(serde_json::json!({
+        "entityId": entity_id,
+        "name": store.name,
+        "vendorInventory": vendor_inventory,
+        "playerInventory": player_inventory,
+        "currants": state.currants,
+    }))
+}
+
+#[tauri::command]
+fn vendor_buy(entity_id: String, item_id: String, count: u32, app: AppHandle) -> Result<u64, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    validate_entity_proximity(&state, &entity_id)?;
+
+    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+        .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
+    let def = state.entity_defs.get(&entity.entity_type)
+        .ok_or_else(|| format!("Unknown entity type: {}", entity.entity_type))?;
+    let store_id = def.store.as_ref()
+        .ok_or_else(|| format!("Entity '{}' is not a vendor", entity.entity_type))?;
+    let store = state.store_catalog.stores.get(store_id)
+        .ok_or_else(|| format!("Unknown store: {store_id}"))?
+        .clone();
+    let item_defs = state.item_defs.clone();
+
+    let currants = state.currants;
+    let new_balance = item::vendor::buy(&item_id, count, currants, &mut state.inventory, &item_defs, &store)?;
+    state.currants = new_balance;
+
+    let total = currants - new_balance;
+    let px = state.player.x;
+    let py = state.player.y;
+    let fb_id = state.next_feedback_id;
+    state.next_feedback_id += 1;
+    state.pickup_feedback.push(item::types::PickupFeedback {
+        id: fb_id,
+        text: format!("-{total} currants"),
+        success: true,
+        x: px,
+        y: py,
+        age_secs: 0.0,
+    });
+
+    Ok(new_balance)
+}
+
+#[tauri::command]
+fn vendor_sell(entity_id: String, item_id: String, count: u32, app: AppHandle) -> Result<u64, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    validate_entity_proximity(&state, &entity_id)?;
+
+    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+        .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
+    let def = state.entity_defs.get(&entity.entity_type)
+        .ok_or_else(|| format!("Unknown entity type: {}", entity.entity_type))?;
+    let store_id = def.store.as_ref()
+        .ok_or_else(|| format!("Entity '{}' is not a vendor", entity.entity_type))?;
+    let store = state.store_catalog.stores.get(store_id)
+        .ok_or_else(|| format!("Unknown store: {store_id}"))?
+        .clone();
+    let item_defs = state.item_defs.clone();
+
+    let sell = item::vendor::sell_price(&item_id, &item_defs, &store)
+        .ok_or_else(|| format!("Item '{item_id}' cannot be sold"))?;
+
+    let currants = state.currants;
+    let new_balance = item::vendor::sell(&item_id, count, currants, &mut state.inventory, &item_defs, &store)?;
+    state.currants = new_balance;
+
+    let total = (sell as u64) * (count as u64);
+    let px = state.player.x;
+    let py = state.player.y;
+    let fb_id = state.next_feedback_id;
+    state.next_feedback_id += 1;
+    state.pickup_feedback.push(item::types::PickupFeedback {
+        id: fb_id,
+        text: format!("+{total} currants"),
+        success: true,
+        x: px,
+        y: py,
+        age_secs: 0.0,
+    });
+
+    Ok(new_balance)
 }
 
 fn game_loop(app: AppHandle) {
@@ -888,6 +1015,20 @@ pub fn run() {
                 eprintln!("[jukebox] Failed to load music catalog: {e}");
                 engine::jukebox::TrackCatalog { tracks: std::collections::HashMap::new() }
             });
+            let store_catalog = item::loader::parse_store_catalog(
+                include_str!("../../assets/stores.json")
+            ).unwrap_or_else(|e| {
+                eprintln!("[economy] Failed to load stores.json: {e}");
+                item::types::StoreCatalog { stores: std::collections::HashMap::new() }
+            });
+            for (store_id, store) in &store_catalog.stores {
+                for item_id in &store.inventory {
+                    assert!(
+                        item_defs.contains_key(item_id),
+                        "Store '{store_id}' references unknown item '{item_id}'"
+                    );
+                }
+            }
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,
@@ -895,7 +1036,7 @@ pub fn run() {
                 entity_defs,
                 recipe_defs,
                 track_catalog,
-                item::types::StoreCatalog { stores: std::collections::HashMap::new() },
+                store_catalog,
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
@@ -967,6 +1108,9 @@ pub fn run() {
             get_jukebox_state,
             get_avatar,
             set_avatar,
+            get_store_state,
+            vendor_buy,
+            vendor_sell,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");
