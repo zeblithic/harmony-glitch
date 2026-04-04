@@ -135,17 +135,16 @@ async function findContentBounds(inputPath) {
  *
  * @param {string} inputPath - Path to raw rendered PNG
  * @param {string} outputPath - Path to write trimmed PNG
- * @param {{x: number, y: number}|null} containerPos - Container position (stage coords × scale).
- *   If the content is at origin, this offset is applied.
+ * @param {{x: number, y: number}|null} containerPos - Container position (stage coords).
+ *   Applied when useContainerOffset is true.
+ * @param {boolean} useContainerOffset - Whether to use the container position
+ *   for spriteSourceSize (true for components at origin, false for self-positioned ones).
  * @param {number} padding - Transparent padding around content
  * @returns {{ width, height, spriteSourceSize: {x,y,w,h} } | null}
  */
-async function trimWithMetadata(inputPath, outputPath, containerPos, padding = 2) {
+async function trimWithMetadata(inputPath, outputPath, containerPos, useContainerOffset, padding = 2) {
   const bounds = await findContentBounds(inputPath);
   if (!bounds) return null;
-
-  // Determine if content is at the origin (needs container offset) or already positioned
-  const atOrigin = bounds.x < ORIGIN_THRESHOLD && bounds.y < ORIGIN_THRESHOLD;
 
   // Read the image and make white pixels transparent
   const { data, info } = await sharp(inputPath)
@@ -177,7 +176,7 @@ async function trimWithMetadata(inputPath, outputPath, containerPos, padding = 2
 
   // Compute spriteSourceSize: where this content sits within the source frame
   let ssX, ssY;
-  if (atOrigin && containerPos) {
+  if (useContainerOffset && containerPos) {
     // Content at origin → place at container position
     ssX = Math.round(containerPos.x * SCALE) - padding;
     ssY = Math.round(containerPos.y * SCALE) - padding;
@@ -245,25 +244,22 @@ async function packSpriteSheet(itemName, framesDir, outputDir, hasTrimData = fal
     })
   );
 
-  // Resize all frames to uniform height, then pack horizontally
+  // Pack frames at their actual sizes (no resize — trim metadata records the
+  // correct position within the shared sourceSize canvas).
   const maxH = Math.max(...frameMeta.map(f => f.height));
-  const resizedFrames = await Promise.all(
+  const readyFrames = await Promise.all(
     frameMeta.map(async (f) => {
-      const resized = await sharp(f.path)
-        .resize({ height: maxH, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png()
-        .toBuffer();
-      const meta = await sharp(resized).metadata();
-      return { ...f, resized, renderedWidth: meta.width, renderedHeight: meta.height };
+      const buf = await sharp(f.path).png().toBuffer();
+      return { ...f, buffer: buf };
     })
   );
 
   let totalW = 0;
-  for (const f of resizedFrames) {
+  for (const f of readyFrames) {
     f.x = totalW;
     f.y = 0;
     const frameEntry = {
-      frame: { x: f.x, y: f.y, w: f.renderedWidth, h: f.renderedHeight },
+      frame: { x: f.x, y: f.y, w: f.width, h: f.height },
     };
 
     if (f.trimData) {
@@ -272,16 +268,16 @@ async function packSpriteSheet(itemName, framesDir, outputDir, hasTrimData = fal
       frameEntry.sourceSize = { w: BODY_FRAME_W, h: BODY_FRAME_H };
     } else {
       // Body frames: not trimmed, sourceSize = frame size
-      frameEntry.sourceSize = { w: f.renderedWidth, h: f.renderedHeight };
+      frameEntry.sourceSize = { w: f.width, h: f.height };
     }
 
     frames[f.name] = frameEntry;
-    totalW += f.renderedWidth;
+    totalW += f.width;
   }
 
   // Composite all frames into a single sprite sheet
-  const composites = resizedFrames.map((f) => ({
-    input: f.resized,
+  const composites = readyFrames.map((f) => ({
+    input: f.buffer,
     left: f.x,
     top: 0,
   }));
@@ -355,96 +351,81 @@ async function extractItem(swfPath, category, itemName, transforms) {
   const framesDir = path.join(tempItemDir, 'frames');
   await mkdir(framesDir, { recursive: true });
 
-  if (isAnimated) {
-    for (const [anim, { start, count, step }] of Object.entries(ANIMATIONS)) {
-      const animDir = path.join(framesDir, anim);
-      await mkdir(animDir, { recursive: true });
+  // Render a probe frame to determine positioning strategy for this component.
+  // Components whose content renders at the SWF origin need container offsets;
+  // components with self-positioned content (e.g., hair SWFs with main-timeline
+  // PlaceObject) don't.
+  const probeFile = path.join(tempItemDir, 'probe_raw.png');
+  try {
+    run(RUFFLE_EXPORTER, [
+      wrappedSwf, probeFile,
+      '--skipframes', String(ANIMATIONS.idle.start),
+      '--frames', '1',
+      '--scale', String(SCALE),
+      '--silent',
+    ], { stdio: 'pipe' });
+  } catch { /* ignore */ }
 
-      const positions = getContainerPositions(transforms, containerKey, anim);
-
-      let frameIdx = 0;
-      for (let f = 0; f < count; f += step) {
-        const frameNum = start + f;
-        const rawFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
-        try {
-          run(RUFFLE_EXPORTER, [
-            wrappedSwf, rawFile,
-            '--skipframes', String(frameNum),
-            '--frames', '1',
-            '--scale', String(SCALE),
-            '--silent',
-          ], { stdio: 'pipe' });
-        } catch {
-          // Some frames may fail — skip
-        }
-
-        // Trim with position metadata
-        if (existsSync(rawFile)) {
-          const croppedFile = rawFile.replace('_raw.png', '.png');
-          const metaFile = rawFile.replace('_raw.png', '.meta.json');
-          const containerPos = positions?.[frameIdx] || null;
-
-          try {
-            const result = await trimWithMetadata(rawFile, croppedFile, containerPos);
-            if (result) {
-              await writeFile(metaFile, JSON.stringify({
-                spriteSourceSize: result.spriteSourceSize,
-              }));
-            }
-            await rm(rawFile);
-          } catch {
-            await rm(rawFile).catch(() => {});
-          }
-        }
-        frameIdx++;
-      }
+  let useContainerOffset = true;
+  if (existsSync(probeFile)) {
+    const probeBounds = await findContentBounds(probeFile);
+    if (probeBounds && (probeBounds.x >= ORIGIN_THRESHOLD || probeBounds.y >= ORIGIN_THRESHOLD)) {
+      useContainerOffset = false;
     }
-  } else {
-    // Static items (wardrobe): render frame 0 for each animation state
-    for (const [anim, { start }] of Object.entries(ANIMATIONS)) {
-      const animDir = path.join(framesDir, anim);
-      await mkdir(animDir, { recursive: true });
+    await rm(probeFile).catch(() => {});
+  }
 
-      const positions = getContainerPositions(transforms, containerKey, anim);
+  // Helper: render and trim a single frame
+  async function renderFrame(animDir, frameIdx, frameNum, containerPos) {
+    const rawFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
+    try {
+      run(RUFFLE_EXPORTER, [
+        wrappedSwf, rawFile,
+        '--skipframes', String(frameNum),
+        '--frames', '1',
+        '--scale', String(SCALE),
+        '--silent',
+      ], { stdio: 'pipe' });
+    } catch {
+      return;
+    }
 
-      // Static items use the same frame for all animation states, but need
-      // per-frame container positions to match body pose
-      let frameIdx = 0;
-      const { count, step } = ANIMATIONS[anim];
-      for (let f = 0; f < count; f += step) {
-        const frameNum = start + f;
-        const rawFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}_raw.png`);
-        try {
-          run(RUFFLE_EXPORTER, [
-            wrappedSwf, rawFile,
-            '--skipframes', String(frameNum),
-            '--frames', '1',
-            '--scale', String(SCALE),
-            '--silent',
-          ], { stdio: 'pipe' });
-        } catch {
-          // Skip on failure
-        }
+    if (!existsSync(rawFile)) return;
 
-        if (existsSync(rawFile)) {
-          const croppedFile = rawFile.replace('_raw.png', '.png');
-          const metaFile = rawFile.replace('_raw.png', '.meta.json');
-          const containerPos = positions?.[frameIdx] || null;
-
-          try {
-            const result = await trimWithMetadata(rawFile, croppedFile, containerPos);
-            if (result) {
-              await writeFile(metaFile, JSON.stringify({
-                spriteSourceSize: result.spriteSourceSize,
-              }));
-            }
-            await rm(rawFile);
-          } catch {
-            await rm(rawFile).catch(() => {});
-          }
-        }
-        frameIdx++;
+    const croppedFile = rawFile.replace('_raw.png', '.png');
+    const metaFile = rawFile.replace('_raw.png', '.meta.json');
+    try {
+      const result = await trimWithMetadata(rawFile, croppedFile, containerPos, useContainerOffset);
+      if (result) {
+        await writeFile(metaFile, JSON.stringify({
+          spriteSourceSize: result.spriteSourceSize,
+        }));
       }
+      await rm(rawFile);
+    } catch {
+      await rm(rawFile).catch(() => {});
+    }
+  }
+
+  for (const [anim, { start, count, step }] of Object.entries(ANIMATIONS)) {
+    const animDir = path.join(framesDir, anim);
+    await mkdir(animDir, { recursive: true });
+
+    const positions = getContainerPositions(transforms, containerKey, anim);
+
+    let frameIdx = 0;
+    for (let f = 0; f < count; f += step) {
+      const frameNum = start + f;
+      const containerPos = positions?.[frameIdx] || null;
+
+      if (isAnimated || frameIdx === 0) {
+        // Animated: render each sampled frame. Static: render once, reuse.
+        await renderFrame(animDir, frameIdx, isAnimated ? frameNum : start, containerPos);
+      } else if (!isAnimated) {
+        // Static items: re-render at each body frame for correct container offset
+        await renderFrame(animDir, frameIdx, frameNum, containerPos);
+      }
+      frameIdx++;
     }
   }
 

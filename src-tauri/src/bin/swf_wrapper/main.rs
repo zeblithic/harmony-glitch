@@ -119,8 +119,12 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Parse raw tag bytes, filtering out background/showframe/end and all
-    // main-timeline PlaceObject/RemoveObject tags to prevent double-placement.
+    // Parse raw tag bytes, filtering out End/ShowFrame/SetBackgroundColor.
+    // PlaceObject tags from the original SWF are kept — most component SWFs
+    // have no main-timeline placements, and those that do (e.g., some hair SWFs)
+    // rely on them for shape positioning. The wrapper adds its own PlaceObject
+    // for each DefineSprite at identity, which may create a second instance at
+    // a different depth for SWFs with existing placements.
     let tag_data = &buf.data;
     let mut raw_tags: Vec<u8> = Vec::new();
     let mut pos: usize = 0;

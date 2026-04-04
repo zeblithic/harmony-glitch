@@ -24,6 +24,7 @@ fn main() {
     }
 
     let input_path = &args[1];
+    let verbose = args.iter().any(|a| a == "--verbose");
 
     // Optional: only output specific frames
     let frame_filter: Option<Vec<u16>> = args
@@ -51,28 +52,29 @@ fn main() {
         .collect();
     high_frame_sprites.sort_by_key(|s| std::cmp::Reverse(s.num_frames));
 
-    eprintln!("High-frame-count DefineSprites:");
-    for s in &high_frame_sprites {
-        // Check which other sprites reference this one
-        let referenced_by: Vec<u16> = sprites
-            .iter()
-            .filter(|(_, parent)| {
-                parent.tags.iter().any(|t| {
-                    if let swf::Tag::PlaceObject(p) = t {
-                        matches!(&p.action,
-                            PlaceObjectAction::Place(id) | PlaceObjectAction::Replace(id) if *id == s.id
-                        )
-                    } else {
-                        false
-                    }
+    if verbose {
+        eprintln!("High-frame-count DefineSprites:");
+        for s in &high_frame_sprites {
+            let referenced_by: Vec<u16> = sprites
+                .iter()
+                .filter(|(_, parent)| {
+                    parent.tags.iter().any(|t| {
+                        if let swf::Tag::PlaceObject(p) = t {
+                            matches!(&p.action,
+                                PlaceObjectAction::Place(id) | PlaceObjectAction::Replace(id) if *id == s.id
+                            )
+                        } else {
+                            false
+                        }
+                    })
                 })
-            })
-            .map(|(id, _)| *id)
-            .collect();
-        eprintln!(
-            "  id={}, frames={}, referenced_by={:?}",
-            s.id, s.num_frames, referenced_by
-        );
+                .map(|(id, _)| *id)
+                .collect();
+            eprintln!(
+                "  id={}, frames={}, referenced_by={:?}",
+                s.id, s.num_frames, referenced_by
+            );
+        }
     }
 
     // Find the avatarContainer_mc — the one with 1233 frames that is placed by
@@ -92,32 +94,32 @@ fn main() {
             }
         })
         .collect();
-    eprintln!(
-        "Main timeline places characters: {:?}",
-        main_timeline_char_ids
-    );
-
-    // Show the main timeline placement transforms (including the avatar container's stage offset)
-    for tag in &parsed.tags {
-        if let swf::Tag::PlaceObject(p) = tag {
-            let name = p
-                .name
-                .as_ref()
-                .map(|n| n.to_str_lossy(swf::UTF_8).into_owned())
-                .unwrap_or_default();
-            let (tx, ty) = p
-                .matrix
-                .as_ref()
-                .map(|m| (m.tx.to_pixels(), m.ty.to_pixels()))
-                .unwrap_or((0.0, 0.0));
-            let char_id = match &p.action {
-                PlaceObjectAction::Place(id) | PlaceObjectAction::Replace(id) => Some(*id),
-                _ => None,
-            };
-            eprintln!(
-                "  Main timeline PlaceObject: depth={}, char_id={:?}, name={:?}, pos=({:.1}, {:.1})",
-                p.depth, char_id, name, tx, ty
-            );
+    if verbose {
+        eprintln!(
+            "Main timeline places characters: {:?}",
+            main_timeline_char_ids
+        );
+        for tag in &parsed.tags {
+            if let swf::Tag::PlaceObject(p) = tag {
+                let name = p
+                    .name
+                    .as_ref()
+                    .map(|n| n.to_str_lossy(swf::UTF_8).into_owned())
+                    .unwrap_or_default();
+                let (tx, ty) = p
+                    .matrix
+                    .as_ref()
+                    .map(|m| (m.tx.to_pixels(), m.ty.to_pixels()))
+                    .unwrap_or((0.0, 0.0));
+                let char_id = match &p.action {
+                    PlaceObjectAction::Place(id) | PlaceObjectAction::Replace(id) => Some(*id),
+                    _ => None,
+                };
+                eprintln!(
+                    "  Main timeline PlaceObject: depth={}, char_id={:?}, name={:?}, pos=({:.1}, {:.1})",
+                    p.depth, char_id, name, tx, ty
+                );
+            }
         }
     }
 
@@ -136,18 +138,22 @@ fn main() {
         })
         .expect("No high-frame-count DefineSprite found");
 
-    eprintln!(
-        "Selected avatar container: sprite id={}, frames={}",
-        avatar_sprite.id, avatar_sprite.num_frames
-    );
+    if verbose {
+        eprintln!(
+            "Selected avatar container: sprite id={}, frames={}",
+            avatar_sprite.id, avatar_sprite.num_frames
+        );
+    }
 
     // Extract per-frame display list from the avatar container
     let avatar_frames = extract_display_list_frames(&avatar_sprite.tags);
 
-    eprintln!(
-        "Extracted {} frames from avatar container",
-        avatar_frames.len()
-    );
+    if verbose {
+        eprintln!(
+            "Extracted {} frames from avatar container",
+            avatar_frames.len()
+        );
+    }
 
     // For each frame, walk the display list and find named containers.
     // Then recursively extract child positions from nested DefineSprites.
