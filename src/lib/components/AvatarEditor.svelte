@@ -114,8 +114,8 @@
     // the reverted value instead of what was actually saved.
     const snapshot = { ...pendingAppearance };
     try {
-      await setAvatar(snapshot);
-      savedAppearance = snapshot;
+      const confirmed = await setAvatar(snapshot);
+      savedAppearance = confirmed;
       onClose?.();
     } catch (e) {
       error = String(e);
@@ -125,13 +125,14 @@
   }
 
   function handleCancel() {
-    // Setting pendingAppearance triggers the $effect which calls applyAppearance
+    if (saving) return; // Don't revert while save is in-flight
     pendingAppearance = savedAppearance ? { ...savedAppearance } : null;
     onClose?.();
   }
 
   function handleDialogCancel(e: Event) {
     e.preventDefault();
+    if (saving) return;
     handleCancel();
   }
 
