@@ -192,6 +192,8 @@
           } else if (frame.interactionPrompt?.entityId) {
             const eid = frame.interactionPrompt.entityId;
             getJukeboxState(eid).then(info => {
+              // Guard: player may have walked away while the IPC was in flight
+              if (latestFrame?.interactionPrompt?.entityId !== eid) return;
               jukeboxInfo = info;
               jukeboxOpen = true;
               inventoryOpen = false;
