@@ -105,9 +105,13 @@
     if (!pendingAppearance || saving) return;
     saving = true;
     error = null;
+    // Snapshot before await — if the editor closes mid-flight, the cleanup
+    // reverts pendingAppearance, so reading it after await would capture
+    // the reverted value instead of what was actually saved.
+    const snapshot = { ...pendingAppearance };
     try {
-      await setAvatar(pendingAppearance);
-      savedAppearance = { ...pendingAppearance };
+      await setAvatar(snapshot);
+      savedAppearance = snapshot;
       onClose?.();
     } catch (e) {
       error = String(e);
