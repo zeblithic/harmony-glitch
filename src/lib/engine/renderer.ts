@@ -1,6 +1,7 @@
 import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
-import type { StreetData, RenderFrame, RemotePlayerFrame } from '../types';
+import type { StreetData, RenderFrame, RemotePlayerFrame, AvatarAppearance } from '../types';
 import { SpriteManager } from './sprites';
+import { AvatarCompositor } from './avatar';
 
 interface ChatBubble {
   text: Text;
@@ -47,6 +48,7 @@ export class GameRenderer {
   private starPositions: { nx: number; ny: number }[] = [];
   private swirlPositions: { nx: number; ny: number }[] = [];
   private spriteManager: SpriteManager;
+  private compositor: AvatarCompositor;
   private destroyed = false;
 
   constructor() {
@@ -57,6 +59,7 @@ export class GameRenderer {
     this.transitionContainer = new Container();
     this.transitionContainer.visible = false;
     this.spriteManager = new SpriteManager();
+    this.compositor = new AvatarCompositor();
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
@@ -197,8 +200,8 @@ export class GameRenderer {
     this.worldContainer.addChild(this.platformGraphics);
     this.drawPlatforms(street);
 
-    // Create avatar (AnimatedSprite or fallback rectangle)
-    this.avatarContainer = this.spriteManager.createAvatar();
+    // Create avatar container (layers populated by applyAppearance)
+    this.avatarContainer = this.compositor.getContainer();
     this.worldContainer.addChild(this.avatarContainer);
 
     // Create interaction prompt text (screen-fixed, in uiContainer)
@@ -256,7 +259,7 @@ export class GameRenderer {
     const avatarScreenY = frame.player.y - this.street.top;
     this.avatarContainer.x = avatarScreenX;
     this.avatarContainer.y = avatarScreenY;
-    this.spriteManager.updateAvatar(this.avatarContainer, frame.player.animation, frame.player.facing);
+    this.compositor.updateAnimation(frame.player.animation, frame.player.facing);
 
     // Update camera — shift world container so the camera region is visible.
     // camera.y is the Glitch Y of the viewport's top edge.
@@ -635,8 +638,13 @@ export class GameRenderer {
     }
   }
 
+  async applyAppearance(appearance: AvatarAppearance): Promise<void> {
+    await this.compositor.applyAppearance(appearance);
+  }
+
   destroy(): void {
     this.destroyed = true;
+    this.compositor.destroy();
     for (const [, sprite] of this.remoteSprites) {
       sprite.destroy();
     }

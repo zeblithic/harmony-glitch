@@ -99,6 +99,24 @@ export interface SignpostConnection {
 export type Direction = 'left' | 'right';
 export type AnimationState = 'idle' | 'walking' | 'jumping' | 'falling';
 
+export interface AvatarAppearance {
+  eyes: string;
+  ears: string;
+  nose: string;
+  mouth: string;
+  hair: string;
+  skinColor: string;
+  hairColor: string;
+  hat: string | null;
+  coat: string | null;
+  shirt: string | null;
+  pants: string | null;
+  dress: string | null;
+  skirt: string | null;
+  shoes: string | null;
+  bracelet: string | null;
+}
+
 export interface PlayerFrame {
   x: number;
   y: number;
