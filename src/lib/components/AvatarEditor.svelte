@@ -19,6 +19,7 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
   let applyGeneration = 0;
+  let loadGeneration = 0;
 
   const VANITY_SLOTS = new Set(['eyes', 'ears', 'nose', 'mouth']);
 
@@ -48,10 +49,13 @@
       if (!dialogEl.open) {
         previousFocus = document.activeElement as HTMLElement | null;
         error = null;
+        const gen = ++loadGeneration;
         getAvatar().then(a => {
+          if (gen !== loadGeneration) return; // stale — editor was reopened
           savedAppearance = a;
           pendingAppearance = { ...a };
         }).catch(e => {
+          if (gen !== loadGeneration) return;
           console.error('[AvatarEditor] Failed to load avatar:', e);
           error = 'Failed to load avatar. Try closing and reopening.';
         });
