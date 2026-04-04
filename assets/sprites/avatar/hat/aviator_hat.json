@@ -1,0 +1,59 @@
+{
+  "frames": {
+    "idle_00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 473,
+        "h": 465
+      }
+    },
+    "walking_00": {
+      "frame": {
+        "x": 473,
+        "y": 0,
+        "w": 473,
+        "h": 465
+      }
+    },
+    "jumping_00": {
+      "frame": {
+        "x": 946,
+        "y": 0,
+        "w": 473,
+        "h": 465
+      }
+    },
+    "falling_00": {
+      "frame": {
+        "x": 1419,
+        "y": 0,
+        "w": 473,
+        "h": 465
+      }
+    }
+  },
+  "animations": {
+    "idle": [
+      "idle_00"
+    ],
+    "walking": [
+      "walking_00"
+    ],
+    "jumping": [
+      "jumping_00"
+    ],
+    "falling": [
+      "falling_00"
+    ]
+  },
+  "meta": {
+    "image": "aviator_hat.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1892,
+      "h": 465
+    },
+    "scale": 1
+  }
+}
