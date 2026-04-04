@@ -1,0 +1,12 @@
+{
+  "grocery": {
+    "name": "Grocery Vendor",
+    "buyMultiplier": 0.66,
+    "inventory": ["cherry", "grain", "meat", "milk"]
+  },
+  "hardware": {
+    "name": "Hardware Vendor",
+    "buyMultiplier": 0.50,
+    "inventory": ["wood", "plank", "pot", "bubble_wand"]
+  }
+}

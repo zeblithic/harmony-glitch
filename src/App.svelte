@@ -10,9 +10,11 @@
   import VolumeSettings from './lib/components/VolumeSettings.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
   import JukeboxPanel from './lib/components/JukeboxPanel.svelte';
+  import ShopPanel from './lib/components/ShopPanel.svelte';
+  import CurrantHud from './lib/components/CurrantHud.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, AvatarManifest } from './lib/types';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
@@ -39,6 +41,9 @@
   let jukeboxOpen = $state(false);
   let jukeboxInfo = $state<JukeboxInfo | null>(null);
   let jukeboxCloseFrames = 0; // frames since jukebox lost interaction prompt
+  let shopOpen = $state(false);
+  let storeState = $state<StoreState | null>(null);
+  let shopCloseFrames = 0;
   let musicCatalog = $state<TrackCatalog>({ tracks: {} });
   let avatarEditorOpen = $state(false);
   let avatarManifest = $state<AvatarManifest | null>(null);
@@ -216,8 +221,37 @@
               jukeboxCloseFrames = 0;
               inventoryOpen = false;
               volumeOpen = false;
+              shopOpen = false;
+              storeState = null;
               avatarEditorOpen = false;
             }).catch(e => console.error('Failed to get jukebox state:', e));
+          }
+        }
+      }
+    }
+
+    // Detect vendor interaction via audio events
+    if (frame.audioEvents?.length) {
+      for (const event of frame.audioEvents) {
+        if (event.type === 'entityInteract' && event.entityType === 'vendor') {
+          if (shopOpen) {
+            shopOpen = false;
+            storeState = null;
+            shopCloseFrames = 0;
+          } else if (frame.interactionPrompt?.entityId) {
+            const eid = frame.interactionPrompt.entityId;
+            getStoreState(eid).then(state => {
+              // Guard: player may have walked away while the IPC was in flight
+              if (latestFrame?.interactionPrompt?.entityId !== eid) return;
+              storeState = state;
+              shopOpen = true;
+              shopCloseFrames = 0;
+              inventoryOpen = false;
+              volumeOpen = false;
+              jukeboxOpen = false;
+              jukeboxInfo = null;
+              avatarEditorOpen = false;
+            }).catch(e => console.error('Failed to get store state:', e));
           }
         }
       }
@@ -251,6 +285,21 @@
           jukeboxOpen = false;
           jukeboxInfo = null;
           jukeboxCloseFrames = 0;
+        }
+      }
+    }
+
+    // Close shop panel when the player walks out of interact_radius.
+    // Same 2-frame debounce as jukebox to ride through one-frame null gaps.
+    if (shopOpen && storeState) {
+      if (frame.interactionPrompt?.entityId === storeState.entityId) {
+        shopCloseFrames = 0;
+      } else {
+        shopCloseFrames++;
+        if (shopCloseFrames >= 2) {
+          shopOpen = false;
+          storeState = null;
+          shopCloseFrames = 0;
         }
       }
     }
@@ -304,20 +353,20 @@
 
 <svelte:window onkeydown={(e) => {
   if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
-  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen) {
+  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
-    if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; }
+    if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen) {
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
     if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
   }
-  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen) {
+  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     avatarEditorOpen = !avatarEditorOpen;
-    if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; }
+    if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
   if ((e.key === 'j' || e.key === 'J') && jukeboxOpen && !chatFocused) {
     e.preventDefault();
@@ -336,7 +385,7 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || avatarEditorOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen || avatarEditorOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
@@ -363,6 +412,32 @@
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
     />
+    <ShopPanel
+      {storeState}
+      visible={shopOpen}
+      onClose={() => { shopOpen = false; storeState = null; shopCloseFrames = 0; }}
+      onBuy={async (itemId, count) => {
+        if (!storeState) return;
+        const eid = storeState.entityId;
+        try {
+          await vendorBuy(eid, itemId, count);
+          storeState = await getStoreState(eid);
+        } catch (e) {
+          console.error('Buy failed:', e);
+        }
+      }}
+      onSell={async (itemId, count) => {
+        if (!storeState) return;
+        const eid = storeState.entityId;
+        try {
+          await vendorSell(eid, itemId, count);
+          storeState = await getStoreState(eid);
+        } catch (e) {
+          console.error('Sell failed:', e);
+        }
+      }}
+    />
+    <CurrantHud currants={latestFrame?.currants ?? 0} />
     <AvatarEditor
       visible={avatarEditorOpen}
       manifest={avatarManifest}
@@ -387,6 +462,9 @@
         jukeboxOpen = false;
         jukeboxInfo = null;
         jukeboxCloseFrames = 0;
+        shopOpen = false;
+        storeState = null;
+        shopCloseFrames = 0;
       }
     }}>
       Back

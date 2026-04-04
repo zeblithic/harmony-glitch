@@ -160,6 +160,7 @@ export interface RenderFrame {
   interactionPrompt: InteractionPrompt | null;
   pickupFeedback: PickupFeedback[];
   audioEvents: AudioEvent[];
+  currants: number;
 }
 
 export interface NetworkStatus {
@@ -267,6 +268,7 @@ export interface SavedState {
   y: number;
   facing: string;
   inventory: (SaveItemStack | null)[];
+  currants?: number;
 }
 
 export type AudioEvent =
@@ -301,6 +303,28 @@ export interface JukeboxInfo {
   currentTrackIndex: number;
   playing: boolean;
   elapsedSecs: number;
+}
+
+export interface StoreState {
+  entityId: string;
+  name: string;
+  vendorInventory: StoreItem[];
+  playerInventory: SellableItem[];
+  currants: number;
+}
+
+export interface StoreItem {
+  itemId: string;
+  name: string;
+  baseCost: number;
+  stackLimit: number;
+}
+
+export interface SellableItem {
+  itemId: string;
+  name: string;
+  count: number;
+  sellPrice: number;
 }
 
 export interface AvatarManifestItem {

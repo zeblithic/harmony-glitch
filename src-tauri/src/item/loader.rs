@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::item::types::{EntityDefs, ItemDefs, RecipeDefs, WorldEntity, WorldItem};
+use crate::item::types::{EntityDefs, ItemDefs, RecipeDefs, StoreCatalog, WorldEntity, WorldItem};
 
 /// Parse item definitions from JSON string.
 /// The JSON is a map of id → ItemDef. We set each ItemDef.id from its map key.
@@ -65,6 +65,11 @@ pub fn parse_entity_placements(json: &str) -> Result<PlacementData, String> {
             ground_items: vec![],
         })
     }
+}
+
+/// Parse store catalog from JSON string.
+pub fn parse_store_catalog(json: &str) -> Result<StoreCatalog, String> {
+    serde_json::from_str(json).map_err(|e| format!("Failed to parse stores.json: {e}"))
 }
 
 /// Parse recipe definitions from JSON string.
@@ -174,7 +179,7 @@ mod tests {
     fn parse_bundled_entities_json() {
         let json = include_str!("../../../assets/entities.json");
         let defs = parse_entity_defs(json).unwrap();
-        assert_eq!(defs.len(), 7);
+        assert_eq!(defs.len(), 9);
         assert!(defs.contains_key("fruit_tree"));
         assert!(defs.contains_key("chicken"));
         assert!(defs.contains_key("pig"));
@@ -182,6 +187,8 @@ mod tests {
         assert!(defs.contains_key("bubble_tree"));
         assert!(defs.contains_key("wood_tree"));
         assert!(defs.contains_key("jukebox_tavern"));
+        assert!(defs.contains_key("vendor_grocery"));
+        assert!(defs.contains_key("vendor_hardware"));
     }
 
     #[test]
@@ -244,6 +251,51 @@ mod tests {
         assert_eq!(defs["cherry_pie"].tools[0].item, "pot");
         // Verify no-tool recipe
         assert!(defs["plank"].tools.is_empty());
+    }
+
+    #[test]
+    fn parse_store_catalog_from_json() {
+        let json = r#"{
+            "grocery": {
+                "name": "Grocery Vendor",
+                "buyMultiplier": 0.66,
+                "inventory": ["cherry", "grain", "meat", "milk"]
+            }
+        }"#;
+        let catalog = parse_store_catalog(json).unwrap();
+        assert_eq!(catalog.stores.len(), 1);
+        let grocery = &catalog.stores["grocery"];
+        assert_eq!(grocery.name, "Grocery Vendor");
+        assert!((grocery.buy_multiplier - 0.66).abs() < 0.001);
+        assert_eq!(grocery.inventory, vec!["cherry", "grain", "meat", "milk"]);
+    }
+
+    #[test]
+    fn parse_store_catalog_empty() {
+        let catalog = parse_store_catalog("{}").unwrap();
+        assert_eq!(catalog.stores.len(), 0);
+    }
+
+    #[test]
+    fn parse_bundled_items_have_base_cost() {
+        let json = include_str!("../../../assets/items.json");
+        let defs = parse_item_defs(json).unwrap();
+        for (id, def) in &defs {
+            assert!(
+                def.base_cost.is_some(),
+                "item '{}' is missing base_cost",
+                id
+            );
+        }
+    }
+
+    #[test]
+    fn parse_bundled_stores_json() {
+        let json = include_str!("../../../assets/stores.json");
+        let catalog = parse_store_catalog(json).unwrap();
+        assert_eq!(catalog.stores.len(), 2);
+        assert!(catalog.stores.contains_key("grocery"));
+        assert!(catalog.stores.contains_key("hardware"));
     }
 
     #[test]

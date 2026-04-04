@@ -78,5 +78,27 @@
     "interactRadius": 100,
     "playlist": [],
     "audioRadius": 400
+  },
+  "vendor_grocery": {
+    "name": "Grocery Vendor",
+    "verb": "Shop",
+    "yields": [],
+    "cooldownSecs": 0,
+    "maxHarvests": 0,
+    "respawnSecs": 0,
+    "spriteClass": "vendor",
+    "interactRadius": 100,
+    "store": "grocery"
+  },
+  "vendor_hardware": {
+    "name": "Hardware Vendor",
+    "verb": "Shop",
+    "yields": [],
+    "cooldownSecs": 0,
+    "maxHarvests": 0,
+    "respawnSecs": 0,
+    "spriteClass": "vendor",
+    "interactRadius": 100,
+    "store": "hardware"
   }
 }
