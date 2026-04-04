@@ -585,7 +585,8 @@ fn get_jukebox_state(entity_id: String, app: AppHandle) -> Result<serde_json::Va
 fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    validate_entity_proximity(&state, &entity_id)?;
+    // No proximity check — this is a read-only query used to refresh
+    // the shop panel after buy/sell (which already validate proximity).
     let entity = state.world_entities.iter().find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type)
