@@ -227,6 +227,7 @@ export interface InteractionPrompt {
   targetX: number;
   targetY: number;
   actionable: boolean;
+  entityId?: string | null;
 }
 
 export interface PickupFeedback {
@@ -278,9 +279,26 @@ export type AudioEvent =
   | { type: 'transitionComplete' }
   | { type: 'entityInteract'; entityType: string }
   | { type: 'streetChanged'; streetId: string }
-  | { type: 'footstep'; surface: string };
+  | { type: 'footstep'; surface: string }
+  | { type: 'jukeboxUpdate'; entityId: string; trackId: string; playing: boolean; distanceFactor: number; elapsedSecs: number };
 
 export interface SoundKitMeta {
   id: string;
   name: string;
+}
+
+export interface TrackInfo {
+  id: string;
+  title: string;
+  artist: string;
+  durationSecs: number;
+}
+
+export interface JukeboxInfo {
+  entityId: string;
+  name: string;
+  playlist: TrackInfo[];
+  currentTrackIndex: number;
+  playing: boolean;
+  elapsedSecs: number;
 }

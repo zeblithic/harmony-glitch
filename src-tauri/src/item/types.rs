@@ -41,6 +41,8 @@ pub struct EntityDef {
     pub wander_radius: Option<f64>,
     pub bob_amplitude: Option<f64>,
     pub bob_frequency: Option<f64>,
+    pub playlist: Option<Vec<String>>,
+    pub audio_radius: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,6 +260,7 @@ pub struct InteractionPrompt {
     pub target_x: f64,
     pub target_y: f64,
     pub actionable: bool,
+    pub entity_id: Option<String>,
 }
 
 /// Floating feedback text after pickup.
@@ -343,6 +346,42 @@ mod tests {
         let def: EntityDef = serde_json::from_str(json).unwrap();
         assert!((def.bob_amplitude.unwrap() - 15.0).abs() < 0.01);
         assert!((def.bob_frequency.unwrap() - 1.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn entity_def_deserializes_jukebox_fields() {
+        let json = r#"{
+            "name": "Tavern Jukebox",
+            "verb": "Listen",
+            "yields": [],
+            "cooldownSecs": 0,
+            "maxHarvests": 0,
+            "respawnSecs": 0.0,
+            "spriteClass": "jukebox",
+            "interactRadius": 100,
+            "playlist": ["track-a", "track-b"],
+            "audioRadius": 400
+        }"#;
+        let def: EntityDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.playlist.as_ref().unwrap(), &vec!["track-a".to_string(), "track-b".to_string()]);
+        assert!((def.audio_radius.unwrap() - 400.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn entity_def_jukebox_fields_default_to_none() {
+        let json = r#"{
+            "name": "Fruit Tree",
+            "verb": "Harvest",
+            "yields": [{ "item": "cherry", "min": 1, "max": 3 }],
+            "cooldownSecs": 5.0,
+            "maxHarvests": 3,
+            "respawnSecs": 30.0,
+            "spriteClass": "tree_fruit",
+            "interactRadius": 80
+        }"#;
+        let def: EntityDef = serde_json::from_str(json).unwrap();
+        assert!(def.playlist.is_none());
+        assert!(def.audio_radius.is_none());
     }
 
     #[test]

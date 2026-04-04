@@ -198,4 +198,15 @@ describe('VolumeSettings', () => {
       });
     }).not.toThrow();
   });
+
+  it('renders Music slider and mute button', () => {
+    render(VolumeSettings, {
+      props: { audioManager: makeAudioManager(), visible: true },
+    });
+    const musicSlider = screen.getByLabelText('Music');
+    expect(musicSlider).toBeDefined();
+    expect((musicSlider as HTMLInputElement).id).toBe('music-slider');
+    const muteBtn = screen.getByRole('button', { name: 'Mute music' });
+    expect(muteBtn).toBeDefined();
+  });
 });

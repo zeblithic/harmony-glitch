@@ -9,10 +9,12 @@
   import GameNotification from './lib/components/GameNotification.svelte';
   import VolumeSettings from './lib/components/VolumeSettings.svelte';
   import InventoryPanel from './lib/components/InventoryPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta } from './lib/types';
+  import JukeboxPanel from './lib/components/JukeboxPanel.svelte';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo } from './lib/types';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
+  import { LocalMusicSource, type TrackCatalog } from './lib/engine/music';
 
   let audioManager = $state<AudioManager | null>(null);
   let cachedKit: SoundKit | null = null;
@@ -32,6 +34,10 @@
   let checkingIdentity = $state(true);
   let resuming = $state(false);
   let recipes = $state<RecipeDef[]>([]);
+  let jukeboxOpen = $state(false);
+  let jukeboxInfo = $state<JukeboxInfo | null>(null);
+  let jukeboxCloseFrames = 0; // frames since jukebox lost interaction prompt
+  let musicCatalog = $state<TrackCatalog>({ tracks: {} });
 
   onMount(async () => {
     try {
@@ -58,6 +64,16 @@
       soundKits = [{ id: 'default', name: 'Default' }];
     }
 
+    // Load music catalog
+    try {
+      const response = await fetch('/assets/music/catalog.json');
+      if (response.ok) {
+        musicCatalog = await response.json();
+      }
+    } catch (e) {
+      console.error('Failed to load music catalog:', e);
+    }
+
     // Restore saved kit selection
     try {
       const savedKit = localStorage.getItem('selected-sound-kit');
@@ -70,7 +86,7 @@
     // (avoids race where StreetPicker re-enables before currentStreet is set)
     try {
       cachedKit = await loadSoundKit(selectedKitId);
-      audioManager = new AudioManager(cachedKit, kitBasePath(selectedKitId));
+      audioManager = new AudioManager(cachedKit, kitBasePath(selectedKitId), new LocalMusicSource(), musicCatalog);
     } catch (e) {
       console.error('Failed to initialize audio:', e);
       if (selectedKitId !== 'default') {
@@ -80,7 +96,7 @@
         } catch { /* localStorage unavailable */ }
         try {
           cachedKit = await loadSoundKit('default');
-          audioManager = new AudioManager(cachedKit, kitBasePath('default'));
+          audioManager = new AudioManager(cachedKit, kitBasePath('default'), new LocalMusicSource(), musicCatalog);
         } catch (e2) {
           console.error('Fallback to default kit also failed:', e2);
         }
@@ -115,7 +131,7 @@
     // Recreate AudioManager if it was disposed (Back button)
     if (!audioManager && cachedKit) {
       try {
-        audioManager = new AudioManager(cachedKit, kitBasePath(selectedKitId));
+        audioManager = new AudioManager(cachedKit, kitBasePath(selectedKitId), new LocalMusicSource(), musicCatalog);
       } catch (e) {
         console.error('Failed to recreate audio:', e);
       }
@@ -161,9 +177,66 @@
       transitionAttempts = 0;
     }
 
-    // Process audio events
-    if (frame.audioEvents?.length && audioManager) {
-      audioManager.processEvents(frame.audioEvents);
+    // Process audio events — always call processEvents so cleanup() runs
+    // even when no events arrive (player walked out of all jukebox ranges)
+    if (audioManager) {
+      audioManager.processEvents(frame.audioEvents ?? []);
+    }
+
+    // Detect jukebox interaction via audio events
+    if (frame.audioEvents?.length) {
+      for (const event of frame.audioEvents) {
+        if (event.type === 'entityInteract' && event.entityType === 'jukebox') {
+          if (jukeboxOpen) {
+            jukeboxOpen = false;
+            jukeboxInfo = null;
+            jukeboxCloseFrames = 0;
+          } else if (frame.interactionPrompt?.entityId) {
+            const eid = frame.interactionPrompt.entityId;
+            getJukeboxState(eid).then(info => {
+              // Guard: player may have walked away while the IPC was in flight
+              if (latestFrame?.interactionPrompt?.entityId !== eid) return;
+              jukeboxInfo = info;
+              jukeboxOpen = true;
+              jukeboxCloseFrames = 0;
+              inventoryOpen = false;
+              volumeOpen = false;
+            }).catch(e => console.error('Failed to get jukebox state:', e));
+          }
+        }
+      }
+    }
+
+    // Update jukebox panel state from JukeboxUpdate events
+    if (jukeboxOpen && jukeboxInfo && frame.audioEvents?.length) {
+      for (const event of frame.audioEvents) {
+        if (event.type === 'jukeboxUpdate' && event.entityId === jukeboxInfo.entityId) {
+          const trackIndex = jukeboxInfo.playlist.findIndex(t => t.id === event.trackId);
+          jukeboxInfo = {
+            ...jukeboxInfo,
+            currentTrackIndex: trackIndex >= 0 ? trackIndex : jukeboxInfo.currentTrackIndex,
+            playing: event.playing,
+            elapsedSecs: event.elapsedSecs,
+          };
+        }
+      }
+    }
+
+    // Close jukebox panel when the player walks out of interact_radius.
+    // Uses the interaction prompt as the signal — present when the jukebox
+    // is the nearest interactable within interact_radius. Debounced by 2
+    // frames to ride through the one-frame null gap after ground item pickup.
+    if (jukeboxOpen && jukeboxInfo) {
+      if (frame.interactionPrompt?.entityId === jukeboxInfo.entityId) {
+        jukeboxCloseFrames = 0;
+      } else {
+        jukeboxCloseFrames++;
+        if (jukeboxCloseFrames >= 2) {
+          jukeboxOpen = false;
+          jukeboxInfo = null;
+          jukeboxCloseFrames = 0;
+        }
+      }
     }
   }
 
@@ -186,7 +259,7 @@
       const kit = await loadSoundKit(kitId);
       audioManager?.dispose();
       cachedKit = kit;
-      audioManager = new AudioManager(kit, kitBasePath(kitId));
+      audioManager = new AudioManager(kit, kitBasePath(kitId), new LocalMusicSource(), musicCatalog);
     } catch (e) {
       console.error(`Failed to load kit '${kitId}':`, e);
       if (kitId !== 'default') {
@@ -198,7 +271,7 @@
           const fallback = await loadSoundKit('default');
           audioManager?.dispose();
           cachedKit = fallback;
-          audioManager = new AudioManager(fallback, kitBasePath('default'));
+          audioManager = new AudioManager(fallback, kitBasePath('default'), new LocalMusicSource(), musicCatalog);
         } catch (e2) {
           console.error('Fallback to default kit also failed:', e2);
         }
@@ -215,15 +288,21 @@
 
 <svelte:window onkeydown={(e) => {
   if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
-  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused) {
+  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) volumeOpen = false;
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused) {
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
     if (volumeOpen) inventoryOpen = false;
+  }
+  if ((e.key === 'j' || e.key === 'J') && jukeboxOpen && !chatFocused) {
+    e.preventDefault();
+    jukeboxOpen = false;
+    jukeboxInfo = null;
+    jukeboxCloseFrames = 0;
   }
 }} />
 
@@ -236,7 +315,7 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
@@ -248,6 +327,14 @@
       {selectedKitId}
       onClose={() => { volumeOpen = false; }}
       onKitChange={switchKit}
+    />
+    <JukeboxPanel
+      info={jukeboxInfo}
+      visible={jukeboxOpen}
+      onClose={() => { jukeboxOpen = false; jukeboxInfo = null; jukeboxCloseFrames = 0; }}
+      onPlay={(eid) => jukeboxPlay(eid).catch(e => console.error('jukebox play:', e))}
+      onPause={(eid) => jukeboxPause(eid).catch(e => console.error('jukebox pause:', e))}
+      onSelectTrack={(eid, idx) => jukeboxSelectTrack(eid, idx).catch(e => console.error('jukebox select:', e))}
     />
     <InventoryPanel
       inventory={latestFrame?.inventory ?? null}
@@ -268,6 +355,9 @@
         audioManager = null;
         currentStreet = null;
         latestFrame = null;
+        jukeboxOpen = false;
+        jukeboxInfo = null;
+        jukeboxCloseFrames = 0;
       }
     }}>
       Back

@@ -14,6 +14,8 @@
     "ingest-items": "cargo run --manifest-path src-tauri/Cargo.toml --features cas-tool --bin cas-tool -- ingest --input assets/sprites/items --manifest manifests/items.json",
     "restore-items": "cargo run --manifest-path src-tauri/Cargo.toml --features cas-tool --bin cas-tool -- restore --manifest manifests/items.json --output assets/sprites/items",
     "pipeline-items": "npm run extract-items && npm run pack-items && npm run ingest-items",
+    "ingest-music": "cargo run --manifest-path src-tauri/Cargo.toml --features cas-tool --bin cas-tool -- ingest --input assets/music/tracks --manifest manifests/music.json",
+    "restore-music": "cargo run --manifest-path src-tauri/Cargo.toml --features cas-tool --bin cas-tool -- restore --manifest manifests/music.json --output assets/music/tracks",
     "extract-avatars": "node tools/avatar-pipeline/extract.mjs",
     "extract-avatar-test": "node tools/avatar-pipeline/extract.mjs --item eyes/eyes_01 --scale 8"
   },

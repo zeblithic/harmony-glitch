@@ -507,6 +507,80 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
     }
 }
 
+/// Validate that the player is within interact_radius of the given entity.
+fn validate_jukebox_proximity(state: &engine::state::GameState, entity_id: &str) -> Result<(), String> {
+    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+        .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
+    let def = state.entity_defs.get(&entity.entity_type);
+    let radius = def.map(|d| d.interact_radius).unwrap_or(60.0);
+    let dx = state.player.x - entity.x;
+    let dy = state.player.y - entity.y;
+    let dist = (dx * dx + dy * dy).sqrt();
+    if dist > radius { return Err("Too far from jukebox".to_string()); }
+    Ok(())
+}
+
+#[tauri::command]
+fn jukebox_play(entity_id: String, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    validate_jukebox_proximity(&state, &entity_id)?;
+    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.play(); }
+    Ok(())
+}
+
+#[tauri::command]
+fn jukebox_pause(entity_id: String, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    validate_jukebox_proximity(&state, &entity_id)?;
+    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.pause(); }
+    Ok(())
+}
+
+#[tauri::command]
+fn jukebox_select_track(entity_id: String, track_index: usize, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    validate_jukebox_proximity(&state, &entity_id)?;
+    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.select_track(track_index); }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_jukebox_state(entity_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+        .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
+    let def = state.entity_defs.get(&entity.entity_type);
+    let name = def.map(|d| d.name.as_str()).unwrap_or("Jukebox");
+
+    let jb = state.jukebox_states.get(&entity_id);
+    let playlist: Vec<serde_json::Value> = jb
+        .map(|jb| {
+            jb.playlist.iter().map(|track_id| {
+                let track_def = state.track_catalog.tracks.get(track_id);
+                serde_json::json!({
+                    "id": track_id,
+                    "title": track_def.map(|t| t.title.as_str()).unwrap_or("Unknown"),
+                    "artist": track_def.map(|t| t.artist.as_str()).unwrap_or("Unknown"),
+                    "durationSecs": track_def.map(|t| t.duration_secs).unwrap_or(0.0),
+                })
+            }).collect()
+        })
+        .unwrap_or_default();
+
+    Ok(serde_json::json!({
+        "entityId": entity_id,
+        "name": name,
+        "playlist": playlist,
+        "currentTrackIndex": jb.map(|j| j.current_track_index).unwrap_or(0),
+        "playing": jb.map(|j| j.playing).unwrap_or(false),
+        "elapsedSecs": jb.map(|j| j.elapsed_secs).unwrap_or(0.0),
+    }))
+}
+
 fn game_loop(app: AppHandle) {
     let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
     let dt = 1.0 / 60.0;
@@ -808,12 +882,19 @@ pub fn run() {
                     );
                 }
             }
+            let track_catalog = engine::jukebox::parse_catalog(
+                include_str!("../../assets/music/catalog.json")
+            ).unwrap_or_else(|e| {
+                eprintln!("[jukebox] Failed to load music catalog: {e}");
+                engine::jukebox::TrackCatalog { tracks: std::collections::HashMap::new() }
+            });
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,
                 item_defs,
                 entity_defs,
                 recipe_defs,
+                track_catalog,
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
@@ -879,6 +960,10 @@ pub fn run() {
             street_transition_ready,
             get_network_status,
             get_saved_state,
+            jukebox_play,
+            jukebox_pause,
+            jukebox_select_track,
+            get_jukebox_state,
             get_avatar,
             set_avatar,
         ])

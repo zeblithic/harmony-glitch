@@ -5,7 +5,8 @@
     { "id": "chicken_1", "type": "chicken", "x": 200, "y": -2 },
     { "id": "pig_1", "type": "pig", "x": -300, "y": -2 },
     { "id": "butterfly_1", "type": "butterfly", "x": 600, "y": -80 },
-    { "id": "wood_tree_1", "type": "wood_tree", "x": -1400, "y": -2 }
+    { "id": "wood_tree_1", "type": "wood_tree", "x": -1400, "y": -2 },
+    { "id": "jukebox_1", "type": "jukebox_tavern", "x": 500, "y": -2 }
   ],
   "groundItems": [
     { "id": "pot_1", "itemId": "pot", "count": 1, "x": 0, "y": -2 }

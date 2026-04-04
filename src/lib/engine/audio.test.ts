@@ -303,6 +303,41 @@ describe('AudioManager', () => {
       expect(prefs.sfxMuted).toBe(false);
       expect(prefs.ambientMuted).toBe(true);
     });
+
+    it('getVolume returns music default (0.5)', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.getVolume('music')).toBe(0.5);
+    });
+
+    it('setVolume adjusts music volume', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setVolume('music', 0.8);
+      expect(manager.getVolume('music')).toBe(0.8);
+    });
+
+    it('isMuted returns false for music initially', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.isMuted('music')).toBe(false);
+    });
+
+    it('setMuted toggles music mute state without affecting other channels', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setMuted('music', true);
+      expect(manager.isMuted('music')).toBe(true);
+      // Channel isolation — sfx and ambient unaffected
+      expect(manager.isMuted('sfx')).toBe(false);
+      expect(manager.isMuted('ambient')).toBe(false);
+    });
+
+    it('getPreferences includes music fields', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      manager.setVolume('music', 0.3);
+      manager.setMuted('music', true);
+
+      const prefs = manager.getPreferences();
+      expect(prefs.musicVolume).toBe(0.3);
+      expect(prefs.musicMuted).toBe(true);
+    });
   });
 
   it('plays footstep with surface variant', () => {
@@ -344,15 +379,33 @@ describe('AudioManager', () => {
       localStorage.setItem('audio-prefs', JSON.stringify({
         sfxVolume: 0.4,
         ambientVolume: 0.2,
+        musicVolume: 0.7,
         sfxMuted: true,
         ambientMuted: false,
+        musicMuted: true,
       }));
 
       const manager = new AudioManager(makeKit(), '/audio/');
       expect(manager.getVolume('sfx')).toBe(0.4);
       expect(manager.getVolume('ambient')).toBe(0.2);
+      expect(manager.getVolume('music')).toBe(0.7);
       expect(manager.isMuted('sfx')).toBe(true);
       expect(manager.isMuted('ambient')).toBe(false);
+      expect(manager.isMuted('music')).toBe(true);
+    });
+
+    it('backward-compatible: old prefs without music fields default to 0.5/false', () => {
+      localStorage.setItem('audio-prefs', JSON.stringify({
+        sfxVolume: 0.4,
+        ambientVolume: 0.2,
+        sfxMuted: false,
+        ambientMuted: false,
+        // no musicVolume or musicMuted
+      }));
+
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(manager.getVolume('music')).toBe(0.5);
+      expect(manager.isMuted('music')).toBe(false);
     });
 
     it('clamps out-of-range volume values from localStorage', () => {

@@ -1,5 +1,7 @@
 import { Howl, Howler } from 'howler';
 import type { AudioEvent } from '../types';
+import { JukeboxController, LocalMusicSource } from './music';
+import type { MusicSource, TrackCatalog } from './music';
 
 export interface SoundEntry {
   default: string;
@@ -19,8 +21,10 @@ export interface SoundKit {
 export interface AudioPreferences {
   sfxVolume: number;
   ambientVolume: number;
+  musicVolume: number;
   sfxMuted: boolean;
   ambientMuted: boolean;
+  musicMuted: boolean;
 }
 
 export class AudioManager {
@@ -29,12 +33,20 @@ export class AudioManager {
   private currentAmbient: Howl | null = null;
   private sfxVolume: number;
   private ambientVolume: number;
+  private musicVolume = 0.5;
   private sfxMuted = false;
   private ambientMuted = false;
+  private musicMuted = false;
   private audioBasePath: string;
   private fadingOut = false;
+  private jukeboxController: JukeboxController | null = null;
 
-  constructor(kit: SoundKit, audioBasePath: string) {
+  constructor(
+    kit: SoundKit,
+    audioBasePath: string,
+    musicSource?: MusicSource,
+    catalog?: TrackCatalog,
+  ) {
     this.kit = kit;
     this.sfxVolume = kit.sfxVolume;
     this.ambientVolume = kit.ambientVolume;
@@ -44,8 +56,19 @@ export class AudioManager {
     if (saved) {
       this.sfxVolume = saved.sfxVolume;
       this.ambientVolume = saved.ambientVolume;
+      this.musicVolume = saved.musicVolume;
       this.sfxMuted = saved.sfxMuted;
       this.ambientMuted = saved.ambientMuted;
+      this.musicMuted = saved.musicMuted;
+    }
+
+    if (catalog) {
+      const source = musicSource ?? new LocalMusicSource();
+      this.jukeboxController = new JukeboxController(
+        source,
+        catalog,
+        () => this.effectiveMusicVolume(),
+      );
     }
 
     this.preloadSounds();
@@ -123,7 +146,22 @@ export class AudioManager {
         case 'footstep':
           this.playSfx('footstep', event.surface);
           break;
+        case 'jukeboxUpdate':
+          if (this.jukeboxController) {
+            this.jukeboxController.update(
+              event.entityId,
+              event.trackId,
+              event.playing,
+              event.distanceFactor,
+              event.elapsedSecs,
+            );
+          }
+          break;
       }
+    }
+
+    if (this.jukeboxController) {
+      this.jukeboxController.cleanup();
     }
   }
 
@@ -133,6 +171,10 @@ export class AudioManager {
 
   private effectiveAmbientVolume(): number {
     return this.ambientMuted ? 0 : this.ambientVolume;
+  }
+
+  private effectiveMusicVolume(): number {
+    return this.musicMuted ? 0 : this.musicVolume;
   }
 
   private playSfx(eventType: string, variantKey?: string): void {
@@ -196,44 +238,54 @@ export class AudioManager {
     }
   }
 
-  setVolume(channel: 'sfx' | 'ambient', volume: number): void {
+  setVolume(channel: 'sfx' | 'ambient' | 'music', volume: number): void {
     if (channel === 'sfx') {
       this.sfxVolume = volume;
-    } else {
+    } else if (channel === 'ambient') {
       this.ambientVolume = volume;
       if (this.currentAmbient && !this.fadingOut) {
         this.currentAmbient.volume(this.effectiveAmbientVolume());
       }
+    } else {
+      this.musicVolume = volume;
     }
     this.savePreferences();
   }
 
-  getVolume(channel: 'sfx' | 'ambient'): number {
-    return channel === 'sfx' ? this.sfxVolume : this.ambientVolume;
+  getVolume(channel: 'sfx' | 'ambient' | 'music'): number {
+    if (channel === 'sfx') return this.sfxVolume;
+    if (channel === 'ambient') return this.ambientVolume;
+    return this.musicVolume;
   }
 
-  setMuted(channel: 'sfx' | 'ambient', muted: boolean): void {
+  setMuted(channel: 'sfx' | 'ambient' | 'music', muted: boolean): void {
     if (channel === 'sfx') {
       this.sfxMuted = muted;
-    } else {
+    } else if (channel === 'ambient') {
       this.ambientMuted = muted;
       if (this.currentAmbient && !this.fadingOut) {
         this.currentAmbient.volume(this.effectiveAmbientVolume());
       }
+    } else {
+      this.musicMuted = muted;
     }
     this.savePreferences();
   }
 
-  isMuted(channel: 'sfx' | 'ambient'): boolean {
-    return channel === 'sfx' ? this.sfxMuted : this.ambientMuted;
+  isMuted(channel: 'sfx' | 'ambient' | 'music'): boolean {
+    if (channel === 'sfx') return this.sfxMuted;
+    if (channel === 'ambient') return this.ambientMuted;
+    return this.musicMuted;
   }
 
   getPreferences(): AudioPreferences {
     return {
       sfxVolume: this.sfxVolume,
       ambientVolume: this.ambientVolume,
+      musicVolume: this.musicVolume,
       sfxMuted: this.sfxMuted,
       ambientMuted: this.ambientMuted,
+      musicMuted: this.musicMuted,
     };
   }
 
@@ -254,8 +306,10 @@ export class AudioManager {
       return {
         sfxVolume: clamp(parsed.sfxVolume, 1.0),
         ambientVolume: clamp(parsed.ambientVolume, 0.5),
+        musicVolume: clamp(parsed.musicVolume, 0.5),
         sfxMuted: typeof parsed.sfxMuted === 'boolean' ? parsed.sfxMuted : false,
         ambientMuted: typeof parsed.ambientMuted === 'boolean' ? parsed.ambientMuted : false,
+        musicMuted: typeof parsed.musicMuted === 'boolean' ? parsed.musicMuted : false,
       };
     } catch {
       return null;
@@ -268,6 +322,9 @@ export class AudioManager {
     }
     this.sounds.clear();
     this.currentAmbient = null;
+    if (this.jukeboxController) {
+      this.jukeboxController.dispose();
+    }
   }
 }
 
