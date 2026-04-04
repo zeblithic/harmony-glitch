@@ -132,17 +132,19 @@
     onClose?.();
   }
 
+  /** Skip/ESC in first-run mode: revert to defaults and advance. */
+  function handleSkip() {
+    if (saving) return;
+    // Revert any in-progress changes so the renderer shows defaults
+    if (savedAppearance) pendingAppearance = { ...savedAppearance };
+    onClose?.();
+  }
+
   function handleDialogCancel(e: Event) {
     e.preventDefault();
     if (saving) return;
     if (firstRun) {
-      // ESC in first-run mode saves defaults and continues.
-      // If avatar hasn't loaded yet (or failed), just advance.
-      if (pendingAppearance) {
-        handleSave();
-      } else {
-        onClose?.();
-      }
+      handleSkip();
     } else {
       handleCancel();
     }
@@ -314,7 +316,7 @@
 
     <div class="editor-footer">
       {#if firstRun}
-        <button type="button" class="cancel-btn" onclick={() => pendingAppearance ? handleSave() : onClose?.()}>Skip</button>
+        <button type="button" class="cancel-btn" onclick={handleSkip}>Skip</button>
       {:else}
         <button type="button" class="cancel-btn" onclick={handleCancel}>Cancel</button>
       {/if}
