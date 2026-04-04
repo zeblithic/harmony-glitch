@@ -25,6 +25,8 @@ interface ActiveJukebox {
   howl: Howl;
   trackId: string;
   lastSeenAt: number;
+  playing: boolean;
+  elapsedSecs: number;
 }
 
 export class JukeboxController {
@@ -54,20 +56,20 @@ export class JukeboxController {
     const existing = this.active.get(entityId);
 
     if (existing && existing.trackId === trackId) {
-      // Same track — update volume and playing state
+      // Same track — update volume, playing state, and stored position
       existing.lastSeenAt = now;
+      existing.playing = playing;
+      existing.elapsedSecs = elapsedSecs;
       existing.howl.volume(distanceFactor * this.getVolume());
-      if (playing) {
-        // Only call play() once the Howl has finished loading — calling it
-        // while loading queues duplicate instances that all fire on load.
-        if (existing.howl.state() === 'loaded' && !existing.howl.playing()) {
+      if (existing.howl.state() === 'loaded') {
+        if (playing && !existing.howl.playing()) {
           existing.howl.play();
-        }
-      } else {
-        if (existing.howl.playing()) {
+          existing.howl.seek(elapsedSecs);
+        } else if (!playing && existing.howl.playing()) {
           existing.howl.pause();
         }
       }
+      // While loading, onload will read the latest playing/elapsedSecs from the entry
     } else {
       // New jukebox or track changed — stop old Howl if any
       if (existing) {
@@ -83,6 +85,14 @@ export class JukeboxController {
       }
 
       const url = this.musicSource.resolveTrackUrl(trackId, entry.file);
+      const activeEntry: ActiveJukebox = {
+        howl: null!,  // assigned immediately below
+        trackId,
+        lastSeenAt: now,
+        playing,
+        elapsedSecs,
+      };
+
       const howl = new Howl({
         src: [url],
         volume: distanceFactor * this.getVolume(),
@@ -90,14 +100,16 @@ export class JukeboxController {
           console.warn(`[JukeboxController] Failed to load track ${trackId}:`, err);
         },
         onload: () => {
-          if (playing) {
+          // Read current state from the entry, not the stale closure captures
+          if (activeEntry.playing) {
             howl.play();
-            howl.seek(elapsedSecs);
+            howl.seek(activeEntry.elapsedSecs);
           }
         },
       });
+      activeEntry.howl = howl;
 
-      this.active.set(entityId, { howl, trackId, lastSeenAt: now });
+      this.active.set(entityId, activeEntry);
     }
   }
 

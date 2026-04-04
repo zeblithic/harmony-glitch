@@ -419,18 +419,18 @@ impl GameState {
                 }
 
                 // Find nearest jukebox within audio_radius (2D Euclidean distance)
-                let mut nearest_jukebox: Option<(String, f64, f64)> = None; // (entity_id, distance_factor, distance)
+                let mut nearest_jukebox: Option<(String, f64)> = None; // (entity_id, distance)
                 for entity in &self.world_entities {
                     if let Some(def) = self.entity_defs.get(&entity.entity_type) {
                         if let Some(audio_radius) = def.audio_radius {
-                            if def.playlist.is_some() && self.jukebox_states.contains_key(&entity.id) {
+                            if audio_radius > 0.0 && def.playlist.is_some() && self.jukebox_states.contains_key(&entity.id) {
                                 let dx = self.player.x - entity.x;
                                 let dy = self.player.y - entity.y;
                                 let distance = (dx * dx + dy * dy).sqrt();
-                                if let Some(factor) = jukebox::distance_factor(self.player.x, self.player.y, entity.x, entity.y, audio_radius) {
-                                    let closer = nearest_jukebox.as_ref().is_none_or(|(_, _, d)| distance < *d);
+                                if distance < audio_radius {
+                                    let closer = nearest_jukebox.as_ref().is_none_or(|(_, d)| distance < *d);
                                     if closer {
-                                        nearest_jukebox = Some((entity.id.clone(), factor, distance));
+                                        nearest_jukebox = Some((entity.id.clone(), distance));
                                     }
                                 }
                             }
@@ -439,11 +439,19 @@ impl GameState {
                 }
 
                 // Emit JukeboxUpdate for the nearest jukebox only
-                if let Some((entity_id, factor, _)) = nearest_jukebox {
-                    if let Some(jb_state) = self.jukebox_states.get(&entity_id) {
+                if let Some((ref entity_id, distance)) = nearest_jukebox {
+                    // Look up audio_radius to compute factor (distance < audio_radius guaranteed)
+                    let entity = self.world_entities.iter().find(|e| e.id == *entity_id);
+                    let audio_radius = entity
+                        .and_then(|e| self.entity_defs.get(&e.entity_type))
+                        .and_then(|d| d.audio_radius)
+                        .unwrap_or(1.0);
+                    let factor = 1.0 - distance / audio_radius;
+
+                    if let Some(jb_state) = self.jukebox_states.get(entity_id) {
                         if let Some(track_id) = jb_state.current_track_id() {
                             audio_events.push(AudioEvent::JukeboxUpdate {
-                                entity_id,
+                                entity_id: entity_id.clone(),
                                 track_id: track_id.to_string(),
                                 playing: jb_state.playing,
                                 distance_factor: factor,
