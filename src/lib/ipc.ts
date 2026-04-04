@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -108,4 +108,16 @@ export async function getAvatar(): Promise<AvatarAppearance> {
 
 export async function setAvatar(appearance: AvatarAppearance): Promise<AvatarAppearance> {
   return invoke<AvatarAppearance>('set_avatar', { appearance });
+}
+
+export async function getStoreState(entityId: string): Promise<StoreState> {
+  return invoke<StoreState>('get_store_state', { entityId });
+}
+
+export async function vendorBuy(entityId: string, itemId: string, count: number): Promise<number> {
+  return invoke<number>('vendor_buy', { entityId, itemId, count });
+}
+
+export async function vendorSell(entityId: string, itemId: string, count: number): Promise<number> {
+  return invoke<number>('vendor_sell', { entityId, itemId, count });
 }
