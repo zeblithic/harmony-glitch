@@ -18,8 +18,9 @@
   let activeCategory = $state<string>('eyes');
   let saving = $state(false);
   let error = $state<string | null>(null);
+  let applyGeneration = 0;
 
-  const VANITY_SLOTS = new Set(['eyes', 'ears', 'nose', 'mouth', 'hair']);
+  const VANITY_SLOTS = new Set(['eyes', 'ears', 'nose', 'mouth']);
 
   const TAB_GROUPS: Record<string, string[]> = {
     face: ['eyes', 'ears', 'nose', 'mouth'],
@@ -46,10 +47,14 @@
     if (visible && dialogEl) {
       if (!dialogEl.open) {
         previousFocus = document.activeElement as HTMLElement | null;
+        error = null;
         getAvatar().then(a => {
           savedAppearance = a;
           pendingAppearance = { ...a };
-        }).catch(e => console.error('[AvatarEditor] Failed to load avatar:', e));
+        }).catch(e => {
+          console.error('[AvatarEditor] Failed to load avatar:', e);
+          error = 'Failed to load avatar. Try closing and reopening.';
+        });
         dialogEl.showModal();
       }
       return () => {
@@ -61,10 +66,18 @@
     }
   });
 
-  // Live preview — apply pending appearance to the renderer
+  // Live preview — apply pending appearance to the renderer.
+  // Uses a generation counter so stale async calls from rapid selections
+  // don't corrupt the compositor's layer state.
   $effect(() => {
     if (pendingAppearance && renderer) {
-      renderer.applyAppearance(pendingAppearance);
+      const gen = ++applyGeneration;
+      const snapshot = pendingAppearance;
+      renderer.applyAppearance(snapshot).catch(e => {
+        if (gen === applyGeneration) {
+          console.error('[AvatarEditor] applyAppearance failed:', e);
+        }
+      });
     }
   });
 
@@ -99,9 +112,7 @@
   }
 
   function handleCancel() {
-    if (savedAppearance && renderer) {
-      renderer.applyAppearance(savedAppearance);
-    }
+    // Setting pendingAppearance triggers the $effect which calls applyAppearance
     pendingAppearance = savedAppearance ? { ...savedAppearance } : null;
     onClose?.();
   }
@@ -125,9 +136,26 @@
     if (e.key === 'ArrowRight') {
       e.preventDefault();
       switchTabGroup(groups[(idx + 1) % groups.length]);
+      // Focus the newly active tab
+      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       switchTabGroup(groups[(idx - 1 + groups.length) % groups.length]);
+      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+    }
+  }
+
+  function handleSubTabKey(e: KeyboardEvent) {
+    const cats = TAB_GROUPS[activeTabGroup];
+    const idx = cats.indexOf(activeCategory);
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      activeCategory = cats[(idx + 1) % cats.length];
+      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      activeCategory = cats[(idx - 1 + cats.length) % cats.length];
+      (e.currentTarget as HTMLElement)?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
     }
   }
 
@@ -162,11 +190,12 @@
     </div>
 
     {#if TAB_GROUPS[activeTabGroup].length > 1}
-      <!-- svelte-ignore a11y_interactive_supports_focus -->
-    <div class="sub-tab-bar" role="tablist" aria-label="{displayName(activeTabGroup)} categories">
+      <div class="sub-tab-bar" role="tablist" aria-label="{displayName(activeTabGroup)} categories"
+        onkeydown={handleSubTabKey}>
         {#each TAB_GROUPS[activeTabGroup] as cat}
           <button type="button" role="tab"
             aria-selected={activeCategory === cat}
+            tabindex={activeCategory === cat ? 0 : -1}
             class="sub-tab" class:active={activeCategory === cat}
             onclick={() => { activeCategory = cat; }}>
             {displayName(cat)}
