@@ -610,7 +610,7 @@ fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Valu
     for stack in state.inventory.slots.iter().flatten() {
         *seen.entry(stack.item_id.clone()).or_insert(0) += stack.count;
     }
-    let player_inventory: Vec<serde_json::Value> = seen.iter().filter_map(|(item_id, &count)| {
+    let mut player_inventory: Vec<serde_json::Value> = seen.iter().filter_map(|(item_id, &count)| {
         let sell = item::vendor::sell_price(item_id, &state.item_defs, store)?;
         let item_def = state.item_defs.get(item_id)?;
         Some(serde_json::json!({
@@ -620,6 +620,10 @@ fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Valu
             "sellPrice": sell,
         }))
     }).collect();
+    // Sort by item name for stable display order across refreshes
+    player_inventory.sort_by(|a, b| {
+        a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or(""))
+    });
 
     Ok(serde_json::json!({
         "entityId": entity_id,
