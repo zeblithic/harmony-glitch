@@ -194,6 +194,8 @@
             getJukeboxState(eid).then(info => {
               jukeboxInfo = info;
               jukeboxOpen = true;
+              inventoryOpen = false;
+              volumeOpen = false;
             }).catch(e => console.error('Failed to get jukebox state:', e));
           }
         }
