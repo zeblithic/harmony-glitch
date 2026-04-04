@@ -310,6 +310,7 @@ export class AvatarCompositor {
         this.layers.delete(key);
       }
       this.sheets.delete(key);
+      this.fadingIn.delete(key);
     }
   }
 
