@@ -585,6 +585,7 @@ fn get_jukebox_state(entity_id: String, app: AppHandle) -> Result<serde_json::Va
 fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    validate_entity_proximity(&state, &entity_id)?;
     let entity = state.world_entities.iter().find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type)
@@ -684,14 +685,11 @@ fn vendor_sell(entity_id: String, item_id: String, count: u32, app: AppHandle) -
         .clone();
     let item_defs = state.item_defs.clone();
 
-    let sell = item::vendor::sell_price(&item_id, &item_defs, &store)
-        .ok_or_else(|| format!("Item '{item_id}' cannot be sold"))?;
-
-    let currants = state.currants;
-    let new_balance = item::vendor::sell(&item_id, count, currants, &mut state.inventory, &item_defs, &store)?;
+    let old_balance = state.currants;
+    let new_balance = item::vendor::sell(&item_id, count, old_balance, &mut state.inventory, &item_defs, &store)?;
     state.currants = new_balance;
 
-    let total = (sell as u64) * (count as u64);
+    let total = new_balance - old_balance;
     let px = state.player.x;
     let py = state.player.y;
     let fb_id = state.next_feedback_id;

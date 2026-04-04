@@ -331,7 +331,7 @@
   if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
-    if (inventoryOpen) { volumeOpen = false; shopOpen = false; storeState = null; }
+    if (inventoryOpen) { volumeOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
   if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
     e.preventDefault();
@@ -355,7 +355,7 @@
   {:else if !identityReady}
     <IdentitySetup onComplete={() => { identityReady = true; }} />
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || inventoryOpen || shopOpen} onFrame={handleFrame} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen} onFrame={handleFrame} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
@@ -385,7 +385,7 @@
     <ShopPanel
       {storeState}
       visible={shopOpen}
-      onClose={() => { shopOpen = false; storeState = null; }}
+      onClose={() => { shopOpen = false; storeState = null; shopCloseFrames = 0; }}
       onBuy={async (itemId, count) => {
         if (!storeState) return;
         try {
@@ -424,6 +424,7 @@
         jukeboxCloseFrames = 0;
         shopOpen = false;
         storeState = null;
+        shopCloseFrames = 0;
       }
     }}>
       Back
