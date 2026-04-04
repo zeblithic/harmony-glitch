@@ -36,6 +36,7 @@
   let recipes = $state<RecipeDef[]>([]);
   let jukeboxOpen = $state(false);
   let jukeboxInfo = $state<JukeboxInfo | null>(null);
+  let jukeboxCloseFrames = 0; // frames since jukebox lost interaction prompt
   let musicCatalog = $state<TrackCatalog>({ tracks: {} });
 
   onMount(async () => {
@@ -219,26 +220,19 @@
       }
     }
 
-    // Close jukebox panel when the player leaves range.
-    // For jukeboxes with tracks, use JukeboxUpdate events as keep-alive
-    // (avoids false close when a closer entity steals the interaction prompt).
-    // For empty-playlist jukeboxes (no JukeboxState, no events), fall back
-    // to the interaction prompt — it's the only signal available.
+    // Close jukebox panel when the player walks out of interact_radius.
+    // Uses the interaction prompt as the signal — present when the jukebox
+    // is the nearest interactable within interact_radius. Debounced by 2
+    // frames to ride through the one-frame null gap after ground item pickup.
     if (jukeboxOpen && jukeboxInfo) {
-      const hasPlaylist = jukeboxInfo.playlist.length > 0;
-      if (hasPlaylist) {
-        const hasUpdate = frame.audioEvents?.some(
-          e => e.type === 'jukeboxUpdate' && e.entityId === jukeboxInfo!.entityId
-        );
-        if (!hasUpdate) {
-          jukeboxOpen = false;
-          jukeboxInfo = null;
-        }
+      if (frame.interactionPrompt?.entityId === jukeboxInfo.entityId) {
+        jukeboxCloseFrames = 0;
       } else {
-        // Empty playlist — no JukeboxUpdate events are emitted, use prompt
-        if (frame.interactionPrompt?.entityId !== jukeboxInfo.entityId) {
+        jukeboxCloseFrames++;
+        if (jukeboxCloseFrames >= 2) {
           jukeboxOpen = false;
           jukeboxInfo = null;
+          jukeboxCloseFrames = 0;
         }
       }
     }
