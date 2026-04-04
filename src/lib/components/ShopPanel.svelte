@@ -20,26 +20,33 @@
   let activeTab = $state<'buy' | 'sell'>('buy');
 
   $effect(() => {
-    if (visible && storeState && dialogEl) {
+    if (!dialogEl) return;
+    if (visible) {
       if (!dialogEl.open) {
         previousFocus = document.activeElement as HTMLElement | null;
         dialogEl.showModal();
-        const firstFocusable = dialogEl.querySelector<HTMLElement>('button');
-        firstFocusable?.focus();
+        const first = dialogEl.querySelector('button, [tabindex]') as HTMLElement | null;
+        first?.focus();
       }
-      return () => {
-        if (dialogEl?.open) dialogEl.close();
-        if (previousFocus) {
-          previousFocus.focus();
-          previousFocus = null;
-        }
+    } else {
+      if (dialogEl.open) {
+        dialogEl.close();
+        previousFocus?.focus();
+        previousFocus = null;
         activeTab = 'buy';
-      };
-    } else if (!visible && previousFocus) {
-      previousFocus.focus();
-      previousFocus = null;
+      }
     }
   });
+
+  function handleTabKeydown(e: KeyboardEvent) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      activeTab = activeTab === 'buy' ? 'sell' : 'buy';
+      // Focus the newly active tab
+      const newTabId = activeTab === 'buy' ? 'tab-buy' : 'tab-sell';
+      (dialogEl?.querySelector(`#${newTabId}`) as HTMLElement)?.focus();
+    }
+  }
 
   function handleCancel(e: Event) {
     e.preventDefault();
@@ -88,7 +95,7 @@
       </button>
     </div>
 
-    <div class="tab-bar" role="tablist" aria-label="Shop tabs">
+    <div class="tab-bar" role="tablist" aria-label="Shop tabs" tabindex="-1" onkeydown={handleTabKeydown}>
       <button
         type="button"
         role="tab"
@@ -97,6 +104,7 @@
         aria-controls="panel-buy"
         class="tab-btn"
         class:active={activeTab === 'buy'}
+        tabindex={activeTab === 'buy' ? 0 : -1}
         onclick={() => (activeTab = 'buy')}
       >
         Buy
@@ -109,6 +117,7 @@
         aria-controls="panel-sell"
         class="tab-btn"
         class:active={activeTab === 'sell'}
+        tabindex={activeTab === 'sell' ? 0 : -1}
         onclick={() => (activeTab = 'sell')}
       >
         Sell
@@ -121,6 +130,7 @@
         id="panel-buy"
         aria-labelledby="tab-buy"
         class="tab-panel"
+        tabindex="0"
       >
         <ul class="item-list">
           {#each storeState.vendorInventory as item (item.itemId)}
@@ -146,6 +156,7 @@
         id="panel-sell"
         aria-labelledby="tab-sell"
         class="tab-panel"
+        tabindex="0"
       >
         {#if storeState.playerInventory.length === 0}
           <p class="empty-message">No items to sell</p>

@@ -91,14 +91,15 @@ pub fn sell(
         ));
     }
 
-    // Remove items and add currants
-    inventory.remove_item(item_id, count);
+    // Compute earnings first so we never mutate inventory on overflow
     let earned = (price as u64)
         .checked_mul(count as u64)
         .ok_or_else(|| "Earnings overflow".to_string())?;
     let new_currants = currants
         .checked_add(earned)
         .ok_or_else(|| "Currant balance overflow".to_string())?;
+    // Safe to remove items now that arithmetic is validated
+    inventory.remove_item(item_id, count);
     Ok(new_currants)
 }
 

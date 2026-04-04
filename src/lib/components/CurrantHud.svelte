@@ -2,7 +2,7 @@
   let { currants = 0 }: { currants: number } = $props();
 </script>
 
-<div class="currant-hud" aria-label="Currant balance: {currants}">
+<div class="currant-hud" role="status" aria-label="Currant balance: {currants}">
   <span class="currant-icon">●</span>
   <span class="currant-amount">{currants}</span>
 </div>
