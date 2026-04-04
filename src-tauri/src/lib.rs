@@ -895,6 +895,7 @@ pub fn run() {
                 entity_defs,
                 recipe_defs,
                 track_catalog,
+                item::types::StoreCatalog { stores: std::collections::HashMap::new() },
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
