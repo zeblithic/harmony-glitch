@@ -418,15 +418,15 @@ impl GameState {
                     jb_state.tick(dt, &self.track_catalog);
                 }
 
-                // Find nearest jukebox within audio_radius (2D Euclidean distance)
-                let mut nearest_jukebox: Option<(String, f64)> = None; // (entity_id, distance)
+                // Find nearest jukebox within audio_radius using 1D horizontal
+                // distance — in a side-scroller, a player on a platform directly
+                // above should hear the jukebox at full volume.
+                let mut nearest_jukebox: Option<(String, f64)> = None; // (entity_id, horizontal_distance)
                 for entity in &self.world_entities {
                     if let Some(def) = self.entity_defs.get(&entity.entity_type) {
                         if let Some(audio_radius) = def.audio_radius {
                             if audio_radius > 0.0 && def.playlist.is_some() && self.jukebox_states.contains_key(&entity.id) {
-                                let dx = self.player.x - entity.x;
-                                let dy = self.player.y - entity.y;
-                                let distance = (dx * dx + dy * dy).sqrt();
+                                let distance = (self.player.x - entity.x).abs();
                                 if distance < audio_radius {
                                     let closer = nearest_jukebox.as_ref().is_none_or(|(_, d)| distance < *d);
                                     if closer {
