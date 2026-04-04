@@ -88,9 +88,21 @@ if (opts.help) {
 const SCALE = parseFloat(opts.scale);
 const LIMIT = parseInt(opts.limit, 10);
 
-// Body frame dimensions at current scale (used as sourceSize for all layers)
-const BODY_FRAME_W = Math.round(68 * SCALE);
-const BODY_FRAME_H = Math.round(126.65 * SCALE);
+// Body frame dimensions at current scale (used as sourceSize for all layers).
+// Derived from the actual body SWF stage bounds via swf-wrapper --info so the
+// sourceSize always matches ruffle's output regardless of --scale.
+let BODY_FRAME_W, BODY_FRAME_H;
+function initBodyDimensions() {
+  try {
+    const info = JSON.parse(run(SWF_WRAPPER, ['--info', BODY_SWF]));
+    BODY_FRAME_W = Math.round(info.stage_px.width * SCALE);
+    BODY_FRAME_H = Math.round(info.stage_px.height * SCALE);
+  } catch {
+    // Fallback if body SWF is missing (e.g., --item on a component only)
+    BODY_FRAME_W = Math.round(68 * SCALE);
+    BODY_FRAME_H = Math.round(126.65 * SCALE);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -418,13 +430,12 @@ async function extractItem(swfPath, category, itemName, transforms) {
       const frameNum = start + f;
       const containerPos = positions?.[frameIdx] || null;
 
-      if (isAnimated || frameIdx === 0) {
-        // Animated: render each sampled frame. Static: render once, reuse.
-        await renderFrame(animDir, frameIdx, isAnimated ? frameNum : start, containerPos);
-      } else if (!isAnimated) {
-        // Static items: re-render at each body frame for correct container offset
-        await renderFrame(animDir, frameIdx, frameNum, containerPos);
-      }
+      // Animated items: render each sampled frame from the 1233-frame timeline.
+      // Static items (max_frames=1): always render frame 0 — the wrapped SWF
+      // only has 1 ShowFrame, so skipframes beyond that would produce blank output.
+      // Each static frame still gets its own per-frame container offset for
+      // correct positioning as the body pose changes.
+      await renderFrame(animDir, frameIdx, isAnimated ? frameNum : 0, containerPos);
       frameIdx++;
     }
   }
@@ -506,6 +517,8 @@ async function main() {
     console.error(`glitch-avatars repo not found at ${GLITCH_AVATARS}`);
     process.exit(1);
   }
+
+  initBodyDimensions();
 
   // Load avatar transforms (per-frame container positions)
   let transforms = { animations: {} };
