@@ -159,4 +159,25 @@ describe('AvatarEditor', () => {
     });
     expect(screen.getByRole('dialog')).toBeDefined();
   });
+
+  it('shows first-run UI when firstRun is true', async () => {
+    render(AvatarEditor, {
+      props: { visible: true, firstRun: true, manifest: testManifest, renderer: null },
+    });
+    expect(screen.getByText('Customize Your Glitchen')).toBeDefined();
+    expect(screen.getByText('Continue')).toBeDefined();
+    expect(screen.getByText('Skip')).toBeDefined();
+    // No close button in first-run mode
+    expect(screen.queryByLabelText('Close avatar editor')).toBeNull();
+  });
+
+  it('shows standard UI when firstRun is false', () => {
+    render(AvatarEditor, {
+      props: { visible: true, firstRun: false, manifest: testManifest, renderer: makeRenderer() as any },
+    });
+    expect(screen.queryByText('Customize Your Glitchen')).toBeNull();
+    expect(screen.getByText('Save')).toBeDefined();
+    expect(screen.getByText('Cancel')).toBeDefined();
+    expect(screen.getByLabelText('Close avatar editor')).toBeDefined();
+  });
 });

@@ -3,8 +3,9 @@
   import type { GameRenderer } from '../engine/renderer';
   import type { AvatarAppearance, AvatarManifest } from '../types';
 
-  let { visible = false, manifest, renderer, onClose }: {
+  let { visible = false, firstRun = false, manifest, renderer, onClose }: {
     visible: boolean;
+    firstRun?: boolean;
     manifest: AvatarManifest | null;
     renderer: GameRenderer | null;
     onClose?: () => void;
@@ -134,7 +135,12 @@
   function handleDialogCancel(e: Event) {
     e.preventDefault();
     if (saving) return;
-    handleCancel();
+    if (firstRun) {
+      // ESC in first-run mode saves defaults and continues
+      handleSave();
+    } else {
+      handleCancel();
+    }
   }
 
   function switchTabGroup(group: string) {
@@ -192,9 +198,11 @@
     bind:this={dialogEl} oncancel={handleDialogCancel}>
 
     <div class="panel-header">
-      <h2>Avatar Editor</h2>
-      <button type="button" class="close-btn" aria-label="Close avatar editor"
-        onclick={handleCancel}>&times;</button>
+      <h2>{firstRun ? 'Customize Your Glitchen' : 'Avatar Editor'}</h2>
+      {#if !firstRun}
+        <button type="button" class="close-btn" aria-label="Close avatar editor"
+          onclick={handleCancel}>&times;</button>
+      {/if}
     </div>
 
     <div class="tab-bar" role="tablist" aria-label="Avatar sections"
@@ -300,14 +308,19 @@
     </div>
 
     <div class="editor-footer">
-      <button type="button" class="cancel-btn" onclick={handleCancel}>Cancel</button>
+      {#if firstRun}
+        <button type="button" class="cancel-btn" onclick={handleSave}>Skip</button>
+      {:else}
+        <button type="button" class="cancel-btn" onclick={handleCancel}>Cancel</button>
+      {/if}
       <button type="button" class="save-btn" disabled={saving} onclick={handleSave}>
-        {saving ? 'Saving...' : 'Save'}
+        {saving ? 'Saving...' : firstRun ? 'Continue' : 'Save'}
       </button>
     </div>
     {#if error}
       <div class="error-msg" role="alert">{error}</div>
     {/if}
+    <p class="shortcut-hint" aria-hidden="true">Arrow keys navigate tabs</p>
   </dialog>
 {/if}
 
@@ -523,5 +536,12 @@
     border-radius: 3px;
     font-size: 0.75rem;
     color: #ff9999;
+  }
+
+  .shortcut-hint {
+    margin: 8px 0 0;
+    text-align: center;
+    font-size: 0.65rem;
+    color: #666;
   }
 </style>
