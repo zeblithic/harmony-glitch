@@ -16,7 +16,7 @@
 
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
-import { readdir, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
+import { readdir, mkdir, writeFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -81,9 +81,6 @@ function run(cmd, args, opts = {}) {
 
 /** Auto-crop a PNG to its non-transparent content bounds, with padding. */
 async function autoCrop(inputPath, outputPath, padding = 2) {
-  const img = sharp(inputPath);
-  const { width, height } = await img.metadata();
-
   // Use sharp's trim to remove uniform borders
   // We trim the white (or near-white) background + transparent areas
   const trimmed = await sharp(inputPath)
