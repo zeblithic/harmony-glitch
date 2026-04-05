@@ -19,7 +19,7 @@ HTMLDialogElement.prototype.close = vi.fn(function(this: HTMLDialogElement) {
 });
 
 function makeInventory(items: { itemId: string; name: string; count: number }[]): InventoryFrame {
-  const slots: (null | { itemId: string; name: string; description: string; icon: string; count: number; stackLimit: number })[] =
+  const slots: (null | { itemId: string; name: string; description: string; icon: string; count: number; stackLimit: number; energyValue: number | null })[] =
     items.map(i => ({
       itemId: i.itemId,
       name: i.name,
@@ -27,6 +27,7 @@ function makeInventory(items: { itemId: string; name: string; count: number }[])
       icon: i.itemId,
       count: i.count,
       stackLimit: 50,
+      energyValue: null,
     }));
   while (slots.length < 16) slots.push(null);
   return { slots, capacity: 16 };
