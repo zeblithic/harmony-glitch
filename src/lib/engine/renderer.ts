@@ -512,7 +512,7 @@ export class GameRenderer {
           labelText.alpha = 0.7 + 0.3 * proximity;
           if (distance < 200) {
             const pulse = Math.sin(performance.now() / 300) * 0.05;
-            labelText.scale.set(1 + proximity * 0.08 + pulse);
+            labelText.scale.set(Math.max(1, 1 + proximity * 0.08 + pulse));
           } else {
             labelText.scale.set(1 + proximity * 0.05);
           }
