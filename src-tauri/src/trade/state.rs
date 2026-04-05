@@ -162,13 +162,13 @@ impl TradeManager {
     }
 
     pub fn accept_trade(&mut self, now: f64) -> Result<TradeMessage, String> {
+        if self.active_trade.is_some() {
+            return Err("Already in a trade".into());
+        }
         let session = self
             .pending_request
             .take()
             .ok_or("No pending trade request")?;
-        if self.active_trade.is_some() {
-            return Err("Already in a trade".into());
-        }
         let trade_id = session.trade_id;
         self.active_trade = Some(TradeSession {
             phase: TradePhase::Negotiating,
@@ -943,6 +943,43 @@ mod tests {
             .initiate_trade(2, BOB, "Bob".into(), 0.0)
             .unwrap_err();
         assert_eq!(err, "Already in a trade");
+    }
+
+    #[test]
+    fn accept_with_active_trade_preserves_pending_request() {
+        let eve: [u8; 16] = [0x03; 16];
+        let mut alice_mgr = TradeManager::new(ALICE);
+
+        // Alice receives a trade request from Bob.
+        alice_mgr
+            .receive_request(1, BOB, "Bob".into(), 0.0)
+            .unwrap();
+        assert!(alice_mgr.pending_request().is_some());
+
+        // Alice initiates a trade with Eve (creating an active trade).
+        // Note: receive_request allows pending + no active, initiate requires no active.
+        // Simulate by directly setting active_trade.
+        alice_mgr.active_trade = Some(TradeSession {
+            trade_id: 2,
+            phase: TradePhase::Negotiating,
+            role: TradeRole::Initiator,
+            our_hash: ALICE,
+            peer_hash: eve,
+            peer_name: "Eve".into(),
+            local_offer: TradeOffer::empty(),
+            remote_offer: TradeOffer::empty(),
+            local_terms_hash: None,
+            remote_terms_hash: None,
+            last_activity: 1.0,
+        });
+
+        // Trying to accept Bob's request should fail but NOT destroy the request.
+        let err = alice_mgr.accept_trade(2.0).unwrap_err();
+        assert_eq!(err, "Already in a trade");
+        assert!(
+            alice_mgr.pending_request().is_some(),
+            "Pending request must survive failed accept"
+        );
     }
 
     // ── Out-of-order ────────────────────────────────────────────────────
