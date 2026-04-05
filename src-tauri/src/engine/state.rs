@@ -17,6 +17,9 @@ use crate::item::types::{
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
 
+/// Energy lost per second from passive decay.
+const PASSIVE_ENERGY_DECAY_RATE: f64 = 0.1;
+
 fn default_currants() -> u64 {
     50
 }
@@ -272,6 +275,10 @@ impl GameState {
             return None;
         }
         self.game_time += dt;
+
+        // Passive energy decay
+        self.energy = (self.energy - PASSIVE_ENERGY_DECAY_RATE * dt).max(0.0);
+
         // Drain pending audio events from IPC commands (craft_recipe, load_street)
         let mut audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
 
@@ -2847,6 +2854,58 @@ mod tests {
                 "Expected surface 'grass', got '{surface}'"
             );
         }
+    }
+
+    #[test]
+    fn energy_decays_per_tick() {
+        let mut state = GameState::new(
+            800.0,
+            600.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        let initial_energy = state.energy;
+        let input = InputState { left: false, right: false, jump: false, interact: false };
+        let mut rng = rand::rngs::mock::StepRng::new(0, 1);
+
+        // Tick for 1 second at 60fps
+        for _ in 0..60 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        // After 1s at 0.1/sec decay: should lose ~0.1 energy
+        let lost = initial_energy - state.energy;
+        assert!(lost > 0.09 && lost < 0.11, "Expected ~0.1 energy loss, got {lost}");
+    }
+
+    #[test]
+    fn energy_does_not_decay_below_zero() {
+        let mut state = GameState::new(
+            800.0,
+            600.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.energy = 0.01; // Almost empty
+
+        let input = InputState { left: false, right: false, jump: false, interact: false };
+        let mut rng = rand::rngs::mock::StepRng::new(0, 1);
+
+        // Tick for 10 seconds — should clamp at 0, not go negative
+        for _ in 0..600 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        assert_eq!(state.energy, 0.0);
     }
 }
 
