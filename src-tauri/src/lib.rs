@@ -270,14 +270,29 @@ fn load_street(
             if !already_saved {
                 state.recover_trade_journal(&journal);
                 // Save immediately so recovery is durable.
-                if let Some(save) = state.save_state() {
+                // Do NOT clear the journal until the save succeeds — if
+                // the disk write fails, we need the journal for the next
+                // restart attempt.
+                let saved = state.save_state().is_some_and(|save| {
                     let save_path = piw.data_dir.join("savegame.json");
-                    if let Err(e) = engine::state::write_save_state(&save_path, &save) {
-                        eprintln!("[journal] Failed to save after recovery: {e}");
+                    match engine::state::write_save_state(&save_path, &save) {
+                        Ok(()) => true,
+                        Err(e) => {
+                            eprintln!("[journal] Failed to save after recovery: {e}");
+                            false
+                        }
                     }
+                });
+                if !saved {
+                    eprintln!("[journal] Retaining journal for next restart");
+                    // Skip clearing — journal stays on disk for retry.
+                } else {
+                    trade::journal::clear_journal(&journal_path);
                 }
+            } else {
+                // Trade already reflected in save — safe to clean up.
+                trade::journal::clear_journal(&journal_path);
             }
-            trade::journal::clear_journal(&journal_path);
         }
     }
 
@@ -671,10 +686,25 @@ fn handle_trade_message(
                 if both_locked {
                     // Both locked with matching hash — execute trade.
                     // Write journal BEFORE execution so a crash can be recovered.
+                    // If the journal write fails, abort — proceeding without a
+                    // crash-recovery record would silently defeat the safety guarantee.
                     let piw = app.state::<PlayerIdentityWrapper>();
                     let journal_path = piw.data_dir.join("trade_journal.json");
-                    if let Some(journal) = trade_mgr.build_journal() {
-                        let _ = trade::journal::write_journal(&journal_path, &journal);
+                    let journal_ok = trade_mgr.build_journal().is_some_and(|journal| {
+                        trade::journal::write_journal(&journal_path, &journal).is_ok()
+                    });
+                    if !journal_ok {
+                        eprintln!("[trade] journal write failed — aborting trade");
+                        let cancel_msg = trade_mgr.cancel_trade();
+                        drop(trade_mgr);
+                        if let Some(cancel_msg) = cancel_msg {
+                            send_trade_msg(app, &cancel_msg);
+                        }
+                        let _ = app.emit(
+                            "trade_event",
+                            serde_json::json!({"type": "cancelled", "reason": "Journal write failed"}),
+                        );
+                        return;
                     }
                     let state_wrapper = app.state::<GameStateWrapper>();
                     let mut guard =
@@ -1048,11 +1078,25 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
 
     if is_executing {
         // Write journal BEFORE execution so a crash can be recovered.
+        // If the journal write fails, abort — proceeding without a
+        // crash-recovery record would silently defeat the safety guarantee.
         let piw = app.state::<PlayerIdentityWrapper>();
         let journal_path = piw.data_dir.join("trade_journal.json");
         let journal = mgr.build_journal();
         if let Some(ref journal) = journal {
-            let _ = trade::journal::write_journal(&journal_path, journal);
+            if let Err(e) = trade::journal::write_journal(&journal_path, journal) {
+                eprintln!("[trade] journal write failed: {e} — aborting trade");
+                let cancel_msg = mgr.cancel_trade();
+                drop(mgr);
+                if let Some(cancel_msg) = cancel_msg {
+                    send_trade_msg(&app, &cancel_msg);
+                }
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "cancelled", "reason": "Journal write failed"}),
+                );
+                return Err("Journal write failed — trade aborted".into());
+            }
         }
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut guard = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
