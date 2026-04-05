@@ -515,12 +515,13 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                 );
             }
             NetworkAction::PresenceChange(ref event) => {
-                // Cancel trade if the departing peer is our trade partner.
+                // Cancel trade only if the departing peer is specifically our trade partner.
                 if let network::types::PresenceEvent::Left { address_hash } = event {
                     let trade = app.state::<TradeWrapper>();
                     let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
-                    if trade_mgr.is_trading_with(address_hash) {
-                        trade_mgr.cancel_trade();
+                    if let Some(cancel_msg) = trade_mgr.cancel_trade_with_peer(address_hash) {
+                        drop(trade_mgr);
+                        send_trade_msg(app, &cancel_msg);
                         let _ = app.emit(
                             "trade_event",
                             serde_json::json!({"type": "cancelled", "reason": "peerDisconnected"}),
@@ -656,7 +657,10 @@ fn handle_trade_message(app: &AppHandle, msg: trade::types::TradeMessage) {
                         }
                         Err(e) => {
                             eprintln!("[trade] execution failed: {e}");
-                            trade_mgr.cancel_trade();
+                            if let Some(cancel_msg) = trade_mgr.cancel_trade() {
+                                drop(trade_mgr);
+                                send_trade_msg(app, &cancel_msg);
+                            }
                             let _ = app.emit(
                                 "trade_event",
                                 serde_json::json!({"type": "cancelled", "reason": e}),
@@ -937,6 +941,11 @@ fn trade_accept(app: AppHandle) -> Result<(), String> {
         mgr.accept_trade(now_secs(&app))?
     };
     send_trade_msg(&app, &msg);
+    // Emit accepted event so the responder's own UI transitions from prompt to trade panel.
+    let _ = app.emit(
+        "trade_event",
+        serde_json::json!({"type": "accepted"}),
+    );
     Ok(())
 }
 
@@ -999,9 +1008,12 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 send_trade_msg(&app, &complete_msg);
             }
             Err(e) => {
-                mgr.cancel_trade();
+                let cancel_msg = mgr.cancel_trade();
                 drop(guard);
                 drop(mgr);
+                if let Some(cancel_msg) = cancel_msg {
+                    send_trade_msg(&app, &cancel_msg);
+                }
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "cancelled", "reason": e}),

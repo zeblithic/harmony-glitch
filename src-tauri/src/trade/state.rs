@@ -48,6 +48,29 @@ impl TradeManager {
                 .is_some_and(|t| &t.peer_hash == peer_hash)
     }
 
+    /// Cancel only the trade/request involving a specific peer.
+    /// Returns a Cancel message if the active trade was with that peer.
+    pub fn cancel_trade_with_peer(&mut self, peer_hash: &[u8; 16]) -> Option<TradeMessage> {
+        if self
+            .active_trade
+            .as_ref()
+            .is_some_and(|s| &s.peer_hash == peer_hash)
+        {
+            return self.active_trade.take().map(|s| TradeMessage::Cancel {
+                trade_id: s.trade_id,
+                sender: self.our_hash,
+            });
+        }
+        if self
+            .pending_request
+            .as_ref()
+            .is_some_and(|s| &s.peer_hash == peer_hash)
+        {
+            self.pending_request = None;
+        }
+        None
+    }
+
     /// Build a TradeFrame for the frontend, enriching items with names/icons.
     pub fn trade_frame(&self, item_defs: &ItemDefs) -> Option<TradeFrame> {
         let session = self.active_trade.as_ref()?;
@@ -210,6 +233,7 @@ impl TradeManager {
             .ok_or("No active trade")?;
         if session.phase != TradePhase::Negotiating
             && session.phase != TradePhase::LockedRemote
+            && session.phase != TradePhase::LockedLocal
         {
             return Err("Cannot update offer in current phase".into());
         }
@@ -246,9 +270,12 @@ impl TradeManager {
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
-        // Remote updating their offer clears their lock.
+        // Remote updating their offer invalidates both locks.
         session.remote_terms_hash = None;
-        if session.phase == TradePhase::LockedRemote {
+        session.local_terms_hash = None;
+        if session.phase == TradePhase::LockedLocal
+            || session.phase == TradePhase::LockedRemote
+        {
             session.phase = TradePhase::Negotiating;
         }
         session.remote_offer = offer;

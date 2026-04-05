@@ -418,9 +418,12 @@
     jukeboxInfo = null;
     jukeboxCloseFrames = 0;
   }
-  // T key: initiate trade with nearest remote player
+  // T key: initiate trade with nearest remote player (by distance, not hash order)
   if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !shopOpen && latestFrame) {
-    const nearest = latestFrame.remotePlayers?.[0];
+    const px = latestFrame.player.x, py = latestFrame.player.y;
+    const nearest = latestFrame.remotePlayers
+      ?.map(p => ({ p, d: Math.hypot(p.x - px, p.y - py) }))
+      .sort((a, b) => a.d - b.d)[0]?.p;
     if (nearest) {
       e.preventDefault();
       tradeInitiate(nearest.addressHash).then(() => {
