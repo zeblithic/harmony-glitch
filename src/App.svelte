@@ -15,6 +15,7 @@
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
   import TradePanel from './lib/components/TradePanel.svelte';
   import TradePrompt from './lib/components/TradePrompt.svelte';
+  import StreetNameHud from './lib/components/StreetNameHud.svelte';
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
@@ -589,6 +590,7 @@
         tradeFrame = null;
       }}
     />
+    <StreetNameHud name={currentStreet.name} />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
     <AvatarEditor
       visible={avatarEditorOpen}

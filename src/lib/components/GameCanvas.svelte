@@ -55,6 +55,17 @@
   }
 
   let cleanupFns: (() => void)[] = [];
+  let builtForTsid: string | null = null;
+
+  // Rebuild scene when street changes (e.g. after a street transition).
+  // The guard builtForTsid !== null prevents double-building on initial mount
+  // (onMount handles the first buildScene call).
+  $effect(() => {
+    if (renderer && street && builtForTsid !== null && street.tsid !== builtForTsid) {
+      builtForTsid = street.tsid;
+      renderer.buildScene(street);
+    }
+  });
 
   onMount(async () => {
     const r = new GameRenderer();
@@ -75,6 +86,7 @@
 
     if (street) {
       await r.buildScene(street);
+      builtForTsid = street.tsid;
       try {
         const appearance = await getAvatar();
         await r.applyAppearance(appearance);
