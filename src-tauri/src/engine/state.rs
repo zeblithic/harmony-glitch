@@ -126,6 +126,8 @@ pub struct RemotePlayerFrame {
     pub y: f64,
     pub facing: String, // "left" or "right"
     pub on_ground: bool,
+    pub animation: AnimationState,
+    pub avatar: Option<AvatarAppearance>,
 }
 
 impl GameState {

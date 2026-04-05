@@ -1,7 +1,13 @@
 import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
-import type { StreetData, RenderFrame, RemotePlayerFrame, AvatarAppearance } from '../types';
+import type { StreetData, RenderFrame, RemotePlayerFrame, AvatarAppearance, Direction } from '../types';
 import { SpriteManager } from './sprites';
 import { AvatarCompositor } from './avatar';
+
+interface RemoteAvatarEntry {
+  container: Container;
+  compositor: AvatarCompositor;
+  label: Text;
+}
 
 interface ChatBubble {
   text: Text;
@@ -10,7 +16,6 @@ interface ChatBubble {
 }
 
 export class GameRenderer {
-  private static REMOTE_COLOR = 0x4488ff;
   private static CHAT_DURATION = 5.0;
 
   private static formatStreetName(raw: string): string {
@@ -25,7 +30,7 @@ export class GameRenderer {
   private worldContainer: Container;
   private uiContainer: Container;
   private layerContainers: Map<string, Container> = new Map();
-  private remoteSprites: Map<string, Container> = new Map();
+  private remoteAvatars: Map<string, RemoteAvatarEntry> = new Map();
   private chatBubbles: ChatBubble[] = [];
   private entitySprites: Map<string, Container> = new Map();
   private groundItemSprites: Map<string, Container> = new Map();
@@ -143,10 +148,11 @@ export class GameRenderer {
     this.parallaxContainer.removeChildren();
     this.worldContainer.removeChildren();
     this.layerContainers.clear();
-    for (const [, sprite] of this.remoteSprites) {
-      sprite.destroy();
+    for (const [, entry] of this.remoteAvatars) {
+      entry.compositor.destroy();
+      entry.container.destroy();
     }
-    this.remoteSprites.clear();
+    this.remoteAvatars.clear();
     for (const bubble of this.chatBubbles) {
       bubble.text.destroy();
     }
@@ -280,19 +286,17 @@ export class GameRenderer {
       container.y = -camScreenY;
     }
 
-    // Remote players — create/update/remove sprite lifecycle
+    // Remote players — create/update/remove avatar lifecycle
     const remotePlayers = frame.remotePlayers ?? [];
     const seen = new Set<string>();
     for (const remote of remotePlayers) {
       seen.add(remote.addressHash);
-      let sprite = this.remoteSprites.get(remote.addressHash);
+      let entry = this.remoteAvatars.get(remote.addressHash);
 
-      if (!sprite) {
-        sprite = new Container();
-        const body = new Graphics();
-        body.rect(-15, -60, 30, 60);
-        body.fill(GameRenderer.REMOTE_COLOR);
-        sprite.addChild(body);
+      if (!entry) {
+        const compositor = new AvatarCompositor();
+        const container = new Container();
+        container.addChild(compositor.getContainer());
 
         const label = new Text({
           text: remote.displayName,
@@ -300,29 +304,40 @@ export class GameRenderer {
         });
         label.anchor.set(0.5, 1);
         label.y = -65;
-        sprite.addChild(label);
+        container.addChild(label);
 
-        this.worldContainer.addChild(sprite);
-        this.remoteSprites.set(remote.addressHash, sprite);
+        this.worldContainer.addChild(container);
+        entry = { container, compositor, label };
+        this.remoteAvatars.set(remote.addressHash, entry);
+
+        if (remote.avatar) {
+          entry.compositor.applyAppearance(remote.avatar);
+        }
+      }
+
+      // Update appearance if changed (applyAppearance diffs internally)
+      if (remote.avatar) {
+        entry.compositor.applyAppearance(remote.avatar);
       }
 
       // Sync label text in case the peer's display name changed.
-      const label = sprite.children[1] as Text;
-      if (label && label.text !== remote.displayName) {
-        label.text = remote.displayName;
+      if (entry.label.text !== remote.displayName) {
+        entry.label.text = remote.displayName;
       }
 
-      sprite.x = remote.x - this.street.left;
-      sprite.y = remote.y - this.street.top;
-      sprite.scale.x = remote.facing === 'right' ? 1 : -1;
+      entry.container.x = remote.x - this.street.left;
+      entry.container.y = remote.y - this.street.top;
+      const facing: Direction = remote.facing === 'right' ? 'right' : 'left';
+      entry.compositor.updateAnimation(remote.animation ?? 'idle', facing);
     }
 
     // Remove departed players
-    for (const [hash, sprite] of this.remoteSprites) {
+    for (const [hash, entry] of this.remoteAvatars) {
       if (!seen.has(hash)) {
-        this.worldContainer.removeChild(sprite);
-        sprite.destroy();
-        this.remoteSprites.delete(hash);
+        this.worldContainer.removeChild(entry.container);
+        entry.compositor.destroy();
+        entry.container.destroy();
+        this.remoteAvatars.delete(hash);
       }
     }
 
@@ -645,10 +660,11 @@ export class GameRenderer {
   destroy(): void {
     this.destroyed = true;
     this.compositor.destroy();
-    for (const [, sprite] of this.remoteSprites) {
-      sprite.destroy();
+    for (const [, entry] of this.remoteAvatars) {
+      entry.compositor.destroy();
+      entry.container.destroy();
     }
-    this.remoteSprites.clear();
+    this.remoteAvatars.clear();
     for (const bubble of this.chatBubbles) {
       bubble.text.destroy();
     }
