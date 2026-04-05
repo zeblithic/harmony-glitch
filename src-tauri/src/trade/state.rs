@@ -216,6 +216,9 @@ impl TradeManager {
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
+        if session.phase != TradePhase::PendingResponse {
+            return Err("Trade not in pending state".into());
+        }
         self.active_trade = None;
         Ok(())
     }

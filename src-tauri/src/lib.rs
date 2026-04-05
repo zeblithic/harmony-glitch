@@ -1032,10 +1032,11 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 );
             }
             Err(e) => {
+                // Do NOT send lock_msg — the peer would see both locked,
+                // execute their side, and we'd have a one-sided trade.
                 let cancel_msg = mgr.cancel_trade();
                 drop(guard);
                 drop(mgr);
-                send_trade_msg(&app, &lock_msg);
                 if let Some(cancel_msg) = cancel_msg {
                     send_trade_msg(&app, &cancel_msg);
                 }
