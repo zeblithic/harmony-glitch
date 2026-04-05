@@ -28,6 +28,7 @@ use crate::avatar::types::AvatarAppearance;
 use crate::engine::state::RemotePlayerFrame;
 use crate::network::registry::RemotePlayerRegistry;
 use crate::network::types::{ChatMessage, NetMessage, PlayerNetState, PresenceEvent};
+use crate::trade::types::TradeMessage;
 
 // ── Constants ────────────────────────────────────────────────────────────
 
@@ -58,10 +59,12 @@ const FRAME_TAG_CONTROL: u8 = 0x01;
 const FRAME_TAG_DATA: u8 = 0x02;
 
 /// Which topic to publish on — avoids positional index bugs.
+/// `State` = high-frequency per-tick data (position, animation).
+/// `Event` = infrequent event-driven messages (chat, trade protocol).
 #[derive(Clone, Copy)]
 enum PubTopic {
     State,
-    Chat,
+    Event,
 }
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -82,6 +85,11 @@ pub enum NetworkAction {
     RemotePlayerUpdate {
         address_hash: [u8; 16],
         state: PlayerNetState,
+    },
+    /// A trade protocol message arrived from an authenticated remote player.
+    TradeMessageReceived {
+        sender: [u8; 16],
+        message: TradeMessage,
     },
 }
 
@@ -105,7 +113,7 @@ pub struct PeerState {
     /// Publisher ID for our player state topic (None if declaration failed).
     pub state_publisher_id: Option<PublisherId>,
     /// Publisher ID for our chat topic (None if declaration failed).
-    pub chat_publisher_id: Option<PublisherId>,
+    pub event_publisher_id: Option<PublisherId>,
     /// Subscription IDs for cleanup on disconnect.
     pub subscription_ids: Vec<SubscriptionId>,
 }
@@ -347,6 +355,25 @@ impl NetworkState {
         self.publish_to_all_peers(&payload, PubTopic::State, rng)
     }
 
+    /// Send a trade protocol message to all active peers (filtered broadcast).
+    pub fn send_trade_message(
+        &mut self,
+        msg: &TradeMessage,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let net_msg = NetMessage::Trade(msg.clone());
+        let payload = match serde_json::to_vec(&net_msg) {
+            Ok(p) => p,
+            Err(_) => return Vec::new(),
+        };
+        self.publish_to_all_peers(&payload, PubTopic::Event, rng)
+    }
+
+    /// Look up a peer's display name by address hash.
+    pub fn peer_display_name(&self, address_hash: &[u8; 16]) -> Option<String> {
+        self.registry.peer_display_name(address_hash)
+    }
+
     /// Send a chat message to all active peers.
     /// Text is truncated to 200 UTF-8 bytes to stay within the Reticulum
     /// 500-byte MTU (worst case: 500 - 35 header - 33 Zenoh = 432 payload).
@@ -364,7 +391,7 @@ impl NetworkState {
 
         let msg = NetMessage::Chat(chat);
         if let Ok(payload) = serde_json::to_vec(&msg) {
-            actions.extend(self.publish_to_all_peers(&payload, PubTopic::Chat, rng));
+            actions.extend(self.publish_to_all_peers(&payload, PubTopic::Event, rng));
         }
         actions
     }
@@ -469,6 +496,11 @@ impl NetworkState {
     /// peer counting is wired up (Task 8).
     pub fn peer_count(&self) -> usize {
         self.registry.count()
+    }
+
+    /// Our 16-byte address hash (public identity).
+    pub fn our_address_hash(&self) -> [u8; 16] {
+        self.public_identity.address_hash
     }
 
     /// The current street name, if any.
@@ -611,7 +643,7 @@ impl NetworkState {
             session: None,
             router: None,
             state_publisher_id: None,
-            chat_publisher_id: None,
+            event_publisher_id: None,
             subscription_ids: Vec::new(),
         };
         self.peers.insert(addr, peer);
@@ -1198,26 +1230,27 @@ impl NetworkState {
         // Declare publishers for our topics.
         let state_topic =
             format!("harmony/glitch/street/{street}/player/{our_addr_hex}/state");
-        let chat_topic =
+        // "chat" topic carries all infrequent event-driven messages (chat + trade).
+        let event_topic =
             format!("harmony/glitch/street/{street}/player/{our_addr_hex}/chat");
 
         let mut state_publisher_id = None;
-        let mut chat_publisher_id = None;
+        let mut event_publisher_id = None;
         let mut all_pubsub_actions: Vec<PubSubAction> = Vec::new();
 
         if let Ok((pub_id, actions)) = router.declare_publisher(state_topic, session) {
             state_publisher_id = Some(pub_id);
             all_pubsub_actions.extend(actions);
         }
-        if let Ok((pub_id, actions)) = router.declare_publisher(chat_topic, session) {
-            chat_publisher_id = Some(pub_id);
+        if let Ok((pub_id, actions)) = router.declare_publisher(event_topic, session) {
+            event_publisher_id = Some(pub_id);
             all_pubsub_actions.extend(actions);
         }
 
         // Subscribe to the peer's topics.
         let peer_state_topic =
             format!("harmony/glitch/street/{street}/player/{peer_addr_hex}/state");
-        let peer_chat_topic =
+        let peer_event_topic =
             format!("harmony/glitch/street/{street}/player/{peer_addr_hex}/chat");
 
         let mut subscription_ids = Vec::new();
@@ -1226,7 +1259,7 @@ impl NetworkState {
             subscription_ids.push(sub_id);
             all_pubsub_actions.extend(actions);
         }
-        if let Ok((sub_id, actions)) = router.subscribe(&peer_chat_topic) {
+        if let Ok((sub_id, actions)) = router.subscribe(&peer_event_topic) {
             subscription_ids.push(sub_id);
             all_pubsub_actions.extend(actions);
         }
@@ -1234,7 +1267,7 @@ impl NetworkState {
         // Fail fast: if no publishers were declared, don't announce
         // subscriptions either — we'd create dangling SUBs on the remote
         // side that can never be satisfied (no router stored locally).
-        if state_publisher_id.is_none() && chat_publisher_id.is_none() {
+        if state_publisher_id.is_none() && event_publisher_id.is_none() {
             return;
         }
 
@@ -1264,7 +1297,7 @@ impl NetworkState {
         // Store the router and IDs in the peer state.
         peer.router = Some(router);
         peer.state_publisher_id = state_publisher_id;
-        peer.chat_publisher_id = chat_publisher_id;
+        peer.event_publisher_id = event_publisher_id;
         peer.subscription_ids = subscription_ids;
     }
 
@@ -1603,6 +1636,12 @@ impl NetworkState {
                             NetMessage::AvatarUpdate(avatar) => {
                                 self.registry.update_avatar(addr, *avatar);
                             }
+                            NetMessage::Trade(trade_msg) => {
+                                out.push(NetworkAction::TradeMessageReceived {
+                                    sender: *addr,
+                                    message: trade_msg,
+                                });
+                            }
                         }
                     }
                 }
@@ -1779,7 +1818,7 @@ impl NetworkState {
                     Some(id) => id,
                     None => continue,
                 },
-                PubTopic::Chat => match peer.chat_publisher_id {
+                PubTopic::Event => match peer.event_publisher_id {
                     Some(id) => id,
                     None => continue,
                 },
@@ -2009,7 +2048,7 @@ mod tests {
                 session: None,
                 router: None,
                 state_publisher_id: None,
-                chat_publisher_id: None,
+                event_publisher_id: None,
                 subscription_ids: Vec::new(),
             },
         );

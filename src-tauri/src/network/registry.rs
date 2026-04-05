@@ -159,6 +159,13 @@ impl RemotePlayerRegistry {
     pub fn count(&self) -> usize {
         self.players.len()
     }
+
+    /// Look up a peer's display name by address hash.
+    pub fn peer_display_name(&self, address_hash: &[u8; 16]) -> Option<String> {
+        self.players
+            .get(address_hash)
+            .map(|p| p.display_name.clone())
+    }
 }
 
 #[cfg(test)]

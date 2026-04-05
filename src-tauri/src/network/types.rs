@@ -1,4 +1,5 @@
 use crate::avatar::types::AvatarAppearance;
+use crate::trade::types::TradeMessage;
 use serde::{Deserialize, Serialize};
 
 /// Compact player state for 60Hz network updates.
@@ -46,6 +47,7 @@ pub enum NetMessage {
     Chat(ChatMessage),
     Presence(PresenceEvent),
     AvatarUpdate(Box<AvatarAppearance>),
+    Trade(TradeMessage),
 }
 
 #[cfg(test)]

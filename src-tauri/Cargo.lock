@@ -1636,6 +1636,7 @@ dependencies = [
 name = "harmony-glitch"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "clap",
  "flate2",
  "harmony-content",
