@@ -139,6 +139,8 @@ export interface RemotePlayerFrame {
   y: number;
   facing: string;
   onGround: boolean;
+  animation: AnimationState;
+  avatar: AvatarAppearance | null;
 }
 
 export interface TransitionInfo {

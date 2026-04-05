@@ -6,7 +6,7 @@ pub mod network;
 pub mod physics;
 pub mod street;
 
-use avatar::types::{AvatarAppearance, Direction};
+use avatar::types::{AnimationState, AvatarAppearance, Direction};
 use engine::state::GameState;
 use network::state::{NetworkAction, NetworkState};
 use network::transport::{UdpTransport, DEFAULT_PORT};
@@ -186,10 +186,20 @@ fn get_avatar(app: AppHandle) -> Result<AvatarAppearance, String> {
 
 #[tauri::command]
 fn set_avatar(appearance: AvatarAppearance, app: AppHandle) -> Result<AvatarAppearance, String> {
-    let state_wrapper = app.state::<GameStateWrapper>();
-    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    state.avatar = appearance;
-    Ok(state.avatar.clone())
+    let avatar_clone;
+    {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        state.avatar = appearance;
+        avatar_clone = state.avatar.clone();
+    }
+    // Broadcast avatar change to peers (GameState lock dropped first)
+    let net = app.state::<NetworkWrapper>();
+    let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+    let actions = ns.publish_avatar_update(&avatar_clone, &mut rand::rngs::OsRng);
+    drop(ns);
+    execute_network_actions(&app, actions);
+    Ok(avatar_clone)
 }
 
 /// Save the current game state to disk. Non-fatal on failure.
@@ -717,6 +727,7 @@ fn game_loop(app: AppHandle) {
     let dt = 1.0 / 60.0;
     let game_start = app.state::<MonotonicEpoch>().0;
     let mut rng = rand::rngs::ThreadRng::default();
+    let mut tick_count: u64 = 0;
 
     loop {
         let tick_start = Instant::now();
@@ -786,12 +797,34 @@ fn game_loop(app: AppHandle) {
                         1
                     },
                     on_ground: frame.player.on_ground,
+                    animation: match frame.player.animation {
+                        AnimationState::Idle => 0,
+                        AnimationState::Walking => 1,
+                        AnimationState::Jumping => 2,
+                        AnimationState::Falling => 3,
+                    },
                 };
                 let net = app.state::<NetworkWrapper>();
                 let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
                 ns.publish_player_state(&net_state, &mut rand::rngs::OsRng)
             };
             execute_network_actions(&app, publish_actions);
+
+            // 8b. Periodically broadcast avatar to peers (every 5s = 300 ticks).
+            // Ensures newly connected peers receive our appearance.
+            if tick_count.is_multiple_of(300) {
+                let avatar = {
+                    let state_wrapper = app.state::<GameStateWrapper>();
+                    let state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                    state.avatar.clone()
+                };
+                let net = app.state::<NetworkWrapper>();
+                let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                let actions = ns.publish_avatar_update(&avatar, &mut rand::rngs::OsRng);
+                drop(ns);
+                execute_network_actions(&app, actions);
+            }
+            tick_count += 1;
 
             // 9. Emit RenderFrame to frontend
             let _ = app.emit("render_frame", &frame);

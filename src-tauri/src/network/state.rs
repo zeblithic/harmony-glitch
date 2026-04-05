@@ -24,6 +24,7 @@ use harmony_zenoh::{
 use rand_core::CryptoRngCore;
 use zeroize::Zeroizing;
 
+use crate::avatar::types::AvatarAppearance;
 use crate::engine::state::RemotePlayerFrame;
 use crate::network::registry::RemotePlayerRegistry;
 use crate::network::types::{ChatMessage, NetMessage, PlayerNetState, PresenceEvent};
@@ -325,6 +326,20 @@ impl NetworkState {
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
         let msg = NetMessage::PlayerState(*state);
+        let payload = match serde_json::to_vec(&msg) {
+            Ok(p) => p,
+            Err(_) => return Vec::new(),
+        };
+        self.publish_to_all_peers(&payload, PubTopic::State, rng)
+    }
+
+    /// Update the local avatar and broadcast it to all active peers.
+    pub fn publish_avatar_update(
+        &mut self,
+        avatar: &AvatarAppearance,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let msg = NetMessage::AvatarUpdate(Box::new(avatar.clone()));
         let payload = match serde_json::to_vec(&msg) {
             Ok(p) => p,
             Err(_) => return Vec::new(),
@@ -1585,6 +1600,9 @@ impl NetworkState {
                                 self.registry.handle_presence(&event, now_secs_f64);
                                 out.push(NetworkAction::PresenceChange(event));
                             }
+                            NetMessage::AvatarUpdate(avatar) => {
+                                self.registry.update_avatar(addr, *avatar);
+                            }
                         }
                     }
                 }
@@ -2633,6 +2651,7 @@ mod tests {
             vy: -5.0,
             facing: 1,
             on_ground: true,
+            animation: 1,
         };
 
         let publish_actions =
