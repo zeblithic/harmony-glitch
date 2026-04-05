@@ -2,14 +2,13 @@
   import type { InventoryFrame, RecipeDef } from '../types';
   import { dropItem, craftRecipe, eatItem } from '../ipc';
 
-  let { inventory, recipes = [], visible = false, onClose, energy = 0, maxEnergy = 600, onEat }: {
+  let { inventory, recipes = [], visible = false, onClose, energy = 0, maxEnergy = 600 }: {
     inventory: InventoryFrame | null;
     recipes?: RecipeDef[];
     visible?: boolean;
     onClose?: () => void;
     energy?: number;
     maxEnergy?: number;
-    onEat?: (itemId: string) => void;
   } = $props();
 
   let selectedSlot = $state<number | null>(null);
@@ -124,7 +123,6 @@
     if (!selectedItem || !isSelectedEdible) return;
     try {
       await eatItem(selectedItem.itemId);
-      onEat?.(selectedItem.itemId);
     } catch (e) {
       console.error('Eat failed:', e);
     }
