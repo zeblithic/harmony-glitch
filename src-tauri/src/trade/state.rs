@@ -60,6 +60,16 @@ impl TradeManager {
         self.pending_request.as_ref()
     }
 
+    /// Address hash of the active trade's peer.
+    pub fn active_peer_hash(&self) -> Option<[u8; 16]> {
+        self.active_trade.as_ref().map(|t| t.peer_hash)
+    }
+
+    /// Address hash of the pending request's peer.
+    pub fn pending_peer_hash(&self) -> Option<[u8; 16]> {
+        self.pending_request.as_ref().map(|t| t.peer_hash)
+    }
+
     pub fn is_trading_with(&self, peer_hash: &[u8; 16]) -> bool {
         self.active_trade
             .as_ref()
