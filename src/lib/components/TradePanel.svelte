@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { TradeFrame, InventoryFrame } from '../types';
 
   let {
@@ -36,7 +37,7 @@
       if (!dialogEl.open) {
         previousFocus = document.activeElement as HTMLElement | null;
         dialogEl.showModal();
-        currantsInput = tradeFrame?.localOffer.currants ?? 0;
+        currantsInput = untrack(() => tradeFrame?.localOffer.currants ?? 0);
       }
       return () => {
         if (dialogEl?.open) dialogEl.close();
