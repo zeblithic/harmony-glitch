@@ -266,7 +266,7 @@ fn load_street(
         if let Some(journal) = trade::journal::read_journal(&journal_path) {
             let already_saved = state
                 .last_trade_id
-                .is_some_and(|id| id >= journal.trade_id);
+                .is_some_and(|id| id == journal.trade_id);
             if !already_saved {
                 state.recover_trade_journal(&journal);
                 // Save immediately so recovery is durable.
@@ -716,11 +716,15 @@ fn handle_trade_message(
                         Ok(complete_msg) => {
                             // Save state immediately after trade execution.
                             guard.last_trade_id = Some(trade_id);
-                            if let Some(save) = guard.save_state() {
+                            let saved = guard.save_state().is_some_and(|save| {
                                 let save_path = piw.data_dir.join("savegame.json");
-                                let _ = engine::state::write_save_state(&save_path, &save);
+                                engine::state::write_save_state(&save_path, &save).is_ok()
+                            });
+                            if saved {
+                                trade::journal::clear_journal(&journal_path);
+                            } else {
+                                eprintln!("[trade] Retaining journal — save failed, trade recoverable on restart");
                             }
-                            trade::journal::clear_journal(&journal_path);
                             drop(guard);
                             let _ = app.emit(
                                 "trade_event",
@@ -1106,11 +1110,15 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 if let Some(ref j) = journal {
                     guard.last_trade_id = Some(j.trade_id);
                 }
-                if let Some(save) = guard.save_state() {
+                let saved = guard.save_state().is_some_and(|save| {
                     let save_path = piw.data_dir.join("savegame.json");
-                    let _ = engine::state::write_save_state(&save_path, &save);
+                    engine::state::write_save_state(&save_path, &save).is_ok()
+                });
+                if saved {
+                    trade::journal::clear_journal(&journal_path);
+                } else {
+                    eprintln!("[trade] Retaining journal — save failed, trade recoverable on restart");
                 }
-                trade::journal::clear_journal(&journal_path);
                 drop(guard);
                 drop(mgr);
                 // Defer network sends until after all locks are released.
