@@ -620,7 +620,7 @@ fn handle_trade_message(
             trade_id, offer, ..
         } => {
             if trade_mgr
-                .receive_remote_update(trade_id, offer, now_secs(app))
+                .receive_remote_update(trade_id, &authenticated_sender, offer, now_secs(app))
                 .is_ok()
             {
                 let frame = {
@@ -642,7 +642,7 @@ fn handle_trade_message(
             ..
         } => {
             if let Ok(both_locked) =
-                trade_mgr.receive_remote_lock(trade_id, terms_hash, now_secs(app))
+                trade_mgr.receive_remote_lock(trade_id, &authenticated_sender, terms_hash, now_secs(app))
             {
                 if both_locked {
                     // Both locked with matching hash — execute trade.
@@ -677,8 +677,10 @@ fn handle_trade_message(
                         }
                         Err(e) => {
                             eprintln!("[trade] execution failed: {e}");
-                            if let Some(cancel_msg) = trade_mgr.cancel_trade() {
-                                drop(trade_mgr);
+                            let cancel_msg = trade_mgr.cancel_trade();
+                            drop(guard);
+                            drop(trade_mgr);
+                            if let Some(cancel_msg) = cancel_msg {
                                 send_trade_msg(app, &cancel_msg);
                             }
                             let _ = app.emit(
@@ -696,7 +698,7 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Unlock { trade_id, .. } => {
-            if trade_mgr.receive_remote_unlock(trade_id, now_secs(app)).is_ok() {
+            if trade_mgr.receive_remote_unlock(trade_id, &authenticated_sender, now_secs(app)).is_ok() {
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "unlocked", "who": "remote"}),
@@ -704,7 +706,7 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Cancel { trade_id, .. } => {
-            if trade_mgr.receive_cancel(trade_id).is_ok() {
+            if trade_mgr.receive_cancel(trade_id, &authenticated_sender).is_ok() {
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "cancelled", "reason": "peerCancelled"}),
@@ -712,7 +714,7 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Complete { trade_id, .. } => {
-            let _ = trade_mgr.receive_complete(trade_id);
+            let _ = trade_mgr.receive_complete(trade_id, &authenticated_sender);
         }
     }
 }

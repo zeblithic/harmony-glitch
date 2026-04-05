@@ -273,6 +273,7 @@ impl TradeManager {
     pub fn receive_remote_update(
         &mut self,
         trade_id: TradeId,
+        sender: &[u8; 16],
         offer: TradeOffer,
         now: f64,
     ) -> Result<(), String> {
@@ -282,6 +283,9 @@ impl TradeManager {
             .ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
+        }
+        if &session.peer_hash != sender {
+            return Err("Sender mismatch".into());
         }
         match session.phase {
             TradePhase::Negotiating
@@ -394,6 +398,7 @@ impl TradeManager {
     pub fn receive_remote_lock(
         &mut self,
         trade_id: TradeId,
+        sender: &[u8; 16],
         terms_hash: [u8; 16],
         now: f64,
     ) -> Result<bool, String> {
@@ -403,6 +408,9 @@ impl TradeManager {
             .ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
+        }
+        if &session.peer_hash != sender {
+            return Err("Sender mismatch".into());
         }
         match session.phase {
             TradePhase::Negotiating
@@ -430,6 +438,7 @@ impl TradeManager {
     pub fn receive_remote_unlock(
         &mut self,
         trade_id: TradeId,
+        sender: &[u8; 16],
         now: f64,
     ) -> Result<(), String> {
         let session = self
@@ -438,6 +447,9 @@ impl TradeManager {
             .ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
+        }
+        if &session.peer_hash != sender {
+            return Err("Sender mismatch".into());
         }
         session.remote_terms_hash = None;
         if session.phase == TradePhase::LockedRemote {
@@ -546,15 +558,15 @@ impl TradeManager {
     }
 
     /// Remote peer cancelled the trade.
-    pub fn receive_cancel(&mut self, trade_id: TradeId) -> Result<(), String> {
+    pub fn receive_cancel(&mut self, trade_id: TradeId, sender: &[u8; 16]) -> Result<(), String> {
         if let Some(ref session) = self.active_trade {
-            if session.trade_id == trade_id {
+            if session.trade_id == trade_id && &session.peer_hash == sender {
                 self.active_trade = None;
                 return Ok(());
             }
         }
         if let Some(ref session) = self.pending_request {
-            if session.trade_id == trade_id {
+            if session.trade_id == trade_id && &session.peer_hash == sender {
                 self.pending_request = None;
                 return Ok(());
             }
@@ -563,13 +575,20 @@ impl TradeManager {
     }
 
     /// Remote peer completed the trade (courtesy message — we already executed).
-    pub fn receive_complete(&mut self, trade_id: TradeId) -> Result<(), String> {
-        // The active trade should already be cleared by execute_trade.
-        // If we see a Complete for a trade_id we don't recognize, ignore it.
+    /// Only clears the trade if we've already completed (execute_trade sets
+    /// Completed then immediately clears, so in practice this is a no-op).
+    /// Crucially, does NOT clear an active non-completed trade — prevents
+    /// a reordered Complete (arriving before Lock) from killing the session.
+    pub fn receive_complete(&mut self, trade_id: TradeId, sender: &[u8; 16]) -> Result<(), String> {
         if let Some(ref session) = self.active_trade {
-            if session.trade_id == trade_id {
+            if session.trade_id == trade_id
+                && &session.peer_hash == sender
+                && session.phase == TradePhase::Completed
+            {
                 self.active_trade = None;
             }
+            // If not yet completed, ignore — we'll execute when we process
+            // the Lock that should arrive (possibly reordered after this).
         }
         Ok(())
     }
@@ -735,7 +754,7 @@ mod tests {
         } = &update
         {
             bob_mgr
-                .receive_remote_update(*trade_id, offer.clone(), 2.0)
+                .receive_remote_update(*trade_id, &ALICE, offer.clone(), 2.0)
                 .unwrap();
         }
 
@@ -753,7 +772,7 @@ mod tests {
         } = &update
         {
             alice_mgr
-                .receive_remote_update(*trade_id, offer.clone(), 3.0)
+                .receive_remote_update(*trade_id, &BOB, offer.clone(), 3.0)
                 .unwrap();
         }
 
@@ -767,7 +786,7 @@ mod tests {
         } = &lock_msg
         {
             let both_locked = bob_mgr
-                .receive_remote_lock(*trade_id, *terms_hash, 4.0)
+                .receive_remote_lock(*trade_id, &ALICE, *terms_hash, 4.0)
                 .unwrap();
             assert!(!both_locked);
         }
@@ -782,7 +801,7 @@ mod tests {
         } = &lock_msg
         {
             let both_locked = alice_mgr
-                .receive_remote_lock(*trade_id, *terms_hash, 5.0)
+                .receive_remote_lock(*trade_id, &BOB, *terms_hash, 5.0)
                 .unwrap();
             assert!(both_locked);
         }
@@ -809,7 +828,7 @@ mod tests {
 
         // Alice's Complete message is a courtesy — Bob already executed.
         if let TradeMessage::Complete { trade_id, .. } = &complete_msg {
-            bob_mgr.receive_complete(*trade_id).unwrap();
+            bob_mgr.receive_complete(*trade_id, &ALICE).unwrap();
         }
     }
 
@@ -862,7 +881,7 @@ mod tests {
             .unwrap();
         bob_mgr.accept_trade(1.0).unwrap();
 
-        bob_mgr.receive_cancel(1).unwrap();
+        bob_mgr.receive_cancel(1, &ALICE).unwrap();
         assert!(!bob_mgr.has_active_trade());
     }
 
@@ -990,7 +1009,7 @@ mod tests {
 
         // Bob sends a lock with a WRONG terms hash (simulating offer mismatch).
         let both_locked = alice_mgr
-            .receive_remote_lock(1, [0xFF; 16], 4.0)
+            .receive_remote_lock(1, &BOB, [0xFF; 16], 4.0)
             .unwrap();
         assert!(!both_locked, "Should not execute with mismatched hash");
 
@@ -1034,7 +1053,7 @@ mod tests {
         // Bob locks with a stale hash (simulating race: Bob locked before
         // receiving Alice's offer update).
         alice_mgr
-            .receive_remote_lock(1, [0xFF; 16], 3.0)
+            .receive_remote_lock(1, &BOB, [0xFF; 16], 3.0)
             .unwrap();
 
         // Alice locks — her hash won't match Bob's stale hash.
@@ -1046,6 +1065,70 @@ mod tests {
         assert_eq!(frame.phase, "lockedLocal");
         assert!(frame.local_locked, "Alice should be locked");
         assert!(!frame.remote_locked, "Bob's stale lock should be cleared");
+    }
+
+    // ── Sender verification ───────────────────────────────────────────────
+
+    #[test]
+    fn cancel_from_wrong_sender_rejected() {
+        let mut alice_mgr = TradeManager::new(ALICE);
+        alice_mgr
+            .initiate_trade(1, BOB, "Bob".into(), 0.0)
+            .unwrap();
+        alice_mgr.receive_accept(1, 1.0).unwrap();
+
+        // Eve (a third peer) tries to cancel Alice's trade with Bob.
+        let eve: [u8; 16] = [0x03; 16];
+        let err = alice_mgr.receive_cancel(1, &eve).unwrap_err();
+        assert_eq!(err, "No matching trade to cancel");
+        assert!(alice_mgr.has_active_trade(), "Trade should survive spoofed cancel");
+    }
+
+    #[test]
+    fn update_from_wrong_sender_rejected() {
+        let mut alice_mgr = TradeManager::new(ALICE);
+        alice_mgr
+            .initiate_trade(1, BOB, "Bob".into(), 0.0)
+            .unwrap();
+        alice_mgr.receive_accept(1, 1.0).unwrap();
+
+        let eve: [u8; 16] = [0x03; 16];
+        let err = alice_mgr
+            .receive_remote_update(1, &eve, TradeOffer::empty(), 2.0)
+            .unwrap_err();
+        assert_eq!(err, "Sender mismatch");
+    }
+
+    #[test]
+    fn lock_from_wrong_sender_rejected() {
+        let mut alice_mgr = TradeManager::new(ALICE);
+        alice_mgr
+            .initiate_trade(1, BOB, "Bob".into(), 0.0)
+            .unwrap();
+        alice_mgr.receive_accept(1, 1.0).unwrap();
+
+        let eve: [u8; 16] = [0x03; 16];
+        let err = alice_mgr
+            .receive_remote_lock(1, &eve, [0xFF; 16], 2.0)
+            .unwrap_err();
+        assert_eq!(err, "Sender mismatch");
+    }
+
+    // ── Complete reorder protection ─────────────────────────────────────
+
+    #[test]
+    fn reordered_complete_does_not_clear_active_trade() {
+        let mut alice_mgr = TradeManager::new(ALICE);
+        alice_mgr
+            .initiate_trade(1, BOB, "Bob".into(), 0.0)
+            .unwrap();
+        alice_mgr.receive_accept(1, 1.0).unwrap();
+
+        // Bob's Complete arrives before his Lock (UDP reorder).
+        alice_mgr.receive_complete(1, &BOB).unwrap();
+
+        // Trade should still be active — not cleared by premature Complete.
+        assert!(alice_mgr.has_active_trade(), "Premature Complete must not clear trade");
     }
 
     // ── Execution validation ────────────────────────────────────────────
