@@ -336,12 +336,17 @@ impl TradeManager {
             _ => return Err("Cannot lock in current phase".into()),
         }
         // Pre-validate: refuse to lock if we can't fulfill the offer.
+        // Aggregate by item_id first to handle any duplicate entries correctly.
+        let mut needed: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
         for item in &session.local_offer.items {
-            let have = inventory.count_item(&item.item_id);
-            if have < item.count {
+            *needed.entry(&item.item_id).or_insert(0) += item.count;
+        }
+        for (item_id, need) in &needed {
+            let have = inventory.count_item(item_id);
+            if have < *need {
                 return Err(format!(
                     "Cannot lock: insufficient {} (need {}, have {})",
-                    item.item_id, item.count, have
+                    item_id, need, have
                 ));
             }
         }

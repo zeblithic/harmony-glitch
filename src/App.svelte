@@ -53,6 +53,7 @@
   let needsAvatarSetup = $state(false);
   let tradeOpen = $state(false);
   let tradeFrame = $state<TradeFrame | null>(null);
+  let tradeStateVersion = 0;
   let tradeRequestVisible = $state(false);
   let tradeRequestName = $state('');
 
@@ -108,32 +109,40 @@
           tradeRequestName = event.initiatorName;
           tradeRequestVisible = true;
           break;
-        case 'accepted':
+        case 'accepted': {
           tradeRequestVisible = false;
           tradeOpen = true;
           inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
-          tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
+          const v1 = ++tradeStateVersion;
+          tradeGetState().then(f => { if (v1 === tradeStateVersion) tradeFrame = f; }).catch(console.error);
           break;
+        }
         case 'declined':
           tradeRequestVisible = false;
           tradeOpen = false;
           tradeFrame = null;
+          ++tradeStateVersion;
           break;
         case 'updated':
           tradeFrame = event.tradeFrame;
+          ++tradeStateVersion;
           break;
         case 'locked':
-        case 'unlocked':
-          tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
+        case 'unlocked': {
+          const v2 = ++tradeStateVersion;
+          tradeGetState().then(f => { if (v2 === tradeStateVersion) tradeFrame = f; }).catch(console.error);
           break;
+        }
         case 'completed':
           tradeOpen = false;
           tradeFrame = null;
+          ++tradeStateVersion;
           break;
         case 'cancelled':
           tradeOpen = false;
           tradeFrame = null;
           tradeRequestVisible = false;
+          ++tradeStateVersion;
           break;
       }
     });
