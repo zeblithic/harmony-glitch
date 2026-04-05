@@ -113,7 +113,7 @@ export class AvatarCompositor {
 
   constructor() {
     this.container = new Container();
-    this.rebuildChildren();
+    this.container.scale.set(DISPLAY_SCALE);
   }
 
   getContainer(): Container {

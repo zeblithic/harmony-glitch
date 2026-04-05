@@ -7,6 +7,7 @@ interface RemoteAvatarEntry {
   container: Container;
   compositor: AvatarCompositor;
   label: Text;
+  fallback: Graphics | null;
 }
 
 interface ChatBubble {
@@ -298,6 +299,14 @@ export class GameRenderer {
         const container = new Container();
         container.addChild(compositor.getContainer());
 
+        // Fallback rectangle shown until avatar data arrives.
+        // Lives in the entry container (not the compositor's scaled container)
+        // so it renders at a fixed screen size regardless of compositor scale.
+        const fallback = new Graphics();
+        fallback.rect(-15, -60, 30, 60);
+        fallback.fill(0x5865f2);
+        container.addChild(fallback);
+
         const label = new Text({
           text: remote.displayName,
           style: { fontSize: 12, fill: 0xffffff, align: 'center' },
@@ -307,13 +316,19 @@ export class GameRenderer {
         container.addChild(label);
 
         this.worldContainer.addChild(container);
-        entry = { container, compositor, label };
+        entry = { container, compositor, label, fallback };
         this.remoteAvatars.set(remote.addressHash, entry);
       }
 
-      // Update appearance if changed (applyAppearance diffs internally)
+      // Update appearance if changed (applyAppearance diffs internally).
+      // Remove fallback once real avatar sprites load.
       if (remote.avatar) {
         entry.compositor.applyAppearance(remote.avatar).catch(console.error);
+        if (entry.fallback) {
+          entry.container.removeChild(entry.fallback);
+          entry.fallback.destroy();
+          entry.fallback = null;
+        }
       }
 
       // Sync label text in case the peer's display name changed.
