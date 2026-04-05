@@ -558,7 +558,7 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     let result = trade_mgr.cancel_trade_with_peer(address_hash);
                     drop(trade_mgr);
                     if let Some(ref cancel_msg) = result.cancel_msg {
-                        send_trade_msg(app, cancel_msg);
+                        send_trade_msg(app, cancel_msg, address_hash);
                     }
                     if result.cancel_msg.is_some() || result.pending_cleared {
                         let _ = app.emit(
@@ -698,7 +698,7 @@ fn handle_trade_message(
                         let cancel_msg = trade_mgr.cancel_trade();
                         drop(trade_mgr);
                         if let Some(cancel_msg) = cancel_msg {
-                            send_trade_msg(app, &cancel_msg);
+                            send_trade_msg(app, &cancel_msg, &authenticated_sender);
                         }
                         let _ = app.emit(
                             "trade_event",
@@ -735,7 +735,7 @@ fn handle_trade_message(
                             let mut ns =
                                 net.0.lock().unwrap_or_else(|e| e.into_inner());
                             let actions =
-                                ns.send_trade_message(&complete_msg, &mut rand::rngs::OsRng);
+                                ns.send_trade_message(&complete_msg, &authenticated_sender, &mut rand::rngs::OsRng);
                             drop(ns);
                             drop(trade_mgr);
                             execute_network_actions(app, actions);
@@ -747,7 +747,7 @@ fn handle_trade_message(
                             drop(guard);
                             drop(trade_mgr);
                             if let Some(cancel_msg) = cancel_msg {
-                                send_trade_msg(app, &cancel_msg);
+                                send_trade_msg(app, &cancel_msg, &authenticated_sender);
                             }
                             let _ = app.emit(
                                 "trade_event",
@@ -1017,18 +1017,20 @@ fn trade_initiate(peer_hash: String, app: AppHandle) -> Result<(), String> {
         let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
         mgr.initiate_trade(trade_id, peer_bytes, peer_name, now_secs(&app))?
     };
-    send_trade_msg(&app, &msg);
+    send_trade_msg(&app, &msg, &peer_bytes);
     Ok(())
 }
 
 #[tauri::command]
 fn trade_accept(app: AppHandle) -> Result<(), String> {
-    let msg = {
+    let (msg, peer_hash) = {
         let trade = app.state::<TradeWrapper>();
         let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-        mgr.accept_trade(now_secs(&app))?
+        let msg = mgr.accept_trade(now_secs(&app))?;
+        let peer = mgr.active_peer_hash().ok_or("No active trade after accept")?;
+        (msg, peer)
     };
-    send_trade_msg(&app, &msg);
+    send_trade_msg(&app, &msg, &peer_hash);
     // Emit accepted event so the responder's own UI transitions from prompt to trade panel.
     let _ = app.emit(
         "trade_event",
@@ -1039,12 +1041,14 @@ fn trade_accept(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn trade_decline(app: AppHandle) -> Result<(), String> {
-    let msg = {
+    let (msg, peer_hash) = {
         let trade = app.state::<TradeWrapper>();
         let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-        mgr.decline_trade()?
+        let peer = mgr.pending_peer_hash().ok_or("No pending trade to decline")?;
+        let msg = mgr.decline_trade()?;
+        (msg, peer)
     };
-    send_trade_msg(&app, &msg);
+    send_trade_msg(&app, &msg, &peer_hash);
     Ok(())
 }
 
@@ -1055,12 +1059,14 @@ fn trade_update_offer(
     app: AppHandle,
 ) -> Result<(), String> {
     let offer = trade::types::TradeOffer { items, currants };
-    let msg = {
+    let (msg, peer_hash) = {
         let trade = app.state::<TradeWrapper>();
         let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-        mgr.update_offer(offer, now_secs(&app))?
+        let peer = mgr.active_peer_hash().ok_or("No active trade")?;
+        let msg = mgr.update_offer(offer, now_secs(&app))?;
+        (msg, peer)
     };
-    send_trade_msg(&app, &msg);
+    send_trade_msg(&app, &msg, &peer_hash);
     Ok(())
 }
 
@@ -1071,6 +1077,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
     // the two operations.
     let trade = app.state::<TradeWrapper>();
     let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+    let peer_hash = mgr.active_peer_hash().ok_or("No active trade")?;
     let lock_msg = {
         let state_wrapper = app.state::<GameStateWrapper>();
         let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
@@ -1093,7 +1100,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 let cancel_msg = mgr.cancel_trade();
                 drop(mgr);
                 if let Some(cancel_msg) = cancel_msg {
-                    send_trade_msg(&app, &cancel_msg);
+                    send_trade_msg(&app, &cancel_msg, &peer_hash);
                 }
                 return Err("Failed to build trade journal".into());
             }
@@ -1103,7 +1110,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
             let cancel_msg = mgr.cancel_trade();
             drop(mgr);
             if let Some(cancel_msg) = cancel_msg {
-                send_trade_msg(&app, &cancel_msg);
+                send_trade_msg(&app, &cancel_msg, &peer_hash);
             }
             let _ = app.emit(
                 "trade_event",
@@ -1129,8 +1136,8 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 drop(guard);
                 drop(mgr);
                 // Defer network sends until after all locks are released.
-                send_trade_msg(&app, &lock_msg);
-                send_trade_msg(&app, &complete_msg);
+                send_trade_msg(&app, &lock_msg, &peer_hash);
+                send_trade_msg(&app, &complete_msg, &peer_hash);
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "completed"}),
@@ -1144,7 +1151,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 drop(guard);
                 drop(mgr);
                 if let Some(cancel_msg) = cancel_msg {
-                    send_trade_msg(&app, &cancel_msg);
+                    send_trade_msg(&app, &cancel_msg, &peer_hash);
                 }
                 let _ = app.emit(
                     "trade_event",
@@ -1154,7 +1161,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
         }
     } else {
         drop(mgr);
-        send_trade_msg(&app, &lock_msg);
+        send_trade_msg(&app, &lock_msg, &peer_hash);
         let _ = app.emit(
             "trade_event",
             serde_json::json!({"type": "locked", "who": "local"}),
@@ -1165,12 +1172,14 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn trade_unlock(app: AppHandle) -> Result<(), String> {
-    let msg = {
+    let (msg, peer_hash) = {
         let trade = app.state::<TradeWrapper>();
         let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-        mgr.unlock_trade(now_secs(&app))?
+        let peer = mgr.active_peer_hash().ok_or("No active trade")?;
+        let msg = mgr.unlock_trade(now_secs(&app))?;
+        (msg, peer)
     };
-    send_trade_msg(&app, &msg);
+    send_trade_msg(&app, &msg, &peer_hash);
     let _ = app.emit(
         "trade_event",
         serde_json::json!({"type": "unlocked", "who": "local"}),
@@ -1182,9 +1191,10 @@ fn trade_unlock(app: AppHandle) -> Result<(), String> {
 fn trade_cancel(app: AppHandle) -> Result<(), String> {
     let trade = app.state::<TradeWrapper>();
     let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-    if let Some(msg) = mgr.cancel_trade() {
+    let peer_hash = mgr.active_peer_hash();
+    if let (Some(msg), Some(peer)) = (mgr.cancel_trade(), peer_hash) {
         drop(mgr);
-        send_trade_msg(&app, &msg);
+        send_trade_msg(&app, &msg, &peer);
     }
     let _ = app.emit(
         "trade_event",
@@ -1203,10 +1213,10 @@ fn trade_get_state(app: AppHandle) -> Result<Option<trade::types::TradeFrame>, S
 }
 
 /// Helper to send a trade message via the network.
-fn send_trade_msg(app: &AppHandle, msg: &trade::types::TradeMessage) {
+fn send_trade_msg(app: &AppHandle, msg: &trade::types::TradeMessage, target: &[u8; 16]) {
     let net = app.state::<NetworkWrapper>();
     let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
-    let actions = ns.send_trade_message(msg, &mut rand::rngs::OsRng);
+    let actions = ns.send_trade_message(msg, target, &mut rand::rngs::OsRng);
     drop(ns);
     execute_network_actions(app, actions);
 }
@@ -1255,12 +1265,14 @@ fn game_loop(app: AppHandle) {
         {
             let trade = app.state::<TradeWrapper>();
             let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
+            // Capture peer hash before tick() clears the trade.
+            let active_peer = trade_mgr.active_peer_hash();
             let tick_result = trade_mgr.tick(now_secs);
             drop(trade_mgr);
-            if let Some(cancel_msg) = tick_result.cancel_msg {
+            if let (Some(cancel_msg), Some(peer)) = (tick_result.cancel_msg, active_peer) {
                 let net = app.state::<NetworkWrapper>();
                 let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
-                let actions = ns.send_trade_message(&cancel_msg, &mut rng);
+                let actions = ns.send_trade_message(&cancel_msg, &peer, &mut rng);
                 drop(ns);
                 execute_network_actions(&app, actions);
                 let _ = app.emit(

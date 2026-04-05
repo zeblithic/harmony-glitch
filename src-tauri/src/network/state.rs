@@ -116,6 +116,8 @@ pub struct PeerState {
     pub event_publisher_id: Option<PublisherId>,
     /// Subscription IDs for cleanup on disconnect.
     pub subscription_ids: Vec<SubscriptionId>,
+    /// Unicast router (present once session is active).
+    pub unicast: Option<harmony_zenoh::UnicastRouter>,
 }
 
 /// The central network state machine.
@@ -355,10 +357,11 @@ impl NetworkState {
         self.publish_to_all_peers(&payload, PubTopic::State, rng)
     }
 
-    /// Send a trade protocol message to all active peers (filtered broadcast).
+    /// Send a trade protocol message to a specific peer via unicast.
     pub fn send_trade_message(
         &mut self,
         msg: &TradeMessage,
+        target_peer: &[u8; 16],
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
         let net_msg = NetMessage::Trade(msg.clone());
@@ -366,7 +369,12 @@ impl NetworkState {
             Ok(p) => p,
             Err(_) => return Vec::new(),
         };
-        self.publish_to_all_peers(&payload, PubTopic::Event, rng)
+        self.send_to_peer(
+            target_peer,
+            harmony_zenoh::unicast_channels::TRADE,
+            &payload,
+            rng,
+        )
     }
 
     /// Look up a peer's display name by address hash.
@@ -645,6 +653,7 @@ impl NetworkState {
             state_publisher_id: None,
             event_publisher_id: None,
             subscription_ids: Vec::new(),
+            unicast: None,
         };
         self.peers.insert(addr, peer);
 
@@ -1294,8 +1303,13 @@ impl NetworkState {
             }
         }
 
+        // Set up unicast router with trade channel open.
+        let mut unicast = harmony_zenoh::UnicastRouter::new();
+        unicast.open_channel(harmony_zenoh::unicast_channels::TRADE);
+
         // Store the router and IDs in the peer state.
         peer.router = Some(router);
+        peer.unicast = Some(unicast);
         peer.state_publisher_id = state_publisher_id;
         peer.event_publisher_id = event_publisher_id;
         peer.subscription_ids = subscription_ids;
@@ -1322,6 +1336,12 @@ impl NetworkState {
         }
         let tag = plaintext[0];
         let body = &plaintext[1..];
+
+        // Unicast frames (tag 0x03): [channel_id: 2 bytes BE][payload].
+        if tag == harmony_zenoh::FRAME_TAG_UNICAST {
+            self.handle_inbound_unicast(addr, body, now_secs_f64, out);
+            return;
+        }
 
         // Data frames (tag 0x02): [expr_id: 2 bytes BE][payload].
         if tag == FRAME_TAG_DATA {
@@ -1668,6 +1688,47 @@ impl NetworkState {
         }
     }
 
+    /// Handle a unicast frame: [channel_id: 2 bytes BE][payload].
+    /// Tag byte (0x03) has already been stripped by the dispatcher.
+    fn handle_inbound_unicast(
+        &mut self,
+        addr: &[u8; 16],
+        body: &[u8],
+        now_secs_f64: f64,
+        out: &mut Vec<NetworkAction>,
+    ) {
+        if body.len() < 2 {
+            return;
+        }
+        let channel_id = u16::from_be_bytes([body[0], body[1]]);
+        let payload = &body[2..];
+
+        // Check that the peer has a unicast router with this channel open.
+        let is_open = self
+            .peers
+            .get(addr)
+            .and_then(|p| p.unicast.as_ref())
+            .is_some_and(|u| u.is_open(channel_id));
+        if !is_open {
+            return;
+        }
+
+        // Refresh liveness — unicast counts as activity.
+        self.registry.refresh_liveness(addr, now_secs_f64);
+
+        // Route by channel ID. Future channels (DM, etc.) add branches here.
+        if channel_id == harmony_zenoh::unicast_channels::TRADE {
+            if let Ok(NetMessage::Trade(trade_msg)) =
+                serde_json::from_slice::<NetMessage>(payload)
+            {
+                out.push(NetworkAction::TradeMessageReceived {
+                    sender: *addr,
+                    message: trade_msg,
+                });
+            }
+        }
+    }
+
     // ── Internal: Session ticking ────────────────────────────────────────
 
     /// Tick a single peer's session. Returns `true` if the peer should be
@@ -1856,6 +1917,44 @@ impl NetworkState {
                 }
             }
         }
+        out
+    }
+
+    /// Send a unicast message to a specific peer via their Link.
+    /// Bypasses Zenoh pub/sub — sends directly through the encrypted channel.
+    fn send_to_peer(
+        &self,
+        target: &[u8; 16],
+        channel_id: harmony_zenoh::ChannelId,
+        payload: &[u8],
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let mut out = Vec::new();
+        let peer = match self.peers.get(target) {
+            Some(p) => p,
+            None => return out,
+        };
+        let link = match peer.link.as_ref() {
+            Some(l) if l.state() == LinkState::Active => l,
+            _ => return out,
+        };
+        let unicast = match peer.unicast.as_ref() {
+            Some(u) => u,
+            None => return out,
+        };
+        // Validate channel is open (guards against programming errors).
+        if !unicast.is_open(channel_id) {
+            return out;
+        }
+        // encode_frame prepends FRAME_TAG_UNICAST (0x03) followed by [channel_id: 2 BE][payload].
+        // Must stay consistent with handle_inbound_pubsub's tag dispatch.
+        let frame = harmony_zenoh::UnicastRouter::encode_frame(channel_id, payload);
+        debug_assert_eq!(
+            frame.first().copied(),
+            Some(harmony_zenoh::FRAME_TAG_UNICAST),
+            "encode_frame must include FRAME_TAG_UNICAST as first byte"
+        );
+        Self::send_via_link(link, rng, &frame, PacketContext::None, &mut out);
         out
     }
 }
@@ -2050,6 +2149,7 @@ mod tests {
                 state_publisher_id: None,
                 event_publisher_id: None,
                 subscription_ids: Vec::new(),
+            unicast: None,
             },
         );
         assert_eq!(state.peers.len(), 1);
