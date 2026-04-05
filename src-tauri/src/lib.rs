@@ -530,16 +530,36 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                 }
             }
             NetworkAction::RemotePlayerUpdate { .. } => {}
-            NetworkAction::TradeMessageReceived(trade_msg) => {
-                handle_trade_message(app, trade_msg);
+            NetworkAction::TradeMessageReceived { sender, message } => {
+                handle_trade_message(app, sender, message);
             }
         }
     }
 }
 
 /// Process an inbound trade protocol message.
-fn handle_trade_message(app: &AppHandle, msg: trade::types::TradeMessage) {
+/// `authenticated_sender` is the peer's address hash from the authenticated session layer.
+fn handle_trade_message(
+    app: &AppHandle,
+    authenticated_sender: [u8; 16],
+    msg: trade::types::TradeMessage,
+) {
     use trade::types::TradeMessage;
+
+    // Verify the message's claimed sender matches the authenticated session peer.
+    let claimed_sender = match &msg {
+        TradeMessage::Request { initiator, .. } => *initiator,
+        TradeMessage::Accept { responder, .. } => *responder,
+        TradeMessage::Decline { responder, .. } => *responder,
+        TradeMessage::Update { sender, .. }
+        | TradeMessage::Lock { sender, .. }
+        | TradeMessage::Unlock { sender, .. }
+        | TradeMessage::Cancel { sender, .. }
+        | TradeMessage::Complete { sender, .. } => *sender,
+    };
+    if claimed_sender != authenticated_sender {
+        return; // spoofed message — discard
+    }
 
     let trade = app.state::<TradeWrapper>();
     let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -978,17 +998,19 @@ fn trade_update_offer(
 
 #[tauri::command]
 fn trade_lock(app: AppHandle) -> Result<(), String> {
-    let msg = {
-        let trade = app.state::<TradeWrapper>();
-        let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-        mgr.lock_trade(now_secs(&app))?
-    };
-    send_trade_msg(&app, &msg);
+    // Hold the trade lock continuously from lock_trade() through execute_trade()
+    // to prevent a race where an inbound Complete/Cancel clears the trade between
+    // the two operations.
+    let trade = app.state::<TradeWrapper>();
+    let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+    let lock_msg = mgr.lock_trade(now_secs(&app))?;
 
     // Check if both are now locked (lock_trade may have set Executing).
-    let trade = app.state::<TradeWrapper>();
-    let mut mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
-    if mgr.trade_frame(&make_empty_item_defs()).is_some_and(|f| f.phase == "executing") {
+    let is_executing = mgr
+        .trade_frame(&make_empty_item_defs())
+        .is_some_and(|f| f.phase == "executing");
+
+    if is_executing {
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut guard = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
         let state = &mut *guard;
@@ -1001,16 +1023,19 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 }
                 drop(guard);
                 drop(mgr);
+                // Defer network sends until after all locks are released.
+                send_trade_msg(&app, &lock_msg);
+                send_trade_msg(&app, &complete_msg);
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "completed"}),
                 );
-                send_trade_msg(&app, &complete_msg);
             }
             Err(e) => {
                 let cancel_msg = mgr.cancel_trade();
                 drop(guard);
                 drop(mgr);
+                send_trade_msg(&app, &lock_msg);
                 if let Some(cancel_msg) = cancel_msg {
                     send_trade_msg(&app, &cancel_msg);
                 }
@@ -1021,6 +1046,8 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
             }
         }
     } else {
+        drop(mgr);
+        send_trade_msg(&app, &lock_msg);
         let _ = app.emit(
             "trade_event",
             serde_json::json!({"type": "locked", "who": "local"}),

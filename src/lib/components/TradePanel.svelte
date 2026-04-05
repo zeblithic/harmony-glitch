@@ -205,6 +205,7 @@
             max={currants}
             bind:value={currantsInput}
             onchange={handleCurrantsChange}
+            oninput={handleCurrantsChange}
             disabled={!canModify}
           />
           <span class="currants-max">(max {currants})</span>

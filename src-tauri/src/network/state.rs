@@ -84,8 +84,11 @@ pub enum NetworkAction {
         address_hash: [u8; 16],
         state: PlayerNetState,
     },
-    /// A trade protocol message arrived from a remote player.
-    TradeMessageReceived(TradeMessage),
+    /// A trade protocol message arrived from an authenticated remote player.
+    TradeMessageReceived {
+        sender: [u8; 16],
+        message: TradeMessage,
+    },
 }
 
 /// Tracks a single peer's connection lifecycle.
@@ -1631,7 +1634,10 @@ impl NetworkState {
                                 self.registry.update_avatar(addr, *avatar);
                             }
                             NetMessage::Trade(trade_msg) => {
-                                out.push(NetworkAction::TradeMessageReceived(trade_msg));
+                                out.push(NetworkAction::TradeMessageReceived {
+                                    sender: *addr,
+                                    message: trade_msg,
+                                });
                             }
                         }
                     }
