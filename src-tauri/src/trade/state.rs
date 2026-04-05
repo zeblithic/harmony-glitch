@@ -503,13 +503,17 @@ impl TradeManager {
             return Err("Trade not ready for execution".into());
         }
 
-        // 1. Validate we have all offered items.
+        // 1. Validate we have all offered items (aggregate duplicates).
+        let mut needed: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
         for item in &session.local_offer.items {
-            let have = inventory.count_item(&item.item_id);
-            if have < item.count {
+            *needed.entry(&item.item_id).or_insert(0) += item.count;
+        }
+        for (item_id, need) in &needed {
+            let have = inventory.count_item(item_id);
+            if have < *need {
                 return Err(format!(
                     "Insufficient {}: need {}, have {}",
-                    item.item_id, item.count, have
+                    item_id, need, have
                 ));
             }
         }
