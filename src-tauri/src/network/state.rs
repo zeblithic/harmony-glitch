@@ -1716,14 +1716,16 @@ impl NetworkState {
         // Refresh liveness — unicast counts as activity.
         self.registry.refresh_liveness(addr, now_secs_f64);
 
-        // Deserialize and route the NetMessage.
-        if let Ok(NetMessage::Trade(trade_msg)) = serde_json::from_slice::<NetMessage>(payload) {
-            // Unicast currently only carries trade. Future channels (DM, etc.)
-            // will add match arms here.
-            out.push(NetworkAction::TradeMessageReceived {
-                sender: *addr,
-                message: trade_msg,
-            });
+        // Route by channel ID. Future channels (DM, etc.) add branches here.
+        if channel_id == harmony_zenoh::unicast_channels::TRADE {
+            if let Ok(NetMessage::Trade(trade_msg)) =
+                serde_json::from_slice::<NetMessage>(payload)
+            {
+                out.push(NetworkAction::TradeMessageReceived {
+                    sender: *addr,
+                    message: trade_msg,
+                });
+            }
         }
     }
 
@@ -1944,7 +1946,14 @@ impl NetworkState {
         if !unicast.is_open(channel_id) {
             return out;
         }
+        // encode_frame prepends FRAME_TAG_UNICAST (0x03) followed by [channel_id: 2 BE][payload].
+        // Must stay consistent with handle_inbound_pubsub's tag dispatch.
         let frame = harmony_zenoh::UnicastRouter::encode_frame(channel_id, payload);
+        debug_assert_eq!(
+            frame.first().copied(),
+            Some(harmony_zenoh::FRAME_TAG_UNICAST),
+            "encode_frame must include FRAME_TAG_UNICAST as first byte"
+        );
         Self::send_via_link(link, rng, &frame, PacketContext::None, &mut out);
         out
     }
