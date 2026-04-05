@@ -401,6 +401,7 @@ mod tests {
                 stack_limit: 5,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         defs

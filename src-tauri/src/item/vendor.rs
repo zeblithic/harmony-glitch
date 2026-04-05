@@ -121,6 +121,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".to_string(),
                 base_cost: Some(3),
+                energy_value: Some(12),
             },
         );
         defs.insert(
@@ -133,6 +134,7 @@ mod tests {
                 stack_limit: 1,
                 icon: "quest_item".to_string(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         defs
@@ -168,6 +170,7 @@ mod tests {
                 stack_limit: 10,
                 icon: "cheap_item".to_string(),
                 base_cost: Some(1),
+                energy_value: None,
             },
         );
         let store = StoreDef {
@@ -232,6 +235,7 @@ mod tests {
                 stack_limit: 5,
                 icon: "gem".to_string(),
                 base_cost: Some(100),
+                energy_value: None,
             },
         );
         let store = test_store(); // store only sells "cherry"

@@ -1207,6 +1207,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -1577,6 +1578,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -1658,6 +1660,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2050,6 +2053,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();

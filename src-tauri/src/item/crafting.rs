@@ -131,6 +131,7 @@ mod tests {
                     stack_limit,
                     icon: id.into(),
                     base_cost: None,
+                    energy_value: None,
                 },
             );
         }
