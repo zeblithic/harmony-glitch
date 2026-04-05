@@ -1,12 +1,15 @@
 <script lang="ts">
   import type { InventoryFrame, RecipeDef } from '../types';
-  import { dropItem, craftRecipe } from '../ipc';
+  import { dropItem, craftRecipe, eatItem } from '../ipc';
 
-  let { inventory, recipes = [], visible = false, onClose }: {
+  let { inventory, recipes = [], visible = false, onClose, energy = 0, maxEnergy = 600, onEat }: {
     inventory: InventoryFrame | null;
     recipes?: RecipeDef[];
     visible?: boolean;
     onClose?: () => void;
+    energy?: number;
+    maxEnergy?: number;
+    onEat?: (itemId: string) => void;
   } = $props();
 
   let selectedSlot = $state<number | null>(null);
@@ -21,6 +24,9 @@
     if (selectedSlot === null || !inventory) return null;
     return inventory.slots[selectedSlot] ?? null;
   });
+
+  let isSelectedEdible = $derived(selectedItem?.energyValue != null && selectedItem.energyValue > 0);
+  let isEnergyFull = $derived(energy >= maxEnergy);
 
   function displayName(itemId: string): string {
     return itemId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -111,6 +117,16 @@
       selectedSlot = null;
     } catch (e) {
       console.error('Drop failed:', e);
+    }
+  }
+
+  async function handleEat() {
+    if (!selectedItem || !isSelectedEdible) return;
+    try {
+      await eatItem(selectedItem.itemId);
+      onEat?.(selectedItem.itemId);
+    } catch (e) {
+      console.error('Eat failed:', e);
     }
   }
 
@@ -279,9 +295,22 @@
             <div class="item-name">{selectedItem.name}</div>
             <div class="item-desc">{selectedItem.description}</div>
             <div class="item-count">{selectedItem.count} / {selectedItem.stackLimit}</div>
-            <button type="button" class="drop-btn" onclick={handleDrop}>
-              Drop
-            </button>
+            <div class="item-actions">
+              {#if isSelectedEdible}
+                <button
+                  type="button"
+                  class="use-btn"
+                  disabled={isEnergyFull}
+                  onclick={handleEat}
+                  aria-label="Use {selectedItem.name}"
+                >
+                  Use
+                </button>
+              {/if}
+              <button type="button" class="drop-btn" onclick={handleDrop}>
+                Drop
+              </button>
+            </div>
           </div>
         {/if}
       </div>
@@ -548,4 +577,23 @@
     font-size: 0.7rem;
     color: #e88;
   }
+
+  .item-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .use-btn {
+    background: rgba(40, 80, 60, 0.8);
+    color: #8cd48c;
+    border: 1px solid #4a7a4a;
+    border-radius: 3px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+
+  .use-btn:hover:not(:disabled) { background: rgba(50, 100, 70, 0.9); }
+  .use-btn:focus-visible { outline: 2px solid #5865f2; outline-offset: -2px; }
+  .use-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
