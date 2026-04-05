@@ -428,7 +428,7 @@
     jukeboxCloseFrames = 0;
   }
   // T key: initiate trade with nearest remote player (by distance, not hash order)
-  if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !shopOpen && latestFrame) {
+  if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !tradeRequestVisible && !shopOpen && latestFrame) {
     const px = latestFrame.player.x, py = latestFrame.player.y;
     const nearest = latestFrame.remotePlayers
       ?.map(p => ({ p, d: Math.hypot(p.x - px, p.y - py) }))
