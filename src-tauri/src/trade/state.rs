@@ -40,6 +40,22 @@ impl TradeManager {
             .is_some_and(|t| t.phase == TradePhase::Executing)
     }
 
+    /// Build a trade journal entry from the current active trade.
+    /// Returns None if there's no active trade in the Executing phase.
+    pub fn build_journal(&self) -> Option<crate::trade::journal::TradeJournal> {
+        let session = self.active_trade.as_ref()?;
+        if session.phase != TradePhase::Executing {
+            return None;
+        }
+        Some(crate::trade::journal::TradeJournal {
+            trade_id: session.trade_id,
+            removed_items: session.local_offer.items.clone(),
+            removed_currants: session.local_offer.currants,
+            received_items: session.remote_offer.items.clone(),
+            received_currants: session.remote_offer.currants,
+        })
+    }
+
     pub fn pending_request(&self) -> Option<&TradeSession> {
         self.pending_request.as_ref()
     }

@@ -34,6 +34,9 @@ pub struct SaveState {
     pub avatar: AvatarAppearance,
     #[serde(default = "default_currants")]
     pub currants: u64,
+    /// ID of the last successfully completed trade (for journal recovery).
+    #[serde(default)]
+    pub last_trade_id: Option<u64>,
 }
 
 /// The complete game state.
@@ -65,6 +68,8 @@ pub struct GameState {
     pub avatar: AvatarAppearance,
     pub currants: u64,
     pub store_catalog: StoreCatalog,
+    /// ID of the last successfully completed trade (for journal recovery).
+    pub last_trade_id: Option<u64>,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -171,6 +176,7 @@ impl GameState {
             avatar: AvatarAppearance::default(),
             currants: 50,
             store_catalog,
+            last_trade_id: None,
         }
     }
 
@@ -713,6 +719,7 @@ impl GameState {
             inventory: self.inventory.slots.clone(),
             avatar: self.avatar.clone(),
             currants: self.currants,
+            last_trade_id: self.last_trade_id,
         })
     }
 
@@ -743,6 +750,18 @@ impl GameState {
         self.inventory.slots.resize(capacity, None);
         self.avatar = save.avatar.clone();
         self.currants = save.currants;
+        self.last_trade_id = save.last_trade_id;
+    }
+
+    /// Replay a journaled trade that wasn't persisted before a crash.
+    pub fn recover_trade_journal(&mut self, journal: &crate::trade::journal::TradeJournal) {
+        crate::trade::journal::recover(
+            journal,
+            &mut self.inventory,
+            &mut self.currants,
+            &self.item_defs,
+        );
+        self.last_trade_id = Some(journal.trade_id);
     }
 
     fn tick_entities(&mut self, dt: f64, rng: &mut impl Rng) {
@@ -907,10 +926,10 @@ impl GameState {
     }
 }
 
-/// Write a save state to disk as pretty-printed JSON.
+/// Write a save state to disk as pretty-printed JSON (atomic: temp → fsync → rename).
 pub fn write_save_state(path: &std::path::Path, save: &SaveState) -> Result<(), String> {
     let json = serde_json::to_string_pretty(save).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    crate::persistence::atomic_write(path, json.as_bytes(), None)
 }
 
 /// Read a save state from disk. Returns Ok(None) if the file is missing
@@ -2860,6 +2879,7 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2882,6 +2902,7 @@ mod save_tests {
             inventory: vec![Some(ItemStack { item_id: "cherry".to_string(), count: 1 })],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -2898,6 +2919,7 @@ mod save_tests {
             inventory: vec![None; 16],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2921,6 +2943,7 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            last_trade_id: None,
         };
 
         write_save_state(&path, &save).unwrap();
@@ -2971,6 +2994,7 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            last_trade_id: None,
         };
         state.restore_save(&save);
 
@@ -2999,6 +3023,7 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            last_trade_id: None,
         };
         state.restore_save(&save);
 
@@ -3020,6 +3045,7 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 999, // will be stripped below
+            last_trade_id: None,
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3039,6 +3065,7 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 999,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
