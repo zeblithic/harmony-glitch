@@ -312,7 +312,7 @@ export class GameRenderer {
           style: { fontSize: 12, fill: 0xffffff, align: 'center' },
         });
         label.anchor.set(0.5, 1);
-        label.y = -65;
+        label.y = -95;
         container.addChild(label);
 
         this.worldContainer.addChild(container);
@@ -321,14 +321,16 @@ export class GameRenderer {
       }
 
       // Update appearance if changed (applyAppearance diffs internally).
-      // Remove fallback once real avatar sprites load.
+      // Remove fallback only after async sprite loading completes.
       if (remote.avatar) {
-        entry.compositor.applyAppearance(remote.avatar).catch(console.error);
-        if (entry.fallback) {
-          entry.container.removeChild(entry.fallback);
-          entry.fallback.destroy();
-          entry.fallback = null;
-        }
+        const e = entry;
+        entry.compositor.applyAppearance(remote.avatar).then(() => {
+          if (e.fallback) {
+            e.container.removeChild(e.fallback);
+            e.fallback.destroy();
+            e.fallback = null;
+          }
+        }).catch(console.error);
       }
 
       // Sync label text in case the peer's display name changed.
