@@ -28,6 +28,10 @@ fn default_energy() -> f64 {
     600.0
 }
 
+fn default_max_energy() -> f64 {
+    600.0
+}
+
 /// Minimal player state for save/load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +47,8 @@ pub struct SaveState {
     pub currants: u64,
     #[serde(default = "default_energy")]
     pub energy: f64,
+    #[serde(default = "default_max_energy")]
+    pub max_energy: f64,
 }
 
 /// The complete game state.
@@ -734,6 +740,7 @@ impl GameState {
             avatar: self.avatar.clone(),
             currants: self.currants,
             energy: self.energy,
+            max_energy: self.max_energy,
         })
     }
 
@@ -765,6 +772,7 @@ impl GameState {
         self.avatar = save.avatar.clone();
         self.currants = save.currants;
         self.energy = save.energy;
+        self.max_energy = save.max_energy;
     }
 
     fn tick_entities(&mut self, dt: f64, rng: &mut impl Rng) {
@@ -2940,6 +2948,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 50,
             energy: 600.0,
+            max_energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2963,6 +2972,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 50,
             energy: 600.0,
+            max_energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -2980,6 +2990,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 50,
             energy: 600.0,
+            max_energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3004,6 +3015,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 50,
             energy: 600.0,
+            max_energy: 600.0,
         };
 
         write_save_state(&path, &save).unwrap();
@@ -3055,6 +3067,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 50,
             energy: 600.0,
+            max_energy: 600.0,
         };
         state.restore_save(&save);
 
@@ -3084,6 +3097,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 50,
             energy: 600.0,
+            max_energy: 600.0,
         };
         state.restore_save(&save);
 
@@ -3106,6 +3120,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 999, // will be stripped below
             energy: 600.0,
+            max_energy: 600.0,
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3126,6 +3141,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 999,
             energy: 600.0,
+            max_energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3150,6 +3166,7 @@ mod save_tests {
             avatar: AvatarAppearance::default(),
             currants: 50,
             energy: 123.4,
+            max_energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();

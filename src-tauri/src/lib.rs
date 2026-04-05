@@ -731,7 +731,7 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
     state.next_feedback_id += 1;
     state.pickup_feedback.push(item::types::PickupFeedback {
         id: fb_id,
-        text: format!("+{} energy", gained as u32),
+        text: format!("+{} energy", gained.round() as u32),
         success: true,
         x: px,
         y: py,

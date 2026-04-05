@@ -18,6 +18,7 @@
   let previousFocus: HTMLElement | null = null;
   let craftError = $state<string | null>(null);
   let isCrafting = $state(false);
+  let eatError = $state<string | null>(null);
 
   let selectedItem = $derived.by(() => {
     if (selectedSlot === null || !inventory) return null;
@@ -121,10 +122,11 @@
 
   async function handleEat() {
     if (!selectedItem || !isSelectedEdible) return;
+    eatError = null;
     try {
       await eatItem(selectedItem.itemId);
     } catch (e) {
-      console.error('Eat failed:', e);
+      eatError = String(e);
     }
   }
 
@@ -309,6 +311,9 @@
                 Drop
               </button>
             </div>
+            {#if eatError}
+              <div class="eat-error" role="alert">{eatError}</div>
+            {/if}
           </div>
         {/if}
       </div>
@@ -570,7 +575,7 @@
   .craft-btn:focus-visible { outline: 2px solid #5865f2; outline-offset: -2px; }
   .craft-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .craft-error {
+  .craft-error, .eat-error {
     margin-top: 4px;
     font-size: 0.7rem;
     color: #e88;

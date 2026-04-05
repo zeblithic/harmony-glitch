@@ -273,6 +273,7 @@ export interface SavedState {
   inventory: (SaveItemStack | null)[];
   currants?: number;
   energy?: number;
+  maxEnergy?: number;
 }
 
 export interface EatResult {
