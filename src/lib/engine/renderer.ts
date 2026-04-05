@@ -309,15 +309,11 @@ export class GameRenderer {
         this.worldContainer.addChild(container);
         entry = { container, compositor, label };
         this.remoteAvatars.set(remote.addressHash, entry);
-
-        if (remote.avatar) {
-          entry.compositor.applyAppearance(remote.avatar);
-        }
       }
 
       // Update appearance if changed (applyAppearance diffs internally)
       if (remote.avatar) {
-        entry.compositor.applyAppearance(remote.avatar);
+        entry.compositor.applyAppearance(remote.avatar).catch(console.error);
       }
 
       // Sync label text in case the peer's display name changed.
@@ -328,7 +324,7 @@ export class GameRenderer {
       entry.container.x = remote.x - this.street.left;
       entry.container.y = remote.y - this.street.top;
       const facing: Direction = remote.facing === 'right' ? 'right' : 'left';
-      entry.compositor.updateAnimation(remote.animation ?? 'idle', facing);
+      entry.compositor.updateAnimation(remote.animation, facing);
     }
 
     // Remove departed players
