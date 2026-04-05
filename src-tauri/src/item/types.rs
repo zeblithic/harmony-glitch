@@ -271,6 +271,7 @@ pub struct ItemStackFrame {
     pub icon: String,
     pub count: u32,
     pub stack_limit: u32,
+    pub energy_value: Option<u32>,
 }
 
 /// Prompt shown when player is near an interactable.

@@ -21,6 +21,10 @@ fn default_currants() -> u64 {
     50
 }
 
+fn default_energy() -> f64 {
+    600.0
+}
+
 /// Minimal player state for save/load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,6 +38,8 @@ pub struct SaveState {
     pub avatar: AvatarAppearance,
     #[serde(default = "default_currants")]
     pub currants: u64,
+    #[serde(default = "default_energy")]
+    pub energy: f64,
 }
 
 /// The complete game state.
@@ -65,6 +71,8 @@ pub struct GameState {
     pub avatar: AvatarAppearance,
     pub currants: u64,
     pub store_catalog: StoreCatalog,
+    pub energy: f64,
+    pub max_energy: f64,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -95,6 +103,8 @@ pub struct RenderFrame {
     pub transition: Option<TransitionFrame>,
     pub audio_events: Vec<AudioEvent>,
     pub currants: u64,
+    pub energy: f64,
+    pub max_energy: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +179,8 @@ impl GameState {
             avatar: AvatarAppearance::default(),
             currants: 50,
             store_catalog,
+            energy: 600.0,
+            max_energy: 600.0,
         }
     }
 
@@ -693,6 +705,8 @@ impl GameState {
             },
             audio_events,
             currants: self.currants,
+            energy: self.energy,
+            max_energy: self.max_energy,
         })
     }
 
@@ -711,6 +725,7 @@ impl GameState {
             inventory: self.inventory.slots.clone(),
             avatar: self.avatar.clone(),
             currants: self.currants,
+            energy: self.energy,
         })
     }
 
@@ -741,6 +756,7 @@ impl GameState {
         self.inventory.slots.resize(capacity, None);
         self.avatar = save.avatar.clone();
         self.currants = save.currants;
+        self.energy = save.energy;
     }
 
     fn tick_entities(&mut self, dt: f64, rng: &mut impl Rng) {
@@ -828,6 +844,7 @@ impl GameState {
                             icon: def.map(|d| d.icon.clone()).unwrap_or_default(),
                             count: stack.count,
                             stack_limit: def.map(|d| d.stack_limit).unwrap_or(1),
+                            energy_value: def.and_then(|d| d.energy_value),
                         }
                     })
                 })
@@ -2862,6 +2879,7 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2884,6 +2902,7 @@ mod save_tests {
             inventory: vec![Some(ItemStack { item_id: "cherry".to_string(), count: 1 })],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -2900,6 +2919,7 @@ mod save_tests {
             inventory: vec![None; 16],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2923,6 +2943,7 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
         };
 
         write_save_state(&path, &save).unwrap();
@@ -2973,6 +2994,7 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
         };
         state.restore_save(&save);
 
@@ -3001,6 +3023,7 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
         };
         state.restore_save(&save);
 
@@ -3022,6 +3045,7 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 999, // will be stripped below
+            energy: 600.0,
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3041,9 +3065,34 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 999,
+            energy: 600.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.currants, 999);
+    }
+
+    #[test]
+    fn save_state_energy_default() {
+        let json = r#"{"streetId":"demo","x":0,"y":0,"facing":"right","inventory":[],"currants":50}"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert_eq!(save.energy, 600.0);
+    }
+
+    #[test]
+    fn save_state_energy_round_trip() {
+        let save = SaveState {
+            street_id: "demo".to_string(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: AvatarAppearance::default(),
+            currants: 50,
+            energy: 123.4,
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let restored: SaveState = serde_json::from_str(&json).unwrap();
+        assert!((restored.energy - 123.4).abs() < f64::EPSILON);
     }
 }
