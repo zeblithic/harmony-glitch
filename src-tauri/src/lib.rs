@@ -1086,30 +1086,37 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
         // crash-recovery record would silently defeat the safety guarantee.
         let piw = app.state::<PlayerIdentityWrapper>();
         let journal_path = piw.data_dir.join("trade_journal.json");
-        let journal = mgr.build_journal();
-        if let Some(ref journal) = journal {
-            if let Err(e) = trade::journal::write_journal(&journal_path, journal) {
-                eprintln!("[trade] journal write failed: {e} — aborting trade");
+        let journal = match mgr.build_journal() {
+            Some(j) => j,
+            None => {
+                eprintln!("[trade] build_journal returned None in Executing phase — aborting");
                 let cancel_msg = mgr.cancel_trade();
                 drop(mgr);
                 if let Some(cancel_msg) = cancel_msg {
                     send_trade_msg(&app, &cancel_msg);
                 }
-                let _ = app.emit(
-                    "trade_event",
-                    serde_json::json!({"type": "cancelled", "reason": "Journal write failed"}),
-                );
-                return Err("Journal write failed — trade aborted".into());
+                return Err("Failed to build trade journal".into());
             }
+        };
+        if let Err(e) = trade::journal::write_journal(&journal_path, &journal) {
+            eprintln!("[trade] journal write failed: {e} — aborting trade");
+            let cancel_msg = mgr.cancel_trade();
+            drop(mgr);
+            if let Some(cancel_msg) = cancel_msg {
+                send_trade_msg(&app, &cancel_msg);
+            }
+            let _ = app.emit(
+                "trade_event",
+                serde_json::json!({"type": "cancelled", "reason": "Journal write failed"}),
+            );
+            return Err("Journal write failed — trade aborted".into());
         }
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut guard = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
         let state = &mut *guard;
         match mgr.execute_trade(&mut state.inventory, &mut state.currants, &state.item_defs) {
             Ok(complete_msg) => {
-                if let Some(ref j) = journal {
-                    guard.last_trade_id = Some(j.trade_id);
-                }
+                guard.last_trade_id = Some(journal.trade_id);
                 let saved = guard.save_state().is_some_and(|save| {
                     let save_path = piw.data_dir.join("savegame.json");
                     engine::state::write_save_state(&save_path, &save).is_ok()
