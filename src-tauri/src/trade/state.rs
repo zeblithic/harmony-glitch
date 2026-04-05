@@ -207,6 +207,7 @@ impl TradeManager {
     pub fn receive_accept(
         &mut self,
         trade_id: TradeId,
+        sender: &[u8; 16],
         now: f64,
     ) -> Result<(), String> {
         let session = self
@@ -215,6 +216,9 @@ impl TradeManager {
             .ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
+        }
+        if &session.peer_hash != sender {
+            return Err("Sender mismatch".into());
         }
         if session.phase != TradePhase::PendingResponse {
             return Err("Trade not in pending state".into());
@@ -225,13 +229,16 @@ impl TradeManager {
     }
 
     /// Called when the peer declines our trade request.
-    pub fn receive_decline(&mut self, trade_id: TradeId) -> Result<(), String> {
+    pub fn receive_decline(&mut self, trade_id: TradeId, sender: &[u8; 16]) -> Result<(), String> {
         let session = self
             .active_trade
             .as_ref()
             .ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
+        }
+        if &session.peer_hash != sender {
+            return Err("Sender mismatch".into());
         }
         if session.phase != TradePhase::PendingResponse {
             return Err("Trade not in pending state".into());
@@ -761,7 +768,7 @@ mod tests {
 
         // Alice receives accept.
         if let TradeMessage::Accept { trade_id, .. } = &accept {
-            alice_mgr.receive_accept(*trade_id, 1.0).unwrap();
+            alice_mgr.receive_accept(*trade_id, &BOB, 1.0).unwrap();
         }
 
         // Alice offers 5 cherries.
@@ -875,7 +882,7 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        alice_mgr.receive_decline(1).unwrap();
+        alice_mgr.receive_decline(1, &BOB).unwrap();
         assert!(!alice_mgr.has_active_trade());
     }
 
@@ -1028,7 +1035,7 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        let err = alice_mgr.receive_accept(999, 1.0).unwrap_err();
+        let err = alice_mgr.receive_accept(999, &BOB, 1.0).unwrap_err();
         assert_eq!(err, "Trade ID mismatch");
     }
 
@@ -1048,7 +1055,7 @@ mod tests {
             .receive_request(1, ALICE, "Alice".into(), 0.0)
             .unwrap();
         bob_mgr.accept_trade(1.0).unwrap();
-        alice_mgr.receive_accept(1, 1.0).unwrap();
+        alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         // Alice offers cherries.
         alice_mgr
@@ -1095,7 +1102,7 @@ mod tests {
             .receive_request(1, ALICE, "Alice".into(), 0.0)
             .unwrap();
         bob_mgr.accept_trade(1.0).unwrap();
-        alice_mgr.receive_accept(1, 1.0).unwrap();
+        alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         // Alice offers cherries, Bob receives.
         alice_mgr
@@ -1136,7 +1143,7 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        alice_mgr.receive_accept(1, 1.0).unwrap();
+        alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         // Eve (a third peer) tries to cancel Alice's trade with Bob.
         let eve: [u8; 16] = [0x03; 16];
@@ -1151,7 +1158,7 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        alice_mgr.receive_accept(1, 1.0).unwrap();
+        alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         let eve: [u8; 16] = [0x03; 16];
         let err = alice_mgr
@@ -1166,7 +1173,7 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        alice_mgr.receive_accept(1, 1.0).unwrap();
+        alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         let eve: [u8; 16] = [0x03; 16];
         let err = alice_mgr
@@ -1183,7 +1190,7 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        alice_mgr.receive_accept(1, 1.0).unwrap();
+        alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         // Bob's Complete arrives before his Lock (UDP reorder).
         alice_mgr.receive_complete(1, &BOB).unwrap();
@@ -1302,7 +1309,7 @@ mod tests {
         bob.receive_request(1, ALICE, "Alice".into(), 0.0)
             .unwrap();
         bob.accept_trade(1.0).unwrap();
-        mgr.receive_accept(1, 1.0).unwrap();
+        mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         mgr.update_offer(TradeOffer::empty(), 2.0).unwrap();
         let empty = make_inventory(&[]);

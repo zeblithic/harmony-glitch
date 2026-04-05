@@ -604,7 +604,7 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Accept { trade_id, .. } => {
-            if trade_mgr.receive_accept(trade_id, now_secs(app)).is_ok() {
+            if trade_mgr.receive_accept(trade_id, &authenticated_sender, now_secs(app)).is_ok() {
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "accepted"}),
@@ -612,7 +612,7 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Decline { trade_id, .. } => {
-            if trade_mgr.receive_decline(trade_id).is_ok() {
+            if trade_mgr.receive_decline(trade_id, &authenticated_sender).is_ok() {
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "declined"}),

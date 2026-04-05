@@ -146,7 +146,8 @@ pub fn compute_terms_hash(
     hash_b: &[u8; 16],
 ) -> [u8; 16] {
     // Sort by peer hash for deterministic ordering.
-    let (first, second) = if hash_a < hash_b {
+    // Use <= so equal hashes produce the same ordering from both sides.
+    let (first, second) = if hash_a <= hash_b {
         (offer_a, offer_b)
     } else {
         (offer_b, offer_a)
