@@ -36,6 +36,7 @@ export class GameRenderer {
   private entitySprites: Map<string, Container> = new Map();
   private groundItemSprites: Map<string, Container> = new Map();
   private signpostContainers: Map<string, Container> = new Map();
+  private signpostLabels: Map<string, Text> = new Map();
   private promptText: Text | null = null;
   private feedbackTexts: { text: Text; feedbackId: number; startAge: number }[] = [];
   private lastFrameTime = 0;
@@ -165,6 +166,7 @@ export class GameRenderer {
     this.groundItemSprites.clear();
     for (const [, c] of this.signpostContainers) { c.destroy(); }
     this.signpostContainers.clear();
+    this.signpostLabels.clear();
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];
@@ -256,9 +258,8 @@ export class GameRenderer {
       }
       container.addChild(board);
 
-      // Destination label text
-      const label = signpost.connects[0].targetLabel;
-      const displayText = pointsRight ? `${label} \u2192` : `\u2190 ${label}`;
+      // Destination label text (arrow direction conveyed by the drawn triangle)
+      const displayText = signpost.connects[0].targetLabel;
       const text = new Text({
         text: displayText,
         style: { fontSize: 11, fill: 0xffffff, fontFamily: 'sans-serif' },
@@ -271,6 +272,7 @@ export class GameRenderer {
 
       this.worldContainer.addChild(container);
       this.signpostContainers.set(signpost.id, container);
+      this.signpostLabels.set(signpost.id, text);
     }
 
     // Create avatar container (layers populated by applyAppearance)
@@ -502,11 +504,9 @@ export class GameRenderer {
     if (this.street) {
       const APPROACH_DISTANCE = 500;
       for (const signpost of this.street.signposts) {
-        const container = this.signpostContainers.get(signpost.id);
-        if (!container) continue;
-        const distance = Math.abs(frame.player.x - signpost.x);
-        const labelText = container.children[container.children.length - 1] as Text;
+        const labelText = this.signpostLabels.get(signpost.id);
         if (!labelText) continue;
+        const distance = Math.abs(frame.player.x - signpost.x);
         if (distance <= APPROACH_DISTANCE) {
           const proximity = 1 - distance / APPROACH_DISTANCE;
           labelText.alpha = 0.7 + 0.3 * proximity;
@@ -779,6 +779,7 @@ export class GameRenderer {
     this.groundItemSprites.clear();
     for (const [, c] of this.signpostContainers) { c.destroy(); }
     this.signpostContainers.clear();
+    this.signpostLabels.clear();
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];

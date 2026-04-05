@@ -62,8 +62,12 @@
   // (onMount handles the first buildScene call).
   $effect(() => {
     if (renderer && street && builtForTsid !== null && street.tsid !== builtForTsid) {
-      builtForTsid = street.tsid;
-      renderer.buildScene(street);
+      const tsid = street.tsid;
+      renderer.buildScene(street).then(() => {
+        builtForTsid = tsid;
+      }).catch((e) => {
+        console.error('[GameCanvas] Scene rebuild failed:', e);
+      });
     }
   });
 
