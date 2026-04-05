@@ -164,6 +164,9 @@ fn append_offer_bytes(data: &mut Vec<u8>, offer: &TradeOffer) {
     let mut items: Vec<&ItemStack> = offer.items.iter().collect();
     items.sort_by(|a, b| a.item_id.cmp(&b.item_id));
     for item in &items {
+        // Length-prefix the item_id to prevent collisions (e.g., "ab" + "cd" vs "abc" + "d").
+        let id_len = item.item_id.len() as u32;
+        data.extend_from_slice(&id_len.to_le_bytes());
         data.extend_from_slice(item.item_id.as_bytes());
         data.extend_from_slice(&item.count.to_le_bytes());
     }

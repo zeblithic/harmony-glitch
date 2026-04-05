@@ -637,7 +637,7 @@ fn handle_trade_message(app: &AppHandle, msg: trade::types::TradeMessage) {
                             // Save state immediately after trade execution.
                             if let Some(save) = guard.save_state() {
                                 let piw = app.state::<PlayerIdentityWrapper>();
-                                let save_path = piw.data_dir.join("save.json");
+                                let save_path = piw.data_dir.join("savegame.json");
                                 let _ = engine::state::write_save_state(&save_path, &save);
                             }
                             drop(guard);
@@ -996,7 +996,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
             Ok(complete_msg) => {
                 if let Some(save) = guard.save_state() {
                     let piw = app.state::<PlayerIdentityWrapper>();
-                    let save_path = piw.data_dir.join("save.json");
+                    let save_path = piw.data_dir.join("savegame.json");
                     let _ = engine::state::write_save_state(&save_path, &save);
                 }
                 drop(guard);

@@ -49,6 +49,7 @@
 
   function handleCancel(e: Event) {
     e.preventDefault();
+    onCancel?.();
     onClose?.();
   }
 
@@ -83,19 +84,20 @@
     for (const item of tradeFrame?.localOffer.items ?? []) {
       offered.set(item.itemId, (offered.get(item.itemId) ?? 0) + item.count);
     }
-    const items = new Map<string, { itemId: string; name: string; icon: string; available: number }>();
+    const totals = new Map<string, { itemId: string; name: string; icon: string; total: number }>();
     for (const slot of inventory.slots) {
       if (!slot) continue;
-      const existing = items.get(slot.itemId);
-      const count = existing ? existing.available + slot.count : slot.count;
-      items.set(slot.itemId, {
+      const existing = totals.get(slot.itemId);
+      totals.set(slot.itemId, {
         itemId: slot.itemId,
         name: slot.name,
         icon: slot.icon,
-        available: count - (offered.get(slot.itemId) ?? 0),
+        total: (existing?.total ?? 0) + slot.count,
       });
     }
-    return [...items.values()].filter(i => i.available > 0);
+    return [...totals.values()]
+      .map(i => ({ ...i, available: i.total - (offered.get(i.itemId) ?? 0) }))
+      .filter(i => i.available > 0);
   });
 
   function handleCurrantsChange() {
