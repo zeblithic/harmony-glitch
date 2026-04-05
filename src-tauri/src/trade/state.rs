@@ -243,9 +243,13 @@ impl TradeManager {
                 MAX_OFFER_ITEMS
             ));
         }
-        // Clear our lock if we had one (changing offer invalidates it).
+        // Changing our offer invalidates both locks — the remote peer's
+        // lock was computed against the old terms and is now stale.
         session.local_terms_hash = None;
-        if session.phase == TradePhase::LockedLocal {
+        session.remote_terms_hash = None;
+        if session.phase == TradePhase::LockedLocal
+            || session.phase == TradePhase::LockedRemote
+        {
             session.phase = TradePhase::Negotiating;
         }
         session.local_offer = offer.clone();
@@ -436,12 +440,20 @@ impl TradeManager {
                 session.local_offer.currants, *currants
             ));
         }
-        // 3. Validate room for incoming items.
-        // Note: we remove our items first, then add received items,
-        // so the room check is conservative (actual room may be larger).
-        for item in &session.remote_offer.items {
-            if !inventory.has_room_for_count(&item.item_id, item.count, item_defs) {
-                return Err(format!("No room for {}", item.item_id));
+        // 3. Validate room for incoming items by simulating the full
+        // remove-then-add sequence on a clone. This correctly handles
+        // cross-item slot contention (multiple item types competing for
+        // the same empty slots).
+        {
+            let mut sim = inventory.clone();
+            for item in &session.local_offer.items {
+                sim.remove_item(&item.item_id, item.count);
+            }
+            for item in &session.remote_offer.items {
+                let overflow = sim.add(&item.item_id, item.count, item_defs);
+                if overflow > 0 {
+                    return Err(format!("No room for {}", item.item_id));
+                }
             }
         }
 
