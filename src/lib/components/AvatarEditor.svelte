@@ -58,7 +58,9 @@
         }).catch(e => {
           if (gen !== loadGeneration) return;
           console.error('[AvatarEditor] Failed to load avatar:', e);
-          error = 'Failed to load avatar. Try closing and reopening.';
+          error = firstRun
+            ? 'Failed to load avatar. Press Skip to continue with defaults.'
+            : 'Failed to load avatar. Try closing and reopening.';
         });
         dialogEl.showModal();
       }
