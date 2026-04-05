@@ -27,27 +27,12 @@ impl std::fmt::Debug for PlayerProfile {
 /// Write profile JSON to disk with restrictive permissions (0600 on Unix).
 /// Private key material lives in this file — it should not be world-readable.
 ///
-/// On Unix, the file is created with 0600 permissions atomically (no TOCTOU window).
-/// On Windows, default ACLs apply; OS-keychain integration is deferred.
+/// Uses atomic write (temp → fsync → rename) so the profile is never corrupted
+/// by a crash mid-write. On Unix, permissions are set on the temp file before
+/// rename — no TOCTOU window.
 pub fn write_profile(path: &Path, json: &str) -> Result<(), String> {
-    #[cfg(unix)]
-    {
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(path)
-            .map_err(|e| e.to_string())?;
-        f.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-    }
-    #[cfg(not(unix))]
-    {
-        std::fs::write(path, json).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    let mode = if cfg!(unix) { Some(0o600) } else { None };
+    crate::persistence::atomic_write(path, json.as_bytes(), mode)
 }
 
 /// Try to load an existing profile from disk. Returns an error if the file

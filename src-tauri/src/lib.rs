@@ -3,6 +3,7 @@ pub mod engine;
 pub mod identity;
 pub mod item;
 pub mod network;
+pub mod persistence;
 pub mod physics;
 pub mod street;
 pub mod trade;
@@ -257,6 +258,26 @@ fn load_street(
                 Ok(save) => state.restore_save(&save),
                 Err(e) => eprintln!("[persistence] Failed to deserialize save_state in load_street: {e}"),
             }
+        }
+
+        // Recover from an incomplete trade (crash between execute and save).
+        let piw = app.state::<PlayerIdentityWrapper>();
+        let journal_path = piw.data_dir.join("trade_journal.json");
+        if let Some(journal) = trade::journal::read_journal(&journal_path) {
+            let already_saved = state
+                .last_trade_id
+                .is_some_and(|id| id >= journal.trade_id);
+            if !already_saved {
+                state.recover_trade_journal(&journal);
+                // Save immediately so recovery is durable.
+                if let Some(save) = state.save_state() {
+                    let save_path = piw.data_dir.join("savegame.json");
+                    if let Err(e) = engine::state::write_save_state(&save_path, &save) {
+                        eprintln!("[journal] Failed to save after recovery: {e}");
+                    }
+                }
+            }
+            trade::journal::clear_journal(&journal_path);
         }
     }
 
@@ -649,6 +670,12 @@ fn handle_trade_message(
             {
                 if both_locked {
                     // Both locked with matching hash — execute trade.
+                    // Write journal BEFORE execution so a crash can be recovered.
+                    let piw = app.state::<PlayerIdentityWrapper>();
+                    let journal_path = piw.data_dir.join("trade_journal.json");
+                    if let Some(journal) = trade_mgr.build_journal() {
+                        let _ = trade::journal::write_journal(&journal_path, &journal);
+                    }
                     let state_wrapper = app.state::<GameStateWrapper>();
                     let mut guard =
                         state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -658,11 +685,12 @@ fn handle_trade_message(
                     {
                         Ok(complete_msg) => {
                             // Save state immediately after trade execution.
+                            guard.last_trade_id = Some(trade_id);
                             if let Some(save) = guard.save_state() {
-                                let piw = app.state::<PlayerIdentityWrapper>();
                                 let save_path = piw.data_dir.join("savegame.json");
                                 let _ = engine::state::write_save_state(&save_path, &save);
                             }
+                            trade::journal::clear_journal(&journal_path);
                             drop(guard);
                             let _ = app.emit(
                                 "trade_event",
@@ -680,6 +708,7 @@ fn handle_trade_message(
                         }
                         Err(e) => {
                             eprintln!("[trade] execution failed: {e}");
+                            trade::journal::clear_journal(&journal_path);
                             let cancel_msg = trade_mgr.cancel_trade();
                             drop(guard);
                             drop(trade_mgr);
@@ -1018,16 +1047,26 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
     let is_executing = mgr.is_executing();
 
     if is_executing {
+        // Write journal BEFORE execution so a crash can be recovered.
+        let piw = app.state::<PlayerIdentityWrapper>();
+        let journal_path = piw.data_dir.join("trade_journal.json");
+        let journal = mgr.build_journal();
+        if let Some(ref journal) = journal {
+            let _ = trade::journal::write_journal(&journal_path, journal);
+        }
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut guard = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
         let state = &mut *guard;
         match mgr.execute_trade(&mut state.inventory, &mut state.currants, &state.item_defs) {
             Ok(complete_msg) => {
+                if let Some(ref j) = journal {
+                    guard.last_trade_id = Some(j.trade_id);
+                }
                 if let Some(save) = guard.save_state() {
-                    let piw = app.state::<PlayerIdentityWrapper>();
                     let save_path = piw.data_dir.join("savegame.json");
                     let _ = engine::state::write_save_state(&save_path, &save);
                 }
+                trade::journal::clear_journal(&journal_path);
                 drop(guard);
                 drop(mgr);
                 // Defer network sends until after all locks are released.
@@ -1041,6 +1080,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
             Err(e) => {
                 // Do NOT send lock_msg — the peer would see both locked,
                 // execute their side, and we'd have a one-sided trade.
+                trade::journal::clear_journal(&journal_path);
                 let cancel_msg = mgr.cancel_trade();
                 drop(guard);
                 drop(mgr);
