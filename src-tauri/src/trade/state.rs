@@ -274,6 +274,12 @@ impl TradeManager {
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
+        match session.phase {
+            TradePhase::Negotiating
+            | TradePhase::LockedLocal
+            | TradePhase::LockedRemote => {}
+            _ => return Ok(()), // ignore stale/reordered updates
+        }
         // Remote updating their offer invalidates both locks.
         session.remote_terms_hash = None;
         session.local_terms_hash = None;
@@ -364,6 +370,12 @@ impl TradeManager {
             .ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
+        }
+        match session.phase {
+            TradePhase::Negotiating
+            | TradePhase::LockedLocal
+            | TradePhase::LockedRemote => {}
+            _ => return Ok(false), // ignore lock in wrong phase (e.g., UDP reorder before Accept)
         }
         session.remote_terms_hash = Some(terms_hash);
         session.last_activity = now;
