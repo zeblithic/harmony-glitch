@@ -519,9 +519,12 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                 if let network::types::PresenceEvent::Left { address_hash } = event {
                     let trade = app.state::<TradeWrapper>();
                     let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(cancel_msg) = trade_mgr.cancel_trade_with_peer(address_hash) {
-                        drop(trade_mgr);
-                        send_trade_msg(app, &cancel_msg);
+                    let result = trade_mgr.cancel_trade_with_peer(address_hash);
+                    drop(trade_mgr);
+                    if let Some(ref cancel_msg) = result.cancel_msg {
+                        send_trade_msg(app, cancel_msg);
+                    }
+                    if result.cancel_msg.is_some() || result.pending_cleared {
                         let _ = app.emit(
                             "trade_event",
                             serde_json::json!({"type": "cancelled", "reason": "peerDisconnected"}),

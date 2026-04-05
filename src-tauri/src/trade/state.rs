@@ -55,26 +55,37 @@ impl TradeManager {
     }
 
     /// Cancel only the trade/request involving a specific peer.
-    /// Returns a Cancel message if the active trade was with that peer.
-    pub fn cancel_trade_with_peer(&mut self, peer_hash: &[u8; 16]) -> Option<TradeMessage> {
+    /// Returns a Cancel message if the active trade was with that peer,
+    /// or sets `pending_cleared` if a pending request was dismissed.
+    pub fn cancel_trade_with_peer(&mut self, peer_hash: &[u8; 16]) -> CancelPeerResult {
         if self
             .active_trade
             .as_ref()
             .is_some_and(|s| &s.peer_hash == peer_hash)
         {
-            return self.active_trade.take().map(|s| TradeMessage::Cancel {
+            let cancel_msg = self.active_trade.take().map(|s| TradeMessage::Cancel {
                 trade_id: s.trade_id,
                 sender: self.our_hash,
             });
+            return CancelPeerResult {
+                cancel_msg,
+                pending_cleared: false,
+            };
         }
-        if self
+        let pending_cleared = if self
             .pending_request
             .as_ref()
             .is_some_and(|s| &s.peer_hash == peer_hash)
         {
             self.pending_request = None;
+            true
+        } else {
+            false
+        };
+        CancelPeerResult {
+            cancel_msg: None,
+            pending_cleared,
         }
-        None
     }
 
     /// Build a TradeFrame for the frontend, enriching items with names/icons.
@@ -630,6 +641,14 @@ pub struct TickResult {
     pub cancel_msg: Option<TradeMessage>,
     /// Whether a pending inbound request expired (frontend should dismiss prompt).
     pub pending_expired: bool,
+}
+
+/// Result of cancelling a trade with a specific peer.
+pub struct CancelPeerResult {
+    /// Cancel message to send if the active trade was with that peer.
+    pub cancel_msg: Option<TradeMessage>,
+    /// Whether a pending inbound request from that peer was cleared.
+    pub pending_cleared: bool,
 }
 
 fn offer_to_frame(offer: &TradeOffer, item_defs: &ItemDefs) -> TradeOfferFrame {

@@ -534,12 +534,14 @@
       onClose={() => { tradeOpen = false; tradeFrame = null; }}
       onAddItem={async (itemId, count) => {
         if (!tradeFrame) return;
-        const items = [...tradeFrame.localOffer.items];
-        const existing = items.find(i => i.itemId === itemId);
-        if (existing) {
-          existing.count += count;
+        const existingIdx = tradeFrame.localOffer.items.findIndex(i => i.itemId === itemId);
+        let items;
+        if (existingIdx >= 0) {
+          items = tradeFrame.localOffer.items.map((i, idx) =>
+            idx === existingIdx ? { ...i, count: i.count + count } : i
+          );
         } else {
-          items.push({ itemId, name: itemId, icon: itemId, count });
+          items = [...tradeFrame.localOffer.items, { itemId, name: itemId, icon: itemId, count }];
         }
         try {
           await tradeUpdateOffer(items.map(i => ({ itemId: i.itemId, count: i.count })), tradeFrame.localOffer.currants);
