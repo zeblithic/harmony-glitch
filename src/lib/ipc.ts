@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, TradeFrame, TradeEvent, SaveItemStack } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -120,4 +120,36 @@ export async function vendorBuy(entityId: string, itemId: string, count: number)
 
 export async function vendorSell(entityId: string, itemId: string, count: number): Promise<number> {
   return invoke<number>('vendor_sell', { entityId, itemId, count });
+}
+
+// ── Trade ───────────────────────────────────────────────────────────────
+
+export async function tradeInitiate(peerHash: string): Promise<void> {
+  return invoke('trade_initiate', { peerHash });
+}
+export async function tradeAccept(): Promise<void> {
+  return invoke('trade_accept');
+}
+export async function tradeDecline(): Promise<void> {
+  return invoke('trade_decline');
+}
+export async function tradeUpdateOffer(items: SaveItemStack[], currants: number): Promise<void> {
+  return invoke('trade_update_offer', { items, currants });
+}
+export async function tradeLock(): Promise<void> {
+  return invoke('trade_lock');
+}
+export async function tradeUnlock(): Promise<void> {
+  return invoke('trade_unlock');
+}
+export async function tradeCancel(): Promise<void> {
+  return invoke('trade_cancel');
+}
+export async function tradeGetState(): Promise<TradeFrame | null> {
+  return invoke<TradeFrame | null>('trade_get_state');
+}
+export function onTradeEvent(callback: (event: TradeEvent) => void): Promise<UnlistenFn> {
+  return listen<TradeEvent>('trade_event', (event) => {
+    callback(event.payload);
+  });
 }

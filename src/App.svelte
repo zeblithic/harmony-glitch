@@ -13,8 +13,10 @@
   import ShopPanel from './lib/components/ShopPanel.svelte';
   import CurrantHud from './lib/components/CurrantHud.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest } from './lib/types';
+  import TradePanel from './lib/components/TradePanel.svelte';
+  import TradePrompt from './lib/components/TradePrompt.svelte';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
@@ -49,6 +51,10 @@
   let avatarManifest = $state<AvatarManifest | null>(null);
   let gameRenderer = $state<GameRenderer | null>(null);
   let needsAvatarSetup = $state(false);
+  let tradeOpen = $state(false);
+  let tradeFrame = $state<TradeFrame | null>(null);
+  let tradeRequestVisible = $state(false);
+  let tradeRequestName = $state('');
 
   onMount(async () => {
     try {
@@ -94,6 +100,43 @@
     } catch (e) {
       console.error('Failed to load avatar manifest:', e);
     }
+
+    // Listen for trade events
+    onTradeEvent((event: TradeEvent) => {
+      switch (event.type) {
+        case 'request':
+          tradeRequestName = event.initiatorName;
+          tradeRequestVisible = true;
+          break;
+        case 'accepted':
+          tradeRequestVisible = false;
+          tradeOpen = true;
+          inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
+          tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
+          break;
+        case 'declined':
+          tradeRequestVisible = false;
+          tradeOpen = false;
+          tradeFrame = null;
+          break;
+        case 'updated':
+          tradeFrame = event.tradeFrame;
+          break;
+        case 'locked':
+        case 'unlocked':
+          tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
+          break;
+        case 'completed':
+          tradeOpen = false;
+          tradeFrame = null;
+          break;
+        case 'cancelled':
+          tradeOpen = false;
+          tradeFrame = null;
+          tradeRequestVisible = false;
+          break;
+      }
+    });
 
     // Restore saved kit selection
     try {
@@ -375,6 +418,18 @@
     jukeboxInfo = null;
     jukeboxCloseFrames = 0;
   }
+  // T key: initiate trade with nearest remote player
+  if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !shopOpen && latestFrame) {
+    const nearest = latestFrame.remotePlayers?.[0];
+    if (nearest) {
+      e.preventDefault();
+      tradeInitiate(nearest.addressHash).then(() => {
+        tradeOpen = true;
+        inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
+        tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
+      }).catch(console.error);
+    }
+  }
 }} />
 
 <main>
@@ -396,7 +451,7 @@
       />
     </div>
   {:else if currentStreet}
-    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen || avatarEditorOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
+    <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen || avatarEditorOpen || tradeOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
@@ -446,6 +501,78 @@
         } catch (e) {
           console.error('Sell failed:', e);
         }
+      }}
+    />
+    <TradePrompt
+      initiatorName={tradeRequestName}
+      visible={tradeRequestVisible}
+      onAccept={async () => {
+        try {
+          await tradeAccept();
+        } catch (e) {
+          console.error('Trade accept failed:', e);
+          tradeRequestVisible = false;
+        }
+      }}
+      onDecline={async () => {
+        try {
+          await tradeDecline();
+        } catch (e) {
+          console.error('Trade decline failed:', e);
+        }
+        tradeRequestVisible = false;
+      }}
+    />
+    <TradePanel
+      {tradeFrame}
+      inventory={latestFrame?.inventory ?? null}
+      currants={latestFrame?.currants ?? 0}
+      visible={tradeOpen && tradeFrame !== null}
+      onClose={() => { tradeOpen = false; tradeFrame = null; }}
+      onAddItem={async (itemId, count) => {
+        if (!tradeFrame) return;
+        const items = [...tradeFrame.localOffer.items];
+        const existing = items.find(i => i.itemId === itemId);
+        if (existing) {
+          existing.count += count;
+        } else {
+          items.push({ itemId, name: itemId, icon: itemId, count });
+        }
+        try {
+          await tradeUpdateOffer(items.map(i => ({ itemId: i.itemId, count: i.count })), tradeFrame.localOffer.currants);
+          tradeFrame = await tradeGetState();
+        } catch (e) { console.error('Trade update failed:', e); }
+      }}
+      onRemoveItem={async (itemId, count) => {
+        if (!tradeFrame) return;
+        const items = tradeFrame.localOffer.items
+          .map(i => i.itemId === itemId ? { ...i, count: i.count - count } : i)
+          .filter(i => i.count > 0);
+        try {
+          await tradeUpdateOffer(items.map(i => ({ itemId: i.itemId, count: i.count })), tradeFrame.localOffer.currants);
+          tradeFrame = await tradeGetState();
+        } catch (e) { console.error('Trade update failed:', e); }
+      }}
+      onSetCurrants={async (amount) => {
+        if (!tradeFrame) return;
+        try {
+          await tradeUpdateOffer(
+            tradeFrame.localOffer.items.map(i => ({ itemId: i.itemId, count: i.count })),
+            amount
+          );
+          tradeFrame = await tradeGetState();
+        } catch (e) { console.error('Trade update failed:', e); }
+      }}
+      onLock={async () => {
+        try { await tradeLock(); } catch (e) { console.error('Trade lock failed:', e); }
+      }}
+      onUnlock={async () => {
+        try { await tradeUnlock(); } catch (e) { console.error('Trade unlock failed:', e); }
+      }}
+      onCancel={async () => {
+        try { await tradeCancel(); } catch (e) { console.error('Trade cancel failed:', e); }
+        tradeOpen = false;
+        tradeFrame = null;
       }}
     />
     <CurrantHud currants={latestFrame?.currants ?? 0} />

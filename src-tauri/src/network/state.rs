@@ -28,6 +28,7 @@ use crate::avatar::types::AvatarAppearance;
 use crate::engine::state::RemotePlayerFrame;
 use crate::network::registry::RemotePlayerRegistry;
 use crate::network::types::{ChatMessage, NetMessage, PlayerNetState, PresenceEvent};
+use crate::trade::types::TradeMessage;
 
 // ── Constants ────────────────────────────────────────────────────────────
 
@@ -83,6 +84,8 @@ pub enum NetworkAction {
         address_hash: [u8; 16],
         state: PlayerNetState,
     },
+    /// A trade protocol message arrived from a remote player.
+    TradeMessageReceived(TradeMessage),
 }
 
 /// Tracks a single peer's connection lifecycle.
@@ -347,6 +350,25 @@ impl NetworkState {
         self.publish_to_all_peers(&payload, PubTopic::State, rng)
     }
 
+    /// Send a trade protocol message to all active peers (filtered broadcast).
+    pub fn send_trade_message(
+        &mut self,
+        msg: &TradeMessage,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let net_msg = NetMessage::Trade(msg.clone());
+        let payload = match serde_json::to_vec(&net_msg) {
+            Ok(p) => p,
+            Err(_) => return Vec::new(),
+        };
+        self.publish_to_all_peers(&payload, PubTopic::Chat, rng)
+    }
+
+    /// Look up a peer's display name by address hash.
+    pub fn peer_display_name(&self, address_hash: &[u8; 16]) -> Option<String> {
+        self.registry.peer_display_name(address_hash)
+    }
+
     /// Send a chat message to all active peers.
     /// Text is truncated to 200 UTF-8 bytes to stay within the Reticulum
     /// 500-byte MTU (worst case: 500 - 35 header - 33 Zenoh = 432 payload).
@@ -469,6 +491,11 @@ impl NetworkState {
     /// peer counting is wired up (Task 8).
     pub fn peer_count(&self) -> usize {
         self.registry.count()
+    }
+
+    /// Our 16-byte address hash (public identity).
+    pub fn our_address_hash(&self) -> [u8; 16] {
+        self.public_identity.address_hash
     }
 
     /// The current street name, if any.
@@ -1602,6 +1629,9 @@ impl NetworkState {
                             }
                             NetMessage::AvatarUpdate(avatar) => {
                                 self.registry.update_avatar(addr, *avatar);
+                            }
+                            NetMessage::Trade(trade_msg) => {
+                                out.push(NetworkAction::TradeMessageReceived(trade_msg));
                             }
                         }
                     }

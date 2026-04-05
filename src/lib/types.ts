@@ -329,6 +329,39 @@ export interface SellableItem {
   sellPrice: number;
 }
 
+export interface TradeFrame {
+  tradeId: number;
+  phase: 'pending' | 'negotiating' | 'lockedLocal' | 'lockedRemote' | 'executing' | 'completed' | 'cancelled';
+  peerName: string;
+  localOffer: TradeOfferFrame;
+  remoteOffer: TradeOfferFrame;
+  localLocked: boolean;
+  remoteLocked: boolean;
+}
+
+export interface TradeOfferFrame {
+  items: TradeItemFrame[];
+  currants: number;
+}
+
+export interface TradeItemFrame {
+  itemId: string;
+  name: string;
+  icon: string;
+  count: number;
+}
+
+export type TradeEvent =
+  | { type: 'request'; tradeId: number; initiatorHash: string; initiatorName: string }
+  | { type: 'accepted' }
+  | { type: 'declined' }
+  | { type: 'updated'; tradeFrame: TradeFrame }
+  | { type: 'locked'; who: 'local' | 'remote' }
+  | { type: 'unlocked'; who: 'local' | 'remote' }
+  | { type: 'completed' }
+  | { type: 'cancelled'; reason: string }
+  | { type: 'error'; message: string };
+
 export interface AvatarManifestItem {
   id: string;
   name: string;
