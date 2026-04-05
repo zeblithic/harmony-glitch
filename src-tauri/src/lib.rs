@@ -1151,13 +1151,20 @@ fn game_loop(app: AppHandle) {
         {
             let trade = app.state::<TradeWrapper>();
             let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(cancel_msg) = trade_mgr.tick(now_secs) {
-                drop(trade_mgr);
+            let tick_result = trade_mgr.tick(now_secs);
+            drop(trade_mgr);
+            if let Some(cancel_msg) = tick_result.cancel_msg {
                 let net = app.state::<NetworkWrapper>();
                 let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
                 let actions = ns.send_trade_message(&cancel_msg, &mut rng);
                 drop(ns);
                 execute_network_actions(&app, actions);
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "cancelled", "reason": "timeout"}),
+                );
+            }
+            if tick_result.pending_expired {
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "cancelled", "reason": "timeout"}),

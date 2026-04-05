@@ -351,8 +351,9 @@ impl TradeManager {
             if remote_hash == terms_hash {
                 session.phase = TradePhase::Executing;
             } else {
-                // Hash mismatch — peer locked with different terms.
-                // Stay in LockedLocal; peer needs to re-lock after seeing our offer.
+                // Hash mismatch — peer's lock was against stale terms.
+                // Clear their stale hash so UI doesn't show them as locked.
+                session.remote_terms_hash = None;
                 session.phase = TradePhase::LockedLocal;
             }
         } else {
@@ -417,11 +418,11 @@ impl TradeManager {
                 session.phase = TradePhase::Executing;
                 return Ok(true);
             }
+            // Hash mismatch — peer locked against different terms.
+            // Auto-unlock our side so the user can re-review and re-lock.
+            session.local_terms_hash = None;
         }
-        // We haven't locked yet, or hashes don't match.
-        if session.local_terms_hash.is_none() {
-            session.phase = TradePhase::LockedRemote;
-        }
+        session.phase = TradePhase::LockedRemote;
         Ok(false)
     }
 
@@ -575,20 +576,41 @@ impl TradeManager {
 
     // ── Tick ────────────────────────────────────────────────────────────
 
-    /// Check for timeout. Returns Cancel message if the trade timed out.
-    pub fn tick(&mut self, now: f64) -> Option<TradeMessage> {
-        if let Some(ref session) = self.active_trade {
-            if now - session.last_activity >= TRADE_TIMEOUT_SECS {
-                return self.cancel_trade();
-            }
+    /// Check for timeouts. Returns cancel message (active trade) and/or
+    /// pending-expired flag so the game loop can notify the frontend.
+    pub fn tick(&mut self, now: f64) -> TickResult {
+        let cancel_msg = if self
+            .active_trade
+            .as_ref()
+            .is_some_and(|s| now - s.last_activity >= TRADE_TIMEOUT_SECS)
+        {
+            self.cancel_trade()
+        } else {
+            None
+        };
+        let pending_expired = if self
+            .pending_request
+            .as_ref()
+            .is_some_and(|s| now - s.last_activity >= TRADE_TIMEOUT_SECS)
+        {
+            self.pending_request = None;
+            true
+        } else {
+            false
+        };
+        TickResult {
+            cancel_msg,
+            pending_expired,
         }
-        if let Some(ref session) = self.pending_request {
-            if now - session.last_activity >= TRADE_TIMEOUT_SECS {
-                self.pending_request = None;
-            }
-        }
-        None
     }
+}
+
+/// Result of a trade manager tick.
+pub struct TickResult {
+    /// Cancel message to send if the active trade timed out.
+    pub cancel_msg: Option<TradeMessage>,
+    /// Whether a pending inbound request expired (frontend should dismiss prompt).
+    pub pending_expired: bool,
 }
 
 fn offer_to_frame(offer: &TradeOffer, item_defs: &ItemDefs) -> TradeOfferFrame {
@@ -852,8 +874,9 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        let cancel = alice_mgr.tick(61.0);
-        assert!(cancel.is_some());
+        let result = alice_mgr.tick(61.0);
+        assert!(result.cancel_msg.is_some());
+        assert!(!result.pending_expired);
         assert!(!alice_mgr.has_active_trade());
     }
 
@@ -863,9 +886,30 @@ mod tests {
         alice_mgr
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
-        let cancel = alice_mgr.tick(59.0);
-        assert!(cancel.is_none());
+        let result = alice_mgr.tick(59.0);
+        assert!(result.cancel_msg.is_none());
+        assert!(!result.pending_expired);
         assert!(alice_mgr.has_active_trade());
+    }
+
+    #[test]
+    fn pending_request_timeout_signals_expiry() {
+        let mut bob_mgr = TradeManager::new(BOB);
+        bob_mgr
+            .receive_request(1, ALICE, "Alice".into(), 0.0)
+            .unwrap();
+        assert!(bob_mgr.pending_request().is_some());
+
+        // Before timeout — no expiry.
+        let result = bob_mgr.tick(59.0);
+        assert!(!result.pending_expired);
+        assert!(bob_mgr.pending_request().is_some());
+
+        // After timeout — expiry signalled and pending cleared.
+        let result = bob_mgr.tick(61.0);
+        assert!(result.pending_expired);
+        assert!(result.cancel_msg.is_none()); // no network message needed
+        assert!(bob_mgr.pending_request().is_none());
     }
 
     // ── Double-initiate ─────────────────────────────────────────────────
@@ -911,7 +955,8 @@ mod tests {
     // ── Terms hash mismatch ─────────────────────────────────────────────
 
     #[test]
-    fn terms_hash_mismatch_does_not_execute() {
+    fn terms_hash_mismatch_auto_unlocks_in_receive_remote_lock() {
+        let defs = make_item_defs();
         let mut alice_mgr = TradeManager::new(ALICE);
         let mut bob_mgr = TradeManager::new(BOB);
 
@@ -948,6 +993,59 @@ mod tests {
             .receive_remote_lock(1, [0xFF; 16], 4.0)
             .unwrap();
         assert!(!both_locked, "Should not execute with mismatched hash");
+
+        // Alice should be auto-unlocked and phase set to LockedRemote.
+        let frame = alice_mgr.trade_frame(&defs).unwrap();
+        assert_eq!(frame.phase, "lockedRemote");
+        assert!(!frame.local_locked, "Local should be auto-unlocked on hash mismatch");
+        assert!(frame.remote_locked, "Remote should still be shown as locked");
+    }
+
+    #[test]
+    fn terms_hash_mismatch_in_lock_trade_clears_stale_remote() {
+        let defs = make_item_defs();
+        let mut alice_mgr = TradeManager::new(ALICE);
+        let mut bob_mgr = TradeManager::new(BOB);
+
+        // Set up and enter negotiation.
+        alice_mgr
+            .initiate_trade(1, BOB, "Bob".into(), 0.0)
+            .unwrap();
+        bob_mgr
+            .receive_request(1, ALICE, "Alice".into(), 0.0)
+            .unwrap();
+        bob_mgr.accept_trade(1.0).unwrap();
+        alice_mgr.receive_accept(1, 1.0).unwrap();
+
+        // Alice offers cherries, Bob receives.
+        alice_mgr
+            .update_offer(
+                TradeOffer {
+                    items: vec![ItemStack {
+                        item_id: "cherry".into(),
+                        count: 5,
+                    }],
+                    currants: 0,
+                },
+                2.0,
+            )
+            .unwrap();
+
+        // Bob locks with a stale hash (simulating race: Bob locked before
+        // receiving Alice's offer update).
+        alice_mgr
+            .receive_remote_lock(1, [0xFF; 16], 3.0)
+            .unwrap();
+
+        // Alice locks — her hash won't match Bob's stale hash.
+        let alice_inv = make_inventory(&[("cherry", 5)]);
+        alice_mgr.lock_trade(&alice_inv, 100, 4.0).unwrap();
+
+        // Verify: Alice is locked, Bob's stale lock is cleared.
+        let frame = alice_mgr.trade_frame(&defs).unwrap();
+        assert_eq!(frame.phase, "lockedLocal");
+        assert!(frame.local_locked, "Alice should be locked");
+        assert!(!frame.remote_locked, "Bob's stale lock should be cleared");
     }
 
     // ── Execution validation ────────────────────────────────────────────
