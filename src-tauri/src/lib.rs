@@ -1003,12 +1003,14 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
     // the two operations.
     let trade = app.state::<TradeWrapper>();
     let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-    let lock_msg = mgr.lock_trade(now_secs(&app))?;
+    let lock_msg = {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        mgr.lock_trade(&state.inventory, state.currants, now_secs(&app))?
+    };
 
     // Check if both are now locked (lock_trade may have set Executing).
-    let is_executing = mgr
-        .trade_frame(&make_empty_item_defs())
-        .is_some_and(|f| f.phase == "executing");
+    let is_executing = mgr.is_executing();
 
     if is_executing {
         let state_wrapper = app.state::<GameStateWrapper>();
@@ -1055,10 +1057,6 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
         );
     }
     Ok(())
-}
-
-fn make_empty_item_defs() -> item::types::ItemDefs {
-    std::collections::HashMap::new()
 }
 
 #[tauri::command]

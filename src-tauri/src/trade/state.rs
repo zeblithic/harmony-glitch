@@ -34,6 +34,12 @@ impl TradeManager {
         self.active_trade.is_some()
     }
 
+    pub fn is_executing(&self) -> bool {
+        self.active_trade
+            .as_ref()
+            .is_some_and(|t| t.phase == TradePhase::Executing)
+    }
+
     pub fn pending_request(&self) -> Option<&TradeSession> {
         self.pending_request.as_ref()
     }
@@ -298,16 +304,39 @@ impl TradeManager {
 
     // ── Locking ─────────────────────────────────────────────────────────
 
-    /// Lock our side of the trade. Returns the Lock message to send.
-    pub fn lock_trade(&mut self, now: f64) -> Result<TradeMessage, String> {
+    /// Lock our side of the trade. Pre-validates that we can fulfill
+    /// the offer before locking, minimizing the execution failure window.
+    pub fn lock_trade(
+        &mut self,
+        inventory: &Inventory,
+        currants: u64,
+        now: f64,
+    ) -> Result<TradeMessage, String> {
         let session = self
             .active_trade
-            .as_mut()
+            .as_ref()
             .ok_or("No active trade")?;
         match session.phase {
             TradePhase::Negotiating | TradePhase::LockedRemote => {}
             _ => return Err("Cannot lock in current phase".into()),
         }
+        // Pre-validate: refuse to lock if we can't fulfill the offer.
+        for item in &session.local_offer.items {
+            let have = inventory.count_item(&item.item_id);
+            if have < item.count {
+                return Err(format!(
+                    "Cannot lock: insufficient {} (need {}, have {})",
+                    item.item_id, item.count, have
+                ));
+            }
+        }
+        if currants < session.local_offer.currants {
+            return Err(format!(
+                "Cannot lock: insufficient currants (need {}, have {})",
+                session.local_offer.currants, currants
+            ));
+        }
+        let session = self.active_trade.as_mut().unwrap();
         let terms_hash = compute_terms_hash(
             &session.local_offer,
             &session.remote_offer,
@@ -706,8 +735,9 @@ mod tests {
                 .unwrap();
         }
 
-        // Alice locks.
-        let lock_msg = alice_mgr.lock_trade(4.0).unwrap();
+        // Alice locks (pre-validates she has the cherries).
+        let alice_inv = make_inventory(&[("cherry", 5)]);
+        let lock_msg = alice_mgr.lock_trade(&alice_inv, 100, 4.0).unwrap();
         if let TradeMessage::Lock {
             trade_id,
             terms_hash,
@@ -720,8 +750,9 @@ mod tests {
             assert!(!both_locked);
         }
 
-        // Bob locks.
-        let lock_msg = bob_mgr.lock_trade(5.0).unwrap();
+        // Bob locks (pre-validates he has the grain).
+        let bob_inv = make_inventory(&[("grain", 3)]);
+        let lock_msg = bob_mgr.lock_trade(&bob_inv, 50, 5.0).unwrap();
         if let TradeMessage::Lock {
             trade_id,
             terms_hash,
@@ -860,7 +891,8 @@ mod tests {
             .initiate_trade(1, BOB, "Bob".into(), 0.0)
             .unwrap();
         // Still in PendingResponse, can't lock.
-        let err = alice_mgr.lock_trade(1.0).unwrap_err();
+        let empty = make_inventory(&[]);
+        let err = alice_mgr.lock_trade(&empty, 0, 1.0).unwrap_err();
         assert_eq!(err, "Cannot lock in current phase");
     }
 
@@ -908,7 +940,8 @@ mod tests {
             .unwrap();
 
         // Alice locks.
-        alice_mgr.lock_trade(3.0).unwrap();
+        let alice_inv = make_inventory(&[("cherry", 5)]);
+        alice_mgr.lock_trade(&alice_inv, 100, 3.0).unwrap();
 
         // Bob sends a lock with a WRONG terms hash (simulating offer mismatch).
         let both_locked = alice_mgr
@@ -1030,7 +1063,8 @@ mod tests {
         mgr.receive_accept(1, 1.0).unwrap();
 
         mgr.update_offer(TradeOffer::empty(), 2.0).unwrap();
-        mgr.lock_trade(3.0).unwrap();
+        let empty = make_inventory(&[]);
+        mgr.lock_trade(&empty, 0, 3.0).unwrap();
         assert_eq!(
             mgr.active_trade.as_ref().unwrap().phase,
             TradePhase::LockedLocal
