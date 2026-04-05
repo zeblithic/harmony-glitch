@@ -77,7 +77,8 @@ describe('AvatarEditor', () => {
     });
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeDefined();
-    expect(dialog.getAttribute('aria-label')).toBe('Avatar Editor');
+    expect(dialog.getAttribute('aria-labelledby')).toBe('avatar-editor-title');
+    expect(screen.getByText('Avatar Editor')).toBeDefined();
   });
 
   it('renders 4 top-level tabs', () => {
@@ -158,5 +159,41 @@ describe('AvatarEditor', () => {
       props: { visible: true, manifest: testManifest, renderer: null },
     });
     expect(screen.getByRole('dialog')).toBeDefined();
+  });
+
+  it('shows first-run UI when firstRun is true', async () => {
+    render(AvatarEditor, {
+      props: { visible: true, firstRun: true, manifest: testManifest, renderer: null },
+    });
+    const heading = screen.getByText('Customize Your Glitchen');
+    expect(heading).toBeDefined();
+    expect(heading.id).toBe('avatar-editor-title');
+    expect(screen.getByText('Continue')).toBeDefined();
+    expect(screen.getByText('Skip')).toBeDefined();
+    // No close button in first-run mode
+    expect(screen.queryByLabelText('Close avatar editor')).toBeNull();
+  });
+
+  it('skip advances even before avatar loads in first-run mode', async () => {
+    const { getAvatar } = await import('../ipc');
+    // Make getAvatar hang forever to simulate pending load
+    (getAvatar as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    const onClose = vi.fn();
+    render(AvatarEditor, {
+      props: { visible: true, firstRun: true, manifest: testManifest, renderer: null, onClose },
+    });
+    // pendingAppearance is null because getAvatar hasn't resolved
+    await fireEvent.click(screen.getByText('Skip'));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows standard UI when firstRun is false', () => {
+    render(AvatarEditor, {
+      props: { visible: true, firstRun: false, manifest: testManifest, renderer: makeRenderer() as any },
+    });
+    expect(screen.queryByText('Customize Your Glitchen')).toBeNull();
+    expect(screen.getByText('Save')).toBeDefined();
+    expect(screen.getByText('Cancel')).toBeDefined();
+    expect(screen.getByLabelText('Close avatar editor')).toBeDefined();
   });
 });

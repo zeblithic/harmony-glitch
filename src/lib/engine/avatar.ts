@@ -89,6 +89,9 @@ const HAIR_TINT_SLOTS = new Set(['hair']);
  */
 const DISPLAY_SCALE = 90 / 1013;
 
+/** Fade-in duration for newly loaded layers (in seconds at 60fps). */
+const FADE_IN_RATE = 1 / 10; // ~10 frames = ~167ms at 60fps
+
 /**
  * Layered avatar compositor for PixiJS.
  *
@@ -106,6 +109,7 @@ export class AvatarCompositor {
   private appearance: AvatarAppearance | null = null;
   private currentAnimation: AnimationState | null = null;
   private manifest: AvatarManifest | null = null;
+  private fadingIn: Set<string> = new Set();
 
   constructor() {
     this.container = new Container();
@@ -177,9 +181,11 @@ export class AvatarCompositor {
             loop: true,
           });
           sprite.anchor.set(0.5, 1);
+          sprite.alpha = 0;
           sprite.play();
 
           this.layers.set(key, sprite);
+          this.fadingIn.add(key);
         } catch {
           // Sheet not found — skip this layer
         }
@@ -195,6 +201,16 @@ export class AvatarCompositor {
    */
   updateAnimation(animation: AnimationState, facing: Direction): void {
     this.container.scale.x = (facing === 'right' ? 1 : -1) * DISPLAY_SCALE;
+
+    // Tick fade-in for newly loaded layers
+    if (this.fadingIn.size > 0) {
+      for (const key of this.fadingIn) {
+        const sprite = this.layers.get(key);
+        if (!sprite) { this.fadingIn.delete(key); continue; }
+        sprite.alpha = Math.min(1, sprite.alpha + FADE_IN_RATE);
+        if (sprite.alpha >= 1) this.fadingIn.delete(key);
+      }
+    }
 
     if (animation === this.currentAnimation) return;
     this.currentAnimation = animation;
@@ -219,6 +235,7 @@ export class AvatarCompositor {
     }
     this.layers.clear();
     this.sheets.clear();
+    this.fadingIn.clear();
     this.appearance = null;
     this.currentAnimation = null;
   }
@@ -293,6 +310,7 @@ export class AvatarCompositor {
         this.layers.delete(key);
       }
       this.sheets.delete(key);
+      this.fadingIn.delete(key);
     }
   }
 

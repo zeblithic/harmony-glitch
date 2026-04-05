@@ -48,6 +48,7 @@
   let avatarEditorOpen = $state(false);
   let avatarManifest = $state<AvatarManifest | null>(null);
   let gameRenderer = $state<GameRenderer | null>(null);
+  let needsAvatarSetup = $state(false);
 
   onMount(async () => {
     try {
@@ -383,7 +384,17 @@
   {#if checkingIdentity || resuming}
     <!-- visual placeholder while loading -->
   {:else if !identityReady}
-    <IdentitySetup onComplete={() => { identityReady = true; }} />
+    <IdentitySetup onComplete={() => { identityReady = true; needsAvatarSetup = true; }} />
+  {:else if needsAvatarSetup}
+    <div class="first-run-avatar">
+      <AvatarEditor
+        visible={true}
+        firstRun={true}
+        manifest={avatarManifest}
+        renderer={null}
+        onClose={() => { needsAvatarSetup = false; }}
+      />
+    </div>
   {:else if currentStreet}
     <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen || avatarEditorOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
@@ -501,6 +512,13 @@
   .back-btn:focus-visible {
     outline: 2px solid #5865f2;
     outline-offset: 2px;
+  }
+
+  .first-run-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
   }
 
   :global(.sr-only) {
