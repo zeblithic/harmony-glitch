@@ -12,6 +12,7 @@
   import JukeboxPanel from './lib/components/JukeboxPanel.svelte';
   import ShopPanel from './lib/components/ShopPanel.svelte';
   import CurrantHud from './lib/components/CurrantHud.svelte';
+  import EnergyHud from './lib/components/EnergyHud.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest } from './lib/types';
@@ -411,6 +412,8 @@
       {recipes}
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
+      energy={latestFrame?.energy ?? 600}
+      maxEnergy={latestFrame?.maxEnergy ?? 600}
     />
     <ShopPanel
       {storeState}
@@ -438,6 +441,7 @@
       }}
     />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
+    <EnergyHud energy={latestFrame?.energy ?? 600} maxEnergy={latestFrame?.maxEnergy ?? 600} />
     <AvatarEditor
       visible={avatarEditorOpen}
       manifest={avatarManifest}
