@@ -548,6 +548,7 @@ impl GameState {
                         rng,
                         &mut self.entity_states,
                         self.game_time,
+                        &mut self.energy,
                     );
 
                     // Apply results — assign unique IDs to feedback
