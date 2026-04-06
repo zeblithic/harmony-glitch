@@ -69,7 +69,10 @@ impl TrustStore {
         pt.opinion.update_positive(TRADE_SUCCESS_WEIGHT);
     }
 
-    /// Record a failed or cancelled trade with a peer.
+    /// Record a provably dishonest trade with a peer (e.g. terms hash
+    /// manipulation). Not wired for normal cancellations/timeouts — those
+    /// are legitimate cooperative behavior, not trust violations.
+    /// ZEB-22 (adaptive validation) will wire this for specific abuse patterns.
     pub fn record_trade_failure(&mut self, hash: &[u8; 16]) {
         let pt = self.get_or_insert(hash);
         pt.failed_trades += 1;
