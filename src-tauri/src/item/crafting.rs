@@ -68,6 +68,70 @@ pub fn craft(
     Ok(outputs)
 }
 
+/// Begin a timed craft: validate everything, consume inputs (not outputs),
+/// and return the pending outputs for deferred delivery by the tick loop.
+pub fn start_craft(
+    recipe: &RecipeDef,
+    inventory: &mut Inventory,
+    item_defs: &ItemDefs,
+    energy: f64,
+) -> Result<Vec<CraftOutput>, CraftError> {
+    // 1. Energy check
+    if energy < recipe.energy_cost {
+        return Err(CraftError::InsufficientEnergy);
+    }
+
+    // 2. Validate tools
+    for tool in &recipe.tools {
+        let have = inventory.count_item(&tool.item);
+        if have < tool.count {
+            return Err(CraftError::MissingTool {
+                item: tool.item.clone(),
+            });
+        }
+    }
+
+    // 3. Validate inputs
+    for input in &recipe.inputs {
+        let have = inventory.count_item(&input.item);
+        if have < input.count {
+            return Err(CraftError::MissingInput {
+                item: input.item.clone(),
+                need: input.count,
+                have,
+            });
+        }
+    }
+
+    // 4. Validate output room
+    for output in &recipe.outputs {
+        if !inventory.has_room_for_count(&output.item, output.count, item_defs) {
+            return Err(CraftError::NoRoom);
+        }
+    }
+
+    // 5. Consume inputs (tools NOT consumed, outputs NOT added)
+    for input in &recipe.inputs {
+        inventory.remove_item(&input.item, input.count);
+    }
+
+    // 6. Build pending outputs for deferred delivery
+    let mut outputs = Vec::new();
+    for output in &recipe.outputs {
+        let name = item_defs
+            .get(&output.item)
+            .map(|d| d.name.clone())
+            .unwrap_or_else(|| output.item.clone());
+        outputs.push(CraftOutput {
+            item_id: output.item.clone(),
+            name,
+            count: output.count,
+        });
+    }
+
+    Ok(outputs)
+}
+
 /// Check whether a recipe can be crafted with the current inventory.
 /// Used as a reference implementation — the frontend mirrors this in TypeScript.
 pub fn check_recipe_availability(
@@ -162,6 +226,7 @@ mod tests {
                 count: 1,
             }],
             duration_secs: 10.0,
+            energy_cost: 15.0,
             category: "food".into(),
         }
     }
@@ -181,6 +246,7 @@ mod tests {
                 count: 2,
             }],
             duration_secs: 4.0,
+            energy_cost: 6.0,
             category: "material".into(),
         }
     }
@@ -308,5 +374,63 @@ mod tests {
         let cherry_status = avail.inputs.iter().find(|i| i.item == "cherry").unwrap();
         assert_eq!(cherry_status.have, 2);
         assert_eq!(cherry_status.need, 5);
+    }
+
+    #[test]
+    fn start_craft_consumes_inputs_not_outputs() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(16);
+        inv.add("cherry", 10, &defs);
+        inv.add("grain", 5, &defs);
+        inv.add("pot", 1, &defs);
+
+        let result = start_craft(&cherry_pie_recipe(), &mut inv, &defs, 600.0).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].item_id, "cherry_pie");
+        assert_eq!(result[0].count, 1);
+        // Inputs consumed
+        assert_eq!(inv.count_item("cherry"), 5);
+        assert_eq!(inv.count_item("grain"), 3);
+        // Tool kept
+        assert_eq!(inv.count_item("pot"), 1);
+        // Output NOT in inventory (deferred)
+        assert_eq!(inv.count_item("cherry_pie"), 0);
+    }
+
+    #[test]
+    fn start_craft_insufficient_energy() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(16);
+        inv.add("cherry", 10, &defs);
+        inv.add("grain", 5, &defs);
+        inv.add("pot", 1, &defs);
+
+        let err = start_craft(&cherry_pie_recipe(), &mut inv, &defs, 10.0).unwrap_err();
+        assert!(matches!(err, CraftError::InsufficientEnergy));
+        // Nothing consumed
+        assert_eq!(inv.count_item("cherry"), 10);
+        assert_eq!(inv.count_item("grain"), 5);
+    }
+
+    #[test]
+    fn start_craft_missing_input() {
+        let defs = test_defs();
+        let mut inv = Inventory::new(16);
+        inv.add("cherry", 2, &defs);
+        inv.add("grain", 5, &defs);
+        inv.add("pot", 1, &defs);
+
+        let err = start_craft(&cherry_pie_recipe(), &mut inv, &defs, 600.0).unwrap_err();
+        match err {
+            CraftError::MissingInput { item, need, have } => {
+                assert_eq!(item, "cherry");
+                assert_eq!(need, 5);
+                assert_eq!(have, 2);
+            }
+            _ => panic!("Expected MissingInput, got {:?}", err),
+        }
+        // Nothing consumed
+        assert_eq!(inv.count_item("cherry"), 2);
     }
 }

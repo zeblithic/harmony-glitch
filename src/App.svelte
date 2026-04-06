@@ -493,6 +493,7 @@
       onClose={() => { inventoryOpen = false; }}
       energy={latestFrame?.energy ?? 600}
       maxEnergy={latestFrame?.maxEnergy ?? 600}
+      activeCraft={latestFrame?.activeCraft ?? null}
     />
     <ShopPanel
       {storeState}

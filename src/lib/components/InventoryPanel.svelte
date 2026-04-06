@@ -1,15 +1,18 @@
 <script lang="ts">
-  import type { InventoryFrame, RecipeDef } from '../types';
+  import type { ActiveCraftFrame, InventoryFrame, RecipeDef } from '../types';
   import { dropItem, craftRecipe, eatItem } from '../ipc';
 
-  let { inventory, recipes = [], visible = false, onClose, energy = 0, maxEnergy = 600 }: {
+  let { inventory, recipes = [], visible = false, onClose, energy = 0, maxEnergy = 600, activeCraft = null }: {
     inventory: InventoryFrame | null;
     recipes?: RecipeDef[];
     visible?: boolean;
     onClose?: () => void;
     energy?: number;
     maxEnergy?: number;
+    activeCraft?: ActiveCraftFrame | null;
   } = $props();
+
+  let isCraftActive = $derived(activeCraft != null);
 
   let selectedSlot = $state<number | null>(null);
   let activeTab = $state<'items' | 'recipes'>('items');
@@ -62,6 +65,7 @@
 
   function isRecipeCraftable(recipe: RecipeDef): boolean {
     if (!hasRoomForOutput(recipe)) return false;
+    if (energy < recipe.energyCost) return false;
     for (const input of recipe.inputs) {
       if (countItem(input.item) < input.count) return false;
     }
@@ -394,15 +398,42 @@
               {/each}
             </div>
 
-            <button
-              type="button"
-              class="craft-btn"
-              disabled={!isRecipeCraftable(selectedRecipe) || isCrafting}
-              onclick={handleCraft}
-              onkeydown={handleSpaceKey}
-            >
-              Craft
-            </button>
+            {#if selectedRecipe.energyCost > 0}
+              <div class="ingredient-section">
+                <div class="ingredient-label">Energy cost:</div>
+                <div class="ingredient" class:sufficient={energy >= selectedRecipe.energyCost}>
+                  {selectedRecipe.energyCost} ({Math.floor(energy)} available)
+                </div>
+              </div>
+            {/if}
+
+            {#if isCraftActive}
+              <div class="craft-progress">
+                <div
+                  class="progress-bar"
+                  role="progressbar"
+                  aria-label="Crafting in progress"
+                  aria-valuenow={Math.round((activeCraft?.progress ?? 0) * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <div class="progress-fill" style="width: {(activeCraft?.progress ?? 0) * 100}%"></div>
+                </div>
+                <span class="progress-label">
+                  {Math.ceil(activeCraft?.remainingSecs ?? 0)}s
+                </span>
+              </div>
+            {:else}
+              <button
+                type="button"
+                class="craft-btn"
+                disabled={!isRecipeCraftable(selectedRecipe) || isCrafting || isCraftActive}
+                onclick={handleCraft}
+                onkeydown={handleSpaceKey}
+              >
+                Craft
+              </button>
+            {/if}
             {#if craftError}
               <div class="craft-error" role="alert">{craftError}</div>
             {/if}
@@ -579,6 +610,35 @@
   .craft-btn:hover:not(:disabled) { background: rgba(50, 100, 70, 0.9); }
   .craft-btn:focus-visible { outline: 2px solid #5865f2; outline-offset: -2px; }
   .craft-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .craft-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: #5865f2;
+    border-radius: 3px;
+    transition: width 0.3s linear;
+  }
+
+  .progress-label {
+    font-size: 11px;
+    color: #aaa;
+    min-width: 24px;
+    text-align: right;
+  }
 
   .craft-error, .eat-error {
     margin-top: 4px;
