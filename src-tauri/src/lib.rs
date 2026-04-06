@@ -211,10 +211,11 @@ fn set_avatar(appearance: AvatarAppearance, app: AppHandle) -> Result<AvatarAppe
 /// Locks GameStateWrapper internally — callers must NOT hold that lock.
 fn save_current_state(app: &AppHandle) {
     let state_wrapper = app.state::<GameStateWrapper>();
-    let state = match state_wrapper.0.lock() {
+    let mut state = match state_wrapper.0.lock() {
         Ok(s) => s,
         Err(_) => return,
     };
+    state.flush_active_craft();
     let save = match state.save_state() {
         Some(s) => s,
         None => return,
@@ -716,6 +717,7 @@ fn handle_trade_message(
                         Ok(complete_msg) => {
                             // Save state immediately after trade execution.
                             guard.last_trade_id = Some(trade_id);
+                            guard.flush_active_craft();
                             let saved = guard.save_state().is_some_and(|save| {
                                 let save_path = piw.data_dir.join("savegame.json");
                                 engine::state::write_save_state(&save_path, &save).is_ok()
@@ -1156,6 +1158,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
         match mgr.execute_trade(&mut state.inventory, &mut state.currants, &state.item_defs) {
             Ok(complete_msg) => {
                 guard.last_trade_id = Some(journal.trade_id);
+                guard.flush_active_craft();
                 let saved = guard.save_state().is_some_and(|save| {
                     let save_path = piw.data_dir.join("savegame.json");
                     engine::state::write_save_state(&save_path, &save).is_ok()

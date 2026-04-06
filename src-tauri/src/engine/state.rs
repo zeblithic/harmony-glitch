@@ -316,21 +316,41 @@ impl GameState {
                     let overflow =
                         self.inventory
                             .add(&output.item_id, output.count, &self.item_defs);
-                    if overflow > 0 {
-                        eprintln!(
-                            "[craft] output overflow: {} x{}",
-                            output.item_id, overflow
-                        );
+                    let delivered = output.count - overflow;
+                    if delivered > 0 {
+                        self.pickup_feedback.push(PickupFeedback {
+                            id: self.next_feedback_id,
+                            text: format!("+{} x{}", output.name, delivered),
+                            success: true,
+                            x: self.player.x,
+                            y: self.player.y,
+                            age_secs: 0.0,
+                        });
+                        self.next_feedback_id += 1;
                     }
-                    self.pickup_feedback.push(PickupFeedback {
-                        id: self.next_feedback_id,
-                        text: format!("+{} x{}", output.name, output.count),
-                        success: true,
-                        x: self.player.x,
-                        y: self.player.y,
-                        age_secs: 0.0,
-                    });
-                    self.next_feedback_id += 1;
+                    if overflow > 0 {
+                        // Spawn overflow as ground drop so the player can recover it
+                        self.world_items.push(WorldItem {
+                            id: format!("drop_{}", self.next_item_id),
+                            item_id: output.item_id.clone(),
+                            count: overflow,
+                            x: self.player.x,
+                            y: self.player.y,
+                        });
+                        self.next_item_id += 1;
+                        self.pickup_feedback.push(PickupFeedback {
+                            id: self.next_feedback_id,
+                            text: format!(
+                                "Inventory full — {} x{} dropped",
+                                output.name, overflow
+                            ),
+                            success: false,
+                            x: self.player.x,
+                            y: self.player.y,
+                            age_secs: 0.0,
+                        });
+                        self.next_feedback_id += 1;
+                    }
                 }
                 audio_events.push(AudioEvent::CraftSuccess {
                     recipe_id: craft.recipe_id,
@@ -785,6 +805,16 @@ impl GameState {
                 }
             }),
         })
+    }
+
+    /// Complete any in-progress craft immediately, delivering outputs to
+    /// inventory. Called before save to prevent item loss.
+    pub fn flush_active_craft(&mut self) {
+        if let Some(craft) = self.active_craft.take() {
+            for output in &craft.pending_outputs {
+                self.inventory.add(&output.item_id, output.count, &self.item_defs);
+            }
+        }
     }
 
     /// Extract the current save-worthy state. Returns None if no street loaded.

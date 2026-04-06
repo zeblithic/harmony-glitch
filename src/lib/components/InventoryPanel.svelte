@@ -407,7 +407,7 @@
               </div>
             {/if}
 
-            {#if isCraftActive}
+            {#if isCraftActive && activeCraft?.recipeId === selectedRecipe.id}
               <div class="craft-progress">
                 <div
                   class="progress-bar"
@@ -423,11 +423,15 @@
                   {Math.ceil(activeCraft?.remainingSecs ?? 0)}s
                 </span>
               </div>
+            {:else if isCraftActive}
+              <div class="craft-other-notice" role="status">
+                Crafting in progress ({Math.ceil(activeCraft?.remainingSecs ?? 0)}s)
+              </div>
             {:else}
               <button
                 type="button"
                 class="craft-btn"
-                disabled={!isRecipeCraftable(selectedRecipe) || isCrafting || isCraftActive}
+                disabled={!isRecipeCraftable(selectedRecipe) || isCrafting}
                 onclick={handleCraft}
                 onkeydown={handleSpaceKey}
               >
@@ -638,6 +642,13 @@
     color: #aaa;
     min-width: 24px;
     text-align: right;
+  }
+
+  .craft-other-notice {
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: #aaa;
+    text-align: center;
   }
 
   .craft-error, .eat-error {
