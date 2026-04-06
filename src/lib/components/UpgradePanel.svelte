@@ -17,10 +17,10 @@
   } = $props();
 
   const energyTankTiers = [
-    { cost: 100, maxEnergy: 650, delta: 50 },
-    { cost: 200, maxEnergy: 725, delta: 75 },
-    { cost: 400, maxEnergy: 825, delta: 100 },
-    { cost: 800, maxEnergy: 950, delta: 125 },
+    { cost: 100, delta: 50 },
+    { cost: 200, delta: 75 },
+    { cost: 400, delta: 100 },
+    { cost: 800, delta: 125 },
   ];
   const hagglingTiers = [
     { cost: 100, discount: 5 },
@@ -39,6 +39,7 @@
   let nextEnergyTier = $derived(energyTankMaxed ? null : energyTankTiers[upgrades.energyTankTier]);
   let nextHagglingTier = $derived(hagglingMaxed ? null : hagglingTiers[upgrades.hagglingTier]);
   let currentDiscount = $derived(upgrades.hagglingTier > 0 ? hagglingTiers[upgrades.hagglingTier - 1].discount : 0);
+  let nextEnergyTotal = $derived(nextEnergyTier ? maxEnergy + nextEnergyTier.delta : null);
 
   $effect(() => {
     if (visible && dialogEl && !dialogEl.open) {
@@ -50,14 +51,19 @@
     }
   });
 
+  function handleClose() {
+    purchaseError = null;
+    onClose?.();
+  }
+
   function handleCancel(e: Event) {
     e.preventDefault();
-    onClose?.();
+    handleClose();
   }
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === dialogEl) {
-      onClose?.();
+      handleClose();
     }
   }
 
@@ -66,7 +72,12 @@
     isPurchasing = true;
     purchaseError = null;
     try {
-      await buyUpgrade(upgradeId);
+      const result = await buyUpgrade(upgradeId);
+      // Apply immediately so button state reflects the deduction
+      // while awaiting the next render frame.
+      imagination = result.imagination;
+      upgrades = result.upgrades;
+      maxEnergy = result.maxEnergy;
     } catch (e) {
       purchaseError = String(e);
     } finally {
@@ -92,7 +103,7 @@
       <div class="panel-header">
         <span class="panel-title">✦ Imagination</span>
         <span class="panel-balance">{imagination} iMG</span>
-        <button type="button" class="close-btn" onclick={onClose} aria-label="Close upgrades">✕</button>
+        <button type="button" class="close-btn" onclick={handleClose} aria-label="Close upgrades">✕</button>
       </div>
 
       <div class="panel-body">
@@ -105,7 +116,7 @@
           {#if energyTankMaxed}
             <div class="max-badge">MAX</div>
           {:else if nextEnergyTier}
-            <div class="card-next">Next: +{nextEnergyTier.delta} energy ({nextEnergyTier.maxEnergy} total)</div>
+            <div class="card-next">Next: +{nextEnergyTier.delta} energy ({nextEnergyTotal} total)</div>
             <button
               type="button"
               class="buy-btn"
