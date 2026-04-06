@@ -93,6 +93,7 @@ pub fn evaluate_choice(
             quest_progress,
             quest_defs,
             inventory,
+            skill_progress,
             currants,
             imagination,
             item_defs,
@@ -172,11 +173,13 @@ pub fn check_condition(
 }
 
 /// Apply a dialogue effect, mutating game state. Returns feedback messages.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_effect(
     effect: &DialogueEffect,
     quest_progress: &mut QuestProgress,
     quest_defs: &QuestDefs,
     inventory: &mut Inventory,
+    skill_progress: &SkillProgress,
     currants: &mut u64,
     imagination: &mut u64,
     item_defs: &ItemDefs,
@@ -196,8 +199,14 @@ pub fn apply_effect(
         }
         DialogueEffect::CompleteQuest { quest_id } => {
             if let Some(def) = quest_defs.get(quest_id) {
-                // Guard: only complete a quest that is currently active
-                if !quest_progress.active.contains_key(quest_id) {
+                // Guard: only complete a quest that is active with all objectives met
+                if !crate::quest::tracker::is_quest_ready(
+                    quest_id,
+                    quest_progress,
+                    quest_defs,
+                    inventory,
+                    skill_progress,
+                ) {
                     return feedback;
                 }
                 // Remove items for deliver objectives
@@ -561,6 +570,7 @@ mod tests {
             &mut quest_progress,
             &quest_defs,
             &mut inventory,
+            &SkillProgress::default(),
             &mut currants,
             &mut imagination,
             &item_defs,
@@ -584,6 +594,8 @@ mod tests {
             },
         );
         let mut inventory = Inventory::new(16);
+        // Must have enough items for is_quest_ready to pass
+        inventory.add("cherry", 3, &item_defs);
         let mut currants = 0u64;
         let mut imagination = 0u64;
 
@@ -596,6 +608,7 @@ mod tests {
             &mut quest_progress,
             &quest_defs,
             &mut inventory,
+            &SkillProgress::default(),
             &mut currants,
             &mut imagination,
             &item_defs,
@@ -628,6 +641,7 @@ mod tests {
             &mut quest_progress,
             &quest_defs,
             &mut inventory,
+            &SkillProgress::default(),
             &mut currants,
             &mut imagination,
             &item_defs,

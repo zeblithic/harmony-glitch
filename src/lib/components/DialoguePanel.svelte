@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { DialogueFrame, DialogueChoiceResult } from '../types';
-  import { dialogueChoose, closeDialogue } from '../ipc';
+  import { dialogueChoose } from '../ipc';
 
   let {
     dialogueFrame = null,
@@ -43,7 +43,6 @@
 
   function handleCancel(e: Event) {
     e.preventDefault();
-    closeDialogue().catch(console.error);
     onClose?.();
   }
 
@@ -93,7 +92,6 @@
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
-      closeDialogue().catch(console.error);
       onClose?.();
       return;
     }
@@ -160,7 +158,7 @@
         <button
           type="button"
           class="dialogue-option dialogue-close"
-          onclick={() => { closeDialogue().catch(console.error); onClose?.(); }}
+          onclick={() => { onClose?.(); }}
         >
           <span class="option-text">Close</span>
         </button>
