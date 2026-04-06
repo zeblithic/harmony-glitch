@@ -166,26 +166,35 @@
 <style>
   .upgrade-panel {
     position: fixed;
-    top: 80px;
-    right: 12px;
-    left: auto;
-    width: 320px;
-    max-width: 320px;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     margin: 0;
-    background: rgba(26, 26, 46, 0.95);
-    border: 1px solid #4a3a6a;
-    border-radius: 12px;
     padding: 0;
-    color: #e0e0e0;
+    border: none;
+    background: transparent;
     z-index: 100;
   }
 
   .upgrade-panel::backdrop {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.3);
   }
 
   .panel-inner {
+    position: absolute;
+    top: 80px;
+    right: 12px;
+    width: 320px;
+    background: rgba(26, 26, 46, 0.95);
+    border: 1px solid #4a3a6a;
+    border-radius: 12px;
     padding: 16px;
+    color: #e0e0e0;
   }
 
   .panel-header {
