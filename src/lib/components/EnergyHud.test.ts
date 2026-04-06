@@ -17,13 +17,13 @@ describe('EnergyHud', () => {
     expect(amount?.textContent).toBe('432');
   });
 
-  it('has low-energy class when below 150', () => {
+  it('has low-energy class when below 25%', () => {
     render(EnergyHud, { props: { energy: 100, maxEnergy: 600 } });
     const hud = document.querySelector('.energy-hud');
     expect(hud?.classList.contains('low')).toBe(true);
   });
 
-  it('does not have low-energy class when above 150', () => {
+  it('does not have low-energy class when above 25%', () => {
     render(EnergyHud, { props: { energy: 300, maxEnergy: 600 } });
     const hud = document.querySelector('.energy-hud');
     expect(hud?.classList.contains('low')).toBe(false);

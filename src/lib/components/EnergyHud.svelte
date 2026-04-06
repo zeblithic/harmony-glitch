@@ -2,7 +2,7 @@
   let { energy = 0, maxEnergy = 600 }: { energy: number; maxEnergy: number } = $props();
 
   let percent = $derived(maxEnergy > 0 ? Math.min(100, (energy / maxEnergy) * 100) : 0);
-  let isLow = $derived(energy < 150);
+  let isLow = $derived(energy < maxEnergy * 0.25);
   let displayEnergy = $derived(Math.floor(energy));
 </script>
 
