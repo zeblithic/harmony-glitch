@@ -460,7 +460,7 @@ export interface DialogueOptionFrame {
 }
 
 export type DialogueChoiceResult =
-  | { type: 'continue'; frame: DialogueFrame }
+  | { type: 'continue'; frame: DialogueFrame; feedback: string[] }
   | { type: 'end'; feedback: string[] };
 
 export interface QuestLogFrame {

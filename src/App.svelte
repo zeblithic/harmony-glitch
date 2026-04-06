@@ -715,6 +715,7 @@
         dialogueFrame = null;
         dialogueEntityId = null;
         dialogueCloseFrames = 0;
+        closeDialogue().catch(console.error);
       }}
       onFrameUpdate={(frame) => { dialogueFrame = frame; }}
     />

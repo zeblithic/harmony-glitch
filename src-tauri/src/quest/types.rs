@@ -240,7 +240,10 @@ pub struct DialogueOptionFrame {
 pub enum DialogueChoiceResult {
     /// Dialogue continues to the next node.
     #[serde(rename_all = "camelCase")]
-    Continue { frame: DialogueFrame },
+    Continue {
+        frame: DialogueFrame,
+        feedback: Vec<String>,
+    },
     /// Dialogue ended.
     #[serde(rename_all = "camelCase")]
     End { feedback: Vec<String> },

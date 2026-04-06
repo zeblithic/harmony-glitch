@@ -49,7 +49,18 @@
     try {
       const result: DialogueChoiceResult = await dialogueChoose(optionIndex);
       if (result.type === 'continue') {
-        onFrameUpdate?.(result.frame);
+        // Show feedback briefly if effects fired, then advance
+        if (result.feedback.length > 0) {
+          feedbackMessages = result.feedback;
+          showingFeedback = true;
+          setTimeout(() => {
+            showingFeedback = false;
+            feedbackMessages = [];
+            onFrameUpdate?.(result.frame);
+          }, 1200);
+        } else {
+          onFrameUpdate?.(result.frame);
+        }
       } else {
         // Show feedback briefly, then close
         if (result.feedback.length > 0) {

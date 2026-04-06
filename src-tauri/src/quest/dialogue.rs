@@ -112,7 +112,7 @@ pub fn evaluate_choice(
                     skill_progress,
                     entity_id,
                 );
-                DialogueChoiceResult::Continue { frame }
+                DialogueChoiceResult::Continue { frame, feedback }
             } else {
                 DialogueChoiceResult::End { feedback }
             }
@@ -661,7 +661,7 @@ mod tests {
         );
 
         match result {
-            DialogueChoiceResult::Continue { frame } => {
+            DialogueChoiceResult::Continue { frame, .. } => {
                 assert_eq!(frame.text, "Get me 3 cherries!");
                 assert_eq!(frame.options.len(), 1);
                 assert_eq!(frame.options[0].text, "Sure!");
