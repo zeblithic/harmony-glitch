@@ -25,8 +25,8 @@ pub fn eat(
         .energy_value
         .ok_or_else(|| format!("Item '{item_id}' is not edible"))?;
 
-    // Can't eat at full energy
-    if energy >= max_energy {
+    // Can't eat at full energy (or so close that the gain rounds to zero)
+    if (max_energy - energy) < 0.5 {
         return Err("Already full".to_string());
     }
 
@@ -105,6 +105,18 @@ mod tests {
         let mut inv = Inventory::new(16);
         inv.add("cherry", 5, &defs);
         let result = eat("cherry", 600.0, 600.0, &mut inv, &defs);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Already full"));
+        assert_eq!(inv.count_item("cherry"), 5);
+    }
+
+    #[test]
+    fn eat_rejected_when_near_full() {
+        // Gain would round to 0 — don't waste the food
+        let defs = test_item_defs();
+        let mut inv = Inventory::new(16);
+        inv.add("cherry", 5, &defs);
+        let result = eat("cherry", 599.8, 600.0, &mut inv, &defs);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Already full"));
         assert_eq!(inv.count_item("cherry"), 5);
