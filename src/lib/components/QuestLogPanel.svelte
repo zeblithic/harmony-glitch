@@ -76,7 +76,7 @@
                   >
                     <div
                       class="obj-fill"
-                      style="width: {Math.min(obj.current / obj.target, 1) * 100}%"
+                      style="width: {obj.target > 0 ? Math.min(obj.current / obj.target, 1) * 100 : 100}%"
                     ></div>
                   </div>
                 </div>

@@ -70,6 +70,7 @@
   let dialogueFrame = $state<DialogueFrame | null>(null);
   let dialogueEntityId = $state<string | null>(null);
   let dialogueCloseFrames = 0;
+  let dialogueClosing: Promise<void> | null = null;
   let questLogOpen = $state(false);
   let questLog = $state<QuestLogFrame | null>(null);
 
@@ -347,10 +348,11 @@
             dialogueFrame = null;
             dialogueEntityId = null;
             dialogueCloseFrames = 0;
-            closeDialogue().catch(console.error);
+            dialogueClosing = closeDialogue().catch(console.error).then(() => { dialogueClosing = null; });
           } else if (frame.interactionPrompt?.entityId) {
             const eid = frame.interactionPrompt.entityId;
-            getDialogueState(eid).then(dialogFrame => {
+            // Chain after any pending close to avoid IPC race
+            const open = () => getDialogueState(eid).then(dialogFrame => {
               if (latestFrame?.interactionPrompt?.entityId !== eid) return;
               dialogueFrame = dialogFrame;
               dialogueEntityId = eid;
@@ -366,6 +368,11 @@
               skillsOpen = false;
               questLogOpen = false;
             }).catch(e => console.error('Failed to get dialogue state:', e));
+            if (dialogueClosing) {
+              dialogueClosing.then(open);
+            } else {
+              open();
+            }
           }
         }
       }
@@ -429,7 +436,7 @@
           dialogueFrame = null;
           dialogueEntityId = null;
           dialogueCloseFrames = 0;
-          closeDialogue().catch(console.error);
+          dialogueClosing = closeDialogue().catch(console.error).then(() => { dialogueClosing = null; });
         }
       }
     }
@@ -715,7 +722,7 @@
         dialogueFrame = null;
         dialogueEntityId = null;
         dialogueCloseFrames = 0;
-        closeDialogue().catch(console.error);
+        dialogueClosing = closeDialogue().catch(console.error).then(() => { dialogueClosing = null; });
       }}
       onFrameUpdate={(frame) => { dialogueFrame = frame; }}
     />
