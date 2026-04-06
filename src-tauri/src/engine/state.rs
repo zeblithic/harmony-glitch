@@ -11,9 +11,9 @@ use crate::item::imagination::PlayerUpgrades;
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
-    EntityDefs, EntityInstanceState, InteractionPrompt, InventoryFrame, ItemDefs, ItemStack,
-    ItemStackFrame, PickupFeedback, RecipeDefs, StoreCatalog, WorldEntity, WorldEntityFrame,
-    WorldItem, WorldItemFrame,
+    ActiveCraft, ActiveCraftFrame, EntityDefs, EntityInstanceState, InteractionPrompt,
+    InventoryFrame, ItemDefs, ItemStack, ItemStackFrame, PickupFeedback, RecipeDefs,
+    StoreCatalog, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
 };
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
@@ -100,6 +100,8 @@ pub struct GameState {
     pub max_energy: f64,
     /// ID of the last successfully completed trade (for journal recovery).
     pub last_trade_id: Option<u64>,
+    /// In-progress timed craft, if any.
+    pub active_craft: Option<ActiveCraft>,
     pub imagination: u64,
     pub upgrades: PlayerUpgrades,
 }
@@ -134,6 +136,7 @@ pub struct RenderFrame {
     pub currants: u64,
     pub energy: f64,
     pub max_energy: f64,
+    pub active_craft: Option<ActiveCraftFrame>,
     pub imagination: u64,
     pub upgrades: PlayerUpgrades,
 }
@@ -217,6 +220,7 @@ impl GameState {
             imagination: 0,
             upgrades: PlayerUpgrades::default(),
             last_trade_id: None,
+            active_craft: None,
         }
     }
 
@@ -270,52 +274,40 @@ impl GameState {
         }
     }
 
-    /// Execute a crafting recipe. On success, generates pickup feedback.
+    /// Start a timed crafting recipe. Consumes inputs and energy immediately;
+    /// outputs are delivered when the timer completes in `tick()`.
     pub fn craft_recipe(
         &mut self,
         recipe_id: &str,
-    ) -> Result<Vec<crate::item::types::CraftOutput>, crate::item::types::CraftError> {
+    ) -> Result<(), crate::item::types::CraftError> {
+        if self.active_craft.is_some() {
+            return Err(crate::item::types::CraftError::AlreadyCrafting);
+        }
         let recipe = self
             .recipe_defs
             .get(recipe_id)
             .ok_or(crate::item::types::CraftError::UnknownRecipe)?
             .clone();
-        let result = crate::item::crafting::craft(&recipe, &mut self.inventory, &self.item_defs)?;
-        for output in &result {
-            self.pickup_feedback.push(PickupFeedback {
-                id: self.next_feedback_id,
-                text: format!("+{} x{}", output.name, output.count),
-                success: true,
-                x: self.player.x,
-                y: self.player.y,
-                age_secs: 0.0,
-                color: None,
-            });
-            self.next_feedback_id += 1;
-        }
-        // Earn iMG from crafted outputs
-        let produced: Vec<(&str, u32)> = result
-            .iter()
-            .map(|o| (o.item_id.as_str(), o.count))
-            .collect();
-        let img_earned = crate::item::imagination::earn_from_craft(&produced, &self.item_defs);
-        if img_earned > 0 {
-            self.imagination = self.imagination.saturating_add(img_earned);
-            self.pickup_feedback.push(PickupFeedback {
-                id: self.next_feedback_id,
-                text: format!("+{img_earned} iMG"),
-                success: true,
-                x: self.player.x,
-                y: self.player.y,
-                age_secs: 0.0,
-                color: Some("#c084fc".to_string()),
-            });
-            self.next_feedback_id += 1;
-        }
-        self.pending_audio_events.push(AudioEvent::CraftSuccess {
+
+        let pending = crate::item::crafting::start_craft(
+            &recipe,
+            &mut self.inventory,
+            &self.item_defs,
+            self.energy,
+        )?;
+
+        // Deduct energy
+        self.energy = (self.energy - recipe.energy_cost).max(0.0);
+
+        // Set active craft timer
+        self.active_craft = Some(ActiveCraft {
             recipe_id: recipe.id.clone(),
+            started_at: self.game_time,
+            complete_at: self.game_time + recipe.duration_secs,
+            pending_outputs: pending,
         });
-        Ok(result)
+
+        Ok(())
     }
 
     /// Run one tick of the game loop.
@@ -334,6 +326,79 @@ impl GameState {
 
         // Drain pending audio events from IPC commands (craft_recipe, load_street)
         let mut audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
+
+        // Complete timed craft if timer expired
+        if let Some(ref craft) = self.active_craft {
+            if self.game_time >= craft.complete_at {
+                let craft = self.active_craft.take().unwrap();
+                for output in &craft.pending_outputs {
+                    let overflow =
+                        self.inventory
+                            .add(&output.item_id, output.count, &self.item_defs);
+                    let delivered = output.count - overflow;
+                    if delivered > 0 {
+                        self.pickup_feedback.push(PickupFeedback {
+                            id: self.next_feedback_id,
+                            text: format!("+{} x{}", output.name, delivered),
+                            success: true,
+                            x: self.player.x,
+                            y: self.player.y,
+                            age_secs: 0.0,
+                            color: None,
+                        });
+                        self.next_feedback_id += 1;
+                    }
+                    if overflow > 0 {
+                        // Spawn overflow as ground drop so the player can recover it
+                        self.world_items.push(WorldItem {
+                            id: format!("drop_{}", self.next_item_id),
+                            item_id: output.item_id.clone(),
+                            count: overflow,
+                            x: self.player.x,
+                            y: self.player.y,
+                        });
+                        self.next_item_id += 1;
+                        self.pickup_feedback.push(PickupFeedback {
+                            id: self.next_feedback_id,
+                            text: format!(
+                                "Inventory full — {} x{} dropped",
+                                output.name, overflow
+                            ),
+                            success: false,
+                            x: self.player.x,
+                            y: self.player.y,
+                            age_secs: 0.0,
+                            color: None,
+                        });
+                        self.next_feedback_id += 1;
+                    }
+                }
+                // Earn iMG from crafted outputs
+                let produced: Vec<(&str, u32)> = craft
+                    .pending_outputs
+                    .iter()
+                    .map(|o| (o.item_id.as_str(), o.count))
+                    .collect();
+                let img_earned =
+                    crate::item::imagination::earn_from_craft(&produced, &self.item_defs);
+                if img_earned > 0 {
+                    self.imagination = self.imagination.saturating_add(img_earned);
+                    self.pickup_feedback.push(PickupFeedback {
+                        id: self.next_feedback_id,
+                        text: format!("+{img_earned} iMG"),
+                        success: true,
+                        x: self.player.x,
+                        y: self.player.y,
+                        age_secs: 0.0,
+                        color: Some("#c084fc".to_string()),
+                    });
+                    self.next_feedback_id += 1;
+                }
+                audio_events.push(AudioEvent::CraftSuccess {
+                    recipe_id: craft.recipe_id,
+                });
+            }
+        }
 
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });
 
@@ -769,14 +834,62 @@ impl GameState {
             currants: self.currants,
             energy: self.energy,
             max_energy: self.max_energy,
+            active_craft: self.active_craft.as_ref().map(|c| {
+                let duration = c.complete_at - c.started_at;
+                let elapsed = (self.game_time - c.started_at).min(duration);
+                ActiveCraftFrame {
+                    recipe_id: c.recipe_id.clone(),
+                    progress: if duration > 0.0 {
+                        elapsed / duration
+                    } else {
+                        1.0
+                    },
+                    remaining_secs: (c.complete_at - self.game_time).max(0.0),
+                }
+            }),
             imagination: self.imagination,
             upgrades: self.upgrades.clone(),
         })
     }
 
+    /// Complete any in-progress craft immediately, delivering outputs to
+    /// inventory. Overflow is spawned as ground drops. Called before game
+    /// stop or trade execution — NOT during regular saves (save_state
+    /// includes pending outputs in the snapshot instead).
+    pub fn flush_active_craft(&mut self) {
+        if let Some(craft) = self.active_craft.take() {
+            for output in &craft.pending_outputs {
+                let overflow =
+                    self.inventory
+                        .add(&output.item_id, output.count, &self.item_defs);
+                if overflow > 0 {
+                    self.world_items.push(WorldItem {
+                        id: format!("drop_{}", self.next_item_id),
+                        item_id: output.item_id.clone(),
+                        count: overflow,
+                        x: self.player.x,
+                        y: self.player.y,
+                    });
+                    self.next_item_id += 1;
+                }
+            }
+        }
+    }
+
     /// Extract the current save-worthy state. Returns None if no street loaded.
+    /// If an active craft is in-progress, pending outputs are included in the
+    /// inventory snapshot so they are not lost on restore.
     pub fn save_state(&self) -> Option<SaveState> {
         let street = self.street.as_ref()?;
+        let mut slots = self.inventory.slots.clone();
+        // Include pending craft outputs in the snapshot so they survive save/load.
+        if let Some(ref craft) = self.active_craft {
+            let mut temp_inv = self.inventory.clone();
+            for output in &craft.pending_outputs {
+                temp_inv.add(&output.item_id, output.count, &self.item_defs);
+            }
+            slots = temp_inv.slots;
+        }
         Some(SaveState {
             street_id: self
                 .tsid_to_name
@@ -786,7 +899,7 @@ impl GameState {
             x: self.player.x,
             y: self.player.y,
             facing: self.facing,
-            inventory: self.inventory.slots.clone(),
+            inventory: slots,
             avatar: self.avatar.clone(),
             currants: self.currants,
             energy: self.energy,
@@ -2319,6 +2432,7 @@ mod tests {
                 .unwrap();
 
         let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog());
+        state.load_street(test_street(), vec![], vec![]);
         state.inventory.add("cherry", 10, &state.item_defs);
         state.inventory.add("grain", 5, &state.item_defs);
         state.inventory.add("pot", 1, &state.item_defs);
@@ -2326,16 +2440,31 @@ mod tests {
         let result = state.craft_recipe("cherry_pie");
         assert!(result.is_ok());
 
-        // One feedback for the crafted item, one for iMG earned
-        assert_eq!(state.pickup_feedback.len(), 2);
-        assert!(state.pickup_feedback[0].text.contains("Cherry Pie"));
-        assert!(state.pickup_feedback[0].success);
-        assert!(state.pickup_feedback[1].text.contains("iMG"));
-        assert!(state.pickup_feedback[1].success);
-
-        assert_eq!(state.inventory.count_item("cherry_pie"), 1);
+        // Inputs consumed immediately, outputs deferred
         assert_eq!(state.inventory.count_item("cherry"), 5);
         assert_eq!(state.inventory.count_item("pot"), 1);
+        assert_eq!(state.inventory.count_item("cherry_pie"), 0);
+        assert!(state.active_craft.is_some());
+
+        // Energy deducted
+        assert!(state.energy < 600.0);
+
+        // Advance game_time to just before completion, then do a small tick
+        // so the feedback doesn't age out (retained for 1.5s).
+        let input = InputState::default();
+        state.game_time = 9.9;
+        let frame = state
+            .tick(0.2, &input, &mut rand::thread_rng())
+            .unwrap();
+
+        // Now outputs delivered
+        assert_eq!(state.inventory.count_item("cherry_pie"), 1);
+        assert!(state.active_craft.is_none());
+        assert!(frame.pickup_feedback.iter().any(|f| f.text.contains("Cherry Pie") && f.success));
+        assert!(frame.audio_events.iter().any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+        // iMG earned from craft (cherry_pie base_cost=20, 2x = 40)
+        assert!(state.imagination > 0);
+        assert!(frame.pickup_feedback.iter().any(|f| f.text.contains("iMG")));
     }
 
     #[test]
@@ -2492,14 +2621,17 @@ mod tests {
         state.inventory.add("wood", 3, &state.item_defs);
         state.craft_recipe("plank").unwrap();
 
-        assert!(state
+        // Craft is now timed — no immediate CraftSuccess event
+        assert!(state.active_craft.is_some());
+        assert!(!state
             .pending_audio_events
             .iter()
             .any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
 
+        // Advance past the craft duration (plank = 4s)
         let input = InputState::default();
         let frame = state
-            .tick(1.0 / 60.0, &input, &mut rand::thread_rng())
+            .tick(5.0, &input, &mut rand::thread_rng())
             .unwrap();
         assert!(frame
             .audio_events
@@ -3313,6 +3445,7 @@ mod save_tests {
 
     #[test]
     fn craft_earns_imagination() {
+        use crate::street::types::{StreetData, Gradient};
         let item_defs =
             crate::item::loader::parse_item_defs(include_str!("../../../assets/items.json"))
                 .unwrap();
@@ -3323,21 +3456,51 @@ mod save_tests {
             crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
                 .unwrap();
         let track_catalog = crate::engine::jukebox::TrackCatalog { tracks: std::collections::HashMap::new() };
-        let store_catalog: crate::item::types::StoreCatalog =
-            serde_json::from_str(include_str!("../../../assets/stores.json")).unwrap();
-        let mut state = GameState::new(800.0, 600.0, item_defs, entity_defs, recipe_defs, track_catalog, store_catalog);
+        let store_catalog = crate::item::types::StoreCatalog { stores: std::collections::HashMap::new() };
+        let mut state = GameState::new(
+            800.0,
+            600.0,
+            item_defs,
+            entity_defs,
+            recipe_defs,
+            track_catalog,
+            store_catalog,
+        );
+        state.load_street(
+            StreetData {
+                tsid: "test".into(),
+                name: "Test".into(),
+                left: -3000.0,
+                right: 3000.0,
+                top: -1000.0,
+                bottom: 0.0,
+                ground_y: 0.0,
+                gradient: Some(Gradient { top: "#000".into(), bottom: "#111".into() }),
+                layers: vec![],
+                signposts: vec![],
+            },
+            vec![],
+            vec![],
+        );
 
-        // Give player cherry_pie ingredients (check assets/recipes.json for the recipe)
-        // cherry_pie recipe requires: cherry x5, grain x2, pot x1 (tool)
-        let defs = state.item_defs.clone();
-        state.inventory.add("cherry", 10, &defs);
-        state.inventory.add("grain", 5, &defs);
-        state.inventory.add("pot", 1, &defs);
+        // Give player cherry_pie ingredients
+        state.inventory.add("cherry", 10, &state.item_defs);
+        state.inventory.add("grain", 5, &state.item_defs);
+        state.inventory.add("pot", 1, &state.item_defs);
 
         let before = state.imagination;
-        let _ = state.craft_recipe("cherry_pie");
-        assert!(state.imagination > before);
-        // cherry_pie base_cost=20, 2x multiplier = 40
+        // Start timed craft
+        state.craft_recipe("cherry_pie").unwrap();
+        // iMG not earned yet (craft is in progress)
+        assert_eq!(state.imagination, before);
+
+        // Advance past craft completion time, then tick to deliver outputs
+        state.game_time = 100.0;
+        let input = InputState::default();
+        let frame = state.tick(0.1, &input, &mut rand::thread_rng()).unwrap();
+
+        // iMG earned on craft completion: cherry_pie base_cost=20, 2x = 40
         assert_eq!(state.imagination - before, 40);
+        assert!(frame.pickup_feedback.iter().any(|f| f.text.contains("iMG")));
     }
 }

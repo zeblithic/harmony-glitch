@@ -716,6 +716,7 @@ fn handle_trade_message(
                         Ok(complete_msg) => {
                             // Save state immediately after trade execution.
                             guard.last_trade_id = Some(trade_id);
+                            guard.flush_active_craft();
                             let saved = guard.save_state().is_some_and(|save| {
                                 let save_path = piw.data_dir.join("savegame.json");
                                 engine::state::write_save_state(&save_path, &save).is_ok()
@@ -1217,6 +1218,7 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
         match mgr.execute_trade(&mut state.inventory, &mut state.currants, &state.item_defs) {
             Ok(complete_msg) => {
                 guard.last_trade_id = Some(journal.trade_id);
+                guard.flush_active_craft();
                 let saved = guard.save_state().is_some_and(|save| {
                     let save_path = piw.data_dir.join("savegame.json");
                     engine::state::write_save_state(&save_path, &save).is_ok()

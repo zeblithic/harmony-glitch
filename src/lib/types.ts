@@ -150,6 +150,12 @@ export interface TransitionInfo {
   generation: number;
 }
 
+export interface ActiveCraftFrame {
+  recipeId: string;
+  progress: number;
+  remainingSecs: number;
+}
+
 export interface RenderFrame {
   player: PlayerFrame;
   remotePlayers: RemotePlayerFrame[];
@@ -165,6 +171,7 @@ export interface RenderFrame {
   currants: number;
   energy: number;
   maxEnergy: number;
+  activeCraft?: ActiveCraftFrame | null;
   imagination: number;
   upgrades: PlayerUpgrades;
 }
@@ -256,6 +263,7 @@ export interface RecipeDef {
   tools: RecipeItem[];
   outputs: RecipeItem[];
   durationSecs: number;
+  energyCost: number;
   category: string;
 }
 

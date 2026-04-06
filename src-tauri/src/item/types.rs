@@ -131,6 +131,8 @@ pub struct RecipeDef {
     pub tools: Vec<RecipeItem>,
     pub outputs: Vec<RecipeItem>,
     pub duration_secs: f64,
+    #[serde(default)]
+    pub energy_cost: f64,
     pub category: String,
 }
 
@@ -165,6 +167,8 @@ pub enum CraftError {
     MissingTool { item: String },
     NoRoom,
     UnknownRecipe,
+    InsufficientEnergy,
+    AlreadyCrafting,
 }
 
 /// Convert an item ID like "cherry_pie" to "Cherry Pie" for display.
@@ -198,6 +202,8 @@ impl std::fmt::Display for CraftError {
             }
             CraftError::NoRoom => write!(f, "Inventory full"),
             CraftError::UnknownRecipe => write!(f, "Unknown recipe"),
+            CraftError::InsufficientEnergy => write!(f, "Too tired to craft"),
+            CraftError::AlreadyCrafting => write!(f, "Already crafting"),
         }
     }
 }
@@ -208,6 +214,24 @@ pub struct CraftOutput {
     pub item_id: String,
     pub name: String,
     pub count: u32,
+}
+
+/// An in-progress craft tracked by the game tick loop.
+#[derive(Debug, Clone)]
+pub struct ActiveCraft {
+    pub recipe_id: String,
+    pub started_at: f64,
+    pub complete_at: f64,
+    pub pending_outputs: Vec<CraftOutput>,
+}
+
+/// Progress data sent to frontend for the crafting progress bar.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveCraftFrame {
+    pub recipe_id: String,
+    pub progress: f64,
+    pub remaining_secs: f64,
 }
 
 /// Per-ingredient availability status (for frontend display).
@@ -500,6 +524,7 @@ mod tests {
                 count: 1,
             }],
             duration_secs: 10.0,
+            energy_cost: 15.0,
             category: "food".into(),
         };
         let json = serde_json::to_string(&def).unwrap();
