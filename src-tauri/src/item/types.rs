@@ -320,6 +320,10 @@ pub struct PickupFeedback {
     pub x: f64,
     pub y: f64,
     pub age_secs: f64,
+    /// Optional hex color override (e.g. "#c084fc"). When present,
+    /// the renderer uses this instead of the success-based green/red.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 #[cfg(test)]

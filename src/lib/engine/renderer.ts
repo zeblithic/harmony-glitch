@@ -554,9 +554,12 @@ export class GameRenderer {
           (ft) => ft.feedbackId === fb.id
         );
         if (!existing) {
+          const fillColor = fb.color
+            ? parseInt(fb.color.replace('#', ''), 16)
+            : fb.success ? 0x7ae87a : 0xe87a7a;
           const text = new Text({
             text: fb.text,
-            style: { fontSize: 14, fill: fb.success ? 0x7ae87a : 0xe87a7a },
+            style: { fontSize: 14, fill: fillColor },
           });
           text.anchor.set(0.5, 1);
           this.uiContainer.addChild(text);

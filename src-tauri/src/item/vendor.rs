@@ -28,6 +28,7 @@ pub fn buy(
     inventory: &mut Inventory,
     item_defs: &ItemDefs,
     store: &StoreDef,
+    haggling_discount: f64,
 ) -> Result<u64, String> {
     // Item must be in vendor's inventory
     if !store.inventory.iter().any(|id| id == item_id) {
@@ -42,8 +43,14 @@ pub fn buy(
         .base_cost
         .ok_or_else(|| format!("Item '{item_id}' has no price"))?;
 
-    // Total cost must fit in u64 and player must have enough
-    let total_cost = (base_cost as u64)
+    // Apply haggling discount, minimum price of 1
+    let unit_price = if haggling_discount > 0.0 {
+        ((base_cost as f64) * (1.0 - haggling_discount)).floor().max(1.0) as u32
+    } else {
+        base_cost
+    };
+
+    let total_cost = (unit_price as u64)
         .checked_mul(count as u64)
         .ok_or_else(|| "Cost overflow".to_string())?;
     if currants < total_cost {
@@ -194,7 +201,7 @@ mod tests {
         let store = test_store();
         let mut inv = Inventory::new(10);
         // 50 currants, buy 5 cherries at 3c each = 35 remaining
-        let result = buy("cherry", 5, 50, &mut inv, &defs, &store);
+        let result = buy("cherry", 5, 50, &mut inv, &defs, &store, 0.0);
         assert_eq!(result, Ok(35));
         assert_eq!(inv.count_item("cherry"), 5);
     }
@@ -205,7 +212,7 @@ mod tests {
         let store = test_store();
         let mut inv = Inventory::new(10);
         // 2 currants, cherry costs 3
-        let result = buy("cherry", 1, 2, &mut inv, &defs, &store);
+        let result = buy("cherry", 1, 2, &mut inv, &defs, &store, 0.0);
         assert!(result.is_err());
         assert_eq!(inv.count_item("cherry"), 0);
     }
@@ -217,7 +224,7 @@ mod tests {
         // Inventory with capacity 1, already full (50 cherries = stack_limit of 50)
         let mut inv = Inventory::new(1);
         inv.add("cherry", 50, &defs);
-        let result = buy("cherry", 1, 1000, &mut inv, &defs, &store);
+        let result = buy("cherry", 1, 1000, &mut inv, &defs, &store, 0.0);
         assert!(result.is_err());
     }
 
@@ -240,7 +247,7 @@ mod tests {
         );
         let store = test_store(); // store only sells "cherry"
         let mut inv = Inventory::new(10);
-        let result = buy("rare_gem", 1, 1000, &mut inv, &defs, &store);
+        let result = buy("rare_gem", 1, 1000, &mut inv, &defs, &store, 0.0);
         assert!(result.is_err());
     }
 
@@ -279,5 +286,50 @@ mod tests {
         assert!(result.is_err());
         // inventory should be unchanged
         assert_eq!(inv.count_item("quest_item"), 1);
+    }
+
+    #[test]
+    fn buy_with_haggling_discount() {
+        let defs = test_item_defs();
+        let store = test_store();
+        let mut inv = Inventory::new(10);
+        // Cherry base_cost=3, 10% discount → floor(3 * 0.90) = floor(2.7) = 2
+        // Buy 5 at 2c each = 10. 50 - 10 = 40
+        let result = buy("cherry", 5, 50, &mut inv, &defs, &store, 0.10);
+        assert_eq!(result, Ok(40));
+        assert_eq!(inv.count_item("cherry"), 5);
+    }
+
+    #[test]
+    fn buy_with_haggling_minimum_price() {
+        let mut defs = test_item_defs();
+        defs.insert("cheap".to_string(), ItemDef {
+            id: "cheap".to_string(),
+            name: "Cheap".to_string(),
+            description: "Very cheap.".to_string(),
+            category: "misc".to_string(),
+            stack_limit: 50,
+            icon: "cheap".to_string(),
+            base_cost: Some(1),
+            energy_value: None,
+        });
+        let store = StoreDef {
+            name: "Store".to_string(),
+            buy_multiplier: 0.5,
+            inventory: vec!["cheap".to_string()],
+        };
+        let mut inv = Inventory::new(10);
+        // base_cost=1, 20% discount → floor(1 * 0.80) = 0 → clamped to 1
+        let result = buy("cheap", 1, 50, &mut inv, &defs, &store, 0.20);
+        assert_eq!(result, Ok(49));
+    }
+
+    #[test]
+    fn buy_with_zero_haggling() {
+        let defs = test_item_defs();
+        let store = test_store();
+        let mut inv = Inventory::new(10);
+        let result = buy("cherry", 5, 50, &mut inv, &defs, &store, 0.0);
+        assert_eq!(result, Ok(35));
     }
 }

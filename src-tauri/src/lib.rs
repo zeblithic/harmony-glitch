@@ -948,7 +948,8 @@ fn vendor_buy(entity_id: String, item_id: String, count: u32, app: AppHandle) ->
     let item_defs = state.item_defs.clone();
 
     let currants = state.currants;
-    let new_balance = item::vendor::buy(&item_id, count, currants, &mut state.inventory, &item_defs, &store)?;
+    let discount = item::imagination::haggling_discount(state.upgrades.haggling_tier);
+    let new_balance = item::vendor::buy(&item_id, count, currants, &mut state.inventory, &item_defs, &store, discount)?;
     state.currants = new_balance;
 
     let total = currants - new_balance;
@@ -963,6 +964,7 @@ fn vendor_buy(entity_id: String, item_id: String, count: u32, app: AppHandle) ->
         x: px,
         y: py,
         age_secs: 0.0,
+        color: None,
     });
 
     Ok(new_balance)
@@ -1001,6 +1003,7 @@ fn vendor_sell(entity_id: String, item_id: String, count: u32, app: AppHandle) -
         x: px,
         y: py,
         age_secs: 0.0,
+        color: None,
     });
 
     Ok(new_balance)
@@ -1030,11 +1033,77 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
         x: px,
         y: py,
         age_secs: 0.0,
+        color: None,
     });
 
     Ok(serde_json::json!({
         "energy": new_energy,
         "maxEnergy": new_max,
+    }))
+}
+
+#[tauri::command]
+fn get_upgrade_defs() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(&item::imagination::ENERGY_TANK).unwrap(),
+        serde_json::to_value(&item::imagination::HAGGLING).unwrap(),
+    ]
+}
+
+#[tauri::command]
+fn buy_upgrade(upgrade_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let mut imagination = state.imagination;
+    let mut upgrades = state.upgrades.clone();
+    let result = item::imagination::buy_upgrade(
+        &upgrade_id,
+        &mut imagination,
+        &mut upgrades,
+    )?;
+    state.imagination = imagination;
+    state.upgrades = upgrades;
+
+    let px = state.player.x;
+    let py = state.player.y;
+
+    match result {
+        item::imagination::UpgradeEffect::EnergyTankDelta(delta) => {
+            state.max_energy += delta;
+            state.energy += delta;
+            let fb_id = state.next_feedback_id;
+            state.next_feedback_id += 1;
+            state.pickup_feedback.push(item::types::PickupFeedback {
+                id: fb_id,
+                text: format!("+{} max energy!", delta as u32),
+                success: true,
+                x: px,
+                y: py,
+                age_secs: 0.0,
+                color: Some("#4ade80".to_string()),
+            });
+        }
+        item::imagination::UpgradeEffect::HagglingDiscount(discount) => {
+            let fb_id = state.next_feedback_id;
+            state.next_feedback_id += 1;
+            state.pickup_feedback.push(item::types::PickupFeedback {
+                id: fb_id,
+                text: format!("Haggling → {}%", (discount * 100.0).round() as u32),
+                success: true,
+                x: px,
+                y: py,
+                age_secs: 0.0,
+                color: Some("#fbbf24".to_string()),
+            });
+        }
+    }
+
+    Ok(serde_json::json!({
+        "imagination": state.imagination,
+        "upgrades": state.upgrades,
+        "energy": state.energy,
+        "maxEnergy": state.max_energy,
     }))
 }
 
@@ -1721,6 +1790,8 @@ pub fn run() {
             vendor_buy,
             vendor_sell,
             eat_item,
+            get_upgrade_defs,
+            buy_upgrade,
             trade_initiate,
             trade_accept,
             trade_decline,

@@ -1,5 +1,6 @@
 pub mod crafting;
 pub mod energy;
+pub mod imagination;
 pub mod interaction;
 pub mod inventory;
 pub mod loader;

@@ -13,6 +13,8 @@
   import ShopPanel from './lib/components/ShopPanel.svelte';
   import CurrantHud from './lib/components/CurrantHud.svelte';
   import EnergyHud from './lib/components/EnergyHud.svelte';
+  import ImaginationHud from './lib/components/ImaginationHud.svelte';
+  import UpgradePanel from './lib/components/UpgradePanel.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
   import TradePanel from './lib/components/TradePanel.svelte';
   import TradePrompt from './lib/components/TradePrompt.svelte';
@@ -53,6 +55,7 @@
   let avatarManifest = $state<AvatarManifest | null>(null);
   let gameRenderer = $state<GameRenderer | null>(null);
   let needsAvatarSetup = $state(false);
+  let upgradePanelOpen = $state(false);
   let tradeOpen = $state(false);
   let tradeFrame = $state<TradeFrame | null>(null);
   let tradeStateVersion = 0;
@@ -597,6 +600,17 @@
     <StreetNameHud name={currentStreet.name} />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
     <EnergyHud energy={latestFrame?.energy ?? 600} maxEnergy={latestFrame?.maxEnergy ?? 600} />
+    <ImaginationHud
+      imagination={latestFrame?.imagination ?? 0}
+      onOpen={() => { upgradePanelOpen = true; }}
+    />
+    <UpgradePanel
+      visible={upgradePanelOpen}
+      imagination={latestFrame?.imagination ?? 0}
+      upgrades={latestFrame?.upgrades ?? { energyTankTier: 0, hagglingTier: 0 }}
+      maxEnergy={latestFrame?.maxEnergy ?? 600}
+      onClose={() => { upgradePanelOpen = false; }}
+    />
     <AvatarEditor
       visible={avatarEditorOpen}
       manifest={avatarManifest}

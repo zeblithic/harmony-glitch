@@ -172,6 +172,8 @@ export interface RenderFrame {
   energy: number;
   maxEnergy: number;
   activeCraft?: ActiveCraftFrame | null;
+  imagination: number;
+  upgrades: PlayerUpgrades;
 }
 
 export interface NetworkStatus {
@@ -250,6 +252,7 @@ export interface PickupFeedback {
   x: number;
   y: number;
   ageSecs: number;
+  color?: string;
 }
 
 export interface RecipeDef {
@@ -284,11 +287,37 @@ export interface SavedState {
   currants?: number;
   energy?: number;
   maxEnergy?: number;
+  imagination?: number;
+  upgrades?: PlayerUpgrades;
 }
 
 export interface EatResult {
   energy: number;
   maxEnergy: number;
+}
+
+export interface PlayerUpgrades {
+  energyTankTier: number;
+  hagglingTier: number;
+}
+
+export interface BuyUpgradeResult {
+  imagination: number;
+  upgrades: PlayerUpgrades;
+  energy: number;
+  maxEnergy: number;
+}
+
+export interface UpgradeTierDef {
+  cost: number;
+  effectValue: number;
+}
+
+export interface UpgradePathDef {
+  id: string;
+  name: string;
+  description: string;
+  tiers: UpgradeTierDef[];
 }
 
 export type AudioEvent =
