@@ -26,7 +26,7 @@
   });
 
   let isSelectedEdible = $derived(selectedItem?.energyValue != null && selectedItem.energyValue > 0);
-  let isEnergyFull = $derived(energy >= maxEnergy);
+  let isEnergyFull = $derived((maxEnergy - energy) < 0.5);
 
   function displayName(itemId: string): string {
     return itemId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
