@@ -326,9 +326,15 @@ impl NetworkState {
             }
             self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
+            self.state_validator.clear_peer(&addr);
             let event = PresenceEvent::Left { address_hash: addr };
             actions.push(NetworkAction::PresenceChange(event));
         }
+
+        // Decay trust opinions toward vacuous for inactive peers.
+        // dt approximated as 1/60s (tick rate) since NetworkState doesn't
+        // track its own elapsed time — close enough for slow decay.
+        self.trust_store.tick_decay(1.0 / 60.0);
 
         // Sweep unmatched_links: only remove Closed links. Active/Handshake
         // links are kept regardless of peer count — a LinkRequest can arrive

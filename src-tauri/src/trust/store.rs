@@ -76,12 +76,12 @@ impl TrustStore {
         pt.opinion.update_negative(TRADE_FAILURE_WEIGHT);
     }
 
-    /// Accumulate co-presence time. Trust grows logarithmically,
-    /// capping at COPRESENCE_CAP_SECS to prevent passive farming.
+    /// Accumulate co-presence time. Trust grows with linear diminishing
+    /// returns, capping at COPRESENCE_CAP_SECS to prevent passive farming.
     pub fn record_copresence(&mut self, hash: &[u8; 16], dt: f64) {
         let pt = self.get_or_insert(hash);
         pt.copresence_secs += dt;
-        // Logarithmic diminishing returns: effective weight drops as copresence grows
+        // Linear diminishing returns: effective weight drops as copresence grows
         let ratio = (pt.copresence_secs / COPRESENCE_CAP_SECS).min(1.0);
         let effective_weight = COPRESENCE_WEIGHT_PER_SEC * dt * (1.0 - ratio);
         if effective_weight > 0.0 {

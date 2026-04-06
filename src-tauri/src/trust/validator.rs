@@ -88,17 +88,14 @@ impl StateValidator {
     ) -> Vec<Violation> {
         let mut violations = Vec::new();
 
-        // 1. Position bounds
+        // 1. Position bounds (single violation for any axis out of range)
         let min_x = bounds.left + HALF_WIDTH;
         let max_x = bounds.right - HALF_WIDTH;
-        if (state.x as f64) < min_x - 1.0 || (state.x as f64) > max_x + 1.0 {
-            violations.push(Violation::OutOfBounds {
-                x: state.x,
-                y: state.y,
-            });
-        }
-        // Y bounds: allow some margin above top (jumping) and below bottom
-        if (state.y as f64) < bounds.top - 100.0 || (state.y as f64) > bounds.bottom + 50.0 {
+        let x_oob =
+            (state.x as f64) < min_x - 1.0 || (state.x as f64) > max_x + 1.0;
+        let y_oob = (state.y as f64) < bounds.top - 100.0
+            || (state.y as f64) > bounds.bottom + 50.0;
+        if x_oob || y_oob {
             violations.push(Violation::OutOfBounds {
                 x: state.x,
                 y: state.y,
@@ -114,7 +111,11 @@ impl StateValidator {
             violations.push(Violation::InvalidVelocityY { vy: state.vy });
         }
 
-        // 3. Teleport detection (delta check against previous state)
+        // 3. Teleport detection (delta check against previous state).
+        // Only update the baseline when enough time has elapsed for a
+        // meaningful delta check — prevents rapid updates from resetting
+        // the baseline and bypassing teleport detection.
+        let mut update_baseline = !self.last_states.contains_key(address_hash);
         if let Some(prev) = self.last_states.get(address_hash) {
             let elapsed = now - prev.timestamp;
             if elapsed >= MIN_DELTA_TIME {
@@ -134,18 +135,20 @@ impl StateValidator {
                         max_possible,
                     });
                 }
+                update_baseline = true;
             }
         }
 
-        // Always store for next delta check
-        self.last_states.insert(
-            *address_hash,
-            ValidatedState {
-                x: state.x,
-                y: state.y,
-                timestamp: now,
-            },
-        );
+        if update_baseline {
+            self.last_states.insert(
+                *address_hash,
+                ValidatedState {
+                    x: state.x,
+                    y: state.y,
+                    timestamp: now,
+                },
+            );
+        }
 
         violations
     }
@@ -299,13 +302,16 @@ mod tests {
     }
 
     #[test]
-    fn rapid_updates_skip_delta_check() {
+    fn rapid_updates_do_not_reset_baseline() {
         let mut v = StateValidator::new();
         v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0);
-        // Update 1ms later — within MIN_DELTA_TIME, delta check skipped
-        let violations = v.validate(&hash(1), &valid_state(100.0, -10.0), &bounds(), 1.005);
-        // No teleport violation because delta check is skipped for very short intervals
+        // Rapid update 1ms later at a far position — delta check skipped
+        // but baseline is NOT updated (prevents bypass)
+        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.005);
         assert!(!violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
+        // Next update at legitimate interval still sees the original baseline (0, -10)
+        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.1);
+        assert!(violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
     }
 
     #[test]

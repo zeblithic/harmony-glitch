@@ -758,13 +758,8 @@ fn handle_trade_message(
                             if let Some(cancel_msg) = cancel_msg {
                                 send_trade_msg(app, &cancel_msg, &authenticated_sender);
                             }
-                            // Record trade failure as negative trust signal.
-                            {
-                                let net = app.state::<NetworkWrapper>();
-                                let mut ns =
-                                    net.0.lock().unwrap_or_else(|e| e.into_inner());
-                                ns.trust_store.record_trade_failure(&authenticated_sender);
-                            }
+                            // No trust penalty — execute_trade failures are local
+                            // (insufficient items/currants), not remote peer misbehavior.
                             let _ = app.emit(
                                 "trade_event",
                                 serde_json::json!({"type": "cancelled", "reason": e}),
