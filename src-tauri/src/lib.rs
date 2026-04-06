@@ -7,6 +7,7 @@ pub mod persistence;
 pub mod physics;
 pub mod street;
 pub mod trade;
+pub mod trust;
 
 use avatar::types::{AnimationState, AvatarAppearance, Direction};
 use engine::state::GameState;
@@ -306,6 +307,12 @@ fn load_street(
         // Use the canonical TSID from parsed street data, not the raw input name.
         // This ensures peers using short names ("demo_meadow") and TSIDs ("LADEMO001")
         // resolve to the same street identity for peer discovery.
+        net_state.set_street_bounds(
+            street_data.left,
+            street_data.right,
+            street_data.top,
+            street_data.bottom,
+        );
         net_state.change_street(&street_data.tsid, now_secs, &mut rand::rngs::OsRng)?
     };
     execute_network_actions(&app, actions);
@@ -731,10 +738,11 @@ fn handle_trade_message(
                                 "trade_event",
                                 serde_json::json!({"type": "completed"}),
                             );
-                            // Send Complete courtesy message to peer.
+                            // Send Complete courtesy message to peer + record trust signal.
                             let net = app.state::<NetworkWrapper>();
                             let mut ns =
                                 net.0.lock().unwrap_or_else(|e| e.into_inner());
+                            ns.trust_store.record_trade_success(&authenticated_sender);
                             let actions =
                                 ns.send_trade_message(&complete_msg, &authenticated_sender, &mut rand::rngs::OsRng);
                             drop(ns);
@@ -750,6 +758,8 @@ fn handle_trade_message(
                             if let Some(cancel_msg) = cancel_msg {
                                 send_trade_msg(app, &cancel_msg, &authenticated_sender);
                             }
+                            // No trust penalty — execute_trade failures are local
+                            // (insufficient items/currants), not remote peer misbehavior.
                             let _ = app.emit(
                                 "trade_event",
                                 serde_json::json!({"type": "cancelled", "reason": e}),

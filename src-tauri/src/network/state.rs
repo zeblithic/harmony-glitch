@@ -149,6 +149,12 @@ pub struct NetworkState {
     /// it to a peer during Session handshake when the real identity is revealed.
     /// Keyed by link_id.
     unmatched_links: HashMap<[u8; 16], Link>,
+    /// Per-peer Subjective Logic trust scores.
+    pub trust_store: crate::trust::store::TrustStore,
+    /// Validates incoming peer state against physics bounds.
+    state_validator: crate::trust::validator::StateValidator,
+    /// Current street bounds for state validation (set on load_street).
+    street_bounds: Option<crate::trust::validator::StreetBounds>,
 }
 
 impl NetworkState {
@@ -187,7 +193,21 @@ impl NetworkState {
             registry: RemotePlayerRegistry::new(),
             peers: HashMap::new(),
             unmatched_links: HashMap::new(),
+            trust_store: crate::trust::store::TrustStore::new(),
+            state_validator: crate::trust::validator::StateValidator::new(),
+            street_bounds: None,
         }
+    }
+
+    /// Set street bounds for peer state validation. Called from load_street.
+    pub fn set_street_bounds(&mut self, left: f64, right: f64, top: f64, bottom: f64) {
+        self.street_bounds = Some(crate::trust::validator::StreetBounds {
+            left,
+            right,
+            top,
+            bottom,
+        });
+        self.state_validator.clear_all();
     }
 
     /// Update the display name and re-register the announcing destination
@@ -306,9 +326,15 @@ impl NetworkState {
             }
             self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
+            self.state_validator.clear_peer(&addr);
             let event = PresenceEvent::Left { address_hash: addr };
             actions.push(NetworkAction::PresenceChange(event));
         }
+
+        // Decay trust opinions toward vacuous for inactive peers.
+        // dt approximated as 1/60s (tick rate) since NetworkState doesn't
+        // track its own elapsed time — close enough for slow decay.
+        self.trust_store.tick_decay(1.0 / 60.0);
 
         // Sweep unmatched_links: only remove Closed links. Active/Handshake
         // links are kept regardless of peer count — a LinkRequest can arrive
@@ -1628,6 +1654,20 @@ impl NetworkState {
                     if let Ok(msg) = serde_json::from_slice::<NetMessage>(&payload) {
                         match msg {
                             NetMessage::PlayerState(state) => {
+                                // Validate state against physics bounds
+                                if let Some(ref bounds) = self.street_bounds {
+                                    let violations = self.state_validator.validate(
+                                        addr,
+                                        &state,
+                                        bounds,
+                                        now_secs_f64,
+                                    );
+                                    for v in &violations {
+                                        self.trust_store
+                                            .record_violation(addr, v.severity());
+                                    }
+                                }
+                                // Accept state regardless (ZEB-22 adds rejection)
                                 self.registry.update_state(addr, state, now_secs_f64);
                                 out.push(NetworkAction::RemotePlayerUpdate {
                                     address_hash: *addr,
