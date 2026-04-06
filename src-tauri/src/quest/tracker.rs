@@ -16,31 +16,36 @@ pub fn tick_quest_progress(
             continue;
         };
         for (i, objective) in def.objectives.iter().enumerate() {
-            if i >= active.objective_progress.len() {
-                break;
-            }
+            let Some(slot) = active.objective_progress.get_mut(i) else {
+                continue;
+            };
             match objective {
                 QuestObjective::Fetch {
                     item_id, count, ..
                 } => {
-                    let have = inventory.count_item(item_id);
-                    active.objective_progress[i] = have.min(*count);
+                    *slot = inventory.count_item(item_id).min(*count);
+                }
+                QuestObjective::Deliver {
+                    item_id, count, ..
+                } => {
+                    // Track delivery progress from inventory so the quest log
+                    // shows live counts (actual removal happens at turn-in).
+                    *slot = inventory.count_item(item_id).min(*count);
                 }
                 QuestObjective::Visit {
                     street_id: target, ..
                 } => {
-                    if street_id == target && active.objective_progress[i] == 0 {
-                        active.objective_progress[i] = 1;
+                    if street_id == target && *slot == 0 {
+                        *slot = 1;
                     }
                 }
                 QuestObjective::LearnSkill { skill_id, .. } => {
                     if skill_progress.learned.contains(skill_id) {
-                        active.objective_progress[i] = 1;
+                        *slot = 1;
                     }
                 }
                 // Craft objectives tracked by record_craft(), not tick.
-                // Deliver objectives checked at dialogue time via conditions.
-                QuestObjective::Craft { .. } | QuestObjective::Deliver { .. } => {}
+                QuestObjective::Craft { .. } => {}
             }
         }
     }

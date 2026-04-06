@@ -1,7 +1,7 @@
 use crate::item::inventory::Inventory;
 use crate::item::types::ItemDefs;
 use crate::quest::types::{
-    ActiveQuest, DialogueChoiceResult, DialogueCondition, DialogueDefs, DialogueEffect,
+    DialogueChoiceResult, DialogueCondition, DialogueDefs, DialogueEffect,
     DialogueFrame, DialogueOptionFrame, QuestDefs, QuestObjective, QuestProgress,
 };
 use crate::skill::types::SkillProgress;
@@ -73,6 +73,18 @@ pub fn evaluate_choice(
         }
     };
 
+    // Re-validate that the selected option's conditions are still met.
+    // The frontend only shows filtered options, but a direct IPC call
+    // could pass a hidden option's index.
+    let conditions_met = option.conditions.iter().all(|c| {
+        check_condition(c, quest_progress, quest_defs, inventory, skill_progress)
+    });
+    if !conditions_met {
+        return DialogueChoiceResult::End {
+            feedback: vec!["Option not available.".to_string()],
+        };
+    }
+
     // Apply effects
     let mut feedback = Vec::new();
     for effect in &option.effects {
@@ -123,10 +135,25 @@ pub fn check_condition(
                 && !quest_progress.completed.contains(quest_id)
         }
         DialogueCondition::QuestActive { quest_id } => {
+            // Active but NOT ready for turn-in — avoids showing both
+            // "in progress" and "turn in" options simultaneously.
             quest_progress.active.contains_key(quest_id)
+                && !crate::quest::tracker::is_quest_ready(
+                    quest_id,
+                    quest_progress,
+                    quest_defs,
+                    inventory,
+                    skill_progress,
+                )
         }
         DialogueCondition::QuestReady { quest_id } => {
-            is_quest_objectives_met(quest_id, quest_progress, quest_defs, inventory, skill_progress)
+            crate::quest::tracker::is_quest_ready(
+                quest_id,
+                quest_progress,
+                quest_defs,
+                inventory,
+                skill_progress,
+            )
         }
         DialogueCondition::QuestComplete { quest_id } => {
             quest_progress.completed.contains(quest_id)
@@ -153,20 +180,22 @@ pub fn apply_effect(
     let mut feedback = Vec::new();
     match effect {
         DialogueEffect::StartQuest { quest_id } => {
-            if let Some(def) = quest_defs.get(quest_id) {
-                let objective_count = def.objectives.len();
-                quest_progress.active.insert(
-                    quest_id.clone(),
-                    ActiveQuest {
-                        quest_id: quest_id.clone(),
-                        objective_progress: vec![0; objective_count],
-                    },
-                );
-                feedback.push(format!("Quest started: {}", def.name));
+            if let Ok(()) =
+                crate::quest::tracker::start_quest(quest_id, quest_defs, quest_progress)
+            {
+                let name = quest_defs
+                    .get(quest_id)
+                    .map(|d| d.name.as_str())
+                    .unwrap_or(quest_id);
+                feedback.push(format!("Quest started: {name}"));
             }
         }
         DialogueEffect::CompleteQuest { quest_id } => {
             if let Some(def) = quest_defs.get(quest_id) {
+                // Guard: only complete a quest that is currently active
+                if !quest_progress.active.contains_key(quest_id) {
+                    return feedback;
+                }
                 // Remove items for deliver objectives
                 for obj in &def.objectives {
                     if let QuestObjective::Deliver {
@@ -255,52 +284,13 @@ fn build_frame(
     }
 }
 
-/// Check if all objectives of a quest are met (used by QuestReady condition).
-fn is_quest_objectives_met(
-    quest_id: &str,
-    quest_progress: &QuestProgress,
-    quest_defs: &QuestDefs,
-    inventory: &Inventory,
-    skill_progress: &SkillProgress,
-) -> bool {
-    let active = match quest_progress.active.get(quest_id) {
-        Some(a) => a,
-        None => return false,
-    };
-    let def = match quest_defs.get(quest_id) {
-        Some(d) => d,
-        None => return false,
-    };
-
-    for (i, objective) in def.objectives.iter().enumerate() {
-        let progress = active.objective_progress.get(i).copied().unwrap_or(0);
-        let met = match objective {
-            QuestObjective::Fetch { item_id, count, .. } => {
-                inventory.count_item(item_id) >= *count
-            }
-            QuestObjective::Craft { count, .. } => progress >= *count,
-            QuestObjective::Deliver {
-                item_id, count, ..
-            } => inventory.count_item(item_id) >= *count,
-            QuestObjective::Visit { .. } => progress >= 1,
-            QuestObjective::LearnSkill { skill_id, .. } => {
-                skill_progress.learned.contains(skill_id)
-            }
-        };
-        if !met {
-            return false;
-        }
-    }
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::item::types::ItemDef;
     use crate::quest::types::{
-        DialogueNodeDef, DialogueOptionDef, DialogueTreeDef, QuestDef, QuestObjective,
-        QuestRewards,
+        ActiveQuest, DialogueNodeDef, DialogueOptionDef, DialogueTreeDef, QuestDef,
+        QuestObjective, QuestRewards,
     };
     use std::collections::HashMap;
 

@@ -350,9 +350,9 @@
             closeDialogue().catch(console.error);
           } else if (frame.interactionPrompt?.entityId) {
             const eid = frame.interactionPrompt.entityId;
-            getDialogueState(eid).then(frame => {
+            getDialogueState(eid).then(dialogFrame => {
               if (latestFrame?.interactionPrompt?.entityId !== eid) return;
-              dialogueFrame = frame;
+              dialogueFrame = dialogFrame;
               dialogueEntityId = eid;
               dialogueOpen = true;
               dialogueCloseFrames = 0;
