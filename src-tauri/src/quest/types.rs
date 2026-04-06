@@ -243,6 +243,11 @@ pub enum DialogueChoiceResult {
     Continue {
         frame: DialogueFrame,
         feedback: Vec<String>,
+        /// The node ID we navigated to (used by the IPC command to update
+        /// active_dialogue.current_node — not sent to the frontend).
+        #[serde(skip_serializing)]
+        #[serde(default)]
+        next_node_id: String,
     },
     /// Dialogue ended.
     #[serde(rename_all = "camelCase")]

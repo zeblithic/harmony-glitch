@@ -18,6 +18,7 @@
   let previousFocus: HTMLElement | null = null;
   let feedbackMessages = $state<string[]>([]);
   let showingFeedback = $state(false);
+  let choosing = $state(false);
 
   $effect(() => {
     if (visible && dialogEl) {
@@ -36,6 +37,7 @@
       previousFocus = null;
       feedbackMessages = [];
       showingFeedback = false;
+      choosing = false;
     }
   });
 
@@ -46,6 +48,8 @@
   }
 
   async function handleChoose(optionIndex: number) {
+    if (choosing || showingFeedback) return;
+    choosing = true;
     try {
       const result: DialogueChoiceResult = await dialogueChoose(optionIndex);
       if (result.type === 'continue') {
@@ -56,9 +60,11 @@
           setTimeout(() => {
             showingFeedback = false;
             feedbackMessages = [];
+            choosing = false;
             onFrameUpdate?.(result.frame);
           }, 1200);
         } else {
+          choosing = false;
           onFrameUpdate?.(result.frame);
         }
       } else {
@@ -69,14 +75,17 @@
           setTimeout(() => {
             showingFeedback = false;
             feedbackMessages = [];
+            choosing = false;
             onClose?.();
           }, 1500);
         } else {
+          choosing = false;
           onClose?.();
         }
       }
     } catch (e) {
       console.error('Dialogue choice failed:', e);
+      choosing = false;
       onClose?.();
     }
   }

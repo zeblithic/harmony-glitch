@@ -112,7 +112,11 @@ pub fn evaluate_choice(
                     skill_progress,
                     entity_id,
                 );
-                DialogueChoiceResult::Continue { frame, feedback }
+                DialogueChoiceResult::Continue {
+                    frame,
+                    feedback,
+                    next_node_id: next_id.clone(),
+                }
             } else {
                 DialogueChoiceResult::End { feedback }
             }

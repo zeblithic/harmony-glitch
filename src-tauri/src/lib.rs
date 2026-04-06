@@ -595,14 +595,6 @@ fn dialogue_choose(
         .ok_or("No active dialogue")?
         .clone();
 
-    // Pre-read the next_id from the option before the mutable borrow
-    let next_id = state
-        .dialogue_defs
-        .get(&dialogue.tree_id)
-        .and_then(|tree| tree.nodes.get(&dialogue.current_node))
-        .and_then(|node| node.options.get(option_index))
-        .and_then(|opt| opt.next.clone());
-
     // Destructure to satisfy the borrow checker — evaluate_choice needs
     // both immutable and mutable borrows on different GameState fields.
     let state = &mut *state;
@@ -622,11 +614,9 @@ fn dialogue_choose(
     );
 
     match &result {
-        quest::types::DialogueChoiceResult::Continue { .. } => {
-            if let Some(next) = next_id {
-                if let Some(ref mut active) = state.active_dialogue {
-                    active.current_node = next;
-                }
+        quest::types::DialogueChoiceResult::Continue { next_node_id, .. } => {
+            if let Some(ref mut active) = state.active_dialogue {
+                active.current_node = next_node_id.clone();
             }
         }
         quest::types::DialogueChoiceResult::End { .. } => {
