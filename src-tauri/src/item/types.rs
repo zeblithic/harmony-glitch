@@ -20,7 +20,7 @@ pub struct ItemDef {
 }
 
 /// A stack of items in inventory.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemStack {
     pub item_id: String,

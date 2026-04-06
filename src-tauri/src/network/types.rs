@@ -1,3 +1,5 @@
+use crate::avatar::types::AvatarAppearance;
+use crate::trade::types::TradeMessage;
 use serde::{Deserialize, Serialize};
 
 /// Compact player state for 60Hz network updates.
@@ -11,6 +13,8 @@ pub struct PlayerNetState {
     /// 0 = left, 1 = right
     pub facing: u8,
     pub on_ground: bool,
+    /// 0 = idle, 1 = walking, 2 = jumping, 3 = falling
+    pub animation: u8,
 }
 
 /// Chat message — ephemeral, no history.
@@ -42,11 +46,14 @@ pub enum NetMessage {
     PlayerState(PlayerNetState),
     Chat(ChatMessage),
     Presence(PresenceEvent),
+    AvatarUpdate(Box<AvatarAppearance>),
+    Trade(TradeMessage),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::avatar::types::AvatarAppearance;
 
     const RETICULUM_MTU: usize = 500;
     // Worst-case overhead: Reticulum Type2 header (35 bytes) + Zenoh envelope (33 bytes)
@@ -61,6 +68,7 @@ mod tests {
             vy: -400.0,
             facing: 1,
             on_ground: true,
+            animation: 1,
         };
         let msg = NetMessage::PlayerState(state);
         let bytes = serde_json::to_vec(&msg).unwrap();
@@ -80,6 +88,7 @@ mod tests {
             vy: 999.99,
             facing: 1,
             on_ground: true,
+            animation: 3,
         };
         let msg = NetMessage::PlayerState(state);
         let bytes = serde_json::to_vec(&msg).unwrap();
@@ -171,5 +180,49 @@ mod tests {
             }
             _ => panic!("wrong variant"),
         }
+    }
+
+    #[test]
+    fn avatar_update_round_trip() {
+        let avatar = AvatarAppearance::default();
+        let msg = NetMessage::AvatarUpdate(Box::new(avatar.clone()));
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
+        match decoded {
+            NetMessage::AvatarUpdate(a) => assert_eq!(*a, avatar),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn avatar_update_typical_fits_in_mtu() {
+        // Typical avatar with real Glitch item names.
+        // AvatarUpdate is infrequent (every 5s + on change), so
+        // Reticulum link fragmentation handles edge cases gracefully.
+        let avatar = AvatarAppearance {
+            eyes: "eyes_01".into(),
+            ears: "ears_0001".into(),
+            nose: "nose_0001".into(),
+            mouth: "mouth_01".into(),
+            hair: "Buzzcut".into(),
+            skin_color: "D4C159".into(),
+            hair_color: "4A3728".into(),
+            hat: None,
+            coat: None,
+            shirt: Some("Bandana_Tank".into()),
+            pants: Some("Boardwalk_Empire_ladies_pants".into()),
+            dress: None,
+            skirt: None,
+            shoes: Some("Men_DressShoes".into()),
+            bracelet: None,
+        };
+        let msg = NetMessage::AvatarUpdate(Box::new(avatar));
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        assert!(
+            bytes.len() <= MAX_PAYLOAD,
+            "Typical AvatarUpdate is {} bytes, max is {}",
+            bytes.len(),
+            MAX_PAYLOAD
+        );
     }
 }

@@ -1,3 +1,4 @@
+use crate::avatar::types::{AnimationState, AvatarAppearance};
 use crate::engine::state::RemotePlayerFrame;
 use crate::network::types::{PlayerNetState, PresenceEvent};
 use std::collections::HashMap;
@@ -10,6 +11,7 @@ struct RemotePlayer {
     address_hash: [u8; 16],
     display_name: String,
     state: PlayerNetState,
+    avatar: Option<AvatarAppearance>,
     last_update: f64,
 }
 
@@ -59,7 +61,9 @@ impl RemotePlayerRegistry {
                             vy: 0.0,
                             facing: 1,
                             on_ground: true,
+                            animation: 0,
                         },
+                        avatar: None,
                         last_update: now,
                     },
                 );
@@ -82,6 +86,13 @@ impl RemotePlayerRegistry {
     pub fn refresh_liveness(&mut self, address_hash: &[u8; 16], now: f64) {
         if let Some(player) = self.players.get_mut(address_hash) {
             player.last_update = now;
+        }
+    }
+
+    /// Update the avatar appearance for a known player.
+    pub fn update_avatar(&mut self, address_hash: &[u8; 16], avatar: AvatarAppearance) {
+        if let Some(player) = self.players.get_mut(address_hash) {
+            player.avatar = Some(avatar);
         }
     }
 
@@ -125,6 +136,13 @@ impl RemotePlayerRegistry {
                     y: p.state.y as f64,
                     facing: facing.to_string(),
                     on_ground: p.state.on_ground,
+                    animation: match p.state.animation {
+                        1 => AnimationState::Walking,
+                        2 => AnimationState::Jumping,
+                        3 => AnimationState::Falling,
+                        _ => AnimationState::Idle,
+                    },
+                    avatar: p.avatar.clone(),
                 }
             })
             .collect();
@@ -141,11 +159,19 @@ impl RemotePlayerRegistry {
     pub fn count(&self) -> usize {
         self.players.len()
     }
+
+    /// Look up a peer's display name by address hash.
+    pub fn peer_display_name(&self, address_hash: &[u8; 16]) -> Option<String> {
+        self.players
+            .get(address_hash)
+            .map(|p| p.display_name.clone())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::avatar::types::AvatarAppearance;
 
     fn make_hash(id: u8) -> [u8; 16] {
         [id; 16]
@@ -159,6 +185,14 @@ mod tests {
             vy: 0.0,
             facing: 1,
             on_ground: true,
+            animation: 0,
+        }
+    }
+
+    fn make_joined(id: u8, name: &str) -> PresenceEvent {
+        PresenceEvent::Joined {
+            address_hash: make_hash(id),
+            display_name: name.into(),
         }
     }
 
@@ -168,10 +202,7 @@ mod tests {
         assert_eq!(reg.count(), 0);
 
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
         assert_eq!(reg.count(), 1);
@@ -189,10 +220,7 @@ mod tests {
     fn update_position() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
 
@@ -216,10 +244,7 @@ mod tests {
     fn purges_stale_players() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
         reg.update_state(&make_hash(1), make_state(0.0, 0.0), 1.0);
@@ -233,10 +258,7 @@ mod tests {
     fn purges_newly_joined_without_updates() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
         // Within timeout — should NOT be purged
@@ -252,17 +274,11 @@ mod tests {
     fn clear_removes_all() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(2),
-                display_name: "Bob".into(),
-            },
+            &make_joined(2, "Bob"),
             1.0,
         );
         assert_eq!(reg.count(), 2);
@@ -275,10 +291,7 @@ mod tests {
     fn rejoin_resets_player_state() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
         reg.update_state(&make_hash(1), make_state(500.0, -200.0), 2.0);
@@ -291,10 +304,7 @@ mod tests {
             3.0,
         );
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice v2".into(),
-            },
+            &make_joined(1, "Alice v2"),
             4.0,
         );
 
@@ -309,10 +319,7 @@ mod tests {
     fn refresh_liveness_prevents_stale_purge() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
 
@@ -337,10 +344,7 @@ mod tests {
     fn update_display_name_propagates_to_frames() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "OldName".into(),
-            },
+            &make_joined(1, "OldName"),
             1.0,
         );
         assert_eq!(reg.frames()[0].display_name, "OldName");
@@ -353,17 +357,11 @@ mod tests {
     fn purge_stale_returns_removed_hashes() {
         let mut reg = RemotePlayerRegistry::new();
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(1),
-                display_name: "Alice".into(),
-            },
+            &make_joined(1, "Alice"),
             1.0,
         );
         reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(2),
-                display_name: "Bob".into(),
-            },
+            &make_joined(2, "Bob"),
             5.0,
         );
 
@@ -378,27 +376,9 @@ mod tests {
     fn frames_sorted_deterministically() {
         let mut reg = RemotePlayerRegistry::new();
         // Insert in reverse order: hash 0xFF before 0x01
-        reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(0xFF),
-                display_name: "Zara".into(),
-            },
-            1.0,
-        );
-        reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(0x01),
-                display_name: "Alice".into(),
-            },
-            1.0,
-        );
-        reg.handle_presence(
-            &PresenceEvent::Joined {
-                address_hash: make_hash(0x80),
-                display_name: "Mid".into(),
-            },
-            1.0,
-        );
+        reg.handle_presence(&make_joined(0xFF, "Zara"), 1.0);
+        reg.handle_presence(&make_joined(0x01, "Alice"), 1.0);
+        reg.handle_presence(&make_joined(0x80, "Mid"), 1.0);
 
         let frames = reg.frames();
         assert_eq!(frames.len(), 3);
@@ -406,5 +386,43 @@ mod tests {
         assert_eq!(frames[0].address_hash, hex::encode([0x01u8; 16]));
         assert_eq!(frames[1].address_hash, hex::encode([0x80u8; 16]));
         assert_eq!(frames[2].address_hash, hex::encode([0xFFu8; 16]));
+    }
+
+    #[test]
+    fn avatar_starts_as_none_on_join() {
+        let mut reg = RemotePlayerRegistry::new();
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
+
+        let frames = reg.frames();
+        assert_eq!(frames.len(), 1);
+        assert!(frames[0].avatar.is_none());
+    }
+
+    #[test]
+    fn update_avatar_reflected_in_frames() {
+        let mut reg = RemotePlayerRegistry::new();
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
+
+        let mut custom = AvatarAppearance::default();
+        custom.hair = "pigtails".into();
+        custom.skin_color = "FF69B4".into();
+        reg.update_avatar(&make_hash(1), custom);
+
+        let frames = reg.frames();
+        assert_eq!(frames[0].avatar.as_ref().unwrap().hair, "pigtails");
+        assert_eq!(frames[0].avatar.as_ref().unwrap().skin_color, "FF69B4");
+    }
+
+    #[test]
+    fn animation_state_mapped_in_frames() {
+        let mut reg = RemotePlayerRegistry::new();
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
+
+        let mut state = make_state(0.0, 0.0);
+        state.animation = 1; // walking
+        reg.update_state(&make_hash(1), state, 2.0);
+
+        let frames = reg.frames();
+        assert_eq!(frames[0].animation, AnimationState::Walking);
     }
 }

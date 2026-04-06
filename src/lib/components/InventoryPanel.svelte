@@ -108,6 +108,7 @@
 
   function handleSlotClick(index: number) {
     selectedSlot = selectedSlot === index ? null : index;
+    eatError = null;
   }
 
   async function handleDrop() {

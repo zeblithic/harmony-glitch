@@ -3,10 +3,12 @@ pub mod engine;
 pub mod identity;
 pub mod item;
 pub mod network;
+pub mod persistence;
 pub mod physics;
 pub mod street;
+pub mod trade;
 
-use avatar::types::{AvatarAppearance, Direction};
+use avatar::types::{AnimationState, AvatarAppearance, Direction};
 use engine::state::GameState;
 use network::state::{NetworkAction, NetworkState};
 use network::transport::{UdpTransport, DEFAULT_PORT};
@@ -54,6 +56,9 @@ struct SoundKitMeta {
     id: String,
     name: String,
 }
+
+/// Shared trade state — manages active P2P trades.
+struct TradeWrapper(Mutex<trade::state::TradeManager>);
 
 /// Shared network state — driven by the game loop, queried by commands.
 struct NetworkWrapper(Mutex<NetworkState>);
@@ -186,10 +191,20 @@ fn get_avatar(app: AppHandle) -> Result<AvatarAppearance, String> {
 
 #[tauri::command]
 fn set_avatar(appearance: AvatarAppearance, app: AppHandle) -> Result<AvatarAppearance, String> {
-    let state_wrapper = app.state::<GameStateWrapper>();
-    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    state.avatar = appearance;
-    Ok(state.avatar.clone())
+    let avatar_clone;
+    {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        state.avatar = appearance;
+        avatar_clone = state.avatar.clone();
+    }
+    // Broadcast avatar change to peers (GameState lock dropped first)
+    let net = app.state::<NetworkWrapper>();
+    let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+    let actions = ns.publish_avatar_update(&avatar_clone, &mut rand::rngs::OsRng);
+    drop(ns);
+    execute_network_actions(&app, actions);
+    Ok(avatar_clone)
 }
 
 /// Save the current game state to disk. Non-fatal on failure.
@@ -242,6 +257,41 @@ fn load_street(
             match serde_json::from_value::<crate::engine::state::SaveState>(save_json.clone()) {
                 Ok(save) => state.restore_save(&save),
                 Err(e) => eprintln!("[persistence] Failed to deserialize save_state in load_street: {e}"),
+            }
+        }
+
+        // Recover from an incomplete trade (crash between execute and save).
+        let piw = app.state::<PlayerIdentityWrapper>();
+        let journal_path = piw.data_dir.join("trade_journal.json");
+        if let Some(journal) = trade::journal::read_journal(&journal_path) {
+            let already_saved = state
+                .last_trade_id
+                .is_some_and(|id| id == journal.trade_id);
+            if !already_saved {
+                state.recover_trade_journal(&journal);
+                // Save immediately so recovery is durable.
+                // Do NOT clear the journal until the save succeeds — if
+                // the disk write fails, we need the journal for the next
+                // restart attempt.
+                let saved = state.save_state().is_some_and(|save| {
+                    let save_path = piw.data_dir.join("savegame.json");
+                    match engine::state::write_save_state(&save_path, &save) {
+                        Ok(()) => true,
+                        Err(e) => {
+                            eprintln!("[journal] Failed to save after recovery: {e}");
+                            false
+                        }
+                    }
+                });
+                if !saved {
+                    eprintln!("[journal] Retaining journal for next restart");
+                    // Skip clearing — journal stays on disk for retry.
+                } else {
+                    trade::journal::clear_journal(&journal_path);
+                }
+            } else {
+                // Trade already reflected in save — safe to clean up.
+                trade::journal::clear_journal(&journal_path);
             }
         }
     }
@@ -500,11 +550,244 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     }),
                 );
             }
-            // Informational — registry updates happen inside NetworkState::tick
-            // before these actions are emitted. No action needed here.
-            NetworkAction::PresenceChange(_) | NetworkAction::RemotePlayerUpdate { .. } => {}
+            NetworkAction::PresenceChange(ref event) => {
+                // Cancel trade only if the departing peer is specifically our trade partner.
+                if let network::types::PresenceEvent::Left { address_hash } = event {
+                    let trade = app.state::<TradeWrapper>();
+                    let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
+                    let result = trade_mgr.cancel_trade_with_peer(address_hash);
+                    drop(trade_mgr);
+                    if let Some(ref cancel_msg) = result.cancel_msg {
+                        send_trade_msg(app, cancel_msg, address_hash);
+                    }
+                    if result.cancel_msg.is_some() || result.pending_cleared {
+                        let _ = app.emit(
+                            "trade_event",
+                            serde_json::json!({"type": "cancelled", "reason": "peerDisconnected"}),
+                        );
+                    }
+                }
+            }
+            NetworkAction::RemotePlayerUpdate { .. } => {}
+            NetworkAction::TradeMessageReceived { sender, message } => {
+                handle_trade_message(app, sender, message);
+            }
         }
     }
+}
+
+/// Process an inbound trade protocol message.
+/// `authenticated_sender` is the peer's address hash from the authenticated session layer.
+fn handle_trade_message(
+    app: &AppHandle,
+    authenticated_sender: [u8; 16],
+    msg: trade::types::TradeMessage,
+) {
+    use trade::types::TradeMessage;
+
+    // Verify the message's claimed sender matches the authenticated session peer.
+    let claimed_sender = match &msg {
+        TradeMessage::Request { initiator, .. } => *initiator,
+        TradeMessage::Accept { responder, .. } => *responder,
+        TradeMessage::Decline { responder, .. } => *responder,
+        TradeMessage::Update { sender, .. }
+        | TradeMessage::Lock { sender, .. }
+        | TradeMessage::Unlock { sender, .. }
+        | TradeMessage::Cancel { sender, .. }
+        | TradeMessage::Complete { sender, .. } => *sender,
+    };
+    if claimed_sender != authenticated_sender {
+        return; // spoofed message — discard
+    }
+
+    let trade = app.state::<TradeWrapper>();
+    let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
+
+    match msg {
+        TradeMessage::Request {
+            trade_id,
+            initiator,
+            recipient,
+        } => {
+            // Only process if we are the recipient.
+            let our_hash = {
+                let net = app.state::<NetworkWrapper>();
+                let ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                ns.our_address_hash()
+            };
+            if recipient != our_hash {
+                return;
+            }
+            let initiator_name = {
+                let net = app.state::<NetworkWrapper>();
+                let ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                ns.peer_display_name(&initiator)
+                    .unwrap_or_else(|| "Unknown".into())
+            };
+            if trade_mgr
+                .receive_request(trade_id, initiator, initiator_name.clone(), now_secs(app))
+                .is_ok()
+            {
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({
+                        "type": "request",
+                        "tradeId": trade_id,
+                        "initiatorHash": hex::encode(initiator),
+                        "initiatorName": initiator_name,
+                    }),
+                );
+            }
+        }
+        TradeMessage::Accept { trade_id, .. } => {
+            if trade_mgr.receive_accept(trade_id, &authenticated_sender, now_secs(app)).is_ok() {
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "accepted"}),
+                );
+            }
+        }
+        TradeMessage::Decline { trade_id, .. } => {
+            if trade_mgr.receive_decline(trade_id, &authenticated_sender).is_ok() {
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "declined"}),
+                );
+            }
+        }
+        TradeMessage::Update {
+            trade_id, offer, ..
+        } => {
+            if trade_mgr
+                .receive_remote_update(trade_id, &authenticated_sender, offer, now_secs(app))
+                .is_ok()
+            {
+                let frame = {
+                    let state_wrapper = app.state::<GameStateWrapper>();
+                    let state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                    trade_mgr.trade_frame(&state.item_defs)
+                };
+                if let Some(frame) = frame {
+                    let _ = app.emit(
+                        "trade_event",
+                        serde_json::json!({"type": "updated", "tradeFrame": frame}),
+                    );
+                }
+            }
+        }
+        TradeMessage::Lock {
+            trade_id,
+            terms_hash,
+            ..
+        } => {
+            if let Ok(both_locked) =
+                trade_mgr.receive_remote_lock(trade_id, &authenticated_sender, terms_hash, now_secs(app))
+            {
+                if both_locked {
+                    // Both locked with matching hash — execute trade.
+                    // Write journal BEFORE execution so a crash can be recovered.
+                    // If the journal write fails, abort — proceeding without a
+                    // crash-recovery record would silently defeat the safety guarantee.
+                    let piw = app.state::<PlayerIdentityWrapper>();
+                    let journal_path = piw.data_dir.join("trade_journal.json");
+                    let journal_ok = trade_mgr.build_journal().is_some_and(|journal| {
+                        trade::journal::write_journal(&journal_path, &journal).is_ok()
+                    });
+                    if !journal_ok {
+                        eprintln!("[trade] journal write failed — aborting trade");
+                        let cancel_msg = trade_mgr.cancel_trade();
+                        drop(trade_mgr);
+                        if let Some(cancel_msg) = cancel_msg {
+                            send_trade_msg(app, &cancel_msg, &authenticated_sender);
+                        }
+                        let _ = app.emit(
+                            "trade_event",
+                            serde_json::json!({"type": "cancelled", "reason": "Journal write failed"}),
+                        );
+                        return;
+                    }
+                    let state_wrapper = app.state::<GameStateWrapper>();
+                    let mut guard =
+                        state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                    let state = &mut *guard;
+                    match trade_mgr
+                        .execute_trade(&mut state.inventory, &mut state.currants, &state.item_defs)
+                    {
+                        Ok(complete_msg) => {
+                            // Save state immediately after trade execution.
+                            guard.last_trade_id = Some(trade_id);
+                            let saved = guard.save_state().is_some_and(|save| {
+                                let save_path = piw.data_dir.join("savegame.json");
+                                engine::state::write_save_state(&save_path, &save).is_ok()
+                            });
+                            if saved {
+                                trade::journal::clear_journal(&journal_path);
+                            } else {
+                                eprintln!("[trade] Retaining journal — save failed, trade recoverable on restart");
+                            }
+                            drop(guard);
+                            let _ = app.emit(
+                                "trade_event",
+                                serde_json::json!({"type": "completed"}),
+                            );
+                            // Send Complete courtesy message to peer.
+                            let net = app.state::<NetworkWrapper>();
+                            let mut ns =
+                                net.0.lock().unwrap_or_else(|e| e.into_inner());
+                            let actions =
+                                ns.send_trade_message(&complete_msg, &authenticated_sender, &mut rand::rngs::OsRng);
+                            drop(ns);
+                            drop(trade_mgr);
+                            execute_network_actions(app, actions);
+                        }
+                        Err(e) => {
+                            eprintln!("[trade] execution failed: {e}");
+                            trade::journal::clear_journal(&journal_path);
+                            let cancel_msg = trade_mgr.cancel_trade();
+                            drop(guard);
+                            drop(trade_mgr);
+                            if let Some(cancel_msg) = cancel_msg {
+                                send_trade_msg(app, &cancel_msg, &authenticated_sender);
+                            }
+                            let _ = app.emit(
+                                "trade_event",
+                                serde_json::json!({"type": "cancelled", "reason": e}),
+                            );
+                        }
+                    }
+                } else {
+                    let _ = app.emit(
+                        "trade_event",
+                        serde_json::json!({"type": "locked", "who": "remote"}),
+                    );
+                }
+            }
+        }
+        TradeMessage::Unlock { trade_id, .. } => {
+            if trade_mgr.receive_remote_unlock(trade_id, &authenticated_sender, now_secs(app)).is_ok() {
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "unlocked", "who": "remote"}),
+                );
+            }
+        }
+        TradeMessage::Cancel { trade_id, .. } => {
+            if trade_mgr.receive_cancel(trade_id, &authenticated_sender).is_ok() {
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "cancelled", "reason": "peerCancelled"}),
+                );
+            }
+        }
+        TradeMessage::Complete { trade_id, .. } => {
+            let _ = trade_mgr.receive_complete(trade_id, &authenticated_sender);
+        }
+    }
+}
+
+fn now_secs(app: &AppHandle) -> f64 {
+    let epoch = app.state::<MonotonicEpoch>();
+    Instant::now().duration_since(epoch.0).as_secs_f64()
 }
 
 /// Validate that the player is within interact_radius of the given entity.
@@ -744,11 +1027,238 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
     }))
 }
 
+// ── Trade IPC commands ──────────────────────────────────────────────────
+
+#[tauri::command]
+fn trade_initiate(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let peer_name = {
+        let net = app.state::<NetworkWrapper>();
+        let ns = net.0.lock().map_err(|e| e.to_string())?;
+        ns.peer_display_name(&peer_bytes)
+            .unwrap_or_else(|| "Unknown".into())
+    };
+
+    let trade_id: u64 = rand::random();
+    let msg = {
+        let trade = app.state::<TradeWrapper>();
+        let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+        mgr.initiate_trade(trade_id, peer_bytes, peer_name, now_secs(&app))?
+    };
+    send_trade_msg(&app, &msg, &peer_bytes);
+    Ok(())
+}
+
+#[tauri::command]
+fn trade_accept(app: AppHandle) -> Result<(), String> {
+    let (msg, peer_hash) = {
+        let trade = app.state::<TradeWrapper>();
+        let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+        let msg = mgr.accept_trade(now_secs(&app))?;
+        let peer = mgr.active_peer_hash().ok_or("No active trade after accept")?;
+        (msg, peer)
+    };
+    send_trade_msg(&app, &msg, &peer_hash);
+    // Emit accepted event so the responder's own UI transitions from prompt to trade panel.
+    let _ = app.emit(
+        "trade_event",
+        serde_json::json!({"type": "accepted"}),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn trade_decline(app: AppHandle) -> Result<(), String> {
+    let (msg, peer_hash) = {
+        let trade = app.state::<TradeWrapper>();
+        let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+        let peer = mgr.pending_peer_hash().ok_or("No pending trade to decline")?;
+        let msg = mgr.decline_trade()?;
+        (msg, peer)
+    };
+    send_trade_msg(&app, &msg, &peer_hash);
+    Ok(())
+}
+
+#[tauri::command]
+fn trade_update_offer(
+    items: Vec<item::types::ItemStack>,
+    currants: u64,
+    app: AppHandle,
+) -> Result<(), String> {
+    let offer = trade::types::TradeOffer { items, currants };
+    let (msg, peer_hash) = {
+        let trade = app.state::<TradeWrapper>();
+        let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+        let peer = mgr.active_peer_hash().ok_or("No active trade")?;
+        let msg = mgr.update_offer(offer, now_secs(&app))?;
+        (msg, peer)
+    };
+    send_trade_msg(&app, &msg, &peer_hash);
+    Ok(())
+}
+
+#[tauri::command]
+fn trade_lock(app: AppHandle) -> Result<(), String> {
+    // Hold the trade lock continuously from lock_trade() through execute_trade()
+    // to prevent a race where an inbound Complete/Cancel clears the trade between
+    // the two operations.
+    let trade = app.state::<TradeWrapper>();
+    let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+    let peer_hash = mgr.active_peer_hash().ok_or("No active trade")?;
+    let lock_msg = {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        mgr.lock_trade(&state.inventory, state.currants, now_secs(&app))?
+    };
+
+    // Check if both are now locked (lock_trade may have set Executing).
+    let is_executing = mgr.is_executing();
+
+    if is_executing {
+        // Write journal BEFORE execution so a crash can be recovered.
+        // If the journal write fails, abort — proceeding without a
+        // crash-recovery record would silently defeat the safety guarantee.
+        let piw = app.state::<PlayerIdentityWrapper>();
+        let journal_path = piw.data_dir.join("trade_journal.json");
+        let journal = match mgr.build_journal() {
+            Some(j) => j,
+            None => {
+                eprintln!("[trade] build_journal returned None in Executing phase — aborting");
+                let cancel_msg = mgr.cancel_trade();
+                drop(mgr);
+                if let Some(cancel_msg) = cancel_msg {
+                    send_trade_msg(&app, &cancel_msg, &peer_hash);
+                }
+                return Err("Failed to build trade journal".into());
+            }
+        };
+        if let Err(e) = trade::journal::write_journal(&journal_path, &journal) {
+            eprintln!("[trade] journal write failed: {e} — aborting trade");
+            let cancel_msg = mgr.cancel_trade();
+            drop(mgr);
+            if let Some(cancel_msg) = cancel_msg {
+                send_trade_msg(&app, &cancel_msg, &peer_hash);
+            }
+            let _ = app.emit(
+                "trade_event",
+                serde_json::json!({"type": "cancelled", "reason": "Journal write failed"}),
+            );
+            return Err("Journal write failed — trade aborted".into());
+        }
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut guard = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+        let state = &mut *guard;
+        match mgr.execute_trade(&mut state.inventory, &mut state.currants, &state.item_defs) {
+            Ok(complete_msg) => {
+                guard.last_trade_id = Some(journal.trade_id);
+                let saved = guard.save_state().is_some_and(|save| {
+                    let save_path = piw.data_dir.join("savegame.json");
+                    engine::state::write_save_state(&save_path, &save).is_ok()
+                });
+                if saved {
+                    trade::journal::clear_journal(&journal_path);
+                } else {
+                    eprintln!("[trade] Retaining journal — save failed, trade recoverable on restart");
+                }
+                drop(guard);
+                drop(mgr);
+                // Defer network sends until after all locks are released.
+                send_trade_msg(&app, &lock_msg, &peer_hash);
+                send_trade_msg(&app, &complete_msg, &peer_hash);
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "completed"}),
+                );
+            }
+            Err(e) => {
+                // Do NOT send lock_msg — the peer would see both locked,
+                // execute their side, and we'd have a one-sided trade.
+                trade::journal::clear_journal(&journal_path);
+                let cancel_msg = mgr.cancel_trade();
+                drop(guard);
+                drop(mgr);
+                if let Some(cancel_msg) = cancel_msg {
+                    send_trade_msg(&app, &cancel_msg, &peer_hash);
+                }
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "cancelled", "reason": e}),
+                );
+            }
+        }
+    } else {
+        drop(mgr);
+        send_trade_msg(&app, &lock_msg, &peer_hash);
+        let _ = app.emit(
+            "trade_event",
+            serde_json::json!({"type": "locked", "who": "local"}),
+        );
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn trade_unlock(app: AppHandle) -> Result<(), String> {
+    let (msg, peer_hash) = {
+        let trade = app.state::<TradeWrapper>();
+        let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+        let peer = mgr.active_peer_hash().ok_or("No active trade")?;
+        let msg = mgr.unlock_trade(now_secs(&app))?;
+        (msg, peer)
+    };
+    send_trade_msg(&app, &msg, &peer_hash);
+    let _ = app.emit(
+        "trade_event",
+        serde_json::json!({"type": "unlocked", "who": "local"}),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn trade_cancel(app: AppHandle) -> Result<(), String> {
+    let trade = app.state::<TradeWrapper>();
+    let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
+    let peer_hash = mgr.active_peer_hash();
+    if let (Some(msg), Some(peer)) = (mgr.cancel_trade(), peer_hash) {
+        drop(mgr);
+        send_trade_msg(&app, &msg, &peer);
+    }
+    let _ = app.emit(
+        "trade_event",
+        serde_json::json!({"type": "cancelled", "reason": "localCancelled"}),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn trade_get_state(app: AppHandle) -> Result<Option<trade::types::TradeFrame>, String> {
+    let trade = app.state::<TradeWrapper>();
+    let mgr = trade.0.lock().map_err(|e| e.to_string())?;
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    Ok(mgr.trade_frame(&state.item_defs))
+}
+
+/// Helper to send a trade message via the network.
+fn send_trade_msg(app: &AppHandle, msg: &trade::types::TradeMessage, target: &[u8; 16]) {
+    let net = app.state::<NetworkWrapper>();
+    let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+    let actions = ns.send_trade_message(msg, target, &mut rand::rngs::OsRng);
+    drop(ns);
+    execute_network_actions(app, actions);
+}
+
 fn game_loop(app: AppHandle) {
     let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
     let dt = 1.0 / 60.0;
     let game_start = app.state::<MonotonicEpoch>().0;
     let mut rng = rand::rngs::ThreadRng::default();
+    let mut tick_count: u64 = 0;
 
     loop {
         let tick_start = Instant::now();
@@ -780,8 +1290,35 @@ fn game_loop(app: AppHandle) {
             net_state.tick(&inbound_packets, now_secs, &mut rng)
         };
 
-        // 4. Execute NetworkActions (broadcast packets)
+        // 4. Execute NetworkActions (broadcast packets, trade messages, presence)
         execute_network_actions(&app, net_actions);
+
+        // 4b. Tick trade manager for timeouts.
+        {
+            let trade = app.state::<TradeWrapper>();
+            let mut trade_mgr = trade.0.lock().unwrap_or_else(|e| e.into_inner());
+            // Capture peer hash before tick() clears the trade.
+            let active_peer = trade_mgr.active_peer_hash();
+            let tick_result = trade_mgr.tick(now_secs);
+            drop(trade_mgr);
+            if let (Some(cancel_msg), Some(peer)) = (tick_result.cancel_msg, active_peer) {
+                let net = app.state::<NetworkWrapper>();
+                let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                let actions = ns.send_trade_message(&cancel_msg, &peer, &mut rng);
+                drop(ns);
+                execute_network_actions(&app, actions);
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "cancelled", "reason": "timeout"}),
+                );
+            }
+            if tick_result.pending_expired {
+                let _ = app.emit(
+                    "trade_event",
+                    serde_json::json!({"type": "cancelled", "reason": "timeout"}),
+                );
+            }
+        }
 
         // 5. Read current input
         let input = {
@@ -818,12 +1355,34 @@ fn game_loop(app: AppHandle) {
                         1
                     },
                     on_ground: frame.player.on_ground,
+                    animation: match frame.player.animation {
+                        AnimationState::Idle => 0,
+                        AnimationState::Walking => 1,
+                        AnimationState::Jumping => 2,
+                        AnimationState::Falling => 3,
+                    },
                 };
                 let net = app.state::<NetworkWrapper>();
                 let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
                 ns.publish_player_state(&net_state, &mut rand::rngs::OsRng)
             };
             execute_network_actions(&app, publish_actions);
+
+            // 8b. Periodically broadcast avatar to peers (every 5s = 300 ticks).
+            // Ensures newly connected peers receive our appearance.
+            if tick_count.is_multiple_of(300) {
+                let avatar = {
+                    let state_wrapper = app.state::<GameStateWrapper>();
+                    let state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                    state.avatar.clone()
+                };
+                let net = app.state::<NetworkWrapper>();
+                let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                let actions = ns.publish_avatar_update(&avatar, &mut rand::rngs::OsRng);
+                drop(ns);
+                execute_network_actions(&app, actions);
+            }
+            tick_count += 1;
 
             // 9. Emit RenderFrame to frontend
             let _ = app.emit("render_frame", &frame);
@@ -1104,10 +1663,12 @@ pub fn run() {
             let net_identity =
                 harmony_identity::PrivateIdentity::from_private_bytes(identity_bytes.as_ref())
                     .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+            let our_hash = net_identity.public_identity().address_hash;
             app.manage(NetworkWrapper(Mutex::new(NetworkState::new(
                 net_identity,
                 display_name,
             ))));
+            app.manage(TradeWrapper(Mutex::new(trade::state::TradeManager::new(our_hash))));
 
             // Bind UDP transport for LAN discovery.
             let transport = UdpTransport::bind(DEFAULT_PORT)
@@ -1148,6 +1709,14 @@ pub fn run() {
             vendor_buy,
             vendor_sell,
             eat_item,
+            trade_initiate,
+            trade_accept,
+            trade_decline,
+            trade_update_offer,
+            trade_lock,
+            trade_unlock,
+            trade_cancel,
+            trade_get_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

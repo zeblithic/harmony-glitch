@@ -49,6 +49,9 @@ pub struct SaveState {
     pub energy: f64,
     #[serde(default = "default_max_energy")]
     pub max_energy: f64,
+    /// ID of the last successfully completed trade (for journal recovery).
+    #[serde(default)]
+    pub last_trade_id: Option<u64>,
 }
 
 /// The complete game state.
@@ -82,6 +85,8 @@ pub struct GameState {
     pub store_catalog: StoreCatalog,
     pub energy: f64,
     pub max_energy: f64,
+    /// ID of the last successfully completed trade (for journal recovery).
+    pub last_trade_id: Option<u64>,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -145,6 +150,8 @@ pub struct RemotePlayerFrame {
     pub y: f64,
     pub facing: String, // "left" or "right"
     pub on_ground: bool,
+    pub animation: AnimationState,
+    pub avatar: Option<AvatarAppearance>,
 }
 
 impl GameState {
@@ -190,6 +197,7 @@ impl GameState {
             store_catalog,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         }
     }
 
@@ -741,6 +749,7 @@ impl GameState {
             currants: self.currants,
             energy: self.energy,
             max_energy: self.max_energy,
+            last_trade_id: self.last_trade_id,
         })
     }
 
@@ -773,6 +782,18 @@ impl GameState {
         self.currants = save.currants;
         self.energy = save.energy;
         self.max_energy = save.max_energy;
+        self.last_trade_id = save.last_trade_id;
+    }
+
+    /// Replay a journaled trade that wasn't persisted before a crash.
+    pub fn recover_trade_journal(&mut self, journal: &crate::trade::journal::TradeJournal) {
+        crate::trade::journal::recover(
+            journal,
+            &mut self.inventory,
+            &mut self.currants,
+            &self.item_defs,
+        );
+        self.last_trade_id = Some(journal.trade_id);
     }
 
     fn tick_entities(&mut self, dt: f64, rng: &mut impl Rng) {
@@ -938,10 +959,10 @@ impl GameState {
     }
 }
 
-/// Write a save state to disk as pretty-printed JSON.
+/// Write a save state to disk as pretty-printed JSON (atomic: temp → fsync → rename).
 pub fn write_save_state(path: &std::path::Path, save: &SaveState) -> Result<(), String> {
     let json = serde_json::to_string_pretty(save).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    crate::persistence::atomic_write(path, json.as_bytes(), None)
 }
 
 /// Read a save state from disk. Returns Ok(None) if the file is missing
@@ -2949,6 +2970,7 @@ mod save_tests {
             currants: 50,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2973,6 +2995,7 @@ mod save_tests {
             currants: 50,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -2991,6 +3014,7 @@ mod save_tests {
             currants: 50,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3016,6 +3040,7 @@ mod save_tests {
             currants: 50,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
 
         write_save_state(&path, &save).unwrap();
@@ -3068,6 +3093,7 @@ mod save_tests {
             currants: 50,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         state.restore_save(&save);
 
@@ -3098,6 +3124,7 @@ mod save_tests {
             currants: 50,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         state.restore_save(&save);
 
@@ -3121,6 +3148,7 @@ mod save_tests {
             currants: 999, // will be stripped below
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3142,6 +3170,7 @@ mod save_tests {
             currants: 999,
             energy: 600.0,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3167,6 +3196,7 @@ mod save_tests {
             currants: 50,
             energy: 123.4,
             max_energy: 600.0,
+            last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();

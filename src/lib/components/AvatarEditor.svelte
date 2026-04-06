@@ -3,8 +3,9 @@
   import type { GameRenderer } from '../engine/renderer';
   import type { AvatarAppearance, AvatarManifest } from '../types';
 
-  let { visible = false, manifest, renderer, onClose }: {
+  let { visible = false, firstRun = false, manifest, renderer, onClose }: {
     visible: boolean;
+    firstRun?: boolean;
     manifest: AvatarManifest | null;
     renderer: GameRenderer | null;
     onClose?: () => void;
@@ -57,7 +58,9 @@
         }).catch(e => {
           if (gen !== loadGeneration) return;
           console.error('[AvatarEditor] Failed to load avatar:', e);
-          error = 'Failed to load avatar. Try closing and reopening.';
+          error = firstRun
+            ? 'Failed to load avatar. Press Skip to continue with defaults.'
+            : 'Failed to load avatar. Try closing and reopening.';
         });
         dialogEl.showModal();
       }
@@ -131,10 +134,22 @@
     onClose?.();
   }
 
+  /** Skip/ESC in first-run mode: revert to defaults and advance. */
+  function handleSkip() {
+    if (saving) return;
+    // Revert any in-progress changes so the renderer shows defaults
+    if (savedAppearance) pendingAppearance = { ...savedAppearance };
+    onClose?.();
+  }
+
   function handleDialogCancel(e: Event) {
     e.preventDefault();
     if (saving) return;
-    handleCancel();
+    if (firstRun) {
+      handleSkip();
+    } else {
+      handleCancel();
+    }
   }
 
   function switchTabGroup(group: string) {
@@ -188,13 +203,15 @@
 </script>
 
 {#if visible}
-  <dialog class="avatar-editor" aria-label="Avatar Editor" aria-modal="true"
+  <dialog class="avatar-editor" aria-labelledby="avatar-editor-title" aria-modal="true"
     bind:this={dialogEl} oncancel={handleDialogCancel}>
 
     <div class="panel-header">
-      <h2>Avatar Editor</h2>
-      <button type="button" class="close-btn" aria-label="Close avatar editor"
-        onclick={handleCancel}>&times;</button>
+      <h2 id="avatar-editor-title">{firstRun ? 'Customize Your Glitchen' : 'Avatar Editor'}</h2>
+      {#if !firstRun}
+        <button type="button" class="close-btn" aria-label="Close avatar editor"
+          onclick={handleCancel}>&times;</button>
+      {/if}
     </div>
 
     <div class="tab-bar" role="tablist" aria-label="Avatar sections"
@@ -300,14 +317,19 @@
     </div>
 
     <div class="editor-footer">
-      <button type="button" class="cancel-btn" onclick={handleCancel}>Cancel</button>
+      {#if firstRun}
+        <button type="button" class="cancel-btn" onclick={handleSkip}>Skip</button>
+      {:else}
+        <button type="button" class="cancel-btn" onclick={handleCancel}>Cancel</button>
+      {/if}
       <button type="button" class="save-btn" disabled={saving} onclick={handleSave}>
-        {saving ? 'Saving...' : 'Save'}
+        {saving ? 'Saving...' : firstRun ? 'Continue' : 'Save'}
       </button>
     </div>
     {#if error}
       <div class="error-msg" role="alert">{error}</div>
     {/if}
+    <p class="shortcut-hint">Arrow keys navigate tabs</p>
   </dialog>
 {/if}
 
@@ -523,5 +545,12 @@
     border-radius: 3px;
     font-size: 0.75rem;
     color: #ff9999;
+  }
+
+  .shortcut-hint {
+    margin: 8px 0 0;
+    text-align: center;
+    font-size: 0.65rem;
+    color: #666;
   }
 </style>
