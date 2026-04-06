@@ -165,6 +165,8 @@ export interface RenderFrame {
   currants: number;
   energy: number;
   maxEnergy: number;
+  imagination: number;
+  upgrades: PlayerUpgrades;
 }
 
 export interface NetworkStatus {
@@ -277,9 +279,23 @@ export interface SavedState {
   currants?: number;
   energy?: number;
   maxEnergy?: number;
+  imagination?: number;
+  upgrades?: PlayerUpgrades;
 }
 
 export interface EatResult {
+  energy: number;
+  maxEnergy: number;
+}
+
+export interface PlayerUpgrades {
+  energyTankTier: number;
+  hagglingTier: number;
+}
+
+export interface BuyUpgradeResult {
+  imagination: number;
+  upgrades: PlayerUpgrades;
   energy: number;
   maxEnergy: number;
 }
