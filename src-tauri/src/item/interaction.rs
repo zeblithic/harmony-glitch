@@ -207,6 +207,7 @@ pub fn execute_interaction(
     entity_states: &mut HashMap<String, EntityInstanceState>,
     game_time: f64,
     energy: &mut f64,
+    imagination: &mut u64,
 ) -> InteractionResult {
     let mut result = InteractionResult {
         feedback: vec![],
@@ -296,8 +297,10 @@ pub fn execute_interaction(
             *energy = (*energy - HARVEST_ENERGY_COST).max(0.0);
 
             // Harvest yields (same as before)
+            let mut produced_items: Vec<(&str, u32)> = Vec::new();
             for yield_entry in &def.yields {
                 let count = rng.gen_range(yield_entry.min..=yield_entry.max);
+                produced_items.push((yield_entry.item.as_str(), count));
                 let overflow = inventory.add(&yield_entry.item, count, item_defs);
                 let added = count - overflow;
 
@@ -334,6 +337,21 @@ pub fn execute_interaction(
                         color: None,
                     });
                 }
+            }
+
+            // Earn iMG from production
+            let img_earned = crate::item::imagination::earn_from_harvest(&produced_items, item_defs);
+            if img_earned > 0 {
+                *imagination = imagination.saturating_add(img_earned);
+                result.feedback.push(PickupFeedback {
+                    id: 0,
+                    text: format!("+{img_earned} iMG"),
+                    success: true,
+                    x: entity.x,
+                    y: entity.y,
+                    age_secs: 0.0,
+                    color: Some("#c084fc".to_string()),
+                });
             }
 
             result.interaction_type = Some(InteractionType::Entity {
@@ -551,6 +569,7 @@ mod tests {
             distance: 0.0,
         };
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest,
             &mut inv,
@@ -562,6 +581,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert_eq!(inv.slots[0].as_ref().unwrap().item_id, "cherry");
@@ -592,6 +612,7 @@ mod tests {
             distance: 0.0,
         };
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest,
             &mut inv,
@@ -603,6 +624,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert!(!result.spawned_items.is_empty());
@@ -630,6 +652,7 @@ mod tests {
             distance: 0.0,
         };
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest,
             &mut inv,
@@ -641,6 +664,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert_eq!(inv.slots[0].as_ref().unwrap().count, 3);
@@ -671,6 +695,7 @@ mod tests {
             distance: 0.0,
         };
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest,
             &mut inv,
@@ -682,6 +707,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert_eq!(inv.slots[0].as_ref().unwrap().count, 5);
@@ -765,6 +791,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         execute_interaction(
             &nearest,
             &mut inv,
@@ -776,6 +803,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         let state = entity_states.get("t1").unwrap();
@@ -802,6 +830,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         // First harvest at t=0
         execute_interaction(
             &nearest,
@@ -814,6 +843,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
         let count_after_first = inv.slots[0].as_ref().unwrap().count;
 
@@ -829,6 +859,7 @@ mod tests {
             &mut entity_states,
             2.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert!(result
@@ -858,6 +889,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         execute_interaction(
             &nearest,
             &mut inv,
@@ -869,6 +901,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
         let count_after_first = inv.slots[0].as_ref().unwrap().count;
 
@@ -884,6 +917,7 @@ mod tests {
             &mut entity_states,
             5.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert!(result.feedback.iter().any(|f| f.success));
@@ -910,6 +944,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         // 3 harvests at t=0, 5, 10
         execute_interaction(
             &nearest,
@@ -922,6 +957,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
         execute_interaction(
             &nearest,
@@ -934,6 +970,7 @@ mod tests {
             &mut entity_states,
             5.0,
             &mut energy,
+            &mut imagination,
         );
         execute_interaction(
             &nearest,
@@ -946,6 +983,7 @@ mod tests {
             &mut entity_states,
             10.0,
             &mut energy,
+            &mut imagination,
         );
 
         let state = entity_states.get("t1").unwrap();
@@ -964,6 +1002,7 @@ mod tests {
             &mut entity_states,
             15.0,
             &mut energy,
+            &mut imagination,
         );
         assert!(result
             .feedback
@@ -991,6 +1030,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         // Exhaust all 3 harvests
         execute_interaction(
             &nearest,
@@ -1003,6 +1043,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
         execute_interaction(
             &nearest,
@@ -1015,6 +1056,7 @@ mod tests {
             &mut entity_states,
             5.0,
             &mut energy,
+            &mut imagination,
         );
         execute_interaction(
             &nearest,
@@ -1027,6 +1069,7 @@ mod tests {
             &mut entity_states,
             10.0,
             &mut energy,
+            &mut imagination,
         );
 
         // Depleted at t=10, respawn at t=40 (10 + 30)
@@ -1041,6 +1084,7 @@ mod tests {
             &mut entity_states,
             40.0,
             &mut energy,
+            &mut imagination,
         );
         assert!(result.feedback.iter().any(|f| f.success));
 
@@ -1070,6 +1114,7 @@ mod tests {
         assert!(!entity_states.contains_key("t1"));
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         execute_interaction(
             &nearest,
             &mut inv,
@@ -1081,6 +1126,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert!(entity_states.contains_key("t1"));
@@ -1131,6 +1177,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         for i in 0..10 {
             let result = execute_interaction(
                 &nearest,
@@ -1143,6 +1190,7 @@ mod tests {
                 &mut entity_states,
                 i as f64,
                 &mut energy,
+                &mut imagination,
             );
             assert!(
                 result.feedback.iter().any(|f| f.success),
@@ -1341,6 +1389,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         // First harvest depletes (max_harvests=1)
         execute_interaction(
             &nearest,
@@ -1353,6 +1402,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         // Immediately available (respawn_secs=0, so depleted_until = 0.0)
@@ -1367,6 +1417,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
         assert!(result.feedback.iter().any(|f| f.success));
     }
@@ -1412,6 +1463,7 @@ mod tests {
         };
 
         let mut energy = 100.0_f64;
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest,
             &mut inv,
@@ -1423,6 +1475,7 @@ mod tests {
             &mut entity_states,
             0.0,
             &mut energy,
+            &mut imagination,
         );
 
         assert!(result.feedback.is_empty());
@@ -1489,6 +1542,33 @@ mod tests {
         assert_eq!(prompt.entity_id, Some("jb1".into()));
     }
 
+    /// Combined test data helper: returns (entities, entity_defs, item_defs)
+    /// where cherry has base_cost=3 so iMG earning can be exercised.
+    fn test_data() -> (Vec<WorldEntity>, EntityDefs, ItemDefs) {
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 0.0,
+            y: 0.0,
+        }];
+        let entity_defs = test_entity_defs();
+        let mut item_defs = ItemDefs::new();
+        item_defs.insert(
+            "cherry".into(),
+            crate::item::types::ItemDef {
+                id: "cherry".into(),
+                name: "Cherry".into(),
+                description: "".into(),
+                category: "food".into(),
+                stack_limit: 50,
+                icon: "cherry".into(),
+                base_cost: Some(3),
+                energy_value: None,
+            },
+        );
+        (entities, entity_defs, item_defs)
+    }
+
     #[test]
     fn harvest_with_sufficient_energy() {
         let item_defs = test_item_defs();
@@ -1506,9 +1586,10 @@ mod tests {
         let mut energy = 100.0;
 
         let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest, &mut inventory, &entities, &entity_defs, &world_items,
-            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy,
+            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy, &mut imagination,
         );
 
         assert!(matches!(result.interaction_type, Some(InteractionType::Entity { .. })));
@@ -1533,9 +1614,10 @@ mod tests {
         let mut energy = 0.0;
 
         let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest, &mut inventory, &entities, &entity_defs, &world_items,
-            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy,
+            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy, &mut imagination,
         );
 
         assert!(matches!(result.interaction_type, Some(InteractionType::Rejected)));
@@ -1561,12 +1643,57 @@ mod tests {
         let mut energy = 3.0; // Below HARVEST_ENERGY_COST of 5.0
 
         let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+        let mut imagination: u64 = 0;
         let result = execute_interaction(
             &nearest, &mut inventory, &entities, &entity_defs, &world_items,
-            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy,
+            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy, &mut imagination,
         );
 
         assert!(matches!(result.interaction_type, Some(InteractionType::Rejected)));
         assert_eq!(energy, 3.0, "Energy should not change on rejection");
+    }
+
+    #[test]
+    fn harvest_earns_imagination() {
+        let (entities, entity_defs, item_defs) = test_data();
+        let mut inv = Inventory::new(16);
+        let mut entity_states = HashMap::new();
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut energy = 600.0;
+        let mut imagination: u64 = 0;
+        let nearest = NearestInteractable::Entity {
+            index: 0,
+            distance: 10.0,
+        };
+        let result = execute_interaction(
+            &nearest, &mut inv, &entities, &entity_defs, &[], &item_defs,
+            &mut rng, &mut entity_states, 1.0, &mut energy, &mut imagination,
+        );
+        // Should have earned iMG based on cherry base_cost=3
+        assert!(imagination > 0);
+        // Should have purple iMG feedback
+        let img_feedback = result.feedback.iter().find(|f| f.text.contains("iMG"));
+        assert!(img_feedback.is_some());
+        assert_eq!(img_feedback.unwrap().color, Some("#c084fc".to_string()));
+    }
+
+    #[test]
+    fn harvest_earns_img_even_when_inventory_full() {
+        let (entities, entity_defs, item_defs) = test_data();
+        let mut inv = Inventory::new(1);
+        inv.add("cherry", 50, &item_defs);
+        let mut entity_states = HashMap::new();
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut energy = 600.0;
+        let mut imagination: u64 = 0;
+        let nearest = NearestInteractable::Entity {
+            index: 0,
+            distance: 10.0,
+        };
+        execute_interaction(
+            &nearest, &mut inv, &entities, &entity_defs, &[], &item_defs,
+            &mut rng, &mut entity_states, 1.0, &mut energy, &mut imagination,
+        );
+        assert!(imagination > 0);
     }
 }

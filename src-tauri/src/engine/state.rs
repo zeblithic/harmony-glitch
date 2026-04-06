@@ -583,6 +583,7 @@ impl GameState {
                         &mut self.entity_states,
                         self.game_time,
                         &mut self.energy,
+                        &mut self.imagination,
                     );
 
                     // Apply results — assign unique IDs to feedback
