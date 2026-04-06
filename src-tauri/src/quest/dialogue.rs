@@ -209,13 +209,14 @@ pub fn apply_effect(
                 ) {
                     return feedback;
                 }
-                // Remove items for deliver objectives
+                // Remove items for fetch and deliver objectives
                 for obj in &def.objectives {
-                    if let QuestObjective::Deliver {
-                        item_id, count, ..
-                    } = obj
-                    {
-                        inventory.remove_item(item_id, *count);
+                    match obj {
+                        QuestObjective::Fetch { item_id, count, .. }
+                        | QuestObjective::Deliver { item_id, count, .. } => {
+                            inventory.remove_item(item_id, *count);
+                        }
+                        _ => {}
                     }
                 }
                 // Grant rewards
