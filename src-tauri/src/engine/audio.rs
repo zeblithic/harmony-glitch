@@ -38,6 +38,10 @@ pub enum AudioEvent {
         distance_factor: f64,
         elapsed_secs: f64,
     },
+    #[serde(rename_all = "camelCase")]
+    SkillLearned {
+        skill_id: String,
+    },
 }
 
 #[cfg(test)]

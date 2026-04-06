@@ -5,6 +5,7 @@ pub mod item;
 pub mod network;
 pub mod persistence;
 pub mod physics;
+pub mod skill;
 pub mod street;
 pub mod trade;
 pub mod trust;
@@ -500,8 +501,38 @@ fn get_recipes(app: AppHandle) -> Result<Vec<item::types::RecipeDef>, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     let mut recipes: Vec<_> = state.recipe_defs.values().cloned().collect();
+    // Populate skill gating fields for the frontend
+    for recipe in &mut recipes {
+        if let Some(skill_id) = state.recipe_skill_gate.get(&recipe.id) {
+            recipe.required_skill = Some(skill_id.clone());
+            recipe.locked = !state.skill_progress.learned.contains(skill_id);
+        }
+    }
     recipes.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(recipes)
+}
+
+#[tauri::command]
+fn get_skills(app: AppHandle) -> Result<Vec<skill::types::SkillDef>, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    let mut skills: Vec<_> = state.skill_defs.values().cloned().collect();
+    skills.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(skills)
+}
+
+#[tauri::command]
+fn learn_skill(skill_id: String, app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.learn_skill(&skill_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn cancel_learning(app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.cancel_skill_learning().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1705,6 +1736,24 @@ pub fn run() {
                     );
                 }
             }
+            let skill_defs = skill::loader::parse_skill_defs(
+                include_str!("../../assets/skills.json")
+            ).expect("Failed to parse skills.json");
+            // Validate skill definitions
+            for (skill_id, skill_def) in &skill_defs {
+                for prereq in &skill_def.prerequisites {
+                    assert!(
+                        skill_defs.contains_key(prereq),
+                        "Skill '{skill_id}' references unknown prerequisite '{prereq}'"
+                    );
+                }
+                for recipe_id in &skill_def.unlocks_recipes {
+                    assert!(
+                        recipe_defs.contains_key(recipe_id),
+                        "Skill '{skill_id}' references unknown recipe '{recipe_id}'"
+                    );
+                }
+            }
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,
@@ -1713,6 +1762,7 @@ pub fn run() {
                 recipe_defs,
                 track_catalog,
                 store_catalog,
+                skill_defs,
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
@@ -1800,6 +1850,9 @@ pub fn run() {
             trade_unlock,
             trade_cancel,
             trade_get_state,
+            get_skills,
+            learn_skill,
+            cancel_learning,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

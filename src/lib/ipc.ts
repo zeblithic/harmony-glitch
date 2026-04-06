@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack, SkillDef } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -164,4 +164,18 @@ export function onTradeEvent(callback: (event: TradeEvent) => void): Promise<Unl
   return listen<TradeEvent>('trade_event', (event) => {
     callback(event.payload);
   });
+}
+
+// ── Skills ─────────────────────────────────────────────────────────────
+
+export async function getSkills(): Promise<SkillDef[]> {
+  return invoke<SkillDef[]>('get_skills');
+}
+
+export async function learnSkill(skillId: string): Promise<void> {
+  return invoke('learn_skill', { skillId });
+}
+
+export async function cancelLearning(): Promise<void> {
+  return invoke('cancel_learning');
 }

@@ -156,6 +156,27 @@ export interface ActiveCraftFrame {
   remainingSecs: number;
 }
 
+export interface SkillDef {
+  id: string;
+  name: string;
+  description: string;
+  prerequisites: string[];
+  imaginationCost: number;
+  learnTimeSecs: number;
+  unlocksRecipes: string[];
+}
+
+export interface SkillProgressFrame {
+  learned: string[];
+  learning: LearningFrame | null;
+}
+
+export interface LearningFrame {
+  skillId: string;
+  remainingSecs: number;
+  progress: number;
+}
+
 export interface RenderFrame {
   player: PlayerFrame;
   remotePlayers: RemotePlayerFrame[];
@@ -173,6 +194,7 @@ export interface RenderFrame {
   maxEnergy: number;
   activeCraft?: ActiveCraftFrame | null;
   imagination: number;
+  skillProgress: SkillProgressFrame;
   upgrades: PlayerUpgrades;
 }
 
@@ -265,6 +287,8 @@ export interface RecipeDef {
   durationSecs: number;
   energyCost: number;
   category: string;
+  requiredSkill?: string | null;
+  locked?: boolean;
 }
 
 export interface RecipeItem {
@@ -331,7 +355,8 @@ export type AudioEvent =
   | { type: 'entityInteract'; entityType: string }
   | { type: 'streetChanged'; streetId: string }
   | { type: 'footstep'; surface: string }
-  | { type: 'jukeboxUpdate'; entityId: string; trackId: string; playing: boolean; distanceFactor: number; elapsedSecs: number };
+  | { type: 'jukeboxUpdate'; entityId: string; trackId: string; playing: boolean; distanceFactor: number; elapsedSecs: number }
+  | { type: 'skillLearned'; skillId: string };
 
 export interface SoundKitMeta {
   id: string;
