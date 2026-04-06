@@ -15,6 +15,7 @@ use crate::item::types::{
     StoreCatalog, WorldEntity, WorldEntityFrame, WorldItem, WorldItemFrame,
 };
 use crate::physics::movement::{InputState, PhysicsBody};
+use crate::skill::types::{SkillDefs, SkillProgress, SkillProgressFrame, LearningFrame};
 use crate::street::types::StreetData;
 
 /// Energy lost per second from passive decay.
@@ -52,6 +53,12 @@ pub struct SaveState {
     /// ID of the last successfully completed trade (for journal recovery).
     #[serde(default)]
     pub last_trade_id: Option<u64>,
+    /// Imagination currency (earned from interactions and crafting).
+    #[serde(default)]
+    pub imagination: u64,
+    /// Skill learning progress (learned skills + in-progress learning).
+    #[serde(default)]
+    pub skill_progress: SkillProgress,
 }
 
 /// The complete game state.
@@ -89,6 +96,14 @@ pub struct GameState {
     pub last_trade_id: Option<u64>,
     /// In-progress timed craft, if any.
     pub active_craft: Option<ActiveCraft>,
+    /// Skill definitions (loaded from assets/skills.json).
+    pub skill_defs: SkillDefs,
+    /// Player's skill learning progress.
+    pub skill_progress: SkillProgress,
+    /// Imagination currency.
+    pub imagination: u64,
+    /// Reverse map: recipe_id → skill_id required to craft it.
+    pub recipe_skill_gate: std::collections::HashMap<String, String>,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -122,6 +137,8 @@ pub struct RenderFrame {
     pub energy: f64,
     pub max_energy: f64,
     pub active_craft: Option<ActiveCraftFrame>,
+    pub imagination: u64,
+    pub skill_progress: SkillProgressFrame,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,6 +175,7 @@ pub struct RemotePlayerFrame {
 }
 
 impl GameState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         viewport_width: f64,
         viewport_height: f64,
@@ -166,7 +184,16 @@ impl GameState {
         recipe_defs: RecipeDefs,
         track_catalog: TrackCatalog,
         store_catalog: StoreCatalog,
+        skill_defs: SkillDefs,
     ) -> Self {
+        // Build reverse map: recipe_id → skill_id from skill definitions.
+        let mut recipe_skill_gate = std::collections::HashMap::new();
+        for (skill_id, skill_def) in &skill_defs {
+            for recipe_id in &skill_def.unlocks_recipes {
+                recipe_skill_gate.insert(recipe_id.clone(), skill_id.clone());
+            }
+        }
+
         Self {
             player: PhysicsBody::new(0.0, -100.0),
             facing: Direction::Right,
@@ -202,6 +229,10 @@ impl GameState {
             max_energy: 600.0,
             last_trade_id: None,
             active_craft: None,
+            skill_defs,
+            skill_progress: SkillProgress::default(),
+            imagination: 0,
+            recipe_skill_gate,
         }
     }
 
@@ -264,6 +295,14 @@ impl GameState {
         if self.active_craft.is_some() {
             return Err(crate::item::types::CraftError::AlreadyCrafting);
         }
+
+        // Check skill requirement
+        if let Some(required_skill) = self.recipe_skill_gate.get(recipe_id) {
+            if !self.skill_progress.learned.contains(required_skill) {
+                return Err(crate::item::types::CraftError::SkillRequired);
+            }
+        }
+
         let recipe = self
             .recipe_defs
             .get(recipe_id)
@@ -301,6 +340,28 @@ impl GameState {
             return None;
         }
         self.game_time += dt;
+
+        // Check if a skill has finished learning (wall-clock time)
+        if crate::skill::learning::check_completion(&self.skill_progress).is_some() {
+            let skill_id = crate::skill::learning::complete_learning(&mut self.skill_progress);
+            let skill_name = self
+                .skill_defs
+                .get(&skill_id)
+                .map(|d| d.name.clone())
+                .unwrap_or_else(|| skill_id.clone());
+            self.pickup_feedback.push(PickupFeedback {
+                id: self.next_feedback_id,
+                text: format!("Learned: {skill_name}!"),
+                success: true,
+                x: self.player.x,
+                y: self.player.y,
+                age_secs: 0.0,
+            });
+            self.next_feedback_id += 1;
+            self.pending_audio_events.push(AudioEvent::SkillLearned {
+                skill_id,
+            });
+        }
 
         // Passive energy decay
         self.energy = (self.energy - PASSIVE_ENERGY_DECAY_RATE * dt).max(0.0);
@@ -355,6 +416,18 @@ impl GameState {
                 audio_events.push(AudioEvent::CraftSuccess {
                     recipe_id: craft.recipe_id,
                 });
+
+                // Award imagination for crafting
+                self.imagination += 10;
+                self.pickup_feedback.push(PickupFeedback {
+                    id: self.next_feedback_id,
+                    text: "+10 Imagination".to_string(),
+                    success: true,
+                    x: self.player.x,
+                    y: self.player.y,
+                    age_secs: 0.0,
+                });
+                self.next_feedback_id += 1;
             }
         }
 
@@ -670,6 +743,17 @@ impl GameState {
                                     }
                                 }
                             }
+                            // Award imagination for entity interaction
+                            self.imagination += 5;
+                            self.pickup_feedback.push(PickupFeedback {
+                                id: self.next_feedback_id,
+                                text: "+5 Imagination".to_string(),
+                                success: true,
+                                x: self.player.x,
+                                y: self.player.y,
+                                age_secs: 0.0,
+                            });
+                            self.next_feedback_id += 1;
                         }
                         Some(interaction::InteractionType::GroundItem { item_id }) => {
                             audio_events.push(AudioEvent::ItemPickup {
@@ -804,6 +888,25 @@ impl GameState {
                     remaining_secs: (c.complete_at - self.game_time).max(0.0),
                 }
             }),
+            imagination: self.imagination,
+            skill_progress: {
+                let learning = crate::skill::learning::learning_progress(
+                    &self.skill_progress,
+                    &self.skill_defs,
+                ).map(|(remaining, progress)| {
+                    let skill_id = self.skill_progress.learning.as_ref().unwrap().skill_id.clone();
+                    LearningFrame {
+                        skill_id,
+                        remaining_secs: remaining,
+                        progress,
+                    }
+                });
+                SkillProgressFrame {
+                    learned: self.skill_progress.learned.clone(),
+                    learning,
+                    imagination: self.imagination,
+                }
+            },
         })
     }
 
@@ -860,6 +963,8 @@ impl GameState {
             energy: self.energy,
             max_energy: self.max_energy,
             last_trade_id: self.last_trade_id,
+            imagination: self.imagination,
+            skill_progress: self.skill_progress.clone(),
         })
     }
 
@@ -893,6 +998,8 @@ impl GameState {
         self.energy = save.energy;
         self.max_energy = save.max_energy;
         self.last_trade_id = save.last_trade_id;
+        self.imagination = save.imagination;
+        self.skill_progress = save.skill_progress.clone();
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -1146,6 +1253,10 @@ mod tests {
         StoreCatalog { stores: HashMap::new() }
     }
 
+    fn empty_skill_defs() -> SkillDefs {
+        HashMap::new()
+    }
+
     fn test_street() -> StreetData {
         StreetData {
             tsid: "test".into(),
@@ -1189,6 +1300,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -1206,6 +1318,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let input = InputState::default();
         assert!(state
@@ -1223,6 +1336,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
 
@@ -1251,6 +1365,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -1274,6 +1389,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -1300,6 +1416,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let small_street = StreetData {
             tsid: "small".into(),
@@ -1349,6 +1466,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         // Player should be at center of street
@@ -1401,7 +1519,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let street = test_street();
         let entities = vec![WorldEntity {
             id: "t1".into(),
@@ -1433,6 +1551,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -1452,6 +1571,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         assert_eq!(state.transition.phase, TransitionPhase::None);
     }
@@ -1468,6 +1588,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1504,6 +1625,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1542,6 +1664,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1590,6 +1713,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let mut street = test_street();
         street.signposts = vec![Signpost {
@@ -1625,6 +1749,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -1648,6 +1773,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state
             .entity_states
@@ -1670,6 +1796,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let mut street = test_street();
         street.tsid = "LADEMO001".into();
@@ -1772,7 +1899,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1854,7 +1981,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1935,7 +2062,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -1966,7 +2093,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -1995,7 +2122,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -2027,7 +2154,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -2081,7 +2208,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "f1".into(),
             entity_type: "fast_npc".into(),
@@ -2117,7 +2244,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -2154,7 +2281,7 @@ mod tests {
         let mut facings = Vec::new();
         for seed in [1u64, 2, 3, 4, 5, 6, 7, 8] {
             let mut state =
-                GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone(), HashMap::new(), empty_catalog(), empty_store_catalog());
+                GameState::new(1280.0, 720.0, ItemDefs::new(), defs.clone(), HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
             let entities = vec![WorldEntity {
                 id: "c1".into(),
                 entity_type: "chicken".into(),
@@ -2184,7 +2311,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs();
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -2247,7 +2374,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "t1".into(),
             entity_type: "fruit_tree".into(),
@@ -2302,7 +2429,7 @@ mod tests {
             },
         );
 
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "b1".into(),
             entity_type: "butterfly".into(),
@@ -2338,7 +2465,7 @@ mod tests {
         use rand::SeedableRng;
 
         let defs = movable_entity_defs(); // chicken + fruit_tree, no bob fields
-        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, ItemDefs::new(), defs, HashMap::new(), empty_catalog(), empty_store_catalog(), empty_skill_defs());
         let entities = vec![WorldEntity {
             id: "c1".into(),
             entity_type: "chicken".into(),
@@ -2382,7 +2509,7 @@ mod tests {
             crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
                 .unwrap();
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog(), empty_skill_defs());
         state.load_street(test_street(), vec![], vec![]);
         state.inventory.add("cherry", 10, &state.item_defs);
         state.inventory.add("grain", 5, &state.item_defs);
@@ -2427,7 +2554,7 @@ mod tests {
             crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
                 .unwrap();
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog(), empty_skill_defs());
 
         let result = state.craft_recipe("nonexistent");
         assert!(result.is_err());
@@ -2443,6 +2570,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         let input = InputState::default();
@@ -2465,6 +2593,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -2501,6 +2630,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
 
@@ -2533,6 +2663,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.player.on_ground = true;
@@ -2561,7 +2692,7 @@ mod tests {
             crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
                 .unwrap();
 
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog(), empty_skill_defs());
         state.load_street(test_street(), vec![], vec![]);
         // Clear the StreetChanged event from load_street
         state.pending_audio_events.clear();
@@ -2608,6 +2739,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         let mut street = test_street();
         street.tsid = "LADEMO001".into();
@@ -2680,6 +2812,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
 
@@ -2813,6 +2946,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
@@ -2857,6 +2991,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, -50.0);
@@ -2900,6 +3035,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
@@ -2974,6 +3110,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(footstep_test_street(), vec![], vec![]);
         state.player = crate::physics::movement::PhysicsBody::new(0.0, 0.0);
@@ -3025,6 +3162,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
 
@@ -3052,6 +3190,7 @@ mod tests {
             HashMap::new(),
             empty_catalog(),
             empty_store_catalog(),
+            empty_skill_defs(),
         );
         state.load_street(test_street(), vec![], vec![]);
         state.energy = 0.01; // Almost empty
@@ -3083,6 +3222,10 @@ mod save_tests {
         StoreCatalog { stores: HashMap::new() }
     }
 
+    fn empty_skill_defs() -> SkillDefs {
+        HashMap::new()
+    }
+
     #[test]
     fn save_state_round_trip() {
         let save = SaveState {
@@ -3100,6 +3243,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3125,6 +3270,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -3144,6 +3291,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3170,6 +3319,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
 
         write_save_state(&path, &save).unwrap();
@@ -3204,7 +3355,7 @@ mod save_tests {
         let item_defs = crate::item::types::ItemDefs::new();
         let entity_defs = crate::item::types::EntityDefs::new();
         let recipe_defs = crate::item::types::RecipeDefs::new();
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog(), empty_skill_defs());
 
         // Load a street to get bounds
         let xml = include_str!("../../../assets/streets/demo_meadow.xml");
@@ -3223,6 +3374,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         state.restore_save(&save);
 
@@ -3238,7 +3391,7 @@ mod save_tests {
         let item_defs = crate::item::types::ItemDefs::new();
         let entity_defs = crate::item::types::EntityDefs::new();
         let recipe_defs = crate::item::types::RecipeDefs::new();
-        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog());
+        let mut state = GameState::new(1280.0, 720.0, item_defs, entity_defs, recipe_defs, empty_catalog(), empty_store_catalog(), empty_skill_defs());
         assert_eq!(state.inventory.slots.len(), 16);
 
         let save = SaveState {
@@ -3254,6 +3407,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         state.restore_save(&save);
 
@@ -3278,6 +3433,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3300,6 +3457,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3326,6 +3485,8 @@ mod save_tests {
             energy: 123.4,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();

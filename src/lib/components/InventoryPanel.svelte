@@ -64,6 +64,7 @@
   }
 
   function isRecipeCraftable(recipe: RecipeDef): boolean {
+    if (recipe.locked) return false;
     if (!hasRoomForOutput(recipe)) return false;
     if (energy < recipe.energyCost) return false;
     for (const input of recipe.inputs) {
@@ -343,11 +344,13 @@
               class="recipe-row"
               class:craftable
               class:selected={selectedRecipeId === recipe.id}
-              aria-label="{recipe.name}{craftable ? '' : ' (missing ingredients)'}"
+              aria-label="{recipe.name}{recipe.locked ? ' (skill required)' : craftable ? '' : ' (missing ingredients)'}"
               onclick={() => { selectedRecipeId = selectedRecipeId === recipe.id ? null : recipe.id; craftError = null; }}
             >
               <span class="recipe-name">{recipe.name}</span>
-              {#if !craftable}
+              {#if recipe.locked}
+                <span class="recipe-badge" title="Skill required">\uD83D\uDD12</span>
+              {:else if !craftable}
                 <span class="recipe-badge">-</span>
               {/if}
             </button>
@@ -404,6 +407,12 @@
                 <div class="ingredient" class:sufficient={energy >= selectedRecipe.energyCost}>
                   {selectedRecipe.energyCost} ({Math.floor(energy)} available)
                 </div>
+              </div>
+            {/if}
+
+            {#if selectedRecipe.locked && selectedRecipe.requiredSkill}
+              <div class="skill-required-notice" role="status">
+                Requires skill: {selectedRecipe.requiredSkill.replace(/_/g, ' ')}
               </div>
             {/if}
 
@@ -655,6 +664,17 @@
     margin-top: 4px;
     font-size: 0.7rem;
     color: #e88;
+  }
+
+  .skill-required-notice {
+    margin-top: 6px;
+    padding: 4px 6px;
+    font-size: 0.7rem;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    border-radius: 4px;
+    text-align: center;
+    text-transform: capitalize;
   }
 
   .item-actions {

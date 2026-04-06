@@ -1,0 +1,34 @@
+{
+  "cooking_1": {
+    "name": "Cooking I",
+    "description": "Learn the basics of preparing food.",
+    "prerequisites": [],
+    "imaginationCost": 50,
+    "learnTimeSecs": 120,
+    "unlocksRecipes": ["bread", "butter"]
+  },
+  "cooking_2": {
+    "name": "Cooking II",
+    "description": "Master complex culinary techniques.",
+    "prerequisites": ["cooking_1"],
+    "imaginationCost": 150,
+    "learnTimeSecs": 600,
+    "unlocksRecipes": ["cherry_pie", "steak"]
+  },
+  "woodwork_1": {
+    "name": "Woodwork I",
+    "description": "Basic lumber processing.",
+    "prerequisites": [],
+    "imaginationCost": 50,
+    "learnTimeSecs": 120,
+    "unlocksRecipes": ["plank"]
+  },
+  "toymaking_1": {
+    "name": "Toymaking I",
+    "description": "Craft whimsical playthings.",
+    "prerequisites": ["woodwork_1"],
+    "imaginationCost": 100,
+    "learnTimeSecs": 300,
+    "unlocksRecipes": ["bubble_wand"]
+  }
+}

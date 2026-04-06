@@ -134,6 +134,12 @@ pub struct RecipeDef {
     #[serde(default)]
     pub energy_cost: f64,
     pub category: String,
+    /// Skill required to craft this recipe (populated at runtime from skill defs).
+    #[serde(skip_deserializing, default)]
+    pub required_skill: Option<String>,
+    /// Whether the player lacks the required skill (populated at query time).
+    #[serde(skip_deserializing, default)]
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +175,7 @@ pub enum CraftError {
     UnknownRecipe,
     InsufficientEnergy,
     AlreadyCrafting,
+    SkillRequired,
 }
 
 /// Convert an item ID like "cherry_pie" to "Cherry Pie" for display.
@@ -204,6 +211,7 @@ impl std::fmt::Display for CraftError {
             CraftError::UnknownRecipe => write!(f, "Unknown recipe"),
             CraftError::InsufficientEnergy => write!(f, "Too tired to craft"),
             CraftError::AlreadyCrafting => write!(f, "Already crafting"),
+            CraftError::SkillRequired => write!(f, "Skill required"),
         }
     }
 }
@@ -522,6 +530,8 @@ mod tests {
             duration_secs: 10.0,
             energy_cost: 15.0,
             category: "food".into(),
+            required_skill: None,
+            locked: false,
         };
         let json = serde_json::to_string(&def).unwrap();
         assert!(json.contains(r#""id":"cherry_pie""#));

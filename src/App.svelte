@@ -17,8 +17,10 @@
   import TradePanel from './lib/components/TradePanel.svelte';
   import TradePrompt from './lib/components/TradePrompt.svelte';
   import StreetNameHud from './lib/components/StreetNameHud.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack } from './lib/types';
+  import SkillsPanel from './lib/components/SkillsPanel.svelte';
+  import ImaginationHud from './lib/components/ImaginationHud.svelte';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
@@ -58,6 +60,8 @@
   let tradeStateVersion = 0;
   let tradeRequestVisible = $state(false);
   let tradeRequestName = $state('');
+  let skillsOpen = $state(false);
+  let skills = $state<SkillDef[]>([]);
 
   onMount(async () => {
     try {
@@ -69,11 +73,16 @@
       checkingIdentity = false;
     }
 
-    // Load recipes once at startup
+    // Load recipes and skills once at startup
     try {
       recipes = await getRecipes();
     } catch (e) {
       console.error('Failed to load recipes:', e);
+    }
+    try {
+      skills = await getSkills();
+    } catch (e) {
+      console.error('Failed to load skills:', e);
     }
 
     // Load available sound kits
@@ -429,6 +438,11 @@
     jukeboxInfo = null;
     jukeboxCloseFrames = 0;
   }
+  if ((e.key === 'k' || e.key === 'K') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+    e.preventDefault();
+    skillsOpen = !skillsOpen;
+    if (skillsOpen) { inventoryOpen = false; volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
+  }
   // T key: initiate trade with nearest remote player (by distance, not hash order)
   if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !tradeRequestVisible && !shopOpen && latestFrame) {
     const px = latestFrame.player.x, py = latestFrame.player.y;
@@ -597,6 +611,17 @@
     <StreetNameHud name={currentStreet.name} />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
     <EnergyHud energy={latestFrame?.energy ?? 600} maxEnergy={latestFrame?.maxEnergy ?? 600} />
+    <ImaginationHud imagination={latestFrame?.imagination ?? 0} />
+    <SkillsPanel
+      {skills}
+      skillProgress={latestFrame?.skillProgress ?? null}
+      visible={skillsOpen}
+      onClose={async () => {
+        skillsOpen = false;
+        // Refresh recipes when closing skills panel (locked status may have changed)
+        try { recipes = await getRecipes(); } catch { /* ignore */ }
+      }}
+    />
     <AvatarEditor
       visible={avatarEditorOpen}
       manifest={avatarManifest}

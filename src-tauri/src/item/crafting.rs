@@ -228,6 +228,8 @@ mod tests {
             duration_secs: 10.0,
             energy_cost: 15.0,
             category: "food".into(),
+            required_skill: None,
+            locked: false,
         }
     }
 
@@ -248,6 +250,8 @@ mod tests {
             duration_secs: 4.0,
             energy_cost: 6.0,
             category: "material".into(),
+            required_skill: None,
+            locked: false,
         }
     }
 
