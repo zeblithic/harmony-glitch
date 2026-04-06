@@ -19,6 +19,7 @@
   let craftError = $state<string | null>(null);
   let isCrafting = $state(false);
   let eatError = $state<string | null>(null);
+  let isEating = $state(false);
 
   let selectedItem = $derived.by(() => {
     if (selectedSlot === null || !inventory) return null;
@@ -122,12 +123,15 @@
   }
 
   async function handleEat() {
-    if (!selectedItem || !isSelectedEdible) return;
+    if (!selectedItem || !isSelectedEdible || isEating) return;
     eatError = null;
+    isEating = true;
     try {
       await eatItem(selectedItem.itemId);
     } catch (e) {
       eatError = String(e);
+    } finally {
+      isEating = false;
     }
   }
 
@@ -301,7 +305,7 @@
                 <button
                   type="button"
                   class="use-btn"
-                  disabled={isEnergyFull}
+                  disabled={isEnergyFull || isEating}
                   onclick={handleEat}
                   aria-label="Use {selectedItem.name}"
                 >
