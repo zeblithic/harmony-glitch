@@ -416,22 +416,6 @@ impl GameState {
             });
         }
 
-        // Update quest objective progress from current state
-        {
-            let street_id = self
-                .street
-                .as_ref()
-                .map(|s| s.tsid.as_str())
-                .unwrap_or("");
-            crate::quest::tracker::tick_quest_progress(
-                &mut self.quest_progress,
-                &self.quest_defs,
-                &self.inventory,
-                &self.skill_progress,
-                street_id,
-            );
-        }
-
         // Passive energy decay
         self.energy = (self.energy - PASSIVE_ENERGY_DECAY_RATE * dt).max(0.0);
 
@@ -515,6 +499,23 @@ impl GameState {
                     recipe_id: craft.recipe_id,
                 });
             }
+        }
+
+        // Update quest objective progress — runs after craft completion so
+        // inventory-based objectives see freshly delivered outputs this frame.
+        {
+            let street_id = self
+                .street
+                .as_ref()
+                .map(|s| s.tsid.as_str())
+                .unwrap_or("");
+            crate::quest::tracker::tick_quest_progress(
+                &mut self.quest_progress,
+                &self.quest_defs,
+                &self.inventory,
+                &self.skill_progress,
+                street_id,
+            );
         }
 
         let is_swooping = matches!(self.transition.phase, TransitionPhase::Swooping { .. });

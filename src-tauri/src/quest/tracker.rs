@@ -117,16 +117,30 @@ pub fn is_quest_ready(
         return false;
     };
 
+    // Accumulate total item requirements across all Deliver/Fetch objectives
+    // so overlapping item types are checked against cumulative need.
+    let mut item_needs: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+    for objective in &def.objectives {
+        match objective {
+            QuestObjective::Fetch { item_id, count, .. }
+            | QuestObjective::Deliver { item_id, count, .. } => {
+                *item_needs.entry(item_id.as_str()).or_default() += count;
+            }
+            _ => {}
+        }
+    }
+    // Check cumulative item requirements
+    for (item_id, need) in &item_needs {
+        if inventory.count_item(item_id) < *need {
+            return false;
+        }
+    }
+    // Check non-item objectives
     for (i, objective) in def.objectives.iter().enumerate() {
         let progress = active.objective_progress.get(i).copied().unwrap_or(0);
         let met = match objective {
-            QuestObjective::Fetch {
-                item_id, count, ..
-            } => inventory.count_item(item_id) >= *count,
+            QuestObjective::Fetch { .. } | QuestObjective::Deliver { .. } => true, // already checked
             QuestObjective::Craft { count, .. } => progress >= *count,
-            QuestObjective::Deliver {
-                item_id, count, ..
-            } => inventory.count_item(item_id) >= *count,
             QuestObjective::Visit { .. } => progress >= 1,
             QuestObjective::LearnSkill { skill_id, .. } => {
                 skill_progress.learned.contains(skill_id)
