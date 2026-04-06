@@ -808,18 +808,43 @@ impl GameState {
     }
 
     /// Complete any in-progress craft immediately, delivering outputs to
-    /// inventory. Called before save to prevent item loss.
+    /// inventory. Overflow is spawned as ground drops. Called before game
+    /// stop or trade execution — NOT during regular saves (save_state
+    /// includes pending outputs in the snapshot instead).
     pub fn flush_active_craft(&mut self) {
         if let Some(craft) = self.active_craft.take() {
             for output in &craft.pending_outputs {
-                self.inventory.add(&output.item_id, output.count, &self.item_defs);
+                let overflow =
+                    self.inventory
+                        .add(&output.item_id, output.count, &self.item_defs);
+                if overflow > 0 {
+                    self.world_items.push(WorldItem {
+                        id: format!("drop_{}", self.next_item_id),
+                        item_id: output.item_id.clone(),
+                        count: overflow,
+                        x: self.player.x,
+                        y: self.player.y,
+                    });
+                    self.next_item_id += 1;
+                }
             }
         }
     }
 
     /// Extract the current save-worthy state. Returns None if no street loaded.
+    /// If an active craft is in-progress, pending outputs are included in the
+    /// inventory snapshot so they are not lost on restore.
     pub fn save_state(&self) -> Option<SaveState> {
         let street = self.street.as_ref()?;
+        let mut slots = self.inventory.slots.clone();
+        // Include pending craft outputs in the snapshot so they survive save/load.
+        if let Some(ref craft) = self.active_craft {
+            let mut temp_inv = self.inventory.clone();
+            for output in &craft.pending_outputs {
+                temp_inv.add(&output.item_id, output.count, &self.item_defs);
+            }
+            slots = temp_inv.slots;
+        }
         Some(SaveState {
             street_id: self
                 .tsid_to_name
@@ -829,7 +854,7 @@ impl GameState {
             x: self.player.x,
             y: self.player.y,
             facing: self.facing,
-            inventory: self.inventory.slots.clone(),
+            inventory: slots,
             avatar: self.avatar.clone(),
             currants: self.currants,
             energy: self.energy,

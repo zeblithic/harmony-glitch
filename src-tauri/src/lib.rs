@@ -211,11 +211,10 @@ fn set_avatar(appearance: AvatarAppearance, app: AppHandle) -> Result<AvatarAppe
 /// Locks GameStateWrapper internally — callers must NOT hold that lock.
 fn save_current_state(app: &AppHandle) {
     let state_wrapper = app.state::<GameStateWrapper>();
-    let mut state = match state_wrapper.0.lock() {
+    let state = match state_wrapper.0.lock() {
         Ok(s) => s,
         Err(_) => return,
     };
-    state.flush_active_craft();
     let save = match state.save_state() {
         Some(s) => s,
         None => return,
