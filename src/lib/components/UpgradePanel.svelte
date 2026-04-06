@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PlayerUpgrades, BuyUpgradeResult } from '../types';
+  import type { PlayerUpgrades } from '../types';
   import { buyUpgrade } from '../ipc';
 
   let {
@@ -88,9 +88,10 @@
     oncancel={handleCancel}
     onclick={handleBackdropClick}
   >
-    <div class="panel-inner" onclick={(e) => e.stopPropagation()}>
+    <div class="panel-inner">
       <div class="panel-header">
-        <h2 class="panel-title">Imagination Upgrades</h2>
+        <span class="panel-title">✦ Imagination</span>
+        <span class="panel-balance">{imagination} iMG</span>
         <button type="button" class="close-btn" onclick={onClose} aria-label="Close upgrades">✕</button>
       </div>
 
@@ -190,6 +191,14 @@
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 1px;
+  }
+
+  .panel-balance {
+    color: #c084fc;
+    font-weight: bold;
+    font-size: 14px;
+    margin-left: auto;
+    margin-right: 8px;
   }
 
   .close-btn {

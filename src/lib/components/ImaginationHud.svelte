@@ -2,19 +2,24 @@
   let { imagination = 0, onOpen }: { imagination: number; onOpen?: () => void } = $props();
 </script>
 
-<button
-  type="button"
-  class="imagination-hud"
-  role="status"
-  aria-label="Imagination: {imagination} iMG"
-  onclick={onOpen}
->
-  <span class="img-icon">✦</span>
-  <span class="img-amount">{imagination} iMG</span>
-</button>
+<div class="imagination-hud-wrapper" role="status" aria-label="Imagination: {imagination} iMG">
+  <button
+    type="button"
+    class="imagination-hud"
+    aria-label="Open upgrades"
+    onclick={onOpen}
+  >
+    <span class="img-icon">✦</span>
+    <span class="img-amount">{imagination} iMG</span>
+  </button>
+</div>
 
 <style>
+  .imagination-hud-wrapper {
+    pointer-events: none;
+  }
   .imagination-hud {
+    pointer-events: auto;
     position: fixed;
     top: 44px;
     right: 12px;
