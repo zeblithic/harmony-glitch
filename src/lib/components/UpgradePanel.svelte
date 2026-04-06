@@ -23,10 +23,11 @@
 
   let energyTankDef = $derived(upgradeDefs.find(d => d.id === 'energy_tank'));
   let hagglingDef = $derived(upgradeDefs.find(d => d.id === 'haggling'));
-  let maxTiers = $derived(energyTankDef?.tiers.length ?? 4);
+  let energyTankMaxTiers = $derived(energyTankDef?.tiers.length ?? 4);
+  let hagglingMaxTiers = $derived(hagglingDef?.tiers.length ?? 4);
 
-  let energyTankMaxed = $derived(upgrades.energyTankTier >= maxTiers);
-  let hagglingMaxed = $derived(upgrades.hagglingTier >= maxTiers);
+  let energyTankMaxed = $derived(upgrades.energyTankTier >= energyTankMaxTiers);
+  let hagglingMaxed = $derived(upgrades.hagglingTier >= hagglingMaxTiers);
   let nextEnergyTier = $derived(
     energyTankMaxed || !energyTankDef ? null : energyTankDef.tiers[upgrades.energyTankTier],
   );
@@ -42,7 +43,9 @@
 
   $effect(() => {
     if (visible && upgradeDefs.length === 0) {
-      getUpgradeDefs().then(defs => { upgradeDefs = defs; });
+      getUpgradeDefs()
+        .then(defs => { upgradeDefs = defs; })
+        .catch(e => { purchaseError = `Failed to load upgrades: ${e}`; });
     }
   });
 
@@ -115,8 +118,8 @@
         <!-- Energy Tank card -->
         <div class="upgrade-card">
           <div class="card-name">Energy Tank</div>
-          <div class="card-tier">Tier {upgrades.energyTankTier} / {maxTiers}</div>
-          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.energyTankTier, maxTiers)}</div>
+          <div class="card-tier">Tier {upgrades.energyTankTier} / {energyTankMaxTiers}</div>
+          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.energyTankTier, energyTankMaxTiers)}</div>
           <div class="card-effect">Max Energy: {maxEnergy}</div>
           {#if energyTankMaxed}
             <div class="max-badge">MAX</div>
@@ -136,8 +139,8 @@
         <!-- Vendor Haggling card -->
         <div class="upgrade-card">
           <div class="card-name">Vendor Haggling</div>
-          <div class="card-tier">Tier {upgrades.hagglingTier} / {maxTiers}</div>
-          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.hagglingTier, maxTiers)}</div>
+          <div class="card-tier">Tier {upgrades.hagglingTier} / {hagglingMaxTiers}</div>
+          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.hagglingTier, hagglingMaxTiers)}</div>
           <div class="card-effect">
             {#if currentDiscount > 0}
               Current discount: {currentDiscount}%
