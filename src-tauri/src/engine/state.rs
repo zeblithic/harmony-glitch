@@ -7,6 +7,7 @@ use crate::engine::jukebox::{self, JukeboxState, TrackCatalog};
 use crate::engine::transition::{
     TransitionDirection, TransitionPhase, TransitionState, PRE_SUBSCRIBE_DISTANCE,
 };
+use crate::item::imagination::PlayerUpgrades;
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
@@ -33,6 +34,14 @@ fn default_max_energy() -> f64 {
     600.0
 }
 
+fn default_imagination() -> u64 {
+    0
+}
+
+fn default_upgrades() -> PlayerUpgrades {
+    PlayerUpgrades::default()
+}
+
 /// Minimal player state for save/load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,9 +62,10 @@ pub struct SaveState {
     /// ID of the last successfully completed trade (for journal recovery).
     #[serde(default)]
     pub last_trade_id: Option<u64>,
-    /// Imagination currency (earned from interactions and crafting).
-    #[serde(default)]
+    #[serde(default = "default_imagination")]
     pub imagination: u64,
+    #[serde(default = "default_upgrades")]
+    pub upgrades: PlayerUpgrades,
     /// Skill learning progress (learned skills + in-progress learning).
     #[serde(default)]
     pub skill_progress: SkillProgress,
@@ -96,12 +106,12 @@ pub struct GameState {
     pub last_trade_id: Option<u64>,
     /// In-progress timed craft, if any.
     pub active_craft: Option<ActiveCraft>,
+    pub imagination: u64,
+    pub upgrades: PlayerUpgrades,
     /// Skill definitions (loaded from assets/skills.json).
     pub skill_defs: SkillDefs,
     /// Player's skill learning progress.
     pub skill_progress: SkillProgress,
-    /// Imagination currency.
-    pub imagination: u64,
     /// Reverse map: recipe_id → skill_id required to craft it.
     pub recipe_skill_gate: std::collections::HashMap<String, String>,
 }
@@ -139,6 +149,7 @@ pub struct RenderFrame {
     pub active_craft: Option<ActiveCraftFrame>,
     pub imagination: u64,
     pub skill_progress: SkillProgressFrame,
+    pub upgrades: PlayerUpgrades,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,11 +238,12 @@ impl GameState {
             store_catalog,
             energy: 600.0,
             max_energy: 600.0,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
             last_trade_id: None,
             active_craft: None,
             skill_defs,
             skill_progress: SkillProgress::default(),
-            imagination: 0,
             recipe_skill_gate,
         }
     }
@@ -330,6 +342,28 @@ impl GameState {
         Ok(())
     }
 
+    /// Begin learning a skill. Delegates to skill::learning::start_learning.
+    pub fn learn_skill(
+        &mut self,
+        skill_id: &str,
+    ) -> Result<(), crate::skill::learning::SkillError> {
+        crate::skill::learning::start_learning(
+            skill_id,
+            &self.skill_defs,
+            &mut self.skill_progress,
+            &mut self.imagination,
+        )
+    }
+
+    /// Cancel learning and refund imagination. Delegates to skill::learning::cancel_learning.
+    pub fn cancel_skill_learning(&mut self) -> Result<(), crate::skill::learning::SkillError> {
+        crate::skill::learning::cancel_learning(
+            &self.skill_defs,
+            &mut self.skill_progress,
+            &mut self.imagination,
+        )
+    }
+
     /// Run one tick of the game loop.
     pub fn tick(&mut self, dt: f64, input: &InputState, rng: &mut impl Rng) -> Option<RenderFrame> {
         // Early return if no street loaded. Use is_none() check + unwrap pattern
@@ -356,6 +390,7 @@ impl GameState {
                 x: self.player.x,
                 y: self.player.y,
                 age_secs: 0.0,
+                color: Some("#c084fc".to_string()),
             });
             self.next_feedback_id += 1;
             self.pending_audio_events.push(AudioEvent::SkillLearned {
@@ -386,6 +421,7 @@ impl GameState {
                             x: self.player.x,
                             y: self.player.y,
                             age_secs: 0.0,
+                            color: None,
                         });
                         self.next_feedback_id += 1;
                     }
@@ -409,25 +445,35 @@ impl GameState {
                             x: self.player.x,
                             y: self.player.y,
                             age_secs: 0.0,
+                            color: None,
                         });
                         self.next_feedback_id += 1;
                     }
                 }
+                // Earn iMG from crafted outputs
+                let produced: Vec<(&str, u32)> = craft
+                    .pending_outputs
+                    .iter()
+                    .map(|o| (o.item_id.as_str(), o.count))
+                    .collect();
+                let img_earned =
+                    crate::item::imagination::earn_from_craft(&produced, &self.item_defs);
+                if img_earned > 0 {
+                    self.imagination = self.imagination.saturating_add(img_earned);
+                    self.pickup_feedback.push(PickupFeedback {
+                        id: self.next_feedback_id,
+                        text: format!("+{img_earned} iMG"),
+                        success: true,
+                        x: self.player.x,
+                        y: self.player.y,
+                        age_secs: 0.0,
+                        color: Some("#c084fc".to_string()),
+                    });
+                    self.next_feedback_id += 1;
+                }
                 audio_events.push(AudioEvent::CraftSuccess {
                     recipe_id: craft.recipe_id,
                 });
-
-                // Award imagination for crafting
-                self.imagination += 10;
-                self.pickup_feedback.push(PickupFeedback {
-                    id: self.next_feedback_id,
-                    text: "+10 Imagination".to_string(),
-                    success: true,
-                    x: self.player.x,
-                    y: self.player.y,
-                    age_secs: 0.0,
-                });
-                self.next_feedback_id += 1;
             }
         }
 
@@ -698,6 +744,7 @@ impl GameState {
                         &mut self.entity_states,
                         self.game_time,
                         &mut self.energy,
+                        &mut self.imagination,
                     );
 
                     // Apply results — assign unique IDs to feedback
@@ -743,17 +790,6 @@ impl GameState {
                                     }
                                 }
                             }
-                            // Award imagination for entity interaction
-                            self.imagination += 5;
-                            self.pickup_feedback.push(PickupFeedback {
-                                id: self.next_feedback_id,
-                                text: "+5 Imagination".to_string(),
-                                success: true,
-                                x: self.player.x,
-                                y: self.player.y,
-                                age_secs: 0.0,
-                            });
-                            self.next_feedback_id += 1;
                         }
                         Some(interaction::InteractionType::GroundItem { item_id }) => {
                             audio_events.push(AudioEvent::ItemPickup {
@@ -904,9 +940,9 @@ impl GameState {
                 SkillProgressFrame {
                     learned: self.skill_progress.learned.clone(),
                     learning,
-                    imagination: self.imagination,
                 }
             },
+            upgrades: self.upgrades.clone(),
         })
     }
 
@@ -930,6 +966,17 @@ impl GameState {
                     });
                     self.next_item_id += 1;
                 }
+            }
+            // Earn iMG from flushed craft (same as tick() completion path)
+            let produced: Vec<(&str, u32)> = craft
+                .pending_outputs
+                .iter()
+                .map(|o| (o.item_id.as_str(), o.count))
+                .collect();
+            let img_earned =
+                crate::item::imagination::earn_from_craft(&produced, &self.item_defs);
+            if img_earned > 0 {
+                self.imagination = self.imagination.saturating_add(img_earned);
             }
         }
     }
@@ -965,6 +1012,7 @@ impl GameState {
             last_trade_id: self.last_trade_id,
             imagination: self.imagination,
             skill_progress: self.skill_progress.clone(),
+            upgrades: self.upgrades.clone(),
         })
     }
 
@@ -1000,6 +1048,7 @@ impl GameState {
         self.last_trade_id = save.last_trade_id;
         self.imagination = save.imagination;
         self.skill_progress = save.skill_progress.clone();
+        self.upgrades = save.upgrades.clone();
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -2540,6 +2589,9 @@ mod tests {
         assert!(state.active_craft.is_none());
         assert!(frame.pickup_feedback.iter().any(|f| f.text.contains("Cherry Pie") && f.success));
         assert!(frame.audio_events.iter().any(|e| matches!(e, AudioEvent::CraftSuccess { .. })));
+        // iMG earned from craft (cherry_pie base_cost=20, 2x = 40)
+        assert!(state.imagination > 0);
+        assert!(frame.pickup_feedback.iter().any(|f| f.text.contains("iMG")));
     }
 
     #[test]
@@ -3245,6 +3297,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3272,6 +3325,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -3293,6 +3347,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3321,6 +3376,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
 
         write_save_state(&path, &save).unwrap();
@@ -3376,6 +3432,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         state.restore_save(&save);
 
@@ -3409,6 +3466,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         state.restore_save(&save);
 
@@ -3435,6 +3493,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3459,6 +3518,7 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3487,9 +3547,121 @@ mod save_tests {
             last_trade_id: None,
             imagination: 0,
             skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();
         assert!((restored.energy - 123.4).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn save_state_imagination_default() {
+        let json = r#"{
+            "streetId": "demo_meadow",
+            "x": 0, "y": 0,
+            "facing": "right",
+            "inventory": []
+        }"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert_eq!(save.imagination, 0);
+        assert_eq!(save.upgrades.energy_tank_tier, 0);
+        assert_eq!(save.upgrades.haggling_tier, 0);
+    }
+
+    #[test]
+    fn save_state_imagination_round_trip() {
+        use crate::item::imagination::PlayerUpgrades;
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: AvatarAppearance::default(),
+            currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 42,
+            upgrades: PlayerUpgrades {
+                energy_tank_tier: 2,
+                haggling_tier: 1,
+            },
+            skill_progress: SkillProgress::default(),
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let parsed: SaveState = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.imagination, 42);
+        assert_eq!(parsed.upgrades.energy_tank_tier, 2);
+        assert_eq!(parsed.upgrades.haggling_tier, 1);
+    }
+
+    #[test]
+    fn craft_earns_imagination() {
+        use crate::street::types::{StreetData, Gradient};
+        let item_defs =
+            crate::item::loader::parse_item_defs(include_str!("../../../assets/items.json"))
+                .unwrap();
+        let entity_defs =
+            crate::item::loader::parse_entity_defs(include_str!("../../../assets/entities.json"))
+                .unwrap();
+        let recipe_defs =
+            crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
+                .unwrap();
+        let track_catalog = crate::engine::jukebox::TrackCatalog { tracks: std::collections::HashMap::new() };
+        let store_catalog = crate::item::types::StoreCatalog { stores: std::collections::HashMap::new() };
+        let skill_defs = crate::skill::loader::parse_skill_defs(
+            include_str!("../../../assets/skills.json")
+        ).unwrap();
+        let mut state = GameState::new(
+            800.0,
+            600.0,
+            item_defs,
+            entity_defs,
+            recipe_defs,
+            track_catalog,
+            store_catalog,
+            skill_defs,
+        );
+        state.load_street(
+            StreetData {
+                tsid: "test".into(),
+                name: "Test".into(),
+                left: -3000.0,
+                right: 3000.0,
+                top: -1000.0,
+                bottom: 0.0,
+                ground_y: 0.0,
+                gradient: Some(Gradient { top: "#000".into(), bottom: "#111".into() }),
+                layers: vec![],
+                signposts: vec![],
+            },
+            vec![],
+            vec![],
+        );
+
+        // Pre-learn required skills for cherry_pie (cooking_1 → cooking_2)
+        state.skill_progress.learned.push("cooking_1".to_string());
+        state.skill_progress.learned.push("cooking_2".to_string());
+
+        // Give player cherry_pie ingredients
+        state.inventory.add("cherry", 10, &state.item_defs);
+        state.inventory.add("grain", 5, &state.item_defs);
+        state.inventory.add("pot", 1, &state.item_defs);
+
+        let before = state.imagination;
+        // Start timed craft
+        state.craft_recipe("cherry_pie").unwrap();
+        // iMG not earned yet (craft is in progress)
+        assert_eq!(state.imagination, before);
+
+        // Advance past craft completion time, then tick to deliver outputs
+        state.game_time = 100.0;
+        let input = InputState::default();
+        let frame = state.tick(0.1, &input, &mut rand::thread_rng()).unwrap();
+
+        // iMG earned on craft completion: cherry_pie base_cost=20, 2x = 40
+        assert_eq!(state.imagination - before, 40);
+        assert!(frame.pickup_feedback.iter().any(|f| f.text.contains("iMG")));
     }
 }

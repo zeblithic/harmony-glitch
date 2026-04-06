@@ -51,7 +51,6 @@ pub struct LearningSlot {
 pub struct SkillProgressFrame {
     pub learned: Vec<String>,
     pub learning: Option<LearningFrame>,
-    pub imagination: u64,
 }
 
 /// Learning-in-progress data for frontend display.

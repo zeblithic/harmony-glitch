@@ -13,12 +13,13 @@
   import ShopPanel from './lib/components/ShopPanel.svelte';
   import CurrantHud from './lib/components/CurrantHud.svelte';
   import EnergyHud from './lib/components/EnergyHud.svelte';
+  import ImaginationHud from './lib/components/ImaginationHud.svelte';
+  import UpgradePanel from './lib/components/UpgradePanel.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
   import TradePanel from './lib/components/TradePanel.svelte';
   import TradePrompt from './lib/components/TradePrompt.svelte';
   import StreetNameHud from './lib/components/StreetNameHud.svelte';
   import SkillsPanel from './lib/components/SkillsPanel.svelte';
-  import ImaginationHud from './lib/components/ImaginationHud.svelte';
   import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
@@ -55,6 +56,7 @@
   let avatarManifest = $state<AvatarManifest | null>(null);
   let gameRenderer = $state<GameRenderer | null>(null);
   let needsAvatarSetup = $state(false);
+  let upgradePanelOpen = $state(false);
   let tradeOpen = $state(false);
   let tradeFrame = $state<TradeFrame | null>(null);
   let tradeStateVersion = 0;
@@ -611,10 +613,21 @@
     <StreetNameHud name={currentStreet.name} />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
     <EnergyHud energy={latestFrame?.energy ?? 600} maxEnergy={latestFrame?.maxEnergy ?? 600} />
-    <ImaginationHud imagination={latestFrame?.imagination ?? 0} />
+    <ImaginationHud
+      imagination={latestFrame?.imagination ?? 0}
+      onOpen={() => { upgradePanelOpen = true; }}
+    />
+    <UpgradePanel
+      visible={upgradePanelOpen}
+      imagination={latestFrame?.imagination ?? 0}
+      upgrades={latestFrame?.upgrades ?? { energyTankTier: 0, hagglingTier: 0 }}
+      maxEnergy={latestFrame?.maxEnergy ?? 600}
+      onClose={() => { upgradePanelOpen = false; }}
+    />
     <SkillsPanel
       {skills}
       skillProgress={latestFrame?.skillProgress ?? null}
+      imagination={latestFrame?.imagination ?? 0}
       visible={skillsOpen}
       onClose={async () => {
         skillsOpen = false;

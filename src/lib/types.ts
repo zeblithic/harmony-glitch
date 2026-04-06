@@ -169,7 +169,6 @@ export interface SkillDef {
 export interface SkillProgressFrame {
   learned: string[];
   learning: LearningFrame | null;
-  imagination: number;
 }
 
 export interface LearningFrame {
@@ -196,6 +195,7 @@ export interface RenderFrame {
   activeCraft?: ActiveCraftFrame | null;
   imagination: number;
   skillProgress: SkillProgressFrame;
+  upgrades: PlayerUpgrades;
 }
 
 export interface NetworkStatus {
@@ -274,6 +274,7 @@ export interface PickupFeedback {
   x: number;
   y: number;
   ageSecs: number;
+  color?: string;
 }
 
 export interface RecipeDef {
@@ -310,11 +311,37 @@ export interface SavedState {
   currants?: number;
   energy?: number;
   maxEnergy?: number;
+  imagination?: number;
+  upgrades?: PlayerUpgrades;
 }
 
 export interface EatResult {
   energy: number;
   maxEnergy: number;
+}
+
+export interface PlayerUpgrades {
+  energyTankTier: number;
+  hagglingTier: number;
+}
+
+export interface BuyUpgradeResult {
+  imagination: number;
+  upgrades: PlayerUpgrades;
+  energy: number;
+  maxEnergy: number;
+}
+
+export interface UpgradeTierDef {
+  cost: number;
+  effectValue: number;
+}
+
+export interface UpgradePathDef {
+  id: string;
+  name: string;
+  description: string;
+  tiers: UpgradeTierDef[];
 }
 
 export type AudioEvent =

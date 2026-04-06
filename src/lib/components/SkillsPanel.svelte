@@ -5,11 +5,13 @@
   let {
     skills = [],
     skillProgress = null,
+    imagination = 0,
     visible = false,
     onClose,
   }: {
     skills: SkillDef[];
     skillProgress: SkillProgressFrame | null;
+    imagination: number;
     visible: boolean;
     onClose?: () => void;
   } = $props();
@@ -46,7 +48,7 @@
   }
 
   function canAfford(skill: SkillDef): boolean {
-    return (skillProgress?.imagination ?? 0) >= skill.imaginationCost;
+    return imagination >= skill.imaginationCost;
   }
 
   function missingPrereq(skill: SkillDef): string | null {
@@ -192,7 +194,7 @@
         <div class="detail-section">
           <div class="detail-label">Cost:</div>
           <div class="detail-item" class:sufficient={canAfford(selectedSkill)}>
-            {selectedSkill.imaginationCost} Imagination ({skillProgress?.imagination ?? 0} available)
+            {selectedSkill.imaginationCost} Imagination ({imagination} available)
           </div>
         </div>
 
@@ -219,6 +221,7 @@
               aria-valuenow={Math.round((skillProgress.learning.progress) * 100)}
               aria-valuemin={0}
               aria-valuemax={100}
+              aria-valuetext="{formatTime(skillProgress.learning.remainingSecs)} remaining"
             >
               <div class="progress-fill" style="width: {skillProgress.learning.progress * 100}%"></div>
             </div>

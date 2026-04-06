@@ -1,38 +1,52 @@
 <script lang="ts">
-  let { imagination = 0 }: { imagination: number } = $props();
+  let { imagination = 0, onOpen }: { imagination: number; onOpen?: () => void } = $props();
 </script>
 
-<div class="imagination-hud" role="status" aria-label="Imagination: {imagination}">
-  <span class="imagination-icon">✦</span>
-  <span class="imagination-amount">{imagination}</span>
+<div class="imagination-hud-wrapper" role="status" aria-label="Imagination: {imagination} iMG">
+  <button
+    type="button"
+    class="imagination-hud"
+    aria-label="Open upgrades"
+    onclick={onOpen}
+  >
+    <span class="img-icon">✦</span>
+    <span class="img-amount">{imagination} iMG</span>
+  </button>
 </div>
 
 <style>
+  .imagination-hud-wrapper {
+    pointer-events: none;
+  }
   .imagination-hud {
+    pointer-events: auto;
     position: fixed;
-    top: 12px;
-    left: 200px;
+    top: 44px;
+    right: 12px;
     background: rgba(26, 26, 46, 0.85);
-    padding: 4px 10px;
+    color: #c084fc;
+    padding: 6px 12px;
     border-radius: 16px;
+    font-weight: bold;
+    font-size: 14px;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     z-index: 50;
-    pointer-events: none;
     user-select: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    font-family: inherit;
   }
-
-  .imagination-icon {
-    font-size: 11px;
-    color: #c084fc;
+  .imagination-hud:hover {
+    border-color: #c084fc;
   }
-
-  .imagination-amount {
-    font-size: 11px;
-    font-weight: bold;
-    color: #c084fc;
-    min-width: 20px;
-    text-align: right;
+  .imagination-hud:focus-visible {
+    outline: 2px solid #c084fc;
+    outline-offset: 2px;
+  }
+  .img-icon {
+    font-size: 10px;
   }
 </style>
