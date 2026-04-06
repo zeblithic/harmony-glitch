@@ -60,6 +60,7 @@
           showingFeedback = true;
           feedbackTimer = setTimeout(() => {
             feedbackTimer = null;
+            if (!showingFeedback) return; // panel closed during feedback
             showingFeedback = false;
             feedbackMessages = [];
             choosing = false;
@@ -76,6 +77,7 @@
           showingFeedback = true;
           feedbackTimer = setTimeout(() => {
             feedbackTimer = null;
+            if (!showingFeedback) return; // panel closed during feedback
             showingFeedback = false;
             feedbackMessages = [];
             choosing = false;
