@@ -44,6 +44,12 @@ pub fn can_learn(
         return Err(SkillError::AlreadyLearned);
     }
 
+    // Check this early — if a skill is already in progress, that's the
+    // actionable blocker regardless of prereqs or imagination.
+    if progress.learning.is_some() {
+        return Err(SkillError::AlreadyLearning);
+    }
+
     for prereq in &def.prerequisites {
         if !progress.learned.contains(prereq) {
             return Err(SkillError::PrerequisiteNotMet {
@@ -57,10 +63,6 @@ pub fn can_learn(
             need: def.imagination_cost,
             have: imagination,
         });
-    }
-
-    if progress.learning.is_some() {
-        return Err(SkillError::AlreadyLearning);
     }
 
     Ok(())

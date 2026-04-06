@@ -204,6 +204,8 @@
           // buildScene then startGame — we don't call startGame here to
           // ensure the scene is built and listeners registered first.
           currentStreet = street;
+          // Re-fetch recipes now that skill_progress is restored from save
+          try { recipes = await getRecipes(); } catch { /* ignore */ }
         }
       } catch (e) {
         console.error('Auto-resume failed, showing street picker:', e);
@@ -261,6 +263,11 @@
       transitionPending = false;
       transitionTarget = null;
       transitionAttempts = 0;
+    }
+
+    // Refresh recipes when a skill completes (locked status changes)
+    if (frame.audioEvents?.some(e => e.type === 'skillLearned')) {
+      getRecipes().then(r => { recipes = r; }).catch(console.error);
     }
 
     // Process audio events — always call processEvents so cleanup() runs
