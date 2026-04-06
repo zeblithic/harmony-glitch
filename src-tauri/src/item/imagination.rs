@@ -25,14 +25,16 @@ pub struct PlayerUpgrades {
 // ---------------------------------------------------------------------------
 
 /// A single tier within an upgrade path.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpgradeTier {
     pub cost: u64,
     pub effect_value: f64,
 }
 
 /// A complete upgrade path with 4 tiers.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpgradePath {
     pub id: &'static str,
     pub name: &'static str,

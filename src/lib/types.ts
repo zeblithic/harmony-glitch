@@ -308,6 +308,18 @@ export interface BuyUpgradeResult {
   maxEnergy: number;
 }
 
+export interface UpgradeTierDef {
+  cost: number;
+  effectValue: number;
+}
+
+export interface UpgradePathDef {
+  id: string;
+  name: string;
+  description: string;
+  tiers: UpgradeTierDef[];
+}
+
 export type AudioEvent =
   | { type: 'itemPickup'; itemId: string }
   | { type: 'craftSuccess'; recipeId: string }

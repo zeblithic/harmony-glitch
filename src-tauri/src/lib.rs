@@ -1033,6 +1033,14 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
 }
 
 #[tauri::command]
+fn get_upgrade_defs() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(&item::imagination::ENERGY_TANK).unwrap(),
+        serde_json::to_value(&item::imagination::HAGGLING).unwrap(),
+    ]
+}
+
+#[tauri::command]
 fn buy_upgrade(upgrade_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
@@ -1772,6 +1780,7 @@ pub fn run() {
             vendor_buy,
             vendor_sell,
             eat_item,
+            get_upgrade_defs,
             buy_upgrade,
             trade_initiate,
             trade_accept,

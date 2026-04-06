@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { PlayerUpgrades } from '../types';
-  import { buyUpgrade } from '../ipc';
+  import type { PlayerUpgrades, UpgradePathDef } from '../types';
+  import { buyUpgrade, getUpgradeDefs } from '../ipc';
 
   let {
     visible = false,
@@ -16,38 +16,43 @@
     onClose?: () => void;
   } = $props();
 
-  const energyTankTiers = [
-    { cost: 100, delta: 50 },
-    { cost: 200, delta: 75 },
-    { cost: 400, delta: 100 },
-    { cost: 800, delta: 125 },
-  ];
-  const hagglingTiers = [
-    { cost: 100, discount: 5 },
-    { cost: 200, discount: 10 },
-    { cost: 400, discount: 15 },
-    { cost: 800, discount: 20 },
-  ];
-
   let dialogEl: HTMLDialogElement | undefined = $state();
-  let previousFocus: HTMLElement | null = null;
   let isPurchasing = $state(false);
   let purchaseError = $state<string | null>(null);
+  let upgradeDefs = $state<UpgradePathDef[]>([]);
 
-  let energyTankMaxed = $derived(upgrades.energyTankTier >= 4);
-  let hagglingMaxed = $derived(upgrades.hagglingTier >= 4);
-  let nextEnergyTier = $derived(energyTankMaxed ? null : energyTankTiers[upgrades.energyTankTier]);
-  let nextHagglingTier = $derived(hagglingMaxed ? null : hagglingTiers[upgrades.hagglingTier]);
-  let currentDiscount = $derived(upgrades.hagglingTier > 0 ? hagglingTiers[upgrades.hagglingTier - 1].discount : 0);
-  let nextEnergyTotal = $derived(nextEnergyTier ? maxEnergy + nextEnergyTier.delta : null);
+  let energyTankDef = $derived(upgradeDefs.find(d => d.id === 'energy_tank'));
+  let hagglingDef = $derived(upgradeDefs.find(d => d.id === 'haggling'));
+  let maxTiers = $derived(energyTankDef?.tiers.length ?? 4);
+
+  let energyTankMaxed = $derived(upgrades.energyTankTier >= maxTiers);
+  let hagglingMaxed = $derived(upgrades.hagglingTier >= maxTiers);
+  let nextEnergyTier = $derived(
+    energyTankMaxed || !energyTankDef ? null : energyTankDef.tiers[upgrades.energyTankTier],
+  );
+  let nextHagglingTier = $derived(
+    hagglingMaxed || !hagglingDef ? null : hagglingDef.tiers[upgrades.hagglingTier],
+  );
+  let currentDiscount = $derived(
+    upgrades.hagglingTier > 0 && hagglingDef
+      ? Math.round(hagglingDef.tiers[upgrades.hagglingTier - 1].effectValue * 100)
+      : 0,
+  );
+  let nextEnergyTotal = $derived(nextEnergyTier ? maxEnergy + nextEnergyTier.effectValue : null);
+
+  $effect(() => {
+    if (visible && upgradeDefs.length === 0) {
+      getUpgradeDefs().then(defs => { upgradeDefs = defs; });
+    }
+  });
 
   $effect(() => {
     if (visible && dialogEl && !dialogEl.open) {
-      previousFocus = document.activeElement as HTMLElement | null;
+      const prev = document.activeElement as HTMLElement | null;
       dialogEl.showModal();
-    } else if (!visible && dialogEl?.open) {
-      dialogEl.close();
-      previousFocus?.focus();
+      return () => {
+        prev?.focus();
+      };
     }
   });
 
@@ -110,13 +115,13 @@
         <!-- Energy Tank card -->
         <div class="upgrade-card">
           <div class="card-name">Energy Tank</div>
-          <div class="card-tier">Tier {upgrades.energyTankTier} / 4</div>
-          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.energyTankTier)}</div>
+          <div class="card-tier">Tier {upgrades.energyTankTier} / {maxTiers}</div>
+          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.energyTankTier, maxTiers)}</div>
           <div class="card-effect">Max Energy: {maxEnergy}</div>
           {#if energyTankMaxed}
             <div class="max-badge">MAX</div>
           {:else if nextEnergyTier}
-            <div class="card-next">Next: +{nextEnergyTier.delta} energy ({nextEnergyTotal} total)</div>
+            <div class="card-next">Next: +{nextEnergyTier.effectValue} energy ({nextEnergyTotal} total)</div>
             <button
               type="button"
               class="buy-btn"
@@ -131,8 +136,8 @@
         <!-- Vendor Haggling card -->
         <div class="upgrade-card">
           <div class="card-name">Vendor Haggling</div>
-          <div class="card-tier">Tier {upgrades.hagglingTier} / 4</div>
-          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.hagglingTier)}</div>
+          <div class="card-tier">Tier {upgrades.hagglingTier} / {maxTiers}</div>
+          <div class="card-dots" aria-hidden="true">{renderTierDots(upgrades.hagglingTier, maxTiers)}</div>
           <div class="card-effect">
             {#if currentDiscount > 0}
               Current discount: {currentDiscount}%
@@ -143,7 +148,7 @@
           {#if hagglingMaxed}
             <div class="max-badge">MAX</div>
           {:else if nextHagglingTier}
-            <div class="card-next">Next: {nextHagglingTier.discount}% vendor discount</div>
+            <div class="card-next">Next: {Math.round(nextHagglingTier.effectValue * 100)}% vendor discount</div>
             <button
               type="button"
               class="buy-btn"

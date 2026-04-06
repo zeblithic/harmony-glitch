@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, TradeFrame, TradeEvent, SaveItemStack } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -124,6 +124,10 @@ export async function vendorSell(entityId: string, itemId: string, count: number
 
 export async function eatItem(itemId: string): Promise<EatResult> {
   return invoke<EatResult>('eat_item', { itemId });
+}
+
+export async function getUpgradeDefs(): Promise<UpgradePathDef[]> {
+  return invoke<UpgradePathDef[]>('get_upgrade_defs');
 }
 
 export async function buyUpgrade(upgradeId: string): Promise<BuyUpgradeResult> {
