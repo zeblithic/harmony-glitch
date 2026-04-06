@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, TradeFrame, TradeEvent, SaveItemStack } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, TradeFrame, TradeEvent, SaveItemStack } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -120,6 +120,10 @@ export async function vendorBuy(entityId: string, itemId: string, count: number)
 
 export async function vendorSell(entityId: string, itemId: string, count: number): Promise<number> {
   return invoke<number>('vendor_sell', { entityId, itemId, count });
+}
+
+export async function eatItem(itemId: string): Promise<EatResult> {
+  return invoke<EatResult>('eat_item', { itemId });
 }
 
 // ── Trade ───────────────────────────────────────────────────────────────

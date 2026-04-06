@@ -12,6 +12,7 @@
   import JukeboxPanel from './lib/components/JukeboxPanel.svelte';
   import ShopPanel from './lib/components/ShopPanel.svelte';
   import CurrantHud from './lib/components/CurrantHud.svelte';
+  import EnergyHud from './lib/components/EnergyHud.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
   import TradePanel from './lib/components/TradePanel.svelte';
   import TradePrompt from './lib/components/TradePrompt.svelte';
@@ -489,6 +490,8 @@
       {recipes}
       visible={inventoryOpen}
       onClose={() => { inventoryOpen = false; }}
+      energy={latestFrame?.energy ?? 600}
+      maxEnergy={latestFrame?.maxEnergy ?? 600}
     />
     <ShopPanel
       {storeState}
@@ -590,6 +593,7 @@
       }}
     />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
+    <EnergyHud energy={latestFrame?.energy ?? 600} maxEnergy={latestFrame?.maxEnergy ?? 600} />
     <AvatarEditor
       visible={avatarEditorOpen}
       manifest={avatarManifest}

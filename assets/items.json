@@ -5,7 +5,8 @@
     "category": "food",
     "stackLimit": 50,
     "icon": "cherry",
-    "baseCost": 3
+    "baseCost": 3,
+    "energyValue": 12
   },
   "grain": {
     "name": "Grain",
@@ -13,7 +14,8 @@
     "category": "food",
     "stackLimit": 50,
     "icon": "grain",
-    "baseCost": 3
+    "baseCost": 3,
+    "energyValue": 10
   },
   "meat": {
     "name": "Meat",
@@ -21,7 +23,8 @@
     "category": "food",
     "stackLimit": 50,
     "icon": "meat",
-    "baseCost": 5
+    "baseCost": 5,
+    "energyValue": 20
   },
   "milk": {
     "name": "Milk",
@@ -29,7 +32,8 @@
     "category": "food",
     "stackLimit": 50,
     "icon": "milk",
-    "baseCost": 4
+    "baseCost": 4,
+    "energyValue": 15
   },
   "bubble": {
     "name": "Bubble",
@@ -53,7 +57,8 @@
     "category": "food",
     "stackLimit": 10,
     "icon": "cherry_pie",
-    "baseCost": 20
+    "baseCost": 20,
+    "energyValue": 100
   },
   "bread": {
     "name": "Bread",
@@ -61,7 +66,8 @@
     "category": "food",
     "stackLimit": 20,
     "icon": "bread",
-    "baseCost": 16
+    "baseCost": 16,
+    "energyValue": 80
   },
   "steak": {
     "name": "Steak",
@@ -69,7 +75,8 @@
     "category": "food",
     "stackLimit": 10,
     "icon": "steak",
-    "baseCost": 22
+    "baseCost": 22,
+    "energyValue": 90
   },
   "butter": {
     "name": "Butter",
@@ -77,7 +84,8 @@
     "category": "food",
     "stackLimit": 20,
     "icon": "butter",
-    "baseCost": 15
+    "baseCost": 15,
+    "energyValue": 60
   },
   "bubble_wand": {
     "name": "Bubble Wand",

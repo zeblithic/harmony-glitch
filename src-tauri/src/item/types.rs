@@ -15,6 +15,8 @@ pub struct ItemDef {
     pub icon: String,
     #[serde(default)]
     pub base_cost: Option<u32>,
+    #[serde(default)]
+    pub energy_value: Option<u32>,
 }
 
 /// A stack of items in inventory.
@@ -269,6 +271,7 @@ pub struct ItemStackFrame {
     pub icon: String,
     pub count: u32,
     pub stack_limit: u32,
+    pub energy_value: Option<u32>,
 }
 
 /// Prompt shown when player is near an interactable.
@@ -510,6 +513,7 @@ mod tests {
             stack_limit: 50,
             icon: "cherry".into(),
             base_cost: None,
+            energy_value: None,
         };
         let json = serde_json::to_string(&def).unwrap();
         assert!(json.contains("stackLimit"));
@@ -576,5 +580,19 @@ mod tests {
         }"#;
         let def: EntityDef = serde_json::from_str(json).unwrap();
         assert_eq!(def.store, None);
+    }
+
+    #[test]
+    fn item_def_with_energy_value() {
+        let json = r#"{"name":"Cherry","description":"A cherry.","category":"food","stackLimit":50,"icon":"cherry","baseCost":3,"energyValue":12}"#;
+        let def: ItemDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.energy_value, Some(12));
+    }
+
+    #[test]
+    fn item_def_without_energy_value() {
+        let json = r#"{"name":"Wood","description":"Wood.","category":"material","stackLimit":50,"icon":"wood","baseCost":4}"#;
+        let def: ItemDef = serde_json::from_str(json).unwrap();
+        assert_eq!(def.energy_value, None);
     }
 }

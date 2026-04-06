@@ -163,6 +163,8 @@ export interface RenderFrame {
   pickupFeedback: PickupFeedback[];
   audioEvents: AudioEvent[];
   currants: number;
+  energy: number;
+  maxEnergy: number;
 }
 
 export interface NetworkStatus {
@@ -200,6 +202,7 @@ export interface ItemStackFrame {
   icon: string;
   count: number;
   stackLimit: number;
+  energyValue: number | null;
 }
 
 export interface WorldEntityFrame {
@@ -271,6 +274,13 @@ export interface SavedState {
   facing: string;
   inventory: (SaveItemStack | null)[];
   currants?: number;
+  energy?: number;
+  maxEnergy?: number;
+}
+
+export interface EatResult {
+  energy: number;
+  maxEnergy: number;
 }
 
 export type AudioEvent =

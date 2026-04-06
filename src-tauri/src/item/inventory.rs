@@ -164,6 +164,7 @@ mod tests {
                 stack_limit: 5,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         defs.insert(
@@ -176,6 +177,7 @@ mod tests {
                 stack_limit: 10,
                 icon: "grain".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         defs

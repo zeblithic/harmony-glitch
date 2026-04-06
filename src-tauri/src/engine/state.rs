@@ -17,8 +17,19 @@ use crate::item::types::{
 use crate::physics::movement::{InputState, PhysicsBody};
 use crate::street::types::StreetData;
 
+/// Energy lost per second from passive decay.
+const PASSIVE_ENERGY_DECAY_RATE: f64 = 0.1;
+
 fn default_currants() -> u64 {
     50
+}
+
+fn default_energy() -> f64 {
+    600.0
+}
+
+fn default_max_energy() -> f64 {
+    600.0
 }
 
 /// Minimal player state for save/load.
@@ -34,6 +45,10 @@ pub struct SaveState {
     pub avatar: AvatarAppearance,
     #[serde(default = "default_currants")]
     pub currants: u64,
+    #[serde(default = "default_energy")]
+    pub energy: f64,
+    #[serde(default = "default_max_energy")]
+    pub max_energy: f64,
     /// ID of the last successfully completed trade (for journal recovery).
     #[serde(default)]
     pub last_trade_id: Option<u64>,
@@ -68,6 +83,8 @@ pub struct GameState {
     pub avatar: AvatarAppearance,
     pub currants: u64,
     pub store_catalog: StoreCatalog,
+    pub energy: f64,
+    pub max_energy: f64,
     /// ID of the last successfully completed trade (for journal recovery).
     pub last_trade_id: Option<u64>,
 }
@@ -100,6 +117,8 @@ pub struct RenderFrame {
     pub transition: Option<TransitionFrame>,
     pub audio_events: Vec<AudioEvent>,
     pub currants: u64,
+    pub energy: f64,
+    pub max_energy: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,6 +195,8 @@ impl GameState {
             avatar: AvatarAppearance::default(),
             currants: 50,
             store_catalog,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         }
     }
@@ -268,6 +289,10 @@ impl GameState {
             return None;
         }
         self.game_time += dt;
+
+        // Passive energy decay
+        self.energy = (self.energy - PASSIVE_ENERGY_DECAY_RATE * dt).max(0.0);
+
         // Drain pending audio events from IPC commands (craft_recipe, load_street)
         let mut audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
 
@@ -537,6 +562,7 @@ impl GameState {
                         rng,
                         &mut self.entity_states,
                         self.game_time,
+                        &mut self.energy,
                     );
 
                     // Apply results — assign unique IDs to feedback
@@ -701,6 +727,8 @@ impl GameState {
             },
             audio_events,
             currants: self.currants,
+            energy: self.energy,
+            max_energy: self.max_energy,
         })
     }
 
@@ -719,6 +747,8 @@ impl GameState {
             inventory: self.inventory.slots.clone(),
             avatar: self.avatar.clone(),
             currants: self.currants,
+            energy: self.energy,
+            max_energy: self.max_energy,
             last_trade_id: self.last_trade_id,
         })
     }
@@ -750,6 +780,8 @@ impl GameState {
         self.inventory.slots.resize(capacity, None);
         self.avatar = save.avatar.clone();
         self.currants = save.currants;
+        self.energy = save.energy;
+        self.max_energy = save.max_energy;
         self.last_trade_id = save.last_trade_id;
     }
 
@@ -849,6 +881,7 @@ impl GameState {
                             icon: def.map(|d| d.icon.clone()).unwrap_or_default(),
                             count: stack.count,
                             stack_limit: def.map(|d| d.stack_limit).unwrap_or(1),
+                            energy_value: def.and_then(|d| d.energy_value),
                         }
                     })
                 })
@@ -1228,6 +1261,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -1598,6 +1632,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -1679,6 +1714,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2071,6 +2107,7 @@ mod tests {
                 stack_limit: 50,
                 icon: "cherry".into(),
                 base_cost: None,
+                energy_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2848,6 +2885,58 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn energy_decays_per_tick() {
+        let mut state = GameState::new(
+            800.0,
+            600.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        let initial_energy = state.energy;
+        let input = InputState { left: false, right: false, jump: false, interact: false };
+        let mut rng = rand::rngs::mock::StepRng::new(0, 1);
+
+        // Tick for 1 second at 60fps
+        for _ in 0..60 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        // After 1s at 0.1/sec decay: should lose ~0.1 energy
+        let lost = initial_energy - state.energy;
+        assert!(lost > 0.09 && lost < 0.11, "Expected ~0.1 energy loss, got {lost}");
+    }
+
+    #[test]
+    fn energy_does_not_decay_below_zero() {
+        let mut state = GameState::new(
+            800.0,
+            600.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.energy = 0.01; // Almost empty
+
+        let input = InputState { left: false, right: false, jump: false, interact: false };
+        let mut rng = rand::rngs::mock::StepRng::new(0, 1);
+
+        // Tick for 10 seconds — should clamp at 0, not go negative
+        for _ in 0..600 {
+            state.tick(1.0 / 60.0, &input, &mut rng);
+        }
+
+        assert_eq!(state.energy, 0.0);
+    }
 }
 
 #[cfg(test)]
@@ -2879,6 +2968,8 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
@@ -2902,6 +2993,8 @@ mod save_tests {
             inventory: vec![Some(ItemStack { item_id: "cherry".to_string(), count: 1 })],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
@@ -2919,6 +3012,8 @@ mod save_tests {
             inventory: vec![None; 16],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
@@ -2943,6 +3038,8 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
 
@@ -2994,6 +3091,8 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
         state.restore_save(&save);
@@ -3023,6 +3122,8 @@ mod save_tests {
             ],
             avatar: AvatarAppearance::default(),
             currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
         state.restore_save(&save);
@@ -3045,6 +3146,8 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 999, // will be stripped below
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
@@ -3065,10 +3168,38 @@ mod save_tests {
             inventory: vec![],
             avatar: AvatarAppearance::default(),
             currants: 999,
+            energy: 600.0,
+            max_energy: 600.0,
             last_trade_id: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.currants, 999);
+    }
+
+    #[test]
+    fn save_state_energy_default() {
+        let json = r#"{"streetId":"demo","x":0,"y":0,"facing":"right","inventory":[],"currants":50}"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert_eq!(save.energy, 600.0);
+    }
+
+    #[test]
+    fn save_state_energy_round_trip() {
+        let save = SaveState {
+            street_id: "demo".to_string(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: AvatarAppearance::default(),
+            currants: 50,
+            energy: 123.4,
+            max_energy: 600.0,
+            last_trade_id: None,
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let restored: SaveState = serde_json::from_str(&json).unwrap();
+        assert!((restored.energy - 123.4).abs() < f64::EPSILON);
     }
 }

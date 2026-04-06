@@ -8,6 +8,7 @@ import type { InventoryFrame, RecipeDef } from '../types';
 vi.mock('../ipc', () => ({
   dropItem: vi.fn().mockResolvedValue(undefined),
   craftRecipe: vi.fn().mockResolvedValue(undefined),
+  eatItem: vi.fn().mockResolvedValue({ energy: 112, maxEnergy: 600 }),
 }));
 
 // Mock dialog showModal/close (jsdom doesn't support)
@@ -18,8 +19,8 @@ HTMLDialogElement.prototype.close = vi.fn(function(this: HTMLDialogElement) {
   this.removeAttribute('open');
 });
 
-function makeInventory(items: { itemId: string; name: string; count: number }[]): InventoryFrame {
-  const slots: (null | { itemId: string; name: string; description: string; icon: string; count: number; stackLimit: number })[] =
+function makeInventory(items: { itemId: string; name: string; count: number; energyValue?: number | null }[]): InventoryFrame {
+  const slots: (null | { itemId: string; name: string; description: string; icon: string; count: number; stackLimit: number; energyValue: number | null })[] =
     items.map(i => ({
       itemId: i.itemId,
       name: i.name,
@@ -27,6 +28,7 @@ function makeInventory(items: { itemId: string; name: string; count: number }[])
       icon: i.itemId,
       count: i.count,
       stackLimit: 50,
+      energyValue: i.energyValue ?? null,
     }));
   while (slots.length < 16) slots.push(null);
   return { slots, capacity: 16 };
@@ -141,5 +143,55 @@ describe('InventoryPanel', () => {
     // Tab panel exists and is labeled
     const panel = screen.getByRole('tabpanel');
     expect(panel.getAttribute('aria-labelledby')).toBe('tab-items');
+  });
+
+  it('shows Use button for food items when selected', async () => {
+    const inv = makeInventory([{ itemId: 'cherry', name: 'Cherry', count: 5, energyValue: 12 }]);
+    render(InventoryPanel, {
+      props: { inventory: inv, visible: true, energy: 100, maxEnergy: 600 },
+    });
+    const slots = screen.getAllByRole('gridcell');
+    const firstSlot = slots[0].querySelector('button');
+    await fireEvent.click(firstSlot!);
+    const useBtn = screen.getByRole('button', { name: /use/i });
+    expect(useBtn).toBeDefined();
+  });
+
+  it('hides Use button for non-food items', async () => {
+    const inv = makeInventory([{ itemId: 'wood', name: 'Wood', count: 3, energyValue: null }]);
+    render(InventoryPanel, {
+      props: { inventory: inv, visible: true, energy: 100, maxEnergy: 600 },
+    });
+    const slots = screen.getAllByRole('gridcell');
+    const firstSlot = slots[0].querySelector('button');
+    await fireEvent.click(firstSlot!);
+    const useBtn = screen.queryByRole('button', { name: /use/i });
+    expect(useBtn).toBeNull();
+  });
+
+  it('Use button triggers eatItem IPC', async () => {
+    const { eatItem } = await import('../ipc');
+    const inv = makeInventory([{ itemId: 'cherry', name: 'Cherry', count: 5, energyValue: 12 }]);
+    render(InventoryPanel, {
+      props: { inventory: inv, visible: true, energy: 100, maxEnergy: 600 },
+    });
+    const slots = screen.getAllByRole('gridcell');
+    const firstSlot = slots[0].querySelector('button');
+    await fireEvent.click(firstSlot!);
+    const useBtn = screen.getByRole('button', { name: /use/i });
+    await fireEvent.click(useBtn);
+    expect(eatItem).toHaveBeenCalledWith('cherry');
+  });
+
+  it('Use button disabled when energy is full', async () => {
+    const inv = makeInventory([{ itemId: 'cherry', name: 'Cherry', count: 5, energyValue: 12 }]);
+    render(InventoryPanel, {
+      props: { inventory: inv, visible: true, energy: 600, maxEnergy: 600 },
+    });
+    const slots = screen.getAllByRole('gridcell');
+    const firstSlot = slots[0].querySelector('button');
+    await fireEvent.click(firstSlot!);
+    const useBtn = screen.getByRole('button', { name: /use/i });
+    expect((useBtn as HTMLButtonElement).disabled).toBe(true);
   });
 });

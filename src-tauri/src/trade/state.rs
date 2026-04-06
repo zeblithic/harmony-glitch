@@ -737,6 +737,7 @@ mod tests {
                 stack_limit: 5,
                 icon: "cherry_icon".into(),
                 base_cost: Some(2),
+                energy_value: None,
             },
         );
         defs.insert(
@@ -749,6 +750,7 @@ mod tests {
                 stack_limit: 10,
                 icon: "grain_icon".into(),
                 base_cost: Some(1),
+                energy_value: None,
             },
         );
         defs

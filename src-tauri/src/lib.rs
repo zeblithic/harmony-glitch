@@ -995,6 +995,38 @@ fn vendor_sell(entity_id: String, item_id: String, count: u32, app: AppHandle) -
     Ok(new_balance)
 }
 
+#[tauri::command]
+fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let item_defs = state.item_defs.clone();
+    let energy = state.energy;
+    let max_energy = state.max_energy;
+
+    let (new_energy, new_max) = item::energy::eat(&item_id, energy, max_energy, &mut state.inventory, &item_defs)?;
+    state.energy = new_energy;
+
+    let gained = new_energy - energy;
+    let px = state.player.x;
+    let py = state.player.y;
+    let fb_id = state.next_feedback_id;
+    state.next_feedback_id += 1;
+    state.pickup_feedback.push(item::types::PickupFeedback {
+        id: fb_id,
+        text: format!("+{} energy", gained.round() as u32),
+        success: true,
+        x: px,
+        y: py,
+        age_secs: 0.0,
+    });
+
+    Ok(serde_json::json!({
+        "energy": new_energy,
+        "maxEnergy": new_max,
+    }))
+}
+
 // ── Trade IPC commands ──────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1676,6 +1708,7 @@ pub fn run() {
             get_store_state,
             vendor_buy,
             vendor_sell,
+            eat_item,
             trade_initiate,
             trade_accept,
             trade_decline,

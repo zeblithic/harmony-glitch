@@ -1,4 +1,5 @@
 pub mod crafting;
+pub mod energy;
 pub mod interaction;
 pub mod inventory;
 pub mod loader;
