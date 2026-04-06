@@ -937,7 +937,7 @@ fn vendor_buy(entity_id: String, item_id: String, count: u32, app: AppHandle) ->
     let item_defs = state.item_defs.clone();
 
     let currants = state.currants;
-    let new_balance = item::vendor::buy(&item_id, count, currants, &mut state.inventory, &item_defs, &store)?;
+    let new_balance = item::vendor::buy(&item_id, count, currants, &mut state.inventory, &item_defs, &store, 0.0)?;
     state.currants = new_balance;
 
     let total = currants - new_balance;
