@@ -7,6 +7,7 @@ use crate::engine::jukebox::{self, JukeboxState, TrackCatalog};
 use crate::engine::transition::{
     TransitionDirection, TransitionPhase, TransitionState, PRE_SUBSCRIBE_DISTANCE,
 };
+use crate::item::imagination::PlayerUpgrades;
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
 use crate::item::types::{
@@ -32,6 +33,14 @@ fn default_max_energy() -> f64 {
     600.0
 }
 
+fn default_imagination() -> u64 {
+    0
+}
+
+fn default_upgrades() -> PlayerUpgrades {
+    PlayerUpgrades::default()
+}
+
 /// Minimal player state for save/load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +61,10 @@ pub struct SaveState {
     /// ID of the last successfully completed trade (for journal recovery).
     #[serde(default)]
     pub last_trade_id: Option<u64>,
+    #[serde(default = "default_imagination")]
+    pub imagination: u64,
+    #[serde(default = "default_upgrades")]
+    pub upgrades: PlayerUpgrades,
 }
 
 /// The complete game state.
@@ -87,6 +100,8 @@ pub struct GameState {
     pub max_energy: f64,
     /// ID of the last successfully completed trade (for journal recovery).
     pub last_trade_id: Option<u64>,
+    pub imagination: u64,
+    pub upgrades: PlayerUpgrades,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -119,6 +134,8 @@ pub struct RenderFrame {
     pub currants: u64,
     pub energy: f64,
     pub max_energy: f64,
+    pub imagination: u64,
+    pub upgrades: PlayerUpgrades,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -197,6 +214,8 @@ impl GameState {
             store_catalog,
             energy: 600.0,
             max_energy: 600.0,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
             last_trade_id: None,
         }
     }
@@ -730,6 +749,8 @@ impl GameState {
             currants: self.currants,
             energy: self.energy,
             max_energy: self.max_energy,
+            imagination: self.imagination,
+            upgrades: self.upgrades.clone(),
         })
     }
 
@@ -751,6 +772,8 @@ impl GameState {
             energy: self.energy,
             max_energy: self.max_energy,
             last_trade_id: self.last_trade_id,
+            imagination: self.imagination,
+            upgrades: self.upgrades.clone(),
         })
     }
 
@@ -784,6 +807,8 @@ impl GameState {
         self.energy = save.energy;
         self.max_energy = save.max_energy;
         self.last_trade_id = save.last_trade_id;
+        self.imagination = save.imagination;
+        self.upgrades = save.upgrades.clone();
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -2972,6 +2997,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -2997,6 +3024,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(json.contains("\"streetId\""), "Should use camelCase: {json}");
@@ -3016,6 +3045,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3042,6 +3073,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
 
         write_save_state(&path, &save).unwrap();
@@ -3095,6 +3128,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         state.restore_save(&save);
 
@@ -3126,6 +3161,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         state.restore_save(&save);
 
@@ -3150,6 +3187,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3172,6 +3211,8 @@ mod save_tests {
             energy: 600.0,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3198,9 +3239,52 @@ mod save_tests {
             energy: 123.4,
             max_energy: 600.0,
             last_trade_id: None,
+            imagination: 0,
+            upgrades: PlayerUpgrades::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();
         assert!((restored.energy - 123.4).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn save_state_imagination_default() {
+        let json = r#"{
+            "streetId": "demo_meadow",
+            "x": 0, "y": 0,
+            "facing": "right",
+            "inventory": []
+        }"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert_eq!(save.imagination, 0);
+        assert_eq!(save.upgrades.energy_tank_tier, 0);
+        assert_eq!(save.upgrades.haggling_tier, 0);
+    }
+
+    #[test]
+    fn save_state_imagination_round_trip() {
+        use crate::item::imagination::PlayerUpgrades;
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: AvatarAppearance::default(),
+            currants: 50,
+            energy: 600.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 42,
+            upgrades: PlayerUpgrades {
+                energy_tank_tier: 2,
+                haggling_tier: 1,
+            },
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let parsed: SaveState = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.imagination, 42);
+        assert_eq!(parsed.upgrades.energy_tank_tier, 2);
+        assert_eq!(parsed.upgrades.haggling_tier, 1);
     }
 }
