@@ -255,6 +255,7 @@ pub fn execute_interaction(
                     x: entity.x,
                     y: entity.y,
                     age_secs: 0.0,
+                    color: None,
                 });
                 result.interaction_type = Some(InteractionType::Rejected);
                 return result;
@@ -270,6 +271,7 @@ pub fn execute_interaction(
                     x: entity.x,
                     y: entity.y,
                     age_secs: 0.0,
+                    color: None,
                 });
                 result.interaction_type = Some(InteractionType::Rejected);
                 return result;
@@ -284,6 +286,7 @@ pub fn execute_interaction(
                     x: entity.x,
                     y: entity.y,
                     age_secs: 0.0,
+                    color: None,
                 });
                 result.interaction_type = Some(InteractionType::Rejected);
                 return result;
@@ -310,6 +313,7 @@ pub fn execute_interaction(
                         x: entity.x,
                         y: entity.y,
                         age_secs: 0.0,
+                        color: None,
                     });
                 }
 
@@ -327,6 +331,7 @@ pub fn execute_interaction(
                         x: entity.x,
                         y: entity.y,
                         age_secs: 0.0,
+                        color: None,
                     });
                 }
             }
@@ -372,6 +377,7 @@ pub fn execute_interaction(
                     x: item.x,
                     y: item.y,
                     age_secs: 0.0,
+                    color: None,
                 });
             }
 
@@ -393,6 +399,7 @@ pub fn execute_interaction(
                     x: item.x,
                     y: item.y,
                     age_secs: 0.0,
+                    color: None,
                 });
                 result.interaction_type = Some(InteractionType::Rejected);
             }

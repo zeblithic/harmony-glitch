@@ -243,6 +243,7 @@ export interface PickupFeedback {
   x: number;
   y: number;
   ageSecs: number;
+  color?: string;
 }
 
 export interface RecipeDef {

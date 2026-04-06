@@ -952,6 +952,7 @@ fn vendor_buy(entity_id: String, item_id: String, count: u32, app: AppHandle) ->
         x: px,
         y: py,
         age_secs: 0.0,
+        color: None,
     });
 
     Ok(new_balance)
@@ -990,6 +991,7 @@ fn vendor_sell(entity_id: String, item_id: String, count: u32, app: AppHandle) -
         x: px,
         y: py,
         age_secs: 0.0,
+        color: None,
     });
 
     Ok(new_balance)
@@ -1019,6 +1021,7 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
         x: px,
         y: py,
         age_secs: 0.0,
+        color: None,
     });
 
     Ok(serde_json::json!({

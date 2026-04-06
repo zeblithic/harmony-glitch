@@ -270,6 +270,7 @@ impl GameState {
                 x: self.player.x,
                 y: self.player.y,
                 age_secs: 0.0,
+                color: None,
             });
             self.next_feedback_id += 1;
         }
