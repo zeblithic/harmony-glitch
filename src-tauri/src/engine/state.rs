@@ -873,6 +873,17 @@ impl GameState {
                     self.next_item_id += 1;
                 }
             }
+            // Earn iMG from flushed craft (same as tick() completion path)
+            let produced: Vec<(&str, u32)> = craft
+                .pending_outputs
+                .iter()
+                .map(|o| (o.item_id.as_str(), o.count))
+                .collect();
+            let img_earned =
+                crate::item::imagination::earn_from_craft(&produced, &self.item_defs);
+            if img_earned > 0 {
+                self.imagination = self.imagination.saturating_add(img_earned);
+            }
         }
     }
 
