@@ -293,6 +293,25 @@ impl GameState {
             });
             self.next_feedback_id += 1;
         }
+        // Earn iMG from crafted outputs
+        let produced: Vec<(&str, u32)> = result
+            .iter()
+            .map(|o| (o.item_id.as_str(), o.count))
+            .collect();
+        let img_earned = crate::item::imagination::earn_from_craft(&produced, &self.item_defs);
+        if img_earned > 0 {
+            self.imagination = self.imagination.saturating_add(img_earned);
+            self.pickup_feedback.push(PickupFeedback {
+                id: self.next_feedback_id,
+                text: format!("+{img_earned} iMG"),
+                success: true,
+                x: self.player.x,
+                y: self.player.y,
+                age_secs: 0.0,
+                color: Some("#c084fc".to_string()),
+            });
+            self.next_feedback_id += 1;
+        }
         self.pending_audio_events.push(AudioEvent::CraftSuccess {
             recipe_id: recipe.id.clone(),
         });
@@ -2307,9 +2326,12 @@ mod tests {
         let result = state.craft_recipe("cherry_pie");
         assert!(result.is_ok());
 
-        assert_eq!(state.pickup_feedback.len(), 1);
+        // One feedback for the crafted item, one for iMG earned
+        assert_eq!(state.pickup_feedback.len(), 2);
         assert!(state.pickup_feedback[0].text.contains("Cherry Pie"));
         assert!(state.pickup_feedback[0].success);
+        assert!(state.pickup_feedback[1].text.contains("iMG"));
+        assert!(state.pickup_feedback[1].success);
 
         assert_eq!(state.inventory.count_item("cherry_pie"), 1);
         assert_eq!(state.inventory.count_item("cherry"), 5);
@@ -3287,5 +3309,35 @@ mod save_tests {
         assert_eq!(parsed.imagination, 42);
         assert_eq!(parsed.upgrades.energy_tank_tier, 2);
         assert_eq!(parsed.upgrades.haggling_tier, 1);
+    }
+
+    #[test]
+    fn craft_earns_imagination() {
+        let item_defs =
+            crate::item::loader::parse_item_defs(include_str!("../../../assets/items.json"))
+                .unwrap();
+        let entity_defs =
+            crate::item::loader::parse_entity_defs(include_str!("../../../assets/entities.json"))
+                .unwrap();
+        let recipe_defs =
+            crate::item::loader::parse_recipe_defs(include_str!("../../../assets/recipes.json"))
+                .unwrap();
+        let track_catalog = crate::engine::jukebox::TrackCatalog { tracks: std::collections::HashMap::new() };
+        let store_catalog: crate::item::types::StoreCatalog =
+            serde_json::from_str(include_str!("../../../assets/stores.json")).unwrap();
+        let mut state = GameState::new(800.0, 600.0, item_defs, entity_defs, recipe_defs, track_catalog, store_catalog);
+
+        // Give player cherry_pie ingredients (check assets/recipes.json for the recipe)
+        // cherry_pie recipe requires: cherry x5, grain x2, pot x1 (tool)
+        let defs = state.item_defs.clone();
+        state.inventory.add("cherry", 10, &defs);
+        state.inventory.add("grain", 5, &defs);
+        state.inventory.add("pot", 1, &defs);
+
+        let before = state.imagination;
+        let _ = state.craft_recipe("cherry_pie");
+        assert!(state.imagination > before);
+        // cherry_pie base_cost=20, 2x multiplier = 40
+        assert_eq!(state.imagination - before, 40);
     }
 }
