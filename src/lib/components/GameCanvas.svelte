@@ -55,6 +55,27 @@
   }
 
   let cleanupFns: (() => void)[] = [];
+  let builtForTsid: string | null = null;
+  let buildGeneration = 0;
+
+  // Rebuild scene when street changes (e.g. after a street transition).
+  // The guard builtForTsid !== null prevents double-building on initial mount
+  // (onMount handles the first buildScene call). The generation counter
+  // prevents a stale build from overwriting builtForTsid if a newer build
+  // was started while loadStreetAssets was still in-flight.
+  $effect(() => {
+    if (renderer && street && builtForTsid !== null && street.tsid !== builtForTsid) {
+      const tsid = street.tsid;
+      const gen = ++buildGeneration;
+      renderer.buildScene(street).then(() => {
+        if (gen === buildGeneration) {
+          builtForTsid = tsid;
+        }
+      }).catch((e) => {
+        console.error('[GameCanvas] Scene rebuild failed:', e);
+      });
+    }
+  });
 
   onMount(async () => {
     const r = new GameRenderer();
@@ -75,6 +96,7 @@
 
     if (street) {
       await r.buildScene(street);
+      builtForTsid = street.tsid;
       try {
         const appearance = await getAvatar();
         await r.applyAppearance(appearance);

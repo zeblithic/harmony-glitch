@@ -35,6 +35,8 @@ export class GameRenderer {
   private chatBubbles: ChatBubble[] = [];
   private entitySprites: Map<string, Container> = new Map();
   private groundItemSprites: Map<string, Container> = new Map();
+  private signpostContainers: Map<string, Container> = new Map();
+  private signpostLabels: Map<string, Text> = new Map();
   private promptText: Text | null = null;
   private feedbackTexts: { text: Text; feedbackId: number; startAge: number }[] = [];
   private lastFrameTime = 0;
@@ -162,6 +164,9 @@ export class GameRenderer {
     this.entitySprites.clear();
     for (const [, sprite] of this.groundItemSprites) { sprite.destroy(); }
     this.groundItemSprites.clear();
+    for (const [, c] of this.signpostContainers) { c.destroy(); }
+    this.signpostContainers.clear();
+    this.signpostLabels.clear();
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];
@@ -206,6 +211,69 @@ export class GameRenderer {
     this.platformGraphics = new Graphics();
     this.worldContainer.addChild(this.platformGraphics);
     this.drawPlatforms(street);
+
+    // Create signpost visuals at street edges
+    const streetMid = (street.left + street.right) / 2;
+    for (const signpost of street.signposts) {
+      if (signpost.connects.length === 0) continue;
+
+      const container = new Container();
+      container.x = signpost.x - street.left;
+      container.y = signpost.y - street.top;
+
+      const pointsRight = signpost.x >= streetMid;
+
+      // Wooden post (vertical)
+      const post = new Graphics();
+      post.rect(-4, -80, 8, 80);
+      post.fill(0x6b4226);
+      post.stroke({ color: 0x8b6914, width: 1 });
+      container.addChild(post);
+
+      // Sign board near top of post
+      const boardW = 130;
+      const boardH = 28;
+      const boardX = pointsRight ? -10 : -boardW + 10;
+      const board = new Graphics();
+      board.rect(boardX, -78, boardW, boardH);
+      board.fill(0x8b5e3c);
+      board.stroke({ color: 0x6b4226, width: 1 });
+
+      // Arrow on sign board
+      const arrowSize = 8;
+      if (pointsRight) {
+        const ax = boardX + boardW - 8;
+        const ay = -78 + boardH / 2;
+        board.moveTo(ax, ay - arrowSize);
+        board.lineTo(ax + arrowSize, ay);
+        board.lineTo(ax, ay + arrowSize);
+        board.fill(0xffffff);
+      } else {
+        const ax = boardX + 8;
+        const ay = -78 + boardH / 2;
+        board.moveTo(ax, ay - arrowSize);
+        board.lineTo(ax - arrowSize, ay);
+        board.lineTo(ax, ay + arrowSize);
+        board.fill(0xffffff);
+      }
+      container.addChild(board);
+
+      // Destination label text (arrow direction conveyed by the drawn triangle)
+      const displayText = signpost.connects[0].targetLabel;
+      const text = new Text({
+        text: displayText,
+        style: { fontSize: 11, fill: 0xffffff, fontFamily: 'sans-serif' },
+      });
+      text.anchor.set(0.5, 0.5);
+      text.x = boardX + boardW / 2;
+      text.y = -78 + boardH / 2;
+      text.alpha = 0.7;
+      container.addChild(text);
+
+      this.worldContainer.addChild(container);
+      this.signpostContainers.set(signpost.id, container);
+      this.signpostLabels.set(signpost.id, text);
+    }
 
     // Create avatar container (layers populated by applyAppearance)
     this.avatarContainer = this.compositor.getContainer();
@@ -429,6 +497,29 @@ export class GameRenderer {
         this.worldContainer.removeChild(sprite);
         sprite.destroy();
         this.groundItemSprites.delete(id);
+      }
+    }
+
+    // Signpost approach glow — brighten label when player nears a signpost
+    if (this.street) {
+      const APPROACH_DISTANCE = 500;
+      for (const signpost of this.street.signposts) {
+        const labelText = this.signpostLabels.get(signpost.id);
+        if (!labelText) continue;
+        const distance = Math.abs(frame.player.x - signpost.x);
+        if (distance <= APPROACH_DISTANCE) {
+          const proximity = 1 - distance / APPROACH_DISTANCE;
+          labelText.alpha = 0.7 + 0.3 * proximity;
+          if (distance < 200) {
+            const pulse = Math.sin(performance.now() / 300) * 0.05;
+            labelText.scale.set(Math.max(1, 1 + proximity * 0.08 + pulse));
+          } else {
+            labelText.scale.set(1 + proximity * 0.05);
+          }
+        } else {
+          labelText.alpha = 0.7;
+          labelText.scale.set(1);
+        }
       }
     }
 
@@ -686,6 +777,9 @@ export class GameRenderer {
     this.entitySprites.clear();
     for (const [, sprite] of this.groundItemSprites) { sprite.destroy(); }
     this.groundItemSprites.clear();
+    for (const [, c] of this.signpostContainers) { c.destroy(); }
+    this.signpostContainers.clear();
+    this.signpostLabels.clear();
     if (this.promptText) { this.promptText.destroy(); this.promptText = null; }
     for (const ft of this.feedbackTexts) { ft.text.destroy(); }
     this.feedbackTexts = [];
