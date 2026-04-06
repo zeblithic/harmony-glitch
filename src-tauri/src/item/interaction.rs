@@ -111,6 +111,20 @@ pub fn build_prompt(
                 }
             }
 
+            // NPC dialogue entities use their verb ("Talk"), always actionable
+            if let Some(d) = def {
+                if d.dialogue.is_some() {
+                    return InteractionPrompt {
+                        verb: d.verb.clone(),
+                        target_name: d.name.clone(),
+                        target_x: entity.x,
+                        target_y: entity.y,
+                        actionable: true,
+                        entity_id: Some(entity.id.clone()),
+                    };
+                }
+            }
+
             // Check entity state for cooldown/depletion
             if let Some(state) = entity_states.get(&entity.id) {
                 if state.depleted_until > game_time {
@@ -179,6 +193,7 @@ pub enum InteractionType {
     Rejected,
     Jukebox { entity_id: String },
     Vendor { entity_id: String },
+    Npc { entity_id: String },
 }
 
 /// Result of executing an interaction.
@@ -235,6 +250,14 @@ pub fn execute_interaction(
             // Vendor entities don't harvest — return a Vendor interaction type
             if def.store.is_some() {
                 result.interaction_type = Some(InteractionType::Vendor {
+                    entity_id: entity.id.clone(),
+                });
+                return result;
+            }
+
+            // NPC dialogue entities don't harvest — return an Npc interaction type
+            if def.dialogue.is_some() {
+                result.interaction_type = Some(InteractionType::Npc {
                     entity_id: entity.id.clone(),
                 });
                 return result;
@@ -478,6 +501,7 @@ mod tests {
                 playlist: None,
                 audio_radius: None,
                 store: None,
+                dialogue: None,
             },
         );
         defs
@@ -1159,6 +1183,7 @@ mod tests {
                 playlist: None,
                 audio_radius: None,
                 store: None,
+                dialogue: None,
             },
         );
         let mut inv = Inventory::new(16);
@@ -1371,6 +1396,7 @@ mod tests {
                 playlist: None,
                 audio_radius: None,
                 store: None,
+                dialogue: None,
             },
         );
         let mut inv = Inventory::new(16);
@@ -1445,6 +1471,7 @@ mod tests {
                 playlist: Some(vec!["track-a".into(), "track-b".into()]),
                 audio_radius: Some(400.0),
                 store: None,
+                dialogue: None,
             },
         );
         let mut inv = Inventory::new(4);
@@ -1511,6 +1538,7 @@ mod tests {
                 playlist: Some(vec!["track-a".into(), "track-b".into()]),
                 audio_radius: Some(400.0),
                 store: None,
+                dialogue: None,
             },
         );
 

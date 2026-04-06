@@ -5,6 +5,7 @@ pub mod item;
 pub mod network;
 pub mod persistence;
 pub mod physics;
+pub mod quest;
 pub mod skill;
 pub mod street;
 pub mod trade;
@@ -533,6 +534,162 @@ fn cancel_learning(app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     state.cancel_skill_learning().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_dialogue_state(
+    entity_id: String,
+    app: AppHandle,
+) -> Result<quest::types::DialogueFrame, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    // Find the entity and its dialogue tree ID
+    let entity = state
+        .world_entities
+        .iter()
+        .find(|e| e.id == entity_id)
+        .ok_or_else(|| format!("Entity not found: {entity_id}"))?;
+    let def = state
+        .entity_defs
+        .get(&entity.entity_type)
+        .ok_or_else(|| format!("Entity def not found: {}", entity.entity_type))?;
+    let tree_id = def
+        .dialogue
+        .as_ref()
+        .ok_or_else(|| format!("Entity {} has no dialogue", entity_id))?
+        .clone();
+
+    let frame = quest::dialogue::evaluate_start(
+        &tree_id,
+        &state.dialogue_defs,
+        &state.quest_progress,
+        &state.quest_defs,
+        &state.inventory,
+        &state.skill_progress,
+        &entity_id,
+    )
+    .ok_or_else(|| "Dialogue tree or start node not found".to_string())?;
+
+    let start_node = state.dialogue_defs[&tree_id].start_node.clone();
+    state.active_dialogue = Some(quest::types::ActiveDialogue {
+        tree_id,
+        entity_id,
+        current_node: start_node,
+    });
+
+    Ok(frame)
+}
+
+#[tauri::command]
+fn dialogue_choose(
+    option_index: usize,
+    app: AppHandle,
+) -> Result<quest::types::DialogueChoiceResult, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let dialogue = state
+        .active_dialogue
+        .as_ref()
+        .ok_or("No active dialogue")?
+        .clone();
+
+    // Pre-read the next_id from the option before the mutable borrow
+    let next_id = state
+        .dialogue_defs
+        .get(&dialogue.tree_id)
+        .and_then(|tree| tree.nodes.get(&dialogue.current_node))
+        .and_then(|node| node.options.get(option_index))
+        .and_then(|opt| opt.next.clone());
+
+    // Destructure to satisfy the borrow checker — evaluate_choice needs
+    // both immutable and mutable borrows on different GameState fields.
+    let state = &mut *state;
+    let result = quest::dialogue::evaluate_choice(
+        &dialogue.tree_id,
+        &dialogue.current_node,
+        option_index,
+        &state.dialogue_defs,
+        &mut state.quest_progress,
+        &state.quest_defs,
+        &mut state.inventory,
+        &state.skill_progress,
+        &mut state.currants,
+        &mut state.imagination,
+        &state.item_defs,
+        &dialogue.entity_id,
+    );
+
+    match &result {
+        quest::types::DialogueChoiceResult::Continue { .. } => {
+            if let Some(next) = next_id {
+                if let Some(ref mut active) = state.active_dialogue {
+                    active.current_node = next;
+                }
+            }
+        }
+        quest::types::DialogueChoiceResult::End { .. } => {
+            state.active_dialogue = None;
+        }
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+fn close_dialogue(app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.active_dialogue = None;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_quest_log(app: AppHandle) -> Result<quest::types::QuestLogFrame, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let mut active = Vec::new();
+    for (quest_id, active_quest) in &state.quest_progress.active {
+        if let Some(def) = state.quest_defs.get(quest_id) {
+            let objectives = def
+                .objectives
+                .iter()
+                .enumerate()
+                .map(|(i, obj)| {
+                    let current = active_quest.objective_progress.get(i).copied().unwrap_or(0);
+                    let target = obj.target_count();
+                    quest::types::ObjectiveEntry {
+                        description: obj.description().to_string(),
+                        current,
+                        target,
+                        complete: current >= target,
+                    }
+                })
+                .collect();
+            active.push(quest::types::QuestEntry {
+                quest_id: quest_id.clone(),
+                name: def.name.clone(),
+                description: def.description.clone(),
+                objectives,
+            });
+        }
+    }
+    // Sort active quests by name for stable display
+    active.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let mut completed = Vec::new();
+    for quest_id in &state.quest_progress.completed {
+        if let Some(def) = state.quest_defs.get(quest_id) {
+            completed.push(quest::types::QuestCompletedEntry {
+                quest_id: quest_id.clone(),
+                name: def.name.clone(),
+            });
+        }
+    }
+
+    Ok(quest::types::QuestLogFrame { active, completed })
 }
 
 #[tauri::command]
@@ -1754,6 +1911,29 @@ pub fn run() {
                     );
                 }
             }
+            let dialogue_defs = quest::loader::parse_dialogue_defs(
+                include_str!("../../assets/dialogues.json")
+            ).expect("Failed to parse dialogues.json");
+            let quest_defs = quest::loader::parse_quest_defs(
+                include_str!("../../assets/quests.json")
+            ).expect("Failed to parse quests.json");
+            // Validate quest turn-in NPC refs exist in entity_defs as dialogue NPCs
+            for (quest_id, quest_def) in &quest_defs {
+                let npc_type = &quest_def.turn_in_npc;
+                assert!(
+                    entity_defs.get(npc_type).and_then(|d| d.dialogue.as_ref()).is_some(),
+                    "Quest '{quest_id}' turn_in_npc '{npc_type}' is not a dialogue entity"
+                );
+            }
+            // Validate dialogue tree refs in entity_defs exist in dialogue_defs
+            for (entity_id, entity_def) in &entity_defs {
+                if let Some(tree_id) = &entity_def.dialogue {
+                    assert!(
+                        dialogue_defs.contains_key(tree_id),
+                        "Entity '{entity_id}' references unknown dialogue tree '{tree_id}'"
+                    );
+                }
+            }
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,
@@ -1763,6 +1943,8 @@ pub fn run() {
                 track_catalog,
                 store_catalog,
                 skill_defs,
+                quest_defs,
+                dialogue_defs,
             )))
         })
         .manage(InputStateWrapper(Mutex::new(InputState::default())))
@@ -1853,6 +2035,10 @@ pub fn run() {
             get_skills,
             learn_skill,
             cancel_learning,
+            get_dialogue_state,
+            dialogue_choose,
+            close_dialogue,
+            get_quest_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

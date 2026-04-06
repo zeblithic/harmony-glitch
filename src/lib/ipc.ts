@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack, SkillDef } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack, SkillDef, DialogueFrame, DialogueChoiceResult, QuestLogFrame } from './types';
 import type { SoundKit } from './engine/audio';
 
 export async function listStreets(): Promise<string[]> {
@@ -178,4 +178,22 @@ export async function learnSkill(skillId: string): Promise<void> {
 
 export async function cancelLearning(): Promise<void> {
   return invoke('cancel_learning');
+}
+
+// ── Dialogue & Quests ─────────────────────────────────────────────────
+
+export async function getDialogueState(entityId: string): Promise<DialogueFrame> {
+  return invoke<DialogueFrame>('get_dialogue_state', { entityId });
+}
+
+export async function dialogueChoose(optionIndex: number): Promise<DialogueChoiceResult> {
+  return invoke<DialogueChoiceResult>('dialogue_choose', { optionIndex });
+}
+
+export async function closeDialogue(): Promise<void> {
+  return invoke('close_dialogue');
+}
+
+export async function getQuestLog(): Promise<QuestLogFrame> {
+  return invoke<QuestLogFrame>('get_quest_log');
 }

@@ -100,5 +100,27 @@
     "spriteClass": "vendor",
     "interactRadius": 100,
     "store": "hardware"
+  },
+  "npc_greeter": {
+    "name": "Friendly Greeter",
+    "verb": "Talk",
+    "yields": [],
+    "cooldownSecs": 0,
+    "maxHarvests": 0,
+    "respawnSecs": 0,
+    "spriteClass": "npc_greeter",
+    "interactRadius": 100,
+    "dialogue": "greeter_default"
+  },
+  "npc_handyman": {
+    "name": "Handyman",
+    "verb": "Talk",
+    "yields": [],
+    "cooldownSecs": 0,
+    "maxHarvests": 0,
+    "respawnSecs": 0,
+    "spriteClass": "npc_handyman",
+    "interactRadius": 100,
+    "dialogue": "handyman_default"
   }
 }

@@ -196,6 +196,7 @@ export interface RenderFrame {
   imagination: number;
   skillProgress: SkillProgressFrame;
   upgrades: PlayerUpgrades;
+  questProgress: QuestProgressFrame;
 }
 
 export interface NetworkStatus {
@@ -444,4 +445,49 @@ export interface AvatarManifestItem {
 export interface AvatarManifest {
   categories: Record<string, { items: AvatarManifestItem[] }>;
   defaults: Record<string, string>;
+}
+
+export interface DialogueFrame {
+  speaker: string;
+  text: string;
+  options: DialogueOptionFrame[];
+  entityId: string;
+}
+
+export interface DialogueOptionFrame {
+  text: string;
+  index: number;
+}
+
+export type DialogueChoiceResult =
+  | { type: 'continue'; frame: DialogueFrame }
+  | { type: 'end'; feedback: string[] };
+
+export interface QuestLogFrame {
+  active: QuestEntry[];
+  completed: QuestCompletedEntry[];
+}
+
+export interface QuestEntry {
+  questId: string;
+  name: string;
+  description: string;
+  objectives: ObjectiveEntry[];
+}
+
+export interface ObjectiveEntry {
+  description: string;
+  current: number;
+  target: number;
+  complete: boolean;
+}
+
+export interface QuestCompletedEntry {
+  questId: string;
+  name: string;
+}
+
+export interface QuestProgressFrame {
+  activeCount: number;
+  hasReady: boolean;
 }

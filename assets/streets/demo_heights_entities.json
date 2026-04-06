@@ -4,7 +4,8 @@
     { "id": "chicken_2", "type": "chicken", "x": 400, "y": -2 },
     { "id": "butterfly_2", "type": "butterfly", "x": -100, "y": -60 },
     { "id": "wood_tree_2", "type": "wood_tree", "x": 800, "y": -2 },
-    { "id": "vendor_hardware_1", "type": "vendor_hardware", "x": 200, "y": -2 }
+    { "id": "vendor_hardware_1", "type": "vendor_hardware", "x": 200, "y": -2 },
+    { "id": "npc_handyman_1", "type": "npc_handyman", "x": -200, "y": -2 }
   ],
   "groundItems": []
 }
