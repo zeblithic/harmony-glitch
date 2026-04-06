@@ -19,6 +19,7 @@
   let feedbackMessages = $state<string[]>([]);
   let showingFeedback = $state(false);
   let choosing = $state(false);
+  let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   $effect(() => {
     if (visible && dialogEl) {
@@ -38,6 +39,7 @@
       feedbackMessages = [];
       showingFeedback = false;
       choosing = false;
+      if (feedbackTimer !== null) { clearTimeout(feedbackTimer); feedbackTimer = null; }
     }
   });
 
@@ -56,7 +58,8 @@
         if (result.feedback.length > 0) {
           feedbackMessages = result.feedback;
           showingFeedback = true;
-          setTimeout(() => {
+          feedbackTimer = setTimeout(() => {
+            feedbackTimer = null;
             showingFeedback = false;
             feedbackMessages = [];
             choosing = false;
@@ -71,7 +74,8 @@
         if (result.feedback.length > 0) {
           feedbackMessages = result.feedback;
           showingFeedback = true;
-          setTimeout(() => {
+          feedbackTimer = setTimeout(() => {
+            feedbackTimer = null;
             showingFeedback = false;
             feedbackMessages = [];
             choosing = false;
