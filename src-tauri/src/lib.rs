@@ -1924,6 +1924,32 @@ pub fn run() {
                     );
                 }
             }
+            // Validate completeQuest effects only appear in the correct NPC's dialogue tree.
+            // Build reverse map: dialogue tree_id → entity type that owns it.
+            let tree_to_entity: std::collections::HashMap<&str, &str> = entity_defs
+                .iter()
+                .filter_map(|(eid, def)| def.dialogue.as_deref().map(|tid| (tid, eid.as_str())))
+                .collect();
+            for (_tree_id, tree) in &dialogue_defs {
+                for node in tree.nodes.values() {
+                    for option in &node.options {
+                        for effect in &option.effects {
+                            if let quest::types::DialogueEffect::CompleteQuest { quest_id } = effect {
+                                if let Some(qdef) = quest_defs.get(quest_id) {
+                                    if let Some(&owner_entity) = tree_to_entity.get(_tree_id.as_str()) {
+                                        assert!(
+                                            owner_entity == qdef.turn_in_npc,
+                                            "completeQuest '{quest_id}' in dialogue tree '{_tree_id}' \
+                                             (owned by '{owner_entity}') but quest turn_in_npc is '{}'",
+                                            qdef.turn_in_npc
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             GameStateWrapper(Mutex::new(GameState::new(
                 1280.0,
                 720.0,

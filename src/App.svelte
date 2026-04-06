@@ -343,16 +343,9 @@
     if (frame.audioEvents?.length) {
       for (const event of frame.audioEvents) {
         if (event.type === 'entityInteract' && event.entityType === 'npc') {
-          if (dialogueOpen) {
-            dialogueOpen = false;
-            dialogueFrame = null;
-            dialogueEntityId = null;
-            dialogueCloseFrames = 0;
-            dialogueClosing = closeDialogue().catch(console.error).then(() => { dialogueClosing = null; });
-          } else if (frame.interactionPrompt?.entityId) {
+          if (!dialogueOpen && !dialogueClosing && frame.interactionPrompt?.entityId) {
             const eid = frame.interactionPrompt.entityId;
-            // Chain after any pending close to avoid IPC race
-            const open = () => getDialogueState(eid).then(dialogFrame => {
+            getDialogueState(eid).then(dialogFrame => {
               if (latestFrame?.interactionPrompt?.entityId !== eid) return;
               dialogueFrame = dialogFrame;
               dialogueEntityId = eid;
@@ -368,11 +361,6 @@
               skillsOpen = false;
               questLogOpen = false;
             }).catch(e => console.error('Failed to get dialogue state:', e));
-            if (dialogueClosing) {
-              dialogueClosing.then(open);
-            } else {
-              open();
-            }
           }
         }
       }
