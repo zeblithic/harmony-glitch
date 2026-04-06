@@ -3,7 +3,7 @@
     "name": "Cherry Picking",
     "description": "Harvest 5 cherries from the Fruit Trees for the Friendly Greeter.",
     "objectives": [
-      { "type": "fetch", "itemId": "cherry", "count": 5, "description": "Collect 5 cherries" }
+      { "type": "deliver", "itemId": "cherry", "count": 5, "npcId": "npc_greeter", "description": "Collect 5 cherries" }
     ],
     "rewards": {
       "currants": 25,

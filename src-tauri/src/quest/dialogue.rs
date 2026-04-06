@@ -228,12 +228,19 @@ pub fn apply_effect(
                     feedback.push(format!("+{} Imagination", def.rewards.imagination));
                 }
                 for reward_item in &def.rewards.items {
-                    inventory.add(&reward_item.item_id, reward_item.count, item_defs);
+                    let overflow =
+                        inventory.add(&reward_item.item_id, reward_item.count, item_defs);
                     let name = item_defs
                         .get(&reward_item.item_id)
                         .map(|d| d.name.as_str())
                         .unwrap_or(&reward_item.item_id);
-                    feedback.push(format!("+{} {}", reward_item.count, name));
+                    let delivered = reward_item.count - overflow;
+                    if delivered > 0 {
+                        feedback.push(format!("+{} {}", delivered, name));
+                    }
+                    if overflow > 0 {
+                        feedback.push(format!("Inventory full! Lost {} {}", overflow, name));
+                    }
                 }
                 // Move quest to completed
                 quest_progress.active.remove(quest_id);
@@ -242,12 +249,18 @@ pub fn apply_effect(
             }
         }
         DialogueEffect::GiveItem { item_id, count } => {
-            inventory.add(item_id, *count, item_defs);
+            let overflow = inventory.add(item_id, *count, item_defs);
             let name = item_defs
                 .get(item_id)
                 .map(|d| d.name.as_str())
                 .unwrap_or(item_id);
-            feedback.push(format!("+{} {}", count, name));
+            let delivered = count - overflow;
+            if delivered > 0 {
+                feedback.push(format!("+{} {}", delivered, name));
+            }
+            if overflow > 0 {
+                feedback.push(format!("Inventory full! Lost {} {}", overflow, name));
+            }
         }
         DialogueEffect::RemoveItem { item_id, count } => {
             inventory.remove_item(item_id, *count);
