@@ -159,6 +159,8 @@ pub struct NetworkState {
     last_tick_time: f64,
     /// Current street bounds for state validation (set on load_street).
     street_bounds: Option<crate::trust::validator::StreetBounds>,
+    /// Gossip-derived trust opinions (separate from direct observations).
+    gossip_store: crate::trust::gossip::GossipStore,
 }
 
 impl NetworkState {
@@ -202,6 +204,7 @@ impl NetworkState {
             validation_states: HashMap::new(),
             last_tick_time: 0.0,
             street_bounds: None,
+            gossip_store: crate::trust::gossip::GossipStore::new(),
         }
     }
 
@@ -215,6 +218,12 @@ impl NetworkState {
         });
         self.state_validator.clear_all();
         self.validation_states.clear();
+        self.gossip_store.clear();
+    }
+
+    /// Whether a peer should be suppressed (direct blackhole OR gossip-derived).
+    fn is_peer_suppressed(&self, addr: &[u8; 16]) -> bool {
+        self.trust_store.is_blackholed(addr) || self.gossip_store.is_gossip_suppressed(addr)
     }
 
     /// Update the display name and re-register the announcing destination
@@ -320,6 +329,7 @@ impl NetworkState {
             self.peers.remove(&addr);
             self.state_validator.clear_peer(&addr);
             self.validation_states.remove(&addr);
+            self.gossip_store.clear_subject(&addr);
         }
 
         // Purge stale players and clean up their PeerState entries.
@@ -338,6 +348,7 @@ impl NetworkState {
             self.peers.remove(&addr);
             self.state_validator.clear_peer(&addr);
             self.validation_states.remove(&addr);
+            self.gossip_store.clear_subject(&addr);
             let event = PresenceEvent::Left { address_hash: addr };
             actions.push(NetworkAction::PresenceChange(event));
         }
@@ -346,6 +357,18 @@ impl NetworkState {
         // dt approximated as 1/60s (tick rate) since NetworkState doesn't
         // track its own elapsed time — close enough for slow decay.
         self.trust_store.tick_decay(1.0 / 60.0);
+
+        // Decay gossip opinions (faster than direct, allowing redemption).
+        self.gossip_store.tick_decay(1.0 / 60.0);
+
+        // Drain and publish pending outbound gossip reports.
+        let gossip_out = self.gossip_store.drain_outbound(now_secs);
+        for envelope in gossip_out {
+            let msg = NetMessage::Gossip(envelope);
+            if let Ok(payload) = serde_json::to_vec(&msg) {
+                actions.extend(self.publish_to_all_peers(&payload, PubTopic::Event, rng));
+            }
+        }
 
         // Record co-presence for all peers with active sessions (same street).
         {
@@ -361,7 +384,7 @@ impl NetworkState {
                 .map(|(addr, _)| *addr)
                 .collect();
             for addr in active_addrs {
-                if self.trust_store.is_suppressed(&addr) {
+                if self.is_peer_suppressed(&addr) {
                     continue;
                 }
                 if let Some(vs) = self.validation_states.get(&addr) {
@@ -514,6 +537,7 @@ impl NetworkState {
         self.unmatched_links.clear();
         self.state_validator.clear_all();
         self.validation_states.clear();
+        self.gossip_store.clear();
 
         // Unregister old destination.
         if let Some(ref old_hash) = self.dest_hash {
@@ -1404,7 +1428,7 @@ impl NetworkState {
 
         // Drop ALL inbound frames from suppressed (blackholed) peers.
         // Covers both unicast (trade) and pubsub (state/chat/presence) channels.
-        if self.trust_store.is_suppressed(addr) {
+        if self.is_peer_suppressed(addr) {
             return;
         }
 
@@ -1736,8 +1760,20 @@ impl NetworkState {
                                             now_secs_f64,
                                             params.jitter_multiplier,
                                         );
+                                        let mut had_critical = false;
                                         for v in &violations {
                                             self.trust_store.record_violation(addr, v.severity());
+                                            if v.severity() >= 1.0 {
+                                                had_critical = true;
+                                            }
+                                        }
+                                        if had_critical {
+                                            self.gossip_store.queue_outbound(
+                                                addr,
+                                                &crate::trust::opinion::Opinion::full_distrust(),
+                                                self.trust_store.violation_count(addr),
+                                                now_secs_f64,
+                                            );
                                         }
                                         if !violations.is_empty() && params.reject_on_violation {
                                             // Always establish a baseline on first contact,
@@ -1762,6 +1798,14 @@ impl NetworkState {
                                                 // Sever: send CLOSE to the shadow-banned peer
                                                 // `link` is already verified Active above
                                                 Self::send_control(link, rng, b"CLOSE", out);
+                                                // Gossip: warn other peers about this bad actor
+                                                self.gossip_store.queue_outbound(
+                                                    addr,
+                                                    &self.trust_store.direct_opinion(addr)
+                                                        .unwrap_or(crate::trust::opinion::Opinion::full_distrust()),
+                                                    v_count,
+                                                    now_secs_f64,
+                                                );
                                             }
                                             // REJECT: don't update registry, don't emit action
                                             continue;
@@ -1819,6 +1863,22 @@ impl NetworkState {
                                     sender: *addr,
                                     message: trade_msg,
                                 });
+                            }
+                            NetMessage::Gossip(envelope) => {
+                                // Don't process gossip about ourselves
+                                if envelope.subject == self.public_identity.address_hash {
+                                    continue;
+                                }
+                                let trust_in_reporter = self
+                                    .trust_store
+                                    .direct_opinion(addr)
+                                    .unwrap_or(crate::trust::opinion::Opinion::vacuous());
+                                self.gossip_store.ingest(
+                                    &envelope,
+                                    addr,
+                                    &trust_in_reporter,
+                                    now_secs_f64,
+                                );
                             }
                         }
                     }
@@ -2016,7 +2076,7 @@ impl NetworkState {
 
         for addr in peer_addrs {
             // Skip suppressed (blackholed) peers.
-            if self.trust_store.is_suppressed(&addr) {
+            if self.is_peer_suppressed(&addr) {
                 continue;
             }
             // Skip shadow-banned peers — they see a frozen world.

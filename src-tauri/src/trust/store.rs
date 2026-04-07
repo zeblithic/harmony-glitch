@@ -117,6 +117,11 @@ impl TrustStore {
         }
     }
 
+    /// Get the direct observation opinion for a peer (None if unknown).
+    pub fn direct_opinion(&self, hash: &[u8; 16]) -> Option<Opinion> {
+        self.peers.get(hash).map(|pt| pt.opinion)
+    }
+
     /// Get the trust expectation for a peer. Returns 0.5 (vacuous base rate)
     /// for unknown peers.
     pub fn expectation(&self, hash: &[u8; 16]) -> f64 {
@@ -327,5 +332,19 @@ mod tests {
         store.record_violation(&hash(1), 1.0);
         assert!(store.is_blackholed(&hash(1)));
         assert!(store.is_suppressed(&hash(1)));
+    }
+
+    #[test]
+    fn direct_opinion_returns_none_for_unknown() {
+        let store = TrustStore::new();
+        assert!(store.direct_opinion(&hash(99)).is_none());
+    }
+
+    #[test]
+    fn direct_opinion_returns_opinion_for_known() {
+        let mut store = TrustStore::new();
+        store.record_trade_success(&hash(1));
+        let op = store.direct_opinion(&hash(1)).unwrap();
+        assert!(op.belief > 0.0);
     }
 }
