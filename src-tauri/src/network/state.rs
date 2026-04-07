@@ -361,9 +361,15 @@ impl NetworkState {
                 .map(|(addr, _)| *addr)
                 .collect();
             for addr in active_addrs {
-                if !self.trust_store.is_suppressed(&addr) {
-                    self.trust_store.record_copresence(&addr, dt);
+                if self.trust_store.is_suppressed(&addr) {
+                    continue;
                 }
+                if let Some(vs) = self.validation_states.get(&addr) {
+                    if crate::trust::policy::is_shadow_banned(vs, now_secs) {
+                        continue;
+                    }
+                }
+                self.trust_store.record_copresence(&addr, dt);
             }
         }
 
