@@ -53,6 +53,8 @@
     choosing = true;
     try {
       const result: DialogueChoiceResult = await dialogueChoose(optionIndex);
+      // Panel may have been closed (walk-away) during the IPC call
+      if (!visible) { choosing = false; return; }
       if (result.type === 'continue') {
         // Show feedback briefly if effects fired, then advance
         if (result.feedback.length > 0) {
@@ -91,7 +93,7 @@
     } catch (e) {
       console.error('Dialogue choice failed:', e);
       choosing = false;
-      onClose?.();
+      if (visible) onClose?.();
     }
   }
 

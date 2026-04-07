@@ -209,14 +209,15 @@ pub fn apply_effect(
                 ) {
                     return feedback;
                 }
-                // Remove items for fetch and deliver objectives
+                // Remove items for deliver objectives (consumed on turn-in).
+                // Fetch objectives don't consume items — they verify the player
+                // collected them but let the player keep them after completion.
                 for obj in &def.objectives {
-                    match obj {
-                        QuestObjective::Fetch { item_id, count, .. }
-                        | QuestObjective::Deliver { item_id, count, .. } => {
-                            inventory.remove_item(item_id, *count);
-                        }
-                        _ => {}
+                    if let QuestObjective::Deliver {
+                        item_id, count, ..
+                    } = obj
+                    {
+                        inventory.remove_item(item_id, *count);
                     }
                 }
                 // Grant rewards
