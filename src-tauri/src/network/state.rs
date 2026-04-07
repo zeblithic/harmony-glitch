@@ -1766,11 +1766,16 @@ impl NetworkState {
                                             // REJECT: don't update registry, don't emit action
                                             continue;
                                         }
-                                        // Validated and accepted (clean or high-trust log-only).
-                                        // Advance baseline so future delta checks use this
-                                        // position — prevents cascading false teleports after
-                                        // a single borderline frame (e.g. lag spike).
-                                        validated_clean = true;
+                                        if violations.is_empty() {
+                                            validated_clean = true;
+                                        }
+                                        // High-trust log-only violations: state is accepted
+                                        // for rendering but baseline is NOT advanced. This
+                                        // prevents a corrupted baseline from causing cascading
+                                        // rejections if trust later drops to Medium tier.
+                                        // The stale baseline self-heals: elapsed time grows,
+                                        // max_possible distance grows proportionally, and the
+                                        // next clean validated frame re-establishes it.
                                     }
                                 }
 
