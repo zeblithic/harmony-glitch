@@ -500,6 +500,8 @@ impl NetworkState {
 
     /// Vouch for another peer, broadcasting to all peers on the street.
     /// Only effective if we are a Citizen from other peers' perspective.
+    /// No local epoch guard: we don't track our own copresence/trust, so
+    /// we can't self-assess our epoch. Recipients enforce the check.
     pub fn send_vouch(
         &mut self,
         subject: [u8; 16],
@@ -554,10 +556,13 @@ impl NetworkState {
             }));
         }
 
-        // Clear all remote players and peer connections.
+        // Clear all remote players, peer connections, and trust data.
+        // Trust must reset per-street so copresence and vouch records
+        // from the previous street don't bypass epoch gates.
         self.registry.clear();
         self.peers.clear();
         self.unmatched_links.clear();
+        self.trust_store.clear();
         self.state_validator.clear_all();
         self.validation_states.clear();
         self.gossip_store.clear();
@@ -1710,6 +1715,11 @@ impl NetworkState {
         let expr_id = u16::from_be_bytes([body[0], body[1]]) as ExprId;
         let payload = body[2..].to_vec();
 
+        // Snapshot of connected peer addresses for the vouch membership
+        // check (taken before the mutable peer borrow to avoid conflicts).
+        let known_peer_addrs: std::collections::HashSet<[u8; 16]> =
+            self.peers.keys().copied().collect();
+
         let peer = match self.peers.get_mut(addr) {
             Some(p) => p,
             None => return,
@@ -1804,13 +1814,15 @@ impl NetworkState {
                                                 &crate::trust::opinion::Opinion::full_distrust(),
                                                 self.trust_store.violation_count(addr),
                                             );
-                                            // Voucher liability: penalize whoever vouched for this bad actor
+                                            // Voucher liability: penalize whoever vouched for this bad actor,
+                                            // then revoke the vouch so the vouchee loses Citizen epoch.
                                             if let Some(voucher) = self.trust_store.vouched_by(addr) {
                                                 self.trust_store.apply_vouch_liability(
                                                     &voucher,
                                                     crate::trust::epoch::VOUCH_LIABILITY_WEIGHT,
                                                 );
                                             }
+                                            self.trust_store.revoke_vouch(addr);
                                         }
                                         if !violations.is_empty() && params.reject_on_violation {
                                             // Always establish a baseline on first contact,
@@ -1939,6 +1951,12 @@ impl NetworkState {
                                 }
                                 // Cannot vouch for us
                                 if vouch_msg.subject == self.public_identity.address_hash {
+                                    continue;
+                                }
+                                // Only accept vouches for peers currently on this street.
+                                // Prevents pre-vouching absent alts that would inherit
+                                // Citizen epoch instantly on arrival.
+                                if !known_peer_addrs.contains(&vouch_msg.subject) {
                                     continue;
                                 }
                                 self.trust_store.record_vouch(&vouch_msg.subject, addr);
@@ -3355,22 +3373,33 @@ mod tests {
     #[test]
     fn citizen_peer_can_vouch() {
         let mut rng = OsRng;
-        let (mut state_a, mut state_b, addr_a, addr_b) = drive_to_pubsub_ready("meadow");
+        let (mut state_a, mut state_b, addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
 
         // Make A a Citizen from B's perspective (copresence + trust).
         {
             let pt = state_b.trust_store.get_or_insert(&addr_a);
             pt.copresence_secs = 1800.0;
         }
-        // Build trust through trades.
         for _ in 0..20 {
             state_b.trust_store.record_trade_success(&addr_a);
         }
         assert!(state_b.trust_store.expectation(&addr_a) > 0.6);
 
-        // Create a third peer hash to vouch for.
-        let subject_hash = [0x42u8; 16];
-        state_b.trust_store.get_or_insert(&subject_hash);
+        // Create a third peer (must be in B's peer map for the membership check).
+        let subject_id = make_identity();
+        let subject_hash = subject_id.identity.address_hash;
+        state_b.peers.insert(subject_hash, PeerState {
+            identity: subject_id.identity.clone(),
+            display_name: "Subject".into(),
+            street: "meadow".into(),
+            link: None,
+            session: None,
+            router: None,
+            state_publisher_id: None,
+            event_publisher_id: None,
+            subscription_ids: vec![],
+            unicast: None,
+        });
 
         // A sends a vouch for subject.
         let vouch_actions = state_a.send_vouch(subject_hash, &mut rng);
@@ -3391,14 +3420,58 @@ mod tests {
     }
 
     #[test]
+    fn vouch_for_absent_peer_rejected() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // Make A a Citizen from B's perspective.
+        {
+            let pt = state_b.trust_store.get_or_insert(&addr_a);
+            pt.copresence_secs = 1800.0;
+        }
+        for _ in 0..20 {
+            state_b.trust_store.record_trade_success(&addr_a);
+        }
+
+        // Vouch for a peer NOT in B's peer map.
+        let absent_hash = [0x42u8; 16];
+        let vouch_actions = state_a.send_vouch(absent_hash, &mut rng);
+        let a_packets = extract_packets(&vouch_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        assert!(
+            state_b.trust_store.vouched_by(&absent_hash).is_none(),
+            "Vouch for absent peer should be rejected"
+        );
+    }
+
+    #[test]
     fn non_citizen_vouch_ignored() {
         let mut rng = OsRng;
         let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
 
-        // A is Sandbox (no copresence) — vouch should be ignored.
-        let subject_hash = [0x42u8; 16];
-        state_b.trust_store.get_or_insert(&subject_hash);
+        // Create a subject peer in B's peer map.
+        let subject_id = make_identity();
+        let subject_hash = subject_id.identity.address_hash;
+        state_b.peers.insert(subject_hash, PeerState {
+            identity: subject_id.identity.clone(),
+            display_name: "Subject".into(),
+            street: "meadow".into(),
+            link: None,
+            session: None,
+            router: None,
+            state_publisher_id: None,
+            event_publisher_id: None,
+            subscription_ids: vec![],
+            unicast: None,
+        });
 
+        // A is Sandbox (no copresence) — vouch should be ignored.
         let vouch_actions = state_a.send_vouch(subject_hash, &mut rng);
         let a_packets = extract_packets(&vouch_actions);
 
@@ -3430,14 +3503,19 @@ mod tests {
         store.record_vouch(&vouchee, &voucher);
         assert_eq!(store.vouched_by(&vouchee), Some(voucher));
 
-        // Simulate critical violation path: find voucher and penalize.
+        // Simulate critical violation path: penalize voucher, revoke vouch.
         if let Some(v) = store.vouched_by(&vouchee) {
             store.apply_vouch_liability(&v, crate::trust::epoch::VOUCH_LIABILITY_WEIGHT);
         }
+        store.revoke_vouch(&vouchee);
 
         assert!(
             store.expectation(&voucher) < voucher_trust_before,
             "Voucher should lose trust when vouchee commits critical violation"
+        );
+        assert!(
+            store.vouched_by(&vouchee).is_none(),
+            "Vouchee's vouch should be revoked on critical violation"
         );
     }
 }

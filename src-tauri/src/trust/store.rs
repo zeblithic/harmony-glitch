@@ -154,6 +154,15 @@ impl TrustStore {
         pt.opinion.update_negative(weight);
     }
 
+    /// Revoke a peer's vouch (e.g. on critical violation). The peer falls
+    /// back to epoch determination by copresence + trust, preventing a
+    /// vouched cheater from retaining Citizen epoch permanently.
+    pub fn revoke_vouch(&mut self, hash: &[u8; 16]) {
+        if let Some(pt) = self.peers.get_mut(hash) {
+            pt.vouched_by = None;
+        }
+    }
+
     /// Get the trust expectation for a peer. Returns 0.5 (vacuous base rate)
     /// for unknown peers.
     pub fn expectation(&self, hash: &[u8; 16]) -> f64 {
@@ -415,5 +424,21 @@ mod tests {
         let before = store.expectation(&hash(1));
         store.apply_vouch_liability(&hash(1), 0.2);
         assert!(store.expectation(&hash(1)) < before);
+    }
+
+    #[test]
+    fn revoke_vouch_clears_vouched_by() {
+        let mut store = TrustStore::new();
+        store.record_vouch(&hash(1), &hash(2));
+        assert!(store.vouched_by(&hash(1)).is_some());
+        store.revoke_vouch(&hash(1));
+        assert!(store.vouched_by(&hash(1)).is_none());
+    }
+
+    #[test]
+    fn revoke_vouch_unknown_peer_no_op() {
+        let mut store = TrustStore::new();
+        store.revoke_vouch(&hash(99)); // should not panic
+        assert!(store.vouched_by(&hash(99)).is_none());
     }
 }
