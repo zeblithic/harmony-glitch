@@ -320,6 +320,8 @@ impl GossipStore {
     pub fn clear(&mut self) {
         self.subjects.clear();
         self.outbound_queue.clear();
+        self.gossip_window_count = 0;
+        self.last_gossip_time = 0.0;
     }
 
     /// Number of tracked subjects (for tests).
