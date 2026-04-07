@@ -67,7 +67,8 @@ fn try_load_profile(
 
 /// Load or create a player profile. Creates directory and new identity if none exists.
 /// If an existing profile is corrupted or missing a valid proof-of-work, logs the
-/// error and generates a fresh identity with proof.
+/// error and generates a fresh identity with proof. When the old profile's JSON was
+/// parseable, the user's display_name and setup_complete are carried forward.
 /// Returns (identity, proof, display_name, setup_complete).
 pub fn load_or_create_profile(
     data_dir: &Path,
@@ -75,35 +76,47 @@ pub fn load_or_create_profile(
 ) -> Result<(PrivateIdentity, IdentityProof, String, bool), String> {
     let profile_path = data_dir.join("profile.json");
 
-    if profile_path.exists() {
+    // Try to salvage display_name and setup_complete from an existing profile,
+    // even if the identity or proof must be regenerated.
+    let salvaged = if profile_path.exists() {
         match try_load_profile(&profile_path, params) {
             Ok(result) => return Ok(result),
             Err(e) => {
                 eprintln!("[identity] Failed to load profile ({}); regenerating.", e);
-                // Fall through to generate a fresh profile.
+                // Try to parse just the JSON to salvage user-facing fields.
+                std::fs::read_to_string(&profile_path)
+                    .ok()
+                    .and_then(|json| serde_json::from_str::<PlayerProfile>(&json).ok())
+                    .map(|p| (p.display_name, p.setup_complete))
             }
         }
-    }
+    } else {
+        None
+    };
 
-    {
-        let mut rng = rand::rngs::OsRng;
-        let (identity, proof) = PrivateIdentity::generate_with_proof(&mut rng, params);
-        let addr_hash = identity.public_identity().address_hash;
-        let display_name = format!("Glitchen_{}", &hex::encode(addr_hash)[..6]);
+    let mut rng = rand::rngs::OsRng;
+    let (identity, proof) = PrivateIdentity::generate_with_proof(&mut rng, params);
 
-        std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
-        let identity_hex = Zeroizing::new(hex::encode(identity.to_private_bytes()));
-        let profile = PlayerProfile {
-            identity_hex: (*identity_hex).clone(),
-            identity_proof: Some(proof),
-            display_name: display_name.clone(),
-            setup_complete: false,
-        };
-        let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
-        write_profile(&profile_path, &json)?;
+    let (display_name, setup_complete) = match salvaged {
+        Some((name, setup)) => (name, setup),
+        None => {
+            let addr_hash = identity.public_identity().address_hash;
+            (format!("Glitchen_{}", &hex::encode(addr_hash)[..6]), false)
+        }
+    };
 
-        Ok((identity, proof, display_name, false))
-    }
+    std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
+    let identity_hex = Zeroizing::new(hex::encode(identity.to_private_bytes()));
+    let profile = PlayerProfile {
+        identity_hex: (*identity_hex).clone(),
+        identity_proof: Some(proof),
+        display_name: display_name.clone(),
+        setup_complete,
+    };
+    let json = serde_json::to_string_pretty(&profile).map_err(|e| e.to_string())?;
+    write_profile(&profile_path, &json)?;
+
+    Ok((identity, proof, display_name, setup_complete))
 }
 
 #[cfg(test)]
@@ -168,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn profile_without_proof_regenerates() {
+    fn profile_without_proof_regenerates_but_keeps_name() {
         let dir = TempDir::new().unwrap();
         std::fs::create_dir_all(dir.path()).unwrap();
 
@@ -187,21 +200,20 @@ mod tests {
         )
         .unwrap();
 
-        // Loading should regenerate because proof is missing.
+        // Identity regenerated, but display_name and setup_complete are salvaged.
         let (new_id, proof, name, setup_complete) =
             load_or_create_profile(dir.path(), &TEST_PARAMS).unwrap();
-        // Regenerated → different identity, fresh name, setup_complete reset.
         assert_ne!(
             new_id.public_identity().address_hash,
             identity.public_identity().address_hash
         );
-        assert!(name.starts_with("Glitchen_"));
-        assert!(!setup_complete);
+        assert_eq!(name, "LegacyPlayer");
+        assert!(setup_complete);
         assert!(new_id.verify_proof(&proof, &TEST_PARAMS));
     }
 
     #[test]
-    fn profile_with_invalid_proof_regenerates() {
+    fn profile_with_invalid_proof_regenerates_but_keeps_name() {
         let dir = TempDir::new().unwrap();
         std::fs::create_dir_all(dir.path()).unwrap();
 
@@ -227,14 +239,15 @@ mod tests {
         )
         .unwrap();
 
-        // Loading should regenerate because proof doesn't verify.
-        let (new_id, proof, _name, setup_complete) =
+        // Identity regenerated, but display_name and setup_complete are salvaged.
+        let (new_id, proof, name, setup_complete) =
             load_or_create_profile(dir.path(), &TEST_PARAMS).unwrap();
         assert_ne!(
             new_id.public_identity().address_hash,
             identity.public_identity().address_hash
         );
-        assert!(!setup_complete);
+        assert_eq!(name, "Tampered");
+        assert!(setup_complete);
         assert!(new_id.verify_proof(&proof, &TEST_PARAMS));
     }
 }

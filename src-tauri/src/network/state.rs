@@ -2317,13 +2317,6 @@ fn truncate_to_bytes(s: &str, max_bytes: usize) -> String {
 
 // ── App data encoding ────────────────────────────────────────────────────
 
-/// Encode display name and optional street name into announce app_data.
-///
-/// Format: `display_name\0street_name` (NUL-separated).
-/// If no street, just `display_name`.
-///
-/// NUL bytes are stripped from inputs to prevent delimiter injection
-/// by untrusted peers crafting names like `"Alice\0LADEMO001"`.
 /// Encode announce app_data: `name\0street\0proof_hex`.
 ///
 /// The proof is serialized as 10 raw bytes (nonce LE + difficulty + params_version)
