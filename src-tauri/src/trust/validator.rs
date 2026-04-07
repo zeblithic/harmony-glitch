@@ -148,6 +148,11 @@ impl StateValidator {
         violations
     }
 
+    /// Whether a baseline exists for this peer (for first-contact handling).
+    pub fn has_baseline(&self, hash: &[u8; 16]) -> bool {
+        self.last_states.contains_key(hash)
+    }
+
     /// Record a peer's position as the baseline for future delta checks.
     /// Call this only when the state update is accepted (not rejected).
     pub fn accept_state(&mut self, hash: &[u8; 16], x: f32, y: f32, now: f64) {

@@ -1740,6 +1740,13 @@ impl NetworkState {
                                             self.trust_store.record_violation(addr, v.severity());
                                         }
                                         if !violations.is_empty() && params.reject_on_violation {
+                                            // Always establish a baseline on first contact,
+                                            // even when rejected. Without a baseline the next
+                                            // frame skips teleport detection entirely, letting
+                                            // a peer teleport for free after one minor penalty.
+                                            if !self.state_validator.has_baseline(addr) {
+                                                self.state_validator.accept_state(addr, state.x, state.y, now_secs_f64);
+                                            }
                                             // Check whether shadow-ban should trigger
                                             let v_count = self.trust_store.violation_count(addr);
                                             let new_exp = self.trust_store.expectation(addr);
