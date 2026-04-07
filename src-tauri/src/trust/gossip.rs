@@ -253,15 +253,18 @@ impl GossipStore {
         self.upsert_outbound(envelope);
     }
 
-    /// Insert or replace an outbound envelope by subject. Ensures at most
-    /// one envelope per subject in the queue, keeping the most recent.
+    /// Insert or replace an outbound envelope by subject. Only replaces
+    /// if the new envelope is at least as authoritative (lower or equal
+    /// hop count), so a relay cannot overwrite a direct observation.
     fn upsert_outbound(&mut self, envelope: GossipEnvelope) {
         if let Some(existing) = self
             .outbound_queue
             .iter_mut()
             .find(|e| e.subject == envelope.subject)
         {
-            *existing = envelope;
+            if envelope.hop <= existing.hop {
+                *existing = envelope;
+            }
         } else {
             self.outbound_queue.push(envelope);
         }
