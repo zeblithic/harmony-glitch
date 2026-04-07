@@ -140,7 +140,6 @@ impl GossipStore {
         envelope: &GossipEnvelope,
         reporter: &[u8; 16],
         trust_in_reporter: &Opinion,
-        _now: f64,
     ) -> bool {
         // Reject over hop limit
         if envelope.hop >= MAX_HOPS {
@@ -174,14 +173,15 @@ impl GossipStore {
         if envelope.hop + 1 < MAX_HOPS {
             if let Some(fused) = self.fused_opinion(&envelope.subject) {
                 if fused.expectation() < RELAY_EXPECTATION_THRESHOLD {
-                    self.outbound_queue.push(GossipEnvelope {
+                    let relay = GossipEnvelope {
                         subject: envelope.subject,
                         belief: fused.belief,
                         disbelief: fused.disbelief,
                         uncertainty: fused.uncertainty,
                         violations: envelope.violations,
                         hop: envelope.hop + 1,
-                    });
+                    };
+                    self.upsert_outbound(relay);
                 }
             }
         }
@@ -223,22 +223,38 @@ impl GossipStore {
     }
 
     /// Queue an outbound gossip report. Called when we shadow-ban a peer
-    /// or detect a critical violation.
+    /// or detect a critical violation. Upserts by subject so duplicate
+    /// events (e.g. critical violation + shadow-ban for the same peer)
+    /// don't waste rate-limit slots.
     pub fn queue_outbound(
         &mut self,
         subject: &[u8; 16],
         opinion: &Opinion,
         violations: u32,
-        _now: f64,
     ) {
-        self.outbound_queue.push(GossipEnvelope {
+        let envelope = GossipEnvelope {
             subject: *subject,
             belief: opinion.belief,
             disbelief: opinion.disbelief,
             uncertainty: opinion.uncertainty,
             violations,
             hop: 0,
-        });
+        };
+        self.upsert_outbound(envelope);
+    }
+
+    /// Insert or replace an outbound envelope by subject. Ensures at most
+    /// one envelope per subject in the queue, keeping the most recent.
+    fn upsert_outbound(&mut self, envelope: GossipEnvelope) {
+        if let Some(existing) = self
+            .outbound_queue
+            .iter_mut()
+            .find(|e| e.subject == envelope.subject)
+        {
+            *existing = envelope;
+        } else {
+            self.outbound_queue.push(envelope);
+        }
     }
 
     /// Drain outbound gossip envelopes that are ready to send, respecting
@@ -352,7 +368,7 @@ mod tests {
         let trust = Opinion::full_trust();
         // Reporter fully trusts us, we fully trust them → passes through
         let envelope = make_envelope(1, 0.0, 0.8, 0.2, 3, 0);
-        assert!(store.ingest(&envelope, &hash(10), &trust, 100.0));
+        assert!(store.ingest(&envelope, &hash(10), &trust));
 
         let fused = store.fused_opinion(&hash(1)).unwrap();
         // With full trust in reporter, discount passes through
@@ -365,7 +381,7 @@ mod tests {
         let mut store = GossipStore::new();
         let vacuous = Opinion::vacuous();
         let envelope = make_envelope(1, 0.0, 1.0, 0.0, 5, 0);
-        assert!(store.ingest(&envelope, &hash(10), &vacuous, 100.0));
+        assert!(store.ingest(&envelope, &hash(10), &vacuous));
 
         let fused = store.fused_opinion(&hash(1)).unwrap();
         // Discounting by vacuous → result is vacuous (b_AR=0)
@@ -378,7 +394,7 @@ mod tests {
         let trust = Opinion::full_trust();
         // hop=3 = MAX_HOPS → rejected
         let envelope = make_envelope(1, 0.0, 0.8, 0.2, 3, 3);
-        assert!(!store.ingest(&envelope, &hash(10), &trust, 100.0));
+        assert!(!store.ingest(&envelope, &hash(10), &trust));
         assert_eq!(store.subject_count(), 0);
     }
 
@@ -388,12 +404,12 @@ mod tests {
         let trust = Opinion::full_trust();
 
         let envelope1 = make_envelope(1, 0.0, 0.5, 0.5, 2, 0);
-        assert!(store.ingest(&envelope1, &hash(10), &trust, 100.0));
+        assert!(store.ingest(&envelope1, &hash(10), &trust));
         assert_eq!(store.report_count(&hash(1)), 1);
 
         // Same reporter, updated opinion → overwrites
         let envelope2 = make_envelope(1, 0.0, 0.9, 0.1, 4, 0);
-        assert!(store.ingest(&envelope2, &hash(10), &trust, 110.0));
+        assert!(store.ingest(&envelope2, &hash(10), &trust));
         assert_eq!(store.report_count(&hash(1)), 1);
 
         let fused = store.fused_opinion(&hash(1)).unwrap();
@@ -409,13 +425,13 @@ mod tests {
         for i in 0..MAX_REPORTS_PER_SUBJECT {
             let reporter = hash(i as u8 + 100);
             let envelope = make_envelope(1, 0.0, 0.5, 0.5, 1, 0);
-            assert!(store.ingest(&envelope, &reporter, &trust, 100.0));
+            assert!(store.ingest(&envelope, &reporter, &trust));
         }
         assert_eq!(store.report_count(&hash(1)), MAX_REPORTS_PER_SUBJECT);
 
         // One more from a new reporter → rejected
         let envelope = make_envelope(1, 0.0, 0.5, 0.5, 1, 0);
-        assert!(!store.ingest(&envelope, &hash(200), &trust, 100.0));
+        assert!(!store.ingest(&envelope, &hash(200), &trust));
         assert_eq!(store.report_count(&hash(1)), MAX_REPORTS_PER_SUBJECT);
     }
 
@@ -426,9 +442,9 @@ mod tests {
 
         // Two trusted reporters both distrust subject
         let e1 = make_envelope(1, 0.05, 0.7, 0.25, 3, 0);
-        store.ingest(&e1, &hash(10), &trust, 100.0);
+        store.ingest(&e1, &hash(10), &trust);
         let e2 = make_envelope(1, 0.0, 0.8, 0.2, 5, 0);
-        store.ingest(&e2, &hash(11), &trust, 100.0);
+        store.ingest(&e2, &hash(11), &trust);
 
         let fused = store.fused_opinion(&hash(1)).unwrap();
         // Two agreeing distrust reports → high disbelief, low uncertainty
@@ -443,7 +459,7 @@ mod tests {
 
         // Single strong distrust report from a trusted peer
         let envelope = make_envelope(1, 0.0, 0.9, 0.1, 5, 0);
-        store.ingest(&envelope, &hash(10), &trust, 100.0);
+        store.ingest(&envelope, &hash(10), &trust);
 
         let fused = store.fused_opinion(&hash(1)).unwrap();
         // Check: expectation should be low (b=0, u=0.1 → E=0.05)
@@ -465,7 +481,7 @@ mod tests {
         let mut store = GossipStore::new();
         let trust = Opinion::full_trust();
         let envelope = make_envelope(1, 0.0, 0.9, 0.1, 5, 0);
-        store.ingest(&envelope, &hash(10), &trust, 100.0);
+        store.ingest(&envelope, &hash(10), &trust);
 
         let before = store.fused_opinion(&hash(1)).unwrap();
         // Simulate 1000 seconds of decay
@@ -480,8 +496,8 @@ mod tests {
     fn queue_and_drain_outbound() {
         let mut store = GossipStore::new();
         let opinion = Opinion::full_distrust();
-        store.queue_outbound(&hash(1), &opinion, 5, 100.0);
-        store.queue_outbound(&hash(2), &opinion, 3, 100.0);
+        store.queue_outbound(&hash(1), &opinion, 5);
+        store.queue_outbound(&hash(2), &opinion, 3);
 
         assert_eq!(store.outbound_count(), 2);
         let drained = store.drain_outbound(200.0);
@@ -496,13 +512,13 @@ mod tests {
 
         // Fill window
         for i in 0..MAX_GOSSIP_SUBJECTS_PER_WINDOW {
-            store.queue_outbound(&hash(i as u8), &opinion, 1, 100.0);
+            store.queue_outbound(&hash(i as u8), &opinion, 1);
         }
         let drained = store.drain_outbound(100.0);
         assert_eq!(drained.len(), MAX_GOSSIP_SUBJECTS_PER_WINDOW);
 
         // Queue more — should be blocked until cooldown
-        store.queue_outbound(&hash(50), &opinion, 1, 100.0);
+        store.queue_outbound(&hash(50), &opinion, 1);
         let drained = store.drain_outbound(100.0 + GOSSIP_COOLDOWN_SECS - 1.0);
         assert!(drained.is_empty());
 
@@ -516,7 +532,7 @@ mod tests {
         let mut store = GossipStore::new();
         let trust = Opinion::full_trust();
         let envelope = make_envelope(1, 0.0, 0.9, 0.1, 5, 0);
-        store.ingest(&envelope, &hash(10), &trust, 100.0);
+        store.ingest(&envelope, &hash(10), &trust);
         assert_eq!(store.subject_count(), 1);
 
         store.clear_subject(&hash(1));
@@ -531,12 +547,12 @@ mod tests {
 
         // First, add a positive gossip report about subject (from another peer)
         let positive = make_envelope(1, 0.8, 0.0, 0.2, 0, 0);
-        store.ingest(&positive, &hash(20), &trust, 100.0);
+        store.ingest(&positive, &hash(20), &trust);
         let outbound_before = store.outbound_count();
 
         // Now receive a distrust report from a different reporter
         let distrust = make_envelope(1, 0.0, 0.9, 0.1, 5, 0);
-        store.ingest(&distrust, &hash(10), &trust, 101.0);
+        store.ingest(&distrust, &hash(10), &trust);
 
         // Fused opinion should be mixed, expectation above relay threshold
         let fused = store.fused_opinion(&hash(1)).unwrap();
@@ -558,7 +574,7 @@ mod tests {
         // Receive a strong distrust report at hop=0 → relay should be queued
         // since fused expectation will be low and hop+1 < MAX_HOPS
         let envelope = make_envelope(1, 0.0, 0.9, 0.1, 5, 0);
-        store.ingest(&envelope, &hash(10), &trust, 100.0);
+        store.ingest(&envelope, &hash(10), &trust);
 
         // Should have queued a relay (hop=1)
         assert!(store.outbound_count() > 0);
@@ -575,7 +591,7 @@ mod tests {
         // 10 "Sybil" reporters we don't know (vacuous trust)
         for i in 0..10 {
             let envelope = make_envelope(1, 0.0, 1.0, 0.0, 10, 0);
-            store.ingest(&envelope, &hash(100 + i), &vacuous, 100.0);
+            store.ingest(&envelope, &hash(100 + i), &vacuous);
         }
 
         // Despite 10 reports of full distrust, fused should be vacuous

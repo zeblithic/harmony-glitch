@@ -143,9 +143,9 @@ impl TrustStore {
             .is_some_and(|pt| pt.opinion.disbelief >= 0.99 && pt.opinion.uncertainty < 0.01)
     }
 
-    /// Whether a peer's messages should be silently discarded.
-    /// Currently delegates to `is_blackholed()`. ZEB-23 (reputation gossip)
-    /// will expand this to include gossip-derived suppression.
+    /// Whether a peer's messages should be silently discarded based on
+    /// direct observation alone. The full suppression check (direct +
+    /// gossip-derived) is `NetworkState::is_peer_suppressed()`.
     pub fn is_suppressed(&self, hash: &[u8; 16]) -> bool {
         self.is_blackholed(hash)
     }

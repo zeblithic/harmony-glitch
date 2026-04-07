@@ -1772,7 +1772,6 @@ impl NetworkState {
                                                 addr,
                                                 &crate::trust::opinion::Opinion::full_distrust(),
                                                 self.trust_store.violation_count(addr),
-                                                now_secs_f64,
                                             );
                                         }
                                         if !violations.is_empty() && params.reject_on_violation {
@@ -1804,7 +1803,6 @@ impl NetworkState {
                                                     &self.trust_store.direct_opinion(addr)
                                                         .unwrap_or(crate::trust::opinion::Opinion::full_distrust()),
                                                     v_count,
-                                                    now_secs_f64,
                                                 );
                                             }
                                             // REJECT: don't update registry, don't emit action
@@ -1877,7 +1875,6 @@ impl NetworkState {
                                     &envelope,
                                     addr,
                                     &trust_in_reporter,
-                                    now_secs_f64,
                                 );
                             }
                         }
