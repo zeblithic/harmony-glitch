@@ -1,3 +1,4 @@
+pub mod epoch;
 pub mod gossip;
 pub mod opinion;
 pub mod policy;

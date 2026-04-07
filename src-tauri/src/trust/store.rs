@@ -24,6 +24,8 @@ pub struct PeerTrust {
     pub violations: u32,
     pub copresence_secs: f64,
     pub last_seen: f64,
+    /// Address hash of the Citizen who vouched for this peer (first wins).
+    pub vouched_by: Option<[u8; 16]>,
 }
 
 impl PeerTrust {
@@ -35,6 +37,7 @@ impl PeerTrust {
             violations: 0,
             copresence_secs: 0.0,
             last_seen: 0.0,
+            vouched_by: None,
         }
     }
 }
@@ -120,6 +123,44 @@ impl TrustStore {
     /// Get the direct observation opinion for a peer (None if unknown).
     pub fn direct_opinion(&self, hash: &[u8; 16]) -> Option<Opinion> {
         self.peers.get(hash).map(|pt| pt.opinion)
+    }
+
+    /// Get the accumulated copresence seconds for a peer. Returns 0.0 for unknown peers.
+    pub fn copresence_secs(&self, hash: &[u8; 16]) -> f64 {
+        self.peers
+            .get(hash)
+            .map(|pt| pt.copresence_secs)
+            .unwrap_or(0.0)
+    }
+
+    /// Get who vouched for a peer (None if not vouched or unknown).
+    pub fn vouched_by(&self, hash: &[u8; 16]) -> Option<[u8; 16]> {
+        self.peers.get(hash).and_then(|pt| pt.vouched_by)
+    }
+
+    /// Record a vouch from a Citizen for a peer. First vouch wins —
+    /// subsequent vouches are silently ignored.
+    pub fn record_vouch(&mut self, subject: &[u8; 16], voucher: &[u8; 16]) {
+        let pt = self.get_or_insert(subject);
+        if pt.vouched_by.is_none() {
+            pt.vouched_by = Some(*voucher);
+        }
+    }
+
+    /// Apply voucher liability: penalize a voucher when their vouchee
+    /// commits a critical violation.
+    pub fn apply_vouch_liability(&mut self, voucher: &[u8; 16], weight: f64) {
+        let pt = self.get_or_insert(voucher);
+        pt.opinion.update_negative(weight);
+    }
+
+    /// Revoke a peer's vouch (e.g. on critical violation). The peer falls
+    /// back to epoch determination by copresence + trust, preventing a
+    /// vouched cheater from retaining Citizen epoch permanently.
+    pub fn revoke_vouch(&mut self, hash: &[u8; 16]) {
+        if let Some(pt) = self.peers.get_mut(hash) {
+            pt.vouched_by = None;
+        }
     }
 
     /// Get the trust expectation for a peer. Returns 0.5 (vacuous base rate)
@@ -346,5 +387,58 @@ mod tests {
         store.record_trade_success(&hash(1));
         let op = store.direct_opinion(&hash(1)).unwrap();
         assert!(op.belief > 0.0);
+    }
+
+    // ── Vouch tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn new_peer_not_vouched() {
+        let mut store = TrustStore::new();
+        store.get_or_insert(&hash(1));
+        assert!(store.vouched_by(&hash(1)).is_none());
+    }
+
+    #[test]
+    fn record_vouch_sets_voucher() {
+        let mut store = TrustStore::new();
+        store.record_vouch(&hash(1), &hash(2));
+        assert_eq!(store.vouched_by(&hash(1)), Some(hash(2)));
+    }
+
+    #[test]
+    fn record_vouch_first_wins() {
+        let mut store = TrustStore::new();
+        store.record_vouch(&hash(1), &hash(2));
+        store.record_vouch(&hash(1), &hash(3));
+        // Second vouch ignored — first wins
+        assert_eq!(store.vouched_by(&hash(1)), Some(hash(2)));
+    }
+
+    #[test]
+    fn apply_vouch_liability_decreases_trust() {
+        let mut store = TrustStore::new();
+        // Build up some trust first
+        for _ in 0..10 {
+            store.record_trade_success(&hash(1));
+        }
+        let before = store.expectation(&hash(1));
+        store.apply_vouch_liability(&hash(1), 0.2);
+        assert!(store.expectation(&hash(1)) < before);
+    }
+
+    #[test]
+    fn revoke_vouch_clears_vouched_by() {
+        let mut store = TrustStore::new();
+        store.record_vouch(&hash(1), &hash(2));
+        assert!(store.vouched_by(&hash(1)).is_some());
+        store.revoke_vouch(&hash(1));
+        assert!(store.vouched_by(&hash(1)).is_none());
+    }
+
+    #[test]
+    fn revoke_vouch_unknown_peer_no_op() {
+        let mut store = TrustStore::new();
+        store.revoke_vouch(&hash(99)); // should not panic
+        assert!(store.vouched_by(&hash(99)).is_none());
     }
 }
