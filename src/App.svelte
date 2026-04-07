@@ -478,17 +478,17 @@
 
 <svelte:window onkeydown={(e) => {
   if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
-  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
     if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
   }
-  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
     avatarEditorOpen = !avatarEditorOpen;
     if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }

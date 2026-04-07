@@ -140,16 +140,7 @@ pub fn check_condition(
                 && !quest_progress.completed.contains(quest_id)
         }
         DialogueCondition::QuestActive { quest_id } => {
-            // Active but NOT ready for turn-in — avoids showing both
-            // "in progress" and "turn in" options simultaneously.
             quest_progress.active.contains_key(quest_id)
-                && !crate::quest::tracker::is_quest_ready(
-                    quest_id,
-                    quest_progress,
-                    quest_defs,
-                    inventory,
-                    skill_progress,
-                )
         }
         DialogueCondition::QuestReady { quest_id } => {
             crate::quest::tracker::is_quest_ready(
