@@ -153,6 +153,10 @@ pub struct NetworkState {
     pub trust_store: crate::trust::store::TrustStore,
     /// Validates incoming peer state against physics bounds.
     state_validator: crate::trust::validator::StateValidator,
+    /// Per-peer validation state (frame counters, shadow-ban timers).
+    validation_states: HashMap<[u8; 16], crate::trust::policy::PeerValidationState>,
+    /// Timestamp of the last tick (for publish filtering ban checks).
+    last_tick_time: f64,
     /// Current street bounds for state validation (set on load_street).
     street_bounds: Option<crate::trust::validator::StreetBounds>,
 }
@@ -195,6 +199,8 @@ impl NetworkState {
             unmatched_links: HashMap::new(),
             trust_store: crate::trust::store::TrustStore::new(),
             state_validator: crate::trust::validator::StateValidator::new(),
+            validation_states: HashMap::new(),
+            last_tick_time: 0.0,
             street_bounds: None,
         }
     }
@@ -208,6 +214,7 @@ impl NetworkState {
             bottom,
         });
         self.state_validator.clear_all();
+        self.validation_states.clear();
     }
 
     /// Update the display name and re-register the announcing destination
@@ -280,6 +287,7 @@ impl NetworkState {
     ) -> Vec<NetworkAction> {
         let mut actions = Vec::new();
         let now_secs_u64 = now_secs as u64;
+        self.last_tick_time = now_secs;
 
         // Feed inbound packets to the node.
         for (iface, raw) in inbound_packets {
@@ -310,6 +318,7 @@ impl NetworkState {
         for addr in closed_peers {
             self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
+            self.validation_states.remove(&addr);
         }
 
         // Purge stale players and clean up their PeerState entries.
@@ -327,6 +336,7 @@ impl NetworkState {
             self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
             self.state_validator.clear_peer(&addr);
+            self.validation_states.remove(&addr);
             let event = PresenceEvent::Left { address_hash: addr };
             actions.push(NetworkAction::PresenceChange(event));
         }
@@ -335,6 +345,24 @@ impl NetworkState {
         // dt approximated as 1/60s (tick rate) since NetworkState doesn't
         // track its own elapsed time — close enough for slow decay.
         self.trust_store.tick_decay(1.0 / 60.0);
+
+        // Record co-presence for all peers with active sessions (same street).
+        {
+            let dt = 1.0 / 60.0;
+            let active_addrs: Vec<[u8; 16]> = self
+                .peers
+                .iter()
+                .filter(|(_, p)| {
+                    p.session
+                        .as_ref()
+                        .is_some_and(|s| s.state() == SessionState::Active)
+                })
+                .map(|(addr, _)| *addr)
+                .collect();
+            for addr in active_addrs {
+                self.trust_store.record_copresence(&addr, dt);
+            }
+        }
 
         // Sweep unmatched_links: only remove Closed links. Active/Handshake
         // links are kept regardless of peer count — a LinkRequest can arrive
@@ -475,6 +503,7 @@ impl NetworkState {
         self.registry.clear();
         self.peers.clear();
         self.unmatched_links.clear();
+        self.validation_states.clear();
 
         // Unregister old destination.
         if let Some(ref old_hash) = self.dest_hash {
@@ -1609,6 +1638,11 @@ impl NetworkState {
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
+        // Drop ALL messages from suppressed (blackholed) peers.
+        if self.trust_store.is_suppressed(addr) {
+            return;
+        }
+
         if body.len() < 2 {
             return;
         }
@@ -1654,20 +1688,62 @@ impl NetworkState {
                     if let Ok(msg) = serde_json::from_slice::<NetMessage>(&payload) {
                         match msg {
                             NetMessage::PlayerState(state) => {
-                                // Validate state against physics bounds
-                                if let Some(ref bounds) = self.street_bounds {
-                                    let violations = self.state_validator.validate(
-                                        addr,
-                                        &state,
-                                        bounds,
-                                        now_secs_f64,
-                                    );
-                                    for v in &violations {
-                                        self.trust_store
-                                            .record_violation(addr, v.severity());
+                                // Determine trust tier and validation params
+                                let expectation = self.trust_store.expectation(addr);
+                                let tier = crate::trust::policy::trust_tier(expectation);
+                                let params = crate::trust::policy::validation_params(tier);
+
+                                // Get/create per-peer validation state
+                                let val_state = self.validation_states
+                                    .entry(*addr)
+                                    .or_default();
+
+                                // Shadow-banned peers are silently dropped
+                                if crate::trust::policy::is_shadow_banned(val_state, now_secs_f64) {
+                                    continue;
+                                }
+
+                                val_state.frame_count += 1;
+                                let frame = val_state.frame_count;
+
+                                // Validate at the tier's frequency (spot-check)
+                                if crate::trust::policy::should_validate(frame, params.check_interval) {
+                                    if let Some(ref bounds) = self.street_bounds {
+                                        let violations = self.state_validator.validate(
+                                            addr,
+                                            &state,
+                                            bounds,
+                                            now_secs_f64,
+                                            params.jitter_multiplier,
+                                        );
+                                        for v in &violations {
+                                            self.trust_store.record_violation(addr, v.severity());
+                                        }
+                                        if !violations.is_empty() && params.reject_on_violation {
+                                            // Check whether shadow-ban should trigger
+                                            let v_count = self.trust_store.violation_count(addr);
+                                            let new_exp = self.trust_store.expectation(addr);
+                                            if let Some(duration) = crate::trust::policy::should_shadow_ban(v_count, new_exp) {
+                                                let until = if duration.is_infinite() {
+                                                    f64::INFINITY
+                                                } else {
+                                                    now_secs_f64 + duration
+                                                };
+                                                if let Some(vs) = self.validation_states.get_mut(addr) {
+                                                    vs.shadow_banned_until = Some(until);
+                                                }
+                                                // Sever: send CLOSE to the shadow-banned peer
+                                                // `link` is already verified Active above (line 1676)
+                                                Self::send_control(link, rng, b"CLOSE", out);
+                                            }
+                                            // REJECT: don't update registry, don't emit action
+                                            continue;
+                                        }
                                     }
                                 }
-                                // Accept state regardless (ZEB-22 adds rejection)
+
+                                // ACCEPT: update baseline, registry, and emit
+                                self.state_validator.accept_state(addr, state.x, state.y, now_secs_f64);
                                 self.registry.update_state(addr, state, now_secs_f64);
                                 out.push(NetworkAction::RemotePlayerUpdate {
                                     address_hash: *addr,
@@ -1897,6 +1973,17 @@ impl NetworkState {
         let peer_addrs: Vec<[u8; 16]> = self.peers.keys().copied().collect();
 
         for addr in peer_addrs {
+            // Skip suppressed (blackholed) peers.
+            if self.trust_store.is_suppressed(&addr) {
+                continue;
+            }
+            // Skip shadow-banned peers — they see a frozen world.
+            if let Some(vs) = self.validation_states.get(&addr) {
+                if crate::trust::policy::is_shadow_banned(vs, self.last_tick_time) {
+                    continue;
+                }
+            }
+
             let peer = match self.peers.get(&addr) {
                 Some(p) => p,
                 None => continue,

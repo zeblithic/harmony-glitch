@@ -126,11 +126,23 @@ impl TrustStore {
             .unwrap_or(0.5)
     }
 
+    /// Get the violation count for a peer. Returns 0 for unknown peers.
+    pub fn violation_count(&self, hash: &[u8; 16]) -> u32 {
+        self.peers.get(hash).map(|pt| pt.violations).unwrap_or(0)
+    }
+
     /// Whether a peer is fully distrusted and should be ignored.
     pub fn is_blackholed(&self, hash: &[u8; 16]) -> bool {
         self.peers
             .get(hash)
             .is_some_and(|pt| pt.opinion.disbelief >= 0.99 && pt.opinion.uncertainty < 0.01)
+    }
+
+    /// Whether a peer's messages should be silently discarded.
+    /// Currently delegates to `is_blackholed()`. ZEB-23 (reputation gossip)
+    /// will expand this to include gossip-derived suppression.
+    pub fn is_suppressed(&self, hash: &[u8; 16]) -> bool {
+        self.is_blackholed(hash)
     }
 
     /// Remove trust data for a peer (e.g. on disconnect).
@@ -289,5 +301,31 @@ mod tests {
         assert_eq!(store.count(), 1);
         store.remove(&hash(1));
         assert_eq!(store.count(), 0);
+    }
+
+    #[test]
+    fn violation_count_returns_zero_for_unknown() {
+        let store = TrustStore::new();
+        assert_eq!(store.violation_count(&hash(99)), 0);
+    }
+
+    #[test]
+    fn violation_count_increments() {
+        let mut store = TrustStore::new();
+        store.record_violation(&hash(1), 0.3);
+        assert_eq!(store.violation_count(&hash(1)), 1);
+        store.record_violation(&hash(1), 0.3);
+        assert_eq!(store.violation_count(&hash(1)), 2);
+    }
+
+    #[test]
+    fn is_suppressed_delegates_to_blackholed() {
+        let mut store = TrustStore::new();
+        assert!(!store.is_suppressed(&hash(1)));
+
+        // Critical violation → blackholed → suppressed
+        store.record_violation(&hash(1), 1.0);
+        assert!(store.is_blackholed(&hash(1)));
+        assert!(store.is_suppressed(&hash(1)));
     }
 }

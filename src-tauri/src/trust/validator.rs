@@ -77,16 +77,27 @@ impl StateValidator {
     }
 
     /// Validate an incoming state update from a peer. Returns a list of
-    /// violations (empty = valid). Always stores the state for future
-    /// delta checking regardless of violations.
+    /// violations (empty = valid).
+    ///
+    /// `tolerance_multiplier` scales the jitter tolerance — higher values
+    /// are more lenient (used for high-trust peers). Pass `1.0` for default
+    /// behavior.
+    ///
+    /// **Does not update the baseline position.** Call [`accept_state()`]
+    /// after accepting a valid frame so future delta checks work correctly.
+    /// This split prevents rejected positions from becoming the new
+    /// baseline (which would make the next legitimate update look like
+    /// a teleport back).
     pub fn validate(
         &mut self,
         address_hash: &[u8; 16],
         state: &PlayerNetState,
         bounds: &StreetBounds,
         now: f64,
+        tolerance_multiplier: f32,
     ) -> Vec<Violation> {
         let mut violations = Vec::new();
+        let effective_tolerance = JITTER_TOLERANCE * tolerance_multiplier;
 
         // 1. Position bounds (single violation for any axis out of range)
         let min_x = bounds.left + HALF_WIDTH;
@@ -103,19 +114,15 @@ impl StateValidator {
         }
 
         // 2. Velocity bounds
-        if state.vx.abs() > MAX_VX * JITTER_TOLERANCE {
+        if state.vx.abs() > MAX_VX * effective_tolerance {
             violations.push(Violation::InvalidVelocityX { vx: state.vx });
         }
         // Only check downward velocity (positive vy in Glitch coords = falling)
-        if state.vy > MAX_VY_DOWN * JITTER_TOLERANCE {
+        if state.vy > MAX_VY_DOWN * effective_tolerance {
             violations.push(Violation::InvalidVelocityY { vy: state.vy });
         }
 
         // 3. Teleport detection (delta check against previous state).
-        // Only update the baseline when enough time has elapsed for a
-        // meaningful delta check — prevents rapid updates from resetting
-        // the baseline and bypassing teleport detection.
-        let mut update_baseline = !self.last_states.contains_key(address_hash);
         if let Some(prev) = self.last_states.get(address_hash) {
             let elapsed = now - prev.timestamp;
             if elapsed >= MIN_DELTA_TIME {
@@ -124,9 +131,9 @@ impl StateValidator {
                 let distance = (dx * dx + dy * dy).sqrt();
 
                 // Max possible movement considering physics limits + jitter
-                let max_h = MAX_VX * elapsed as f32 * JITTER_TOLERANCE;
+                let max_h = MAX_VX * elapsed as f32 * effective_tolerance;
                 // Vertical: consider gravity acceleration + terminal velocity
-                let max_v = MAX_VY_DOWN * elapsed as f32 * JITTER_TOLERANCE;
+                let max_v = MAX_VY_DOWN * elapsed as f32 * effective_tolerance;
                 let max_possible = (max_h * max_h + max_v * max_v).sqrt();
 
                 if distance > max_possible {
@@ -135,22 +142,23 @@ impl StateValidator {
                         max_possible,
                     });
                 }
-                update_baseline = true;
             }
         }
 
-        if update_baseline {
-            self.last_states.insert(
-                *address_hash,
-                ValidatedState {
-                    x: state.x,
-                    y: state.y,
-                    timestamp: now,
-                },
-            );
-        }
-
         violations
+    }
+
+    /// Record a peer's position as the baseline for future delta checks.
+    /// Call this only when the state update is accepted (not rejected).
+    pub fn accept_state(&mut self, hash: &[u8; 16], x: f32, y: f32, now: f64) {
+        self.last_states.insert(
+            *hash,
+            ValidatedState {
+                x,
+                y,
+                timestamp: now,
+            },
+        );
     }
 
     /// Remove tracking for a disconnected peer.
@@ -196,7 +204,7 @@ mod tests {
     #[test]
     fn valid_state_passes() {
         let mut v = StateValidator::new();
-        let violations = v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0, 1.0);
         assert!(violations.is_empty());
     }
 
@@ -204,7 +212,7 @@ mod tests {
     fn first_state_after_join_always_passes() {
         let mut v = StateValidator::new();
         // Even a state at the far edge is accepted on first contact (no delta ref)
-        let violations = v.validate(&hash(1), &valid_state(2980.0, -500.0), &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &valid_state(2980.0, -500.0), &bounds(), 1.0, 1.0);
         assert!(violations.is_empty());
     }
 
@@ -213,7 +221,7 @@ mod tests {
         let mut v = StateValidator::new();
         // Way past right bound
         let state = valid_state(5000.0, -10.0);
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         assert!(violations.iter().any(|v| matches!(v, Violation::OutOfBounds { .. })));
     }
 
@@ -222,7 +230,7 @@ mod tests {
         let mut v = StateValidator::new();
         // Way above top bound
         let state = valid_state(0.0, -1200.0);
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         assert!(violations.iter().any(|v| matches!(v, Violation::OutOfBounds { .. })));
     }
 
@@ -231,7 +239,7 @@ mod tests {
         let mut v = StateValidator::new();
         // Just inside the margin (left + HALF_WIDTH - small tolerance)
         let state = valid_state(-2984.0, -10.0);
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         assert!(violations.is_empty());
     }
 
@@ -240,7 +248,7 @@ mod tests {
         let mut v = StateValidator::new();
         let mut state = valid_state(0.0, -10.0);
         state.vx = 500.0; // Way past WALK_SPEED * JITTER_TOLERANCE
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         assert!(violations.iter().any(|v| matches!(v, Violation::InvalidVelocityX { .. })));
     }
 
@@ -249,7 +257,7 @@ mod tests {
         let mut v = StateValidator::new();
         let mut state = valid_state(0.0, -10.0);
         state.vx = 200.0; // Exactly WALK_SPEED
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         assert!(violations.is_empty());
     }
 
@@ -258,7 +266,7 @@ mod tests {
         let mut v = StateValidator::new();
         let mut state = valid_state(0.0, -10.0);
         state.vx = 290.0; // Between WALK_SPEED and WALK_SPEED * JITTER_TOLERANCE
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         assert!(violations.is_empty());
     }
 
@@ -267,7 +275,7 @@ mod tests {
         let mut v = StateValidator::new();
         let mut state = valid_state(0.0, -10.0);
         state.vy = 1000.0; // Way past TERMINAL_VELOCITY * JITTER_TOLERANCE
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         assert!(violations.iter().any(|v| matches!(v, Violation::InvalidVelocityY { .. })));
     }
 
@@ -276,7 +284,7 @@ mod tests {
         let mut v = StateValidator::new();
         let mut state = valid_state(0.0, -10.0);
         state.vy = -800.0; // Fast upward velocity (negative = up in Glitch)
-        let violations = v.validate(&hash(1), &state, &bounds(), 1.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
         // Upward velocity is not capped — only downward (falling) is
         assert!(!violations.iter().any(|v| matches!(v, Violation::InvalidVelocityY { .. })));
     }
@@ -284,43 +292,48 @@ mod tests {
     #[test]
     fn teleport_detected() {
         let mut v = StateValidator::new();
-        // First update at (0, 0)
-        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0);
-        // Second update 100ms later at (5000, 0) — impossible
-        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.1);
+        // First update at (0, -10) — accept to establish baseline
+        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0, 1.0);
+        v.accept_state(&hash(1), 0.0, -10.0, 1.0);
+        // Second update 100ms later at (5000, -10) — impossible
+        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.1, 1.0);
         assert!(violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
     }
 
     #[test]
     fn normal_movement_with_jitter_passes() {
         let mut v = StateValidator::new();
-        // First update
-        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0);
+        // First update — accept to establish baseline
+        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0, 1.0);
+        v.accept_state(&hash(1), 0.0, -10.0, 1.0);
         // 1 second later, moved 180px right (within 200 px/s * 1.5 tolerance)
-        let violations = v.validate(&hash(1), &valid_state(180.0, -10.0), &bounds(), 2.0);
+        let violations = v.validate(&hash(1), &valid_state(180.0, -10.0), &bounds(), 2.0, 1.0);
         assert!(violations.is_empty());
     }
 
     #[test]
     fn rapid_updates_do_not_reset_baseline() {
         let mut v = StateValidator::new();
-        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0);
+        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0, 1.0);
+        v.accept_state(&hash(1), 0.0, -10.0, 1.0);
         // Rapid update 1ms later at a far position — delta check skipped
-        // but baseline is NOT updated (prevents bypass)
-        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.005);
+        // (elapsed < MIN_DELTA_TIME), no teleport detected
+        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.005, 1.0);
         assert!(!violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
-        // Next update at legitimate interval still sees the original baseline (0, -10)
-        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.1);
+        // Don't accept the bad state — baseline stays at (0, -10)
+        // Next update at legitimate interval still sees the original baseline
+        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.1, 1.0);
         assert!(violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
     }
 
     #[test]
     fn clear_peer_removes_tracking() {
         let mut v = StateValidator::new();
-        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0);
+        v.validate(&hash(1), &valid_state(0.0, -10.0), &bounds(), 1.0, 1.0);
+        v.accept_state(&hash(1), 0.0, -10.0, 1.0);
         v.clear_peer(&hash(1));
         // Next update should be treated as first (no delta check)
-        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.1);
+        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.1, 1.0);
         // No teleport since it's treated as first state
         assert!(!violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
     }
@@ -339,5 +352,73 @@ mod tests {
                 .abs()
                 < 1e-10
         );
+    }
+
+    // ── Tolerance multiplier tests ──────────────────────────────────
+
+    #[test]
+    fn tolerance_multiplier_relaxes_velocity_check() {
+        let mut v = StateValidator::new();
+        let mut state = valid_state(0.0, -10.0);
+        // 290 px/s: just under WALK_SPEED (200) * JITTER_TOLERANCE (1.5) = 300
+        // but above WALK_SPEED * JITTER_TOLERANCE * 1.0 = 300
+        // Use 310 to exceed 300 at mult=1.0 but pass at mult=2.0 (threshold=600)
+        state.vx = 310.0;
+
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 1.0);
+        assert!(violations.iter().any(|v| matches!(v, Violation::InvalidVelocityX { .. })));
+
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.0, 2.0);
+        assert!(!violations.iter().any(|v| matches!(v, Violation::InvalidVelocityX { .. })));
+    }
+
+    #[test]
+    fn tolerance_multiplier_relaxes_teleport_check() {
+        let mut v = StateValidator::new();
+        // Establish baseline
+        v.accept_state(&hash(1), 0.0, -10.0, 1.0);
+
+        // Move 1000px in 1 second.
+        // At mult=1.0: max_h = 200*1*1.5 = 300, max_v = 600*1*1.5 = 900.
+        // max_possible = sqrt(300² + 900²) ≈ 949. 1000 > 949 → teleport.
+        // At mult=2.0: max_h = 200*1*3.0 = 600, max_v = 600*1*3.0 = 1800.
+        // max_possible = sqrt(600² + 1800²) ≈ 1897. 1000 < 1897 → no teleport.
+        let violations = v.validate(&hash(1), &valid_state(1000.0, -10.0), &bounds(), 2.0, 1.0);
+        assert!(violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
+
+        let violations = v.validate(&hash(1), &valid_state(1000.0, -10.0), &bounds(), 2.0, 2.0);
+        assert!(!violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
+    }
+
+    #[test]
+    fn rejected_state_preserves_old_baseline() {
+        let mut v = StateValidator::new();
+        // Accept initial position
+        v.accept_state(&hash(1), 0.0, -10.0, 1.0);
+
+        // Validate a teleport — violation detected
+        let state = valid_state(5000.0, -10.0);
+        let violations = v.validate(&hash(1), &state, &bounds(), 1.1, 1.0);
+        assert!(!violations.is_empty());
+
+        // Do NOT call accept_state — simulate rejection.
+        // Next validation should still use (0, -10) as baseline.
+        let violations = v.validate(&hash(1), &valid_state(5000.0, -10.0), &bounds(), 1.2, 1.0);
+        assert!(violations.iter().any(|v| matches!(v, Violation::TeleportDetected { .. })));
+    }
+
+    #[test]
+    fn accept_state_updates_baseline() {
+        let mut v = StateValidator::new();
+        v.accept_state(&hash(1), 0.0, -10.0, 1.0);
+
+        // Move to (100, -10) and accept
+        let violations = v.validate(&hash(1), &valid_state(100.0, -10.0), &bounds(), 2.0, 1.0);
+        assert!(violations.is_empty());
+        v.accept_state(&hash(1), 100.0, -10.0, 2.0);
+
+        // Now a small move from (100, -10) to (200, -10) should pass
+        let violations = v.validate(&hash(1), &valid_state(200.0, -10.0), &bounds(), 3.0, 1.0);
+        assert!(violations.is_empty());
     }
 }
