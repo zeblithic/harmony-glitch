@@ -48,6 +48,7 @@ pub enum NetMessage {
     Presence(PresenceEvent),
     AvatarUpdate(Box<AvatarAppearance>),
     Trade(TradeMessage),
+    Gossip(crate::trust::gossip::GossipEnvelope),
 }
 
 #[cfg(test)]
@@ -192,6 +193,27 @@ mod tests {
             NetMessage::AvatarUpdate(a) => assert_eq!(*a, avatar),
             _ => panic!("wrong variant"),
         }
+    }
+
+    #[test]
+    fn gossip_envelope_fits_in_mtu() {
+        use crate::trust::gossip::GossipEnvelope;
+        let envelope = GossipEnvelope {
+            subject: [0xFF; 16],
+            belief: 0.0,
+            disbelief: 0.999999999,
+            uncertainty: 0.000000001,
+            violations: 999999,
+            hop: 3,
+        };
+        let msg = NetMessage::Gossip(envelope);
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        assert!(
+            bytes.len() <= MAX_PAYLOAD,
+            "GossipEnvelope is {} bytes, max is {}",
+            bytes.len(),
+            MAX_PAYLOAD
+        );
     }
 
     #[test]

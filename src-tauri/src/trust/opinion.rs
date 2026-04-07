@@ -93,6 +93,74 @@ impl Opinion {
             *self = Self::vacuous();
         }
     }
+
+    // ── Transitive trust operators (Josang 2016) ────────────────────
+
+    /// Trust-discount operator (§3.7): weight a recommendation by our
+    /// trust in the recommender.
+    ///
+    /// `self` is our opinion about recommender R. `recommendation` is R's
+    /// opinion about subject X. Returns our derived opinion about X.
+    ///
+    /// If we don't trust R (vacuous → b=0), the result is vacuous.
+    /// If we fully trust R (b=1), R's opinion passes through unchanged.
+    pub fn discount(&self, recommendation: &Opinion) -> Opinion {
+        let b = self.belief * recommendation.belief;
+        let d = self.belief * recommendation.disbelief;
+        let u = self.disbelief + self.uncertainty + self.belief * recommendation.uncertainty;
+        let mut result = Opinion {
+            belief: b,
+            disbelief: d,
+            uncertainty: u,
+        };
+        result.renormalize();
+        result
+    }
+
+    /// Cumulative Belief Fusion (§12.3): combine two independent opinions
+    /// about the same subject.
+    ///
+    /// Fusing with a vacuous opinion returns the other (identity element).
+    /// Fusing two vacuous opinions returns vacuous.
+    pub fn fuse(&self, other: &Opinion) -> Opinion {
+        let ua = self.uncertainty;
+        let ub = other.uncertainty;
+
+        // Edge cases: one or both vacuous
+        if ua >= 1.0 - 1e-12 && ub >= 1.0 - 1e-12 {
+            return Opinion::vacuous();
+        }
+        if ua >= 1.0 - 1e-12 {
+            return *other;
+        }
+        if ub >= 1.0 - 1e-12 {
+            return *self;
+        }
+
+        let k = ua + ub - ua * ub;
+        if k < 1e-15 {
+            // Both dogmatic (u≈0): average their belief/disbelief (§12.3)
+            let mut result = Opinion {
+                belief: (self.belief + other.belief) / 2.0,
+                disbelief: (self.disbelief + other.disbelief) / 2.0,
+                uncertainty: 0.0,
+            };
+            result.renormalize();
+            return result;
+        }
+
+        let b = (self.belief * ub + other.belief * ua) / k;
+        let d = (self.disbelief * ub + other.disbelief * ua) / k;
+        let u = (ua * ub) / k;
+
+        let mut result = Opinion {
+            belief: b,
+            disbelief: d,
+            uncertainty: u,
+        };
+        result.renormalize();
+        result
+    }
 }
 
 #[cfg(test)]
@@ -235,5 +303,185 @@ mod tests {
         assert!(o.expectation() > 0.5);
         assert!(o.expectation() < 1.0);
         assert_invariant(&o);
+    }
+
+    // ── Discount operator tests ─────────────────────────────────────
+
+    #[test]
+    fn discount_vacuous_recommender_returns_vacuous() {
+        let vacuous = Opinion::vacuous();
+        let distrust = Opinion::full_distrust();
+        let result = vacuous.discount(&distrust);
+        // b_AR=0 → numerator is zero → result is vacuous
+        assert!(result.uncertainty > 1.0 - EPSILON);
+        assert_invariant(&result);
+    }
+
+    #[test]
+    fn discount_full_trust_passes_through() {
+        let full = Opinion::full_trust();
+        let recommendation = Opinion {
+            belief: 0.3,
+            disbelief: 0.5,
+            uncertainty: 0.2,
+        };
+        let result = full.discount(&recommendation);
+        // b_AR=1, d_AR=0, u_AR=0 → passes through
+        assert!((result.belief - 0.3).abs() < EPSILON);
+        assert!((result.disbelief - 0.5).abs() < EPSILON);
+        assert!((result.uncertainty - 0.2).abs() < EPSILON);
+        assert_invariant(&result);
+    }
+
+    #[test]
+    fn discount_partial_trust_scales() {
+        // We half-trust the recommender: (0.5, 0, 0.5)
+        let our_trust = Opinion {
+            belief: 0.5,
+            disbelief: 0.0,
+            uncertainty: 0.5,
+        };
+        // Recommender fully distrusts subject: (0, 1, 0)
+        let rec = Opinion::full_distrust();
+        let result = our_trust.discount(&rec);
+        // b = 0.5*0 = 0, d = 0.5*1 = 0.5, u = 0 + 0.5 + 0.5*0 = 0.5
+        assert!(result.belief < EPSILON);
+        assert!((result.disbelief - 0.5).abs() < EPSILON);
+        assert!((result.uncertainty - 0.5).abs() < EPSILON);
+        assert_invariant(&result);
+    }
+
+    #[test]
+    fn discount_preserves_invariant() {
+        let a = Opinion {
+            belief: 0.6,
+            disbelief: 0.1,
+            uncertainty: 0.3,
+        };
+        let b = Opinion {
+            belief: 0.2,
+            disbelief: 0.7,
+            uncertainty: 0.1,
+        };
+        let result = a.discount(&b);
+        assert_invariant(&result);
+    }
+
+    // ── Fusion operator tests ───────────────────────────────────────
+
+    #[test]
+    fn fuse_vacuous_identity() {
+        let vacuous = Opinion::vacuous();
+        let opinion = Opinion {
+            belief: 0.4,
+            disbelief: 0.3,
+            uncertainty: 0.3,
+        };
+        let result = vacuous.fuse(&opinion);
+        assert!((result.belief - 0.4).abs() < EPSILON);
+        assert!((result.disbelief - 0.3).abs() < EPSILON);
+        assert!((result.uncertainty - 0.3).abs() < EPSILON);
+        // Commutative check
+        let result2 = opinion.fuse(&vacuous);
+        assert!((result2.belief - 0.4).abs() < EPSILON);
+    }
+
+    #[test]
+    fn fuse_strengthens_agreement() {
+        // Two independent sources both distrust the subject
+        let a = Opinion {
+            belief: 0.1,
+            disbelief: 0.6,
+            uncertainty: 0.3,
+        };
+        let b = Opinion {
+            belief: 0.05,
+            disbelief: 0.7,
+            uncertainty: 0.25,
+        };
+        let fused = a.fuse(&b);
+        // Fused disbelief should be stronger (higher) than either alone
+        assert!(fused.disbelief > a.disbelief);
+        assert!(fused.disbelief > b.disbelief);
+        // Uncertainty should be lower
+        assert!(fused.uncertainty < a.uncertainty);
+        assert!(fused.uncertainty < b.uncertainty);
+        assert_invariant(&fused);
+    }
+
+    #[test]
+    fn fuse_opposing_opinions_average() {
+        let trust = Opinion {
+            belief: 0.8,
+            disbelief: 0.0,
+            uncertainty: 0.2,
+        };
+        let distrust = Opinion {
+            belief: 0.0,
+            disbelief: 0.8,
+            uncertainty: 0.2,
+        };
+        let fused = trust.fuse(&distrust);
+        // Opposing opinions should result in moderate belief and disbelief
+        assert!(fused.belief > 0.1);
+        assert!(fused.disbelief > 0.1);
+        // And very low uncertainty (both sources are quite certain)
+        assert!(fused.uncertainty < 0.15);
+        assert_invariant(&fused);
+    }
+
+    #[test]
+    fn fuse_preserves_invariant() {
+        let a = Opinion {
+            belief: 0.3,
+            disbelief: 0.4,
+            uncertainty: 0.3,
+        };
+        let b = Opinion {
+            belief: 0.7,
+            disbelief: 0.1,
+            uncertainty: 0.2,
+        };
+        let result = a.fuse(&b);
+        assert_invariant(&result);
+    }
+
+    #[test]
+    fn fuse_is_commutative() {
+        let a = Opinion {
+            belief: 0.3,
+            disbelief: 0.4,
+            uncertainty: 0.3,
+        };
+        let b = Opinion {
+            belief: 0.7,
+            disbelief: 0.1,
+            uncertainty: 0.2,
+        };
+        let ab = a.fuse(&b);
+        let ba = b.fuse(&a);
+        assert!((ab.belief - ba.belief).abs() < EPSILON);
+        assert!((ab.disbelief - ba.disbelief).abs() < EPSILON);
+        assert!((ab.uncertainty - ba.uncertainty).abs() < EPSILON);
+    }
+
+    #[test]
+    fn fuse_dogmatic_opinions_averaged() {
+        // Two dogmatic opinions (u=0) should be averaged, not vacuous
+        let a = Opinion::full_distrust();
+        let b = Opinion::full_distrust();
+        let fused = a.fuse(&b);
+        assert!((fused.disbelief - 1.0).abs() < EPSILON);
+        assert!(fused.uncertainty < EPSILON);
+        assert_invariant(&fused);
+
+        // Mixed dogmatic: full_trust + full_distrust → (0.5, 0.5, 0)
+        let trust = Opinion::full_trust();
+        let distrust = Opinion::full_distrust();
+        let mixed = trust.fuse(&distrust);
+        assert!((mixed.belief - 0.5).abs() < EPSILON);
+        assert!((mixed.disbelief - 0.5).abs() < EPSILON);
+        assert!(mixed.uncertainty < EPSILON);
+        assert_invariant(&mixed);
     }
 }
