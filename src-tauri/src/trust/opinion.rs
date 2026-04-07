@@ -139,7 +139,14 @@ impl Opinion {
 
         let k = ua + ub - ua * ub;
         if k < 1e-15 {
-            return Opinion::vacuous();
+            // Both dogmatic (u≈0): average their belief/disbelief (§12.3)
+            let mut result = Opinion {
+                belief: (self.belief + other.belief) / 2.0,
+                disbelief: (self.disbelief + other.disbelief) / 2.0,
+                uncertainty: 0.0,
+            };
+            result.renormalize();
+            return result;
         }
 
         let b = (self.belief * ub + other.belief * ua) / k;
@@ -456,5 +463,25 @@ mod tests {
         assert!((ab.belief - ba.belief).abs() < EPSILON);
         assert!((ab.disbelief - ba.disbelief).abs() < EPSILON);
         assert!((ab.uncertainty - ba.uncertainty).abs() < EPSILON);
+    }
+
+    #[test]
+    fn fuse_dogmatic_opinions_averaged() {
+        // Two dogmatic opinions (u=0) should be averaged, not vacuous
+        let a = Opinion::full_distrust();
+        let b = Opinion::full_distrust();
+        let fused = a.fuse(&b);
+        assert!((fused.disbelief - 1.0).abs() < EPSILON);
+        assert!(fused.uncertainty < EPSILON);
+        assert_invariant(&fused);
+
+        // Mixed dogmatic: full_trust + full_distrust → (0.5, 0.5, 0)
+        let trust = Opinion::full_trust();
+        let distrust = Opinion::full_distrust();
+        let mixed = trust.fuse(&distrust);
+        assert!((mixed.belief - 0.5).abs() < EPSILON);
+        assert!((mixed.disbelief - 0.5).abs() < EPSILON);
+        assert!(mixed.uncertainty < EPSILON);
+        assert_invariant(&mixed);
     }
 }
