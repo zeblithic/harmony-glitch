@@ -94,8 +94,17 @@ pub fn load_or_create_profile(
         None
     };
 
-    let mut rng = rand::rngs::OsRng;
-    let (identity, proof) = PrivateIdentity::generate_with_proof(&mut rng, params);
+    // Proof-of-work computation is CPU-intensive (~6.4s at production difficulty).
+    // Spawn it on a worker thread so the main thread stays responsive to OS events
+    // (avoids "not responding" on macOS). This is a one-time cost per identity.
+    eprintln!("[identity] Computing proof-of-work for new identity…");
+    let params_copy = *params;
+    let (identity, proof) = std::thread::spawn(move || {
+        let mut rng = rand::rngs::OsRng;
+        PrivateIdentity::generate_with_proof(&mut rng, &params_copy)
+    })
+    .join()
+    .map_err(|_| "proof-of-work thread panicked".to_string())?;
 
     let (display_name, setup_complete) = match salvaged {
         Some((name, setup)) => (name, setup),
