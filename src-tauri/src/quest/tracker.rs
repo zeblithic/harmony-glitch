@@ -15,6 +15,10 @@ pub fn tick_quest_progress(
         let Some(def) = quest_defs.get(quest_id) else {
             continue;
         };
+        // Track how many of each item have been allocated to earlier objectives
+        // so cumulative display matches is_quest_ready's cumulative check.
+        let mut allocated: std::collections::HashMap<&str, u32> =
+            std::collections::HashMap::new();
         for (i, objective) in def.objectives.iter().enumerate() {
             let Some(slot) = active.objective_progress.get_mut(i) else {
                 continue;
@@ -22,15 +26,15 @@ pub fn tick_quest_progress(
             match objective {
                 QuestObjective::Fetch {
                     item_id, count, ..
-                } => {
-                    *slot = inventory.count_item(item_id).min(*count);
                 }
-                QuestObjective::Deliver {
+                | QuestObjective::Deliver {
                     item_id, count, ..
                 } => {
-                    // Track delivery progress from inventory so the quest log
-                    // shows live counts (actual removal happens at turn-in).
-                    *slot = inventory.count_item(item_id).min(*count);
+                    let total = inventory.count_item(item_id);
+                    let used = allocated.get(item_id.as_str()).copied().unwrap_or(0);
+                    let available = total.saturating_sub(used);
+                    *slot = available.min(*count);
+                    *allocated.entry(item_id.as_str()).or_default() += *slot;
                 }
                 QuestObjective::Visit {
                     street_id: target, ..

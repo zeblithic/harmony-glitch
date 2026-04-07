@@ -1907,13 +1907,21 @@ pub fn run() {
             let quest_defs = quest::loader::parse_quest_defs(
                 include_str!("../../assets/quests.json")
             ).expect("Failed to parse quests.json");
-            // Validate quest turn-in NPC refs exist in entity_defs as dialogue NPCs
+            // Validate quest turn-in NPC and deliver objective npc_id refs
             for (quest_id, quest_def) in &quest_defs {
                 let npc_type = &quest_def.turn_in_npc;
                 assert!(
                     entity_defs.get(npc_type).and_then(|d| d.dialogue.as_ref()).is_some(),
                     "Quest '{quest_id}' turn_in_npc '{npc_type}' is not a dialogue entity"
                 );
+                for obj in &quest_def.objectives {
+                    if let quest::types::QuestObjective::Deliver { npc_id, .. } = obj {
+                        assert!(
+                            entity_defs.get(npc_id).and_then(|d| d.dialogue.as_ref()).is_some(),
+                            "Quest '{quest_id}' deliver objective npc_id '{npc_id}' is not a dialogue entity"
+                        );
+                    }
+                }
             }
             // Validate dialogue tree refs in entity_defs exist in dialogue_defs
             for (entity_id, entity_def) in &entity_defs {
