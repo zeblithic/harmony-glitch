@@ -89,7 +89,7 @@ impl StateValidator {
     /// baseline (which would make the next legitimate update look like
     /// a teleport back).
     pub fn validate(
-        &mut self,
+        &self,
         address_hash: &[u8; 16],
         state: &PlayerNetState,
         bounds: &StreetBounds,
