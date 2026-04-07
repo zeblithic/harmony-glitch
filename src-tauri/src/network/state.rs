@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use harmony_identity::{Identity, PrivateIdentity};
+use harmony_identity::{Identity, IdentityProof, PrivateIdentity, PuzzleParams};
 use std::sync::Arc;
 
 use harmony_reticulum::{
@@ -131,6 +131,10 @@ pub struct NetworkState {
     identity_bytes: Zeroizing<[u8; 64]>,
     /// Our public identity.
     public_identity: Identity,
+    /// Proof-of-work for our identity (embedded in announces).
+    identity_proof: IdentityProof,
+    /// Puzzle parameters used for proof generation and verification.
+    puzzle_params: PuzzleParams,
     /// Our display name.
     display_name: String,
     /// The street we're currently on (None = lobby/offline).
@@ -169,7 +173,12 @@ impl NetworkState {
     /// Registers a Reticulum interface and announcing destination. The
     /// identity is consumed (passed to the Node) but we keep a byte copy
     /// for creating Sessions later.
-    pub fn new(identity: PrivateIdentity, display_name: String) -> Self {
+    pub fn new(
+        identity: PrivateIdentity,
+        display_name: String,
+        proof: IdentityProof,
+        puzzle_params: PuzzleParams,
+    ) -> Self {
         // Save identity bytes before we hand it off to the node.
         let identity_bytes = Zeroizing::new(identity.to_private_bytes());
         let public_identity = identity.public_identity().clone();
@@ -179,7 +188,7 @@ impl NetworkState {
 
         let dest_name =
             DestinationName::from_name(APP_NAME, DEST_ASPECTS).expect("valid destination name");
-        let app_data = encode_app_data(&display_name, None);
+        let app_data = encode_app_data(&display_name, None, &proof);
         let dest_hash = node.register_announcing_destination(
             identity,
             dest_name.clone(),
@@ -192,6 +201,8 @@ impl NetworkState {
             node,
             identity_bytes,
             public_identity,
+            identity_proof: proof,
+            puzzle_params,
             display_name,
             current_street: None,
             dest_hash: Some(dest_hash),
@@ -259,7 +270,11 @@ impl NetworkState {
 
         let dest_name =
             DestinationName::from_name(APP_NAME, DEST_ASPECTS).expect("valid destination name");
-        let app_data = encode_app_data(&self.display_name, self.current_street.as_deref());
+        let app_data = encode_app_data(
+            &self.display_name,
+            self.current_street.as_deref(),
+            &self.identity_proof,
+        );
 
         let dest_hash = self.node.register_announcing_destination(
             identity,
@@ -578,7 +593,7 @@ impl NetworkState {
 
         let dest_name =
             DestinationName::from_name(APP_NAME, DEST_ASPECTS).expect("valid destination name");
-        let app_data = encode_app_data(&self.display_name, Some(street_name));
+        let app_data = encode_app_data(&self.display_name, Some(street_name), &self.identity_proof);
 
         let dest_hash = self.node.register_announcing_destination(
             identity,
@@ -721,8 +736,20 @@ impl NetworkState {
             return;
         }
 
-        // Decode app_data to get display name and street.
-        let (display_name, street) = decode_app_data(&announce.app_data);
+        // Decode app_data to get display name, street, and proof-of-work.
+        let (display_name, street, proof) = decode_app_data(&announce.app_data);
+
+        // Reject peers without a valid proof-of-work.
+        let valid_proof = proof.is_some_and(|p| {
+            harmony_identity::puzzle::verify(
+                &announce.identity.to_public_bytes(),
+                &p,
+                &self.puzzle_params,
+            )
+        });
+        if !valid_proof {
+            return;
+        }
 
         // Check if the peer is on the same street as us.
         let same_street = match (&self.current_street, &street) {
@@ -2297,28 +2324,60 @@ fn truncate_to_bytes(s: &str, max_bytes: usize) -> String {
 ///
 /// NUL bytes are stripped from inputs to prevent delimiter injection
 /// by untrusted peers crafting names like `"Alice\0LADEMO001"`.
-fn encode_app_data(display_name: &str, street: Option<&str>) -> Vec<u8> {
+/// Encode announce app_data: `name\0street\0proof_hex`.
+///
+/// The proof is serialized as 10 raw bytes (nonce LE + difficulty + params_version)
+/// then hex-encoded. If street is None but proof is present, an empty street
+/// segment is emitted so the separator positions remain unambiguous.
+fn encode_app_data(display_name: &str, street: Option<&str>, proof: &IdentityProof) -> Vec<u8> {
     let safe_name = display_name.replace('\0', "");
     let mut data = safe_name.as_bytes().to_vec();
+
+    // Always emit street separator (proof needs the second separator).
+    data.push(APP_DATA_SEPARATOR);
     if let Some(street) = street {
-        data.push(APP_DATA_SEPARATOR);
         data.extend_from_slice(street.replace('\0', "").as_bytes());
     }
+
+    // Proof: 10 bytes → 20 hex chars.
+    data.push(APP_DATA_SEPARATOR);
+    let mut proof_bytes = [0u8; 10];
+    proof_bytes[..8].copy_from_slice(&proof.nonce.to_le_bytes());
+    proof_bytes[8] = proof.difficulty;
+    proof_bytes[9] = proof.params_version;
+    data.extend_from_slice(hex::encode(proof_bytes).as_bytes());
+
     data
 }
 
-/// Decode announce app_data into (display_name, optional street).
-fn decode_app_data(data: &[u8]) -> (String, Option<String>) {
-    // Strip NUL bytes from decoded values to be robust against peers
-    // running pre-fix clients or sending non-sanitized app_data.
-    if let Some(sep_pos) = data.iter().position(|&b| b == APP_DATA_SEPARATOR) {
-        let name = String::from_utf8_lossy(&data[..sep_pos]).replace('\0', "");
-        let street = String::from_utf8_lossy(&data[sep_pos + 1..]).replace('\0', "");
-        (name, Some(street))
-    } else {
-        let name = String::from_utf8_lossy(data).replace('\0', "");
-        (name, None)
-    }
+/// Decode announce app_data into (display_name, optional street, optional proof).
+fn decode_app_data(data: &[u8]) -> (String, Option<String>, Option<IdentityProof>) {
+    let mut parts = data.splitn(3, |&b| b == APP_DATA_SEPARATOR);
+
+    let name = parts
+        .next()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
+        .unwrap_or_default();
+
+    let street = parts
+        .next()
+        .map(|b| String::from_utf8_lossy(b).into_owned())
+        .filter(|s| !s.is_empty());
+
+    let proof = parts.next().and_then(|hex_bytes| {
+        let hex_str = std::str::from_utf8(hex_bytes).ok()?;
+        let raw = hex::decode(hex_str).ok()?;
+        if raw.len() != 10 {
+            return None;
+        }
+        Some(IdentityProof {
+            nonce: u64::from_le_bytes(raw[..8].try_into().ok()?),
+            difficulty: raw[8],
+            params_version: raw[9],
+        })
+    });
+
+    (name, street, proof)
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────
@@ -2328,13 +2387,13 @@ mod tests {
     use super::*;
     use rand::rngs::OsRng;
 
-    fn make_identity() -> PrivateIdentity {
-        PrivateIdentity::generate(&mut OsRng)
+    fn make_identity_with_proof() -> (PrivateIdentity, IdentityProof) {
+        PrivateIdentity::generate_with_proof(&mut OsRng, &PuzzleParams::TEST)
     }
 
     fn make_state() -> NetworkState {
-        let identity = make_identity();
-        NetworkState::new(identity, "TestPlayer".to_string())
+        let (identity, proof) = make_identity_with_proof();
+        NetworkState::new(identity, "TestPlayer".to_string(), proof, PuzzleParams::TEST)
     }
 
     #[test]
@@ -2417,18 +2476,110 @@ mod tests {
 
     #[test]
     fn app_data_round_trip_with_street() {
-        let encoded = encode_app_data("Alice", Some("meadow"));
-        let (name, street) = decode_app_data(&encoded);
+        let proof = IdentityProof {
+            nonce: 0xCAFE,
+            difficulty: 7,
+            params_version: 1,
+        };
+        let encoded = encode_app_data("Alice", Some("meadow"), &proof);
+        let (name, street, decoded_proof) = decode_app_data(&encoded);
         assert_eq!(name, "Alice");
         assert_eq!(street.as_deref(), Some("meadow"));
+        assert_eq!(decoded_proof, Some(proof));
     }
 
     #[test]
     fn app_data_round_trip_without_street() {
-        let encoded = encode_app_data("Bob", None);
-        let (name, street) = decode_app_data(&encoded);
+        let proof = IdentityProof {
+            nonce: 0xBEEF,
+            difficulty: 1,
+            params_version: 0,
+        };
+        let encoded = encode_app_data("Bob", None, &proof);
+        let (name, street, decoded_proof) = decode_app_data(&encoded);
         assert_eq!(name, "Bob");
         assert!(street.is_none());
+        assert_eq!(decoded_proof, Some(proof));
+    }
+
+    #[test]
+    fn app_data_without_proof_decodes_gracefully() {
+        // Legacy format: just "name\0street" with no proof segment.
+        let mut data = b"Alice".to_vec();
+        data.push(APP_DATA_SEPARATOR);
+        data.extend_from_slice(b"meadow");
+        let (name, street, proof) = decode_app_data(&data);
+        assert_eq!(name, "Alice");
+        assert_eq!(street.as_deref(), Some("meadow"));
+        assert!(proof.is_none());
+    }
+
+    #[test]
+    fn announce_rejected_without_proof() {
+        let mut rng = OsRng;
+        let mut state = make_state();
+        state.change_street("meadow", 1.0, &mut rng).unwrap();
+
+        // Create a peer identity but build announce WITHOUT proof.
+        let (peer_id, _proof) = make_identity_with_proof();
+        let peer_pub = peer_id.public_identity().clone();
+
+        let mut legacy_data = b"NoproofPeer".to_vec();
+        legacy_data.push(APP_DATA_SEPARATOR);
+        legacy_data.extend_from_slice(b"meadow");
+
+        let dest_name =
+            DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
+        let announce = harmony_reticulum::ValidatedAnnounce {
+            identity: peer_pub.clone(),
+            destination_name: dest_name.clone(),
+            destination_hash: dest_name.destination_hash(&peer_pub.address_hash),
+            random_hash: [0u8; 10],
+            ratchet: None,
+            app_data: legacy_data,
+        };
+
+        let mut actions = Vec::new();
+        state.handle_announce_received(&announce, 2, 2.0, &mut rng, &mut actions);
+        assert!(
+            !state.peers.contains_key(&peer_pub.address_hash),
+            "peer without proof should be rejected"
+        );
+    }
+
+    #[test]
+    fn announce_rejected_with_invalid_proof() {
+        let mut rng = OsRng;
+        let mut state = make_state();
+        state.change_street("meadow", 1.0, &mut rng).unwrap();
+
+        // Create a peer with a fabricated (wrong) proof.
+        let (peer_id, _valid_proof) = make_identity_with_proof();
+        let peer_pub = peer_id.public_identity().clone();
+        let bad_proof = IdentityProof {
+            nonce: 0xDEADBEEF,
+            difficulty: 99,
+            params_version: PuzzleParams::TEST.params_version,
+        };
+
+        let app_data = encode_app_data("BadProofPeer", Some("meadow"), &bad_proof);
+        let dest_name =
+            DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
+        let announce = harmony_reticulum::ValidatedAnnounce {
+            identity: peer_pub.clone(),
+            destination_name: dest_name.clone(),
+            destination_hash: dest_name.destination_hash(&peer_pub.address_hash),
+            random_hash: [0u8; 10],
+            ratchet: None,
+            app_data,
+        };
+
+        let mut actions = Vec::new();
+        state.handle_announce_received(&announce, 2, 2.0, &mut rng, &mut actions);
+        assert!(
+            !state.peers.contains_key(&peer_pub.address_hash),
+            "peer with invalid proof should be rejected"
+        );
     }
 
     #[test]
@@ -2506,22 +2657,24 @@ mod tests {
     fn announce_triggers_link_initiation_for_lower_hash() {
         use harmony_reticulum::ValidatedAnnounce;
 
-        let id_a = make_identity();
-        let id_b = make_identity();
+        let (id_a, proof_a) = make_identity_with_proof();
+        let (id_b, proof_b) = make_identity_with_proof();
 
         let pub_a = id_a.public_identity().clone();
         let pub_b = id_b.public_identity().clone();
-        let (lower_id, higher_pub) = if pub_a.address_hash < pub_b.address_hash {
-            (id_a, pub_b)
-        } else {
-            (id_b, pub_a)
-        };
+        let (lower_id, lower_proof, higher_pub, higher_proof) =
+            if pub_a.address_hash < pub_b.address_hash {
+                (id_a, proof_a, pub_b, proof_b)
+            } else {
+                (id_b, proof_b, pub_a, proof_a)
+            };
 
-        let mut state = NetworkState::new(lower_id, "Lower".to_string());
+        let mut state =
+            NetworkState::new(lower_id, "Lower".to_string(), lower_proof, PuzzleParams::TEST);
         let mut rng = OsRng;
         state.change_street("meadow", 1.0, &mut rng).unwrap();
 
-        let app_data = encode_app_data("Higher", Some("meadow"));
+        let app_data = encode_app_data("Higher", Some("meadow"), &higher_proof);
         let dest_name =
             DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
         let destination_hash = dest_name.destination_hash(&higher_pub.address_hash);
@@ -2554,22 +2707,24 @@ mod tests {
     fn announce_does_not_initiate_link_for_higher_hash() {
         use harmony_reticulum::ValidatedAnnounce;
 
-        let id_a = make_identity();
-        let id_b = make_identity();
+        let (id_a, proof_a) = make_identity_with_proof();
+        let (id_b, proof_b) = make_identity_with_proof();
 
         let pub_a = id_a.public_identity().clone();
         let pub_b = id_b.public_identity().clone();
-        let (higher_id, lower_pub) = if pub_a.address_hash > pub_b.address_hash {
-            (id_a, pub_b)
-        } else {
-            (id_b, pub_a)
-        };
+        let (higher_id, higher_proof, lower_pub, lower_proof) =
+            if pub_a.address_hash > pub_b.address_hash {
+                (id_a, proof_a, pub_b, proof_b)
+            } else {
+                (id_b, proof_b, pub_a, proof_a)
+            };
 
-        let mut state = NetworkState::new(higher_id, "Higher".to_string());
+        let mut state =
+            NetworkState::new(higher_id, "Higher".to_string(), higher_proof, PuzzleParams::TEST);
         let mut rng = OsRng;
         state.change_street("meadow", 1.0, &mut rng).unwrap();
 
-        let app_data = encode_app_data("Lower", Some("meadow"));
+        let app_data = encode_app_data("Lower", Some("meadow"), &lower_proof);
         let dest_name =
             DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
         let destination_hash = dest_name.destination_hash(&lower_pub.address_hash);
@@ -2595,20 +2750,23 @@ mod tests {
     /// Create two NetworkStates on the same street, with the lower-hash one first.
     fn make_pair_on_street(street: &str) -> (NetworkState, NetworkState) {
         let mut rng = OsRng;
-        let id_a = make_identity();
-        let id_b = make_identity();
+        let (id_a, proof_a) = make_identity_with_proof();
+        let (id_b, proof_b) = make_identity_with_proof();
 
         let pub_a = id_a.public_identity().clone();
         let pub_b = id_b.public_identity().clone();
 
-        let (lower_id, higher_id) = if pub_a.address_hash < pub_b.address_hash {
-            (id_a, id_b)
-        } else {
-            (id_b, id_a)
-        };
+        let (lower_id, lower_proof, higher_id, higher_proof) =
+            if pub_a.address_hash < pub_b.address_hash {
+                (id_a, proof_a, id_b, proof_b)
+            } else {
+                (id_b, proof_b, id_a, proof_a)
+            };
 
-        let mut state_low = NetworkState::new(lower_id, "Lower".to_string());
-        let mut state_high = NetworkState::new(higher_id, "Higher".to_string());
+        let mut state_low =
+            NetworkState::new(lower_id, "Lower".to_string(), lower_proof, PuzzleParams::TEST);
+        let mut state_high =
+            NetworkState::new(higher_id, "Higher".to_string(), higher_proof, PuzzleParams::TEST);
 
         state_low.change_street(street, 1.0, &mut rng).unwrap();
         state_high.change_street(street, 1.0, &mut rng).unwrap();
@@ -2637,6 +2795,7 @@ mod tests {
         let app_data = encode_app_data(
             &state.display_name,
             state.current_street.as_deref(),
+            &state.identity_proof,
         );
 
         harmony_reticulum::ValidatedAnnounce {
@@ -3386,7 +3545,7 @@ mod tests {
         assert!(state_b.trust_store.expectation(&addr_a) > 0.6);
 
         // Create a third peer (must be in B's peer map for the membership check).
-        let subject_id = make_identity();
+        let (subject_id, _) = make_identity_with_proof();
         let subject_hash = subject_id.identity.address_hash;
         state_b.peers.insert(subject_hash, PeerState {
             identity: subject_id.identity.clone(),
@@ -3456,7 +3615,7 @@ mod tests {
         let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
 
         // Create a subject peer in B's peer map.
-        let subject_id = make_identity();
+        let (subject_id, _) = make_identity_with_proof();
         let subject_hash = subject_id.identity.address_hash;
         state_b.peers.insert(subject_hash, PeerState {
             identity: subject_id.identity.clone(),

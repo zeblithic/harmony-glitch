@@ -45,6 +45,7 @@ struct GameLoopHandle(Mutex<Option<JoinHandle<()>>>);
 /// Player identity and display name, loaded from disk on startup.
 struct PlayerIdentityWrapper {
     identity: Mutex<harmony_identity::PrivateIdentity>,
+    identity_proof: harmony_identity::IdentityProof,
     display_name: Mutex<String>,
     setup_complete: Mutex<bool>,
     data_dir: std::path::PathBuf,
@@ -442,6 +443,7 @@ fn set_display_name(name: String, app: AppHandle) -> Result<(), String> {
         let identity_hex = zeroize::Zeroizing::new(hex::encode(identity.to_private_bytes()));
         identity::persistence::PlayerProfile {
             identity_hex: (*identity_hex).clone(),
+            identity_proof: Some(pi.identity_proof),
             display_name: name.clone(),
             setup_complete: true,
         }
@@ -1981,9 +1983,12 @@ pub fn run() {
                 eprintln!("[sound-kits] Failed to create {}: {e}", kits_dir.display());
             }
             app.manage(SoundKitsDir(kits_dir));
-            let (player_identity, display_name, setup_complete) =
-                identity::persistence::load_or_create_profile(&data_dir)
-                    .map_err(std::io::Error::other)?;
+            let (player_identity, identity_proof, display_name, setup_complete) =
+                identity::persistence::load_or_create_profile(
+                    &data_dir,
+                    &harmony_identity::PuzzleParams::PRODUCTION,
+                )
+                .map_err(std::io::Error::other)?;
 
             // Save identity bytes BEFORE moving identity into PlayerIdentityWrapper,
             // since PrivateIdentity is not Clone.
@@ -1991,6 +1996,7 @@ pub fn run() {
 
             app.manage(PlayerIdentityWrapper {
                 identity: Mutex::new(player_identity),
+                identity_proof,
                 display_name: Mutex::new(display_name.clone()),
                 setup_complete: Mutex::new(setup_complete),
                 data_dir: data_dir.clone(),
@@ -2004,6 +2010,8 @@ pub fn run() {
             app.manage(NetworkWrapper(Mutex::new(NetworkState::new(
                 net_identity,
                 display_name,
+                identity_proof,
+                harmony_identity::PuzzleParams::PRODUCTION,
             ))));
             app.manage(TradeWrapper(Mutex::new(trade::state::TradeManager::new(our_hash))));
 
