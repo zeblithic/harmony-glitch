@@ -65,12 +65,22 @@ pub struct GossipEnvelope {
 }
 
 impl GossipEnvelope {
-    /// Convert the envelope's opinion fields to an Opinion struct.
+    /// Convert the envelope's opinion fields to a validated Opinion.
+    /// Clamps negative values and renormalizes to enforce the SL invariant,
+    /// preventing malicious peers from injecting invalid opinions.
     fn to_opinion(&self) -> Opinion {
-        Opinion {
-            belief: self.belief,
-            disbelief: self.disbelief,
-            uncertainty: self.uncertainty,
+        let b = self.belief.max(0.0);
+        let d = self.disbelief.max(0.0);
+        let u = self.uncertainty.max(0.0);
+        let sum = b + d + u;
+        if sum > 0.0 {
+            Opinion {
+                belief: b / sum,
+                disbelief: d / sum,
+                uncertainty: u / sum,
+            }
+        } else {
+            Opinion::vacuous()
         }
     }
 }

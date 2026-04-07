@@ -1867,6 +1867,11 @@ impl NetworkState {
                                 if envelope.subject == self.public_identity.address_hash {
                                     continue;
                                 }
+                                // Reject self-gossip: a peer cannot vouch for
+                                // or report on themselves
+                                if envelope.subject == *addr {
+                                    continue;
+                                }
                                 let trust_in_reporter = self
                                     .trust_store
                                     .direct_opinion(addr)
