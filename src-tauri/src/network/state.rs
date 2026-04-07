@@ -504,6 +504,7 @@ impl NetworkState {
         self.registry.clear();
         self.peers.clear();
         self.unmatched_links.clear();
+        self.state_validator.clear_all();
         self.validation_states.clear();
 
         // Unregister old destination.
