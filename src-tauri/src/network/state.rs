@@ -361,7 +361,9 @@ impl NetworkState {
                 .map(|(addr, _)| *addr)
                 .collect();
             for addr in active_addrs {
-                self.trust_store.record_copresence(&addr, dt);
+                if !self.trust_store.is_suppressed(&addr) {
+                    self.trust_store.record_copresence(&addr, dt);
+                }
             }
         }
 
@@ -1731,33 +1733,31 @@ impl NetworkState {
                                         for v in &violations {
                                             self.trust_store.record_violation(addr, v.severity());
                                         }
-                                        if !violations.is_empty() {
-                                            if params.reject_on_violation {
-                                                // Check whether shadow-ban should trigger
-                                                let v_count = self.trust_store.violation_count(addr);
-                                                let new_exp = self.trust_store.expectation(addr);
-                                                if let Some(duration) = crate::trust::policy::should_shadow_ban(v_count, new_exp) {
-                                                    let until = if duration.is_infinite() {
-                                                        f64::INFINITY
-                                                    } else {
-                                                        now_secs_f64 + duration
-                                                    };
-                                                    if let Some(vs) = self.validation_states.get_mut(addr) {
-                                                        vs.shadow_banned_until = Some(until);
-                                                    }
-                                                    // Sever: send CLOSE to the shadow-banned peer
-                                                    // `link` is already verified Active above
-                                                    Self::send_control(link, rng, b"CLOSE", out);
+                                        if !violations.is_empty() && params.reject_on_violation {
+                                            // Check whether shadow-ban should trigger
+                                            let v_count = self.trust_store.violation_count(addr);
+                                            let new_exp = self.trust_store.expectation(addr);
+                                            if let Some(duration) = crate::trust::policy::should_shadow_ban(v_count, new_exp) {
+                                                let until = if duration.is_infinite() {
+                                                    f64::INFINITY
+                                                } else {
+                                                    now_secs_f64 + duration
+                                                };
+                                                if let Some(vs) = self.validation_states.get_mut(addr) {
+                                                    vs.shadow_banned_until = Some(until);
                                                 }
-                                                // REJECT: don't update registry, don't emit action
-                                                continue;
+                                                // Sever: send CLOSE to the shadow-banned peer
+                                                // `link` is already verified Active above
+                                                Self::send_control(link, rng, b"CLOSE", out);
                                             }
-                                            // High-trust: violations logged but state accepted.
-                                            // Do NOT update baseline — the violated position
-                                            // must not become the teleport reference point.
-                                        } else {
-                                            validated_clean = true;
+                                            // REJECT: don't update registry, don't emit action
+                                            continue;
                                         }
+                                        // Validated and accepted (clean or high-trust log-only).
+                                        // Advance baseline so future delta checks use this
+                                        // position — prevents cascading false teleports after
+                                        // a single borderline frame (e.g. lag spike).
+                                        validated_clean = true;
                                     }
                                 }
 
