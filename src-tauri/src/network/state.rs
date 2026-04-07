@@ -318,6 +318,7 @@ impl NetworkState {
         for addr in closed_peers {
             self.unregister_peer_link(&addr);
             self.peers.remove(&addr);
+            self.state_validator.clear_peer(&addr);
             self.validation_states.remove(&addr);
         }
 
@@ -1392,6 +1393,12 @@ impl NetworkState {
         let tag = plaintext[0];
         let body = &plaintext[1..];
 
+        // Drop ALL inbound frames from suppressed (blackholed) peers.
+        // Covers both unicast (trade) and pubsub (state/chat/presence) channels.
+        if self.trust_store.is_suppressed(addr) {
+            return;
+        }
+
         // Unicast frames (tag 0x03): [channel_id: 2 bytes BE][payload].
         if tag == harmony_zenoh::FRAME_TAG_UNICAST {
             self.handle_inbound_unicast(addr, body, now_secs_f64, out);
@@ -1638,10 +1645,8 @@ impl NetworkState {
         rng: &mut impl CryptoRngCore,
         out: &mut Vec<NetworkAction>,
     ) {
-        // Drop ALL messages from suppressed (blackholed) peers.
-        if self.trust_store.is_suppressed(addr) {
-            return;
-        }
+        // Suppression check is handled at the dispatch level (handle_inbound_pubsub)
+        // so both unicast and data frames are covered.
 
         if body.len() < 2 {
             return;
@@ -1706,7 +1711,13 @@ impl NetworkState {
                                 val_state.frame_count += 1;
                                 let frame = val_state.frame_count;
 
-                                // Validate at the tier's frequency (spot-check)
+                                // Validate at the tier's frequency (spot-check).
+                                // Only update the validator baseline when validation
+                                // runs AND passes — non-validated and violated frames
+                                // must not advance the baseline, otherwise a cheater
+                                // can teleport on a non-validated frame and the next
+                                // validated frame sees zero displacement.
+                                let mut validated_clean = false;
                                 if crate::trust::policy::should_validate(frame, params.check_interval) {
                                     if let Some(ref bounds) = self.street_bounds {
                                         let violations = self.state_validator.validate(
@@ -1719,31 +1730,43 @@ impl NetworkState {
                                         for v in &violations {
                                             self.trust_store.record_violation(addr, v.severity());
                                         }
-                                        if !violations.is_empty() && params.reject_on_violation {
-                                            // Check whether shadow-ban should trigger
-                                            let v_count = self.trust_store.violation_count(addr);
-                                            let new_exp = self.trust_store.expectation(addr);
-                                            if let Some(duration) = crate::trust::policy::should_shadow_ban(v_count, new_exp) {
-                                                let until = if duration.is_infinite() {
-                                                    f64::INFINITY
-                                                } else {
-                                                    now_secs_f64 + duration
-                                                };
-                                                if let Some(vs) = self.validation_states.get_mut(addr) {
-                                                    vs.shadow_banned_until = Some(until);
+                                        if !violations.is_empty() {
+                                            if params.reject_on_violation {
+                                                // Check whether shadow-ban should trigger
+                                                let v_count = self.trust_store.violation_count(addr);
+                                                let new_exp = self.trust_store.expectation(addr);
+                                                if let Some(duration) = crate::trust::policy::should_shadow_ban(v_count, new_exp) {
+                                                    let until = if duration.is_infinite() {
+                                                        f64::INFINITY
+                                                    } else {
+                                                        now_secs_f64 + duration
+                                                    };
+                                                    if let Some(vs) = self.validation_states.get_mut(addr) {
+                                                        vs.shadow_banned_until = Some(until);
+                                                    }
+                                                    // Sever: send CLOSE to the shadow-banned peer
+                                                    // `link` is already verified Active above
+                                                    Self::send_control(link, rng, b"CLOSE", out);
                                                 }
-                                                // Sever: send CLOSE to the shadow-banned peer
-                                                // `link` is already verified Active above (line 1676)
-                                                Self::send_control(link, rng, b"CLOSE", out);
+                                                // REJECT: don't update registry, don't emit action
+                                                continue;
                                             }
-                                            // REJECT: don't update registry, don't emit action
-                                            continue;
+                                            // High-trust: violations logged but state accepted.
+                                            // Do NOT update baseline — the violated position
+                                            // must not become the teleport reference point.
+                                        } else {
+                                            validated_clean = true;
                                         }
                                     }
                                 }
 
-                                // ACCEPT: update baseline, registry, and emit
-                                self.state_validator.accept_state(addr, state.x, state.y, now_secs_f64);
+                                // Update the validator baseline only for validated-clean frames.
+                                if validated_clean {
+                                    self.state_validator.accept_state(addr, state.x, state.y, now_secs_f64);
+                                }
+
+                                // ACCEPT: update registry and emit (rendering uses
+                                // latest state even if baseline wasn't updated).
                                 self.registry.update_state(addr, state, now_secs_f64);
                                 out.push(NetworkAction::RemotePlayerUpdate {
                                     address_hash: *addr,
