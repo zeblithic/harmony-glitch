@@ -1708,8 +1708,8 @@ impl NetworkState {
                                     continue;
                                 }
 
-                                val_state.frame_count += 1;
                                 let frame = val_state.frame_count;
+                                val_state.frame_count += 1;
 
                                 // Validate at the tier's frequency (spot-check).
                                 // Only update the validator baseline when validation
