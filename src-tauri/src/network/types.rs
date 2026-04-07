@@ -49,6 +49,7 @@ pub enum NetMessage {
     AvatarUpdate(Box<AvatarAppearance>),
     Trade(TradeMessage),
     Gossip(crate::trust::gossip::GossipEnvelope),
+    Vouch(crate::trust::epoch::VouchMessage),
 }
 
 #[cfg(test)]
@@ -211,6 +212,37 @@ mod tests {
         assert!(
             bytes.len() <= MAX_PAYLOAD,
             "GossipEnvelope is {} bytes, max is {}",
+            bytes.len(),
+            MAX_PAYLOAD
+        );
+    }
+
+    #[test]
+    fn vouch_message_round_trip() {
+        use crate::trust::epoch::VouchMessage;
+        let vouch = VouchMessage {
+            subject: [0x42; 16],
+        };
+        let msg = NetMessage::Vouch(vouch.clone());
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
+        match decoded {
+            NetMessage::Vouch(v) => assert_eq!(v, vouch),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn vouch_message_fits_in_mtu() {
+        use crate::trust::epoch::VouchMessage;
+        let vouch = VouchMessage {
+            subject: [0xFF; 16],
+        };
+        let msg = NetMessage::Vouch(vouch);
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        assert!(
+            bytes.len() <= MAX_PAYLOAD,
+            "VouchMessage is {} bytes, max is {}",
             bytes.len(),
             MAX_PAYLOAD
         );

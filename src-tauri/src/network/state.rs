@@ -226,6 +226,14 @@ impl NetworkState {
         self.trust_store.is_blackholed(addr) || self.gossip_store.is_gossip_suppressed(addr)
     }
 
+    /// Compute the capability epoch for a remote peer from our subjective trust data.
+    fn peer_epoch(&self, addr: &[u8; 16]) -> crate::trust::epoch::PeerEpoch {
+        let copresence = self.trust_store.copresence_secs(addr);
+        let expectation = self.trust_store.expectation(addr);
+        let is_vouched = self.trust_store.vouched_by(addr).is_some();
+        crate::trust::epoch::determine_epoch(copresence, expectation, is_vouched)
+    }
+
     /// Update the display name and re-register the announcing destination
     /// so the next announce broadcasts the new name immediately.
     ///
@@ -488,6 +496,21 @@ impl NetworkState {
             actions.extend(self.publish_to_all_peers(&payload, PubTopic::Event, rng));
         }
         actions
+    }
+
+    /// Vouch for another peer, broadcasting to all peers on the street.
+    /// Only effective if we are a Citizen from other peers' perspective.
+    pub fn send_vouch(
+        &mut self,
+        subject: [u8; 16],
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let vouch = crate::trust::epoch::VouchMessage { subject };
+        let msg = NetMessage::Vouch(vouch);
+        match serde_json::to_vec(&msg) {
+            Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
+            Err(_) => Vec::new(),
+        }
     }
 
     /// Change the street we're on.
@@ -1724,6 +1747,14 @@ impl NetworkState {
                 } => {
                     // Deserialize the NetMessage and route it.
                     if let Ok(msg) = serde_json::from_slice::<NetMessage>(&payload) {
+                        // Compute epoch via split borrows (trust_store, not peers)
+                        // to avoid conflicting with the mutable peer/link borrow.
+                        let peer_epoch = {
+                            let copresence = self.trust_store.copresence_secs(addr);
+                            let expectation = self.trust_store.expectation(addr);
+                            let is_vouched = self.trust_store.vouched_by(addr).is_some();
+                            crate::trust::epoch::determine_epoch(copresence, expectation, is_vouched)
+                        };
                         match msg {
                             NetMessage::PlayerState(state) => {
                                 // Determine trust tier and validation params
@@ -1773,6 +1804,13 @@ impl NetworkState {
                                                 &crate::trust::opinion::Opinion::full_distrust(),
                                                 self.trust_store.violation_count(addr),
                                             );
+                                            // Voucher liability: penalize whoever vouched for this bad actor
+                                            if let Some(voucher) = self.trust_store.vouched_by(addr) {
+                                                self.trust_store.apply_vouch_liability(
+                                                    &voucher,
+                                                    crate::trust::epoch::VOUCH_LIABILITY_WEIGHT,
+                                                );
+                                            }
                                         }
                                         if !violations.is_empty() && params.reject_on_violation {
                                             // Always establish a baseline on first contact,
@@ -1835,6 +1873,9 @@ impl NetworkState {
                                 });
                             }
                             NetMessage::Chat(chat) => {
+                                if !crate::trust::epoch::can_chat(peer_epoch) {
+                                    continue;
+                                }
                                 out.push(NetworkAction::ChatReceived(chat));
                             }
                             NetMessage::Presence(event) => {
@@ -1857,12 +1898,18 @@ impl NetworkState {
                                 self.registry.update_avatar(addr, *avatar);
                             }
                             NetMessage::Trade(trade_msg) => {
+                                if !crate::trust::epoch::can_trade(peer_epoch) {
+                                    continue;
+                                }
                                 out.push(NetworkAction::TradeMessageReceived {
                                     sender: *addr,
                                     message: trade_msg,
                                 });
                             }
                             NetMessage::Gossip(envelope) => {
+                                if !crate::trust::epoch::can_gossip(peer_epoch) {
+                                    continue;
+                                }
                                 // Don't process gossip about ourselves
                                 if envelope.subject == self.public_identity.address_hash {
                                     continue;
@@ -1881,6 +1928,20 @@ impl NetworkState {
                                     addr,
                                     &trust_in_reporter,
                                 );
+                            }
+                            NetMessage::Vouch(vouch_msg) => {
+                                if !crate::trust::epoch::can_vouch(peer_epoch) {
+                                    continue;
+                                }
+                                // Cannot vouch for yourself
+                                if vouch_msg.subject == *addr {
+                                    continue;
+                                }
+                                // Cannot vouch for us
+                                if vouch_msg.subject == self.public_identity.address_hash {
+                                    continue;
+                                }
+                                self.trust_store.record_vouch(&vouch_msg.subject, addr);
                             }
                         }
                     }
@@ -1938,6 +1999,10 @@ impl NetworkState {
 
         // Route by channel ID. Future channels (DM, etc.) add branches here.
         if channel_id == harmony_zenoh::unicast_channels::TRADE {
+            // Sandbox peers cannot trade.
+            if !crate::trust::epoch::can_trade(self.peer_epoch(addr)) {
+                return;
+            }
             if let Ok(NetMessage::Trade(trade_msg)) =
                 serde_json::from_slice::<NetMessage>(payload)
             {
@@ -3072,7 +3137,10 @@ mod tests {
         let mut rng = OsRng;
 
         // 1. Drive both states to pubsub-ready.
-        let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+        let (mut state_a, mut state_b, addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // Peer A must be at least Initiate epoch on B's trust store to chat.
+        state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
 
         // 2. A sends a chat message — first action should be local echo.
         let chat_actions = state_a.send_chat("Hello Bob!".to_string(), &mut rng);
@@ -3193,6 +3261,183 @@ mod tests {
             !send_packets.is_empty(),
             "tick() at t=35s should emit at least one SendPacket (keepalive) but got: {:?}",
             actions
+        );
+    }
+
+    // ── Epoch + Vouch integration tests ─────────────────────────────
+
+    #[test]
+    fn sandbox_peer_chat_dropped() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // A has 0 copresence on B's trust store → Sandbox → cannot chat.
+        let chat_actions = state_a.send_chat("Should be dropped".to_string(), &mut rng);
+        let a_packets = extract_packets(&chat_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let chat_received: Vec<_> = b_actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::ChatReceived(_)))
+            .collect();
+        assert!(
+            chat_received.is_empty(),
+            "Sandbox peer's chat should be dropped"
+        );
+    }
+
+    #[test]
+    fn initiate_peer_chat_accepted() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // Give A enough copresence on B's trust store → Initiate → can chat.
+        state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
+
+        let chat_actions = state_a.send_chat("Hello!".to_string(), &mut rng);
+        let a_packets = extract_packets(&chat_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let chat_received: Vec<_> = b_actions
+            .iter()
+            .filter_map(|a| match a {
+                NetworkAction::ChatReceived(msg) => Some(msg),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !chat_received.is_empty(),
+            "Initiate peer's chat should be accepted"
+        );
+        assert_eq!(chat_received[0].text, "Hello!");
+    }
+
+    #[test]
+    fn sandbox_peer_trade_dropped() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, _addr_a, addr_b) = drive_to_pubsub_ready("meadow");
+
+        // A is Sandbox → trade should be dropped.
+        let trade_msg = crate::trade::types::TradeMessage::Request {
+            trade_id: 1,
+            initiator: state_a.public_identity.address_hash,
+            recipient: addr_b,
+        };
+        let trade_actions = state_a.send_trade_message(&trade_msg, &addr_b, &mut rng);
+        let a_packets = extract_packets(&trade_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let trade_received: Vec<_> = b_actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::TradeMessageReceived { .. }))
+            .collect();
+        assert!(
+            trade_received.is_empty(),
+            "Sandbox peer's trade should be dropped"
+        );
+    }
+
+    #[test]
+    fn citizen_peer_can_vouch() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, addr_a, addr_b) = drive_to_pubsub_ready("meadow");
+
+        // Make A a Citizen from B's perspective (copresence + trust).
+        {
+            let pt = state_b.trust_store.get_or_insert(&addr_a);
+            pt.copresence_secs = 1800.0;
+        }
+        // Build trust through trades.
+        for _ in 0..20 {
+            state_b.trust_store.record_trade_success(&addr_a);
+        }
+        assert!(state_b.trust_store.expectation(&addr_a) > 0.6);
+
+        // Create a third peer hash to vouch for.
+        let subject_hash = [0x42u8; 16];
+        state_b.trust_store.get_or_insert(&subject_hash);
+
+        // A sends a vouch for subject.
+        let vouch_actions = state_a.send_vouch(subject_hash, &mut rng);
+        let a_packets = extract_packets(&vouch_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        // B should have recorded the vouch.
+        assert_eq!(
+            state_b.trust_store.vouched_by(&subject_hash),
+            Some(addr_a),
+            "Citizen's vouch should be recorded"
+        );
+    }
+
+    #[test]
+    fn non_citizen_vouch_ignored() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // A is Sandbox (no copresence) — vouch should be ignored.
+        let subject_hash = [0x42u8; 16];
+        state_b.trust_store.get_or_insert(&subject_hash);
+
+        let vouch_actions = state_a.send_vouch(subject_hash, &mut rng);
+        let a_packets = extract_packets(&vouch_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        assert!(
+            state_b.trust_store.vouched_by(&subject_hash).is_none(),
+            "Sandbox peer's vouch should be ignored"
+        );
+    }
+
+    #[test]
+    fn vouch_liability_on_critical_violation() {
+        let mut store = crate::trust::store::TrustStore::new();
+        let voucher = [1u8; 16];
+        let vouchee = [2u8; 16];
+
+        // Set up voucher with some trust.
+        for _ in 0..10 {
+            store.record_trade_success(&voucher);
+        }
+        let voucher_trust_before = store.expectation(&voucher);
+
+        // Record vouch.
+        store.record_vouch(&vouchee, &voucher);
+        assert_eq!(store.vouched_by(&vouchee), Some(voucher));
+
+        // Simulate critical violation path: find voucher and penalize.
+        if let Some(v) = store.vouched_by(&vouchee) {
+            store.apply_vouch_liability(&v, crate::trust::epoch::VOUCH_LIABILITY_WEIGHT);
+        }
+
+        assert!(
+            store.expectation(&voucher) < voucher_trust_before,
+            "Voucher should lose trust when vouchee commits critical violation"
         );
     }
 }
