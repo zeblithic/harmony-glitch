@@ -1,0 +1,42 @@
+{
+  "cherry_picking": {
+    "name": "Cherry Picking",
+    "description": "Harvest 5 cherries from the Fruit Trees for the Friendly Greeter.",
+    "objectives": [
+      { "type": "deliver", "itemId": "cherry", "count": 5, "npcId": "npc_greeter", "description": "Deliver 5 cherries to the Greeter" }
+    ],
+    "rewards": {
+      "currants": 25,
+      "imagination": 20,
+      "items": []
+    },
+    "turnInNpc": "npc_greeter"
+  },
+  "baking_basics": {
+    "name": "Baking Basics",
+    "description": "Learn Cooking I and bake a loaf of Bread.",
+    "objectives": [
+      { "type": "learnSkill", "skillId": "cooking_1", "description": "Learn Cooking I" },
+      { "type": "craft", "recipeId": "bread", "count": 1, "description": "Craft 1 Bread" }
+    ],
+    "rewards": {
+      "currants": 50,
+      "imagination": 40,
+      "items": [{ "itemId": "cherry", "count": 10 }]
+    },
+    "turnInNpc": "npc_greeter"
+  },
+  "special_delivery": {
+    "name": "Special Delivery",
+    "description": "Bring 2 Bread to the Handyman in Demo Heights.",
+    "objectives": [
+      { "type": "deliver", "itemId": "bread", "count": 2, "npcId": "npc_handyman", "description": "Deliver 2 Bread to the Handyman" }
+    ],
+    "rewards": {
+      "currants": 75,
+      "imagination": 50,
+      "items": [{ "itemId": "pot", "count": 1 }]
+    },
+    "turnInNpc": "npc_handyman"
+  }
+}

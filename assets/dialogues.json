@@ -1,0 +1,199 @@
+{
+  "greeter_default": {
+    "startNode": "greeting",
+    "nodes": {
+      "greeting": {
+        "speaker": "Friendly Greeter",
+        "text": "Welcome to the Meadow! What can I help you with?",
+        "options": [
+          {
+            "text": "Got any work for me?",
+            "next": "quest1_offer",
+            "conditions": [{ "type": "questNotStarted", "questId": "cherry_picking" }]
+          },
+          {
+            "text": "I've got those cherries!",
+            "next": "quest1_turnin",
+            "conditions": [{ "type": "questReady", "questId": "cherry_picking" }]
+          },
+          {
+            "text": "How's the cherry picking going?",
+            "next": "quest1_progress",
+            "conditions": [{ "type": "questActive", "questId": "cherry_picking" }]
+          },
+          {
+            "text": "What should I do next?",
+            "next": "quest2_offer",
+            "conditions": [
+              { "type": "questComplete", "questId": "cherry_picking" },
+              { "type": "questNotStarted", "questId": "baking_basics" }
+            ]
+          },
+          {
+            "text": "I baked that bread!",
+            "next": "quest2_turnin",
+            "conditions": [{ "type": "questReady", "questId": "baking_basics" }]
+          },
+          {
+            "text": "How's the baking going?",
+            "next": "quest2_progress",
+            "conditions": [{ "type": "questActive", "questId": "baking_basics" }]
+          },
+          {
+            "text": "What's next?",
+            "next": "quest3_offer",
+            "conditions": [
+              { "type": "questComplete", "questId": "baking_basics" },
+              { "type": "questNotStarted", "questId": "special_delivery" }
+            ]
+          },
+          {
+            "text": "I'm on the delivery!",
+            "next": "quest3_progress",
+            "conditions": [{ "type": "questActive", "questId": "special_delivery" }]
+          },
+          {
+            "text": "Just saying hi!",
+            "next": "idle_chat"
+          }
+        ]
+      },
+      "quest1_offer": {
+        "speaker": "Friendly Greeter",
+        "text": "The Fruit Trees around here are bursting with cherries! Could you harvest 5 for me? I'm putting together a welcome basket.",
+        "options": [
+          {
+            "text": "Sure thing!",
+            "next": null,
+            "effects": [{ "type": "startQuest", "questId": "cherry_picking" }]
+          },
+          { "text": "Maybe later.", "next": null }
+        ]
+      },
+      "quest1_progress": {
+        "speaker": "Friendly Greeter",
+        "text": "Still gathering those cherries? The Fruit Trees are scattered around the meadow. Keep at it!",
+        "options": [
+          { "text": "On it!", "next": null }
+        ]
+      },
+      "quest1_turnin": {
+        "speaker": "Friendly Greeter",
+        "text": "Wonderful, those look delicious! Here, take these currants as thanks. You're a natural!",
+        "options": [
+          {
+            "text": "Thanks!",
+            "next": null,
+            "effects": [{ "type": "completeQuest", "questId": "cherry_picking" }]
+          }
+        ]
+      },
+      "quest2_offer": {
+        "speaker": "Friendly Greeter",
+        "text": "You've got the harvesting down! Now it's time to learn a real skill. Open the Skills panel and learn Cooking I, then try baking some Bread.",
+        "options": [
+          {
+            "text": "I'll give it a try!",
+            "next": null,
+            "effects": [{ "type": "startQuest", "questId": "baking_basics" }]
+          },
+          { "text": "Not right now.", "next": null }
+        ]
+      },
+      "quest2_progress": {
+        "speaker": "Friendly Greeter",
+        "text": "Learning takes time! Press K to open Skills, then once you've learned Cooking I, open your inventory with I and craft some Bread.",
+        "options": [
+          { "text": "Got it!", "next": null }
+        ]
+      },
+      "quest2_turnin": {
+        "speaker": "Friendly Greeter",
+        "text": "You baked bread! The smell is incredible. I knew you had it in you. Here's a nice reward, and some extra cherries for the road.",
+        "options": [
+          {
+            "text": "Thanks!",
+            "next": null,
+            "effects": [{ "type": "completeQuest", "questId": "baking_basics" }]
+          }
+        ]
+      },
+      "quest3_offer": {
+        "speaker": "Friendly Greeter",
+        "text": "My friend the Handyman up in Demo Heights has been asking for fresh bread. Could you bake 2 loaves and bring them to him?",
+        "options": [
+          {
+            "text": "I'll deliver them!",
+            "next": null,
+            "effects": [{ "type": "startQuest", "questId": "special_delivery" }]
+          },
+          { "text": "Maybe later.", "next": null }
+        ]
+      },
+      "quest3_progress": {
+        "speaker": "Friendly Greeter",
+        "text": "The Handyman is waiting in Demo Heights! Bake 2 loaves of Bread and bring them to him.",
+        "options": [
+          { "text": "On my way!", "next": null }
+        ]
+      },
+      "idle_chat": {
+        "speaker": "Friendly Greeter",
+        "text": "It's a beautiful day in the meadow. The trees are swaying, the butterflies are floating... what more could you ask for?",
+        "options": [
+          { "text": "See you around!", "next": null }
+        ]
+      }
+    }
+  },
+  "handyman_default": {
+    "startNode": "greeting",
+    "nodes": {
+      "greeting": {
+        "speaker": "Handyman",
+        "text": "Hey there! Always good to see a new face up here in the Heights.",
+        "options": [
+          {
+            "text": "I've got a bread delivery for you!",
+            "next": "delivery_turnin",
+            "conditions": [{ "type": "questReady", "questId": "special_delivery" }]
+          },
+          {
+            "text": "I'm working on getting your bread.",
+            "next": "delivery_progress",
+            "conditions": [{ "type": "questActive", "questId": "special_delivery" }]
+          },
+          {
+            "text": "Just exploring!",
+            "next": "idle_chat"
+          }
+        ]
+      },
+      "delivery_turnin": {
+        "speaker": "Handyman",
+        "text": "Fresh bread! You have no idea how much I've been craving this. Here, take this pot and some currants. You've earned it!",
+        "options": [
+          {
+            "text": "Happy to help!",
+            "next": null,
+            "effects": [{ "type": "completeQuest", "questId": "special_delivery" }]
+          }
+        ]
+      },
+      "delivery_progress": {
+        "speaker": "Handyman",
+        "text": "The Greeter mentioned you might be bringing bread? I can hardly wait. Come back when you've got 2 loaves!",
+        "options": [
+          { "text": "I'll be back!", "next": null }
+        ]
+      },
+      "idle_chat": {
+        "speaker": "Handyman",
+        "text": "I've been fixing up this place for a while now. Always need more supplies though. If you ever meet the Greeter down in the Meadow, tell them I said hello!",
+        "options": [
+          { "text": "Will do!", "next": null }
+        ]
+      }
+    }
+  }
+}

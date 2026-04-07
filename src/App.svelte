@@ -20,8 +20,10 @@
   import TradePrompt from './lib/components/TradePrompt.svelte';
   import StreetNameHud from './lib/components/StreetNameHud.svelte';
   import SkillsPanel from './lib/components/SkillsPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack } from './lib/types';
+  import DialoguePanel from './lib/components/DialoguePanel.svelte';
+  import QuestLogPanel from './lib/components/QuestLogPanel.svelte';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog } from './lib/ipc';
+  import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
@@ -64,6 +66,13 @@
   let tradeRequestName = $state('');
   let skillsOpen = $state(false);
   let skills = $state<SkillDef[]>([]);
+  let dialogueOpen = $state(false);
+  let dialogueFrame = $state<DialogueFrame | null>(null);
+  let dialogueEntityId = $state<string | null>(null);
+  let dialogueCloseFrames = 0;
+  let dialogueClosing: Promise<void> | null = null;
+  let questLogOpen = $state(false);
+  let questLog = $state<QuestLogFrame | null>(null);
 
   onMount(async () => {
     try {
@@ -330,6 +339,33 @@
       }
     }
 
+    // Detect NPC dialogue interaction via audio events
+    if (frame.audioEvents?.length) {
+      for (const event of frame.audioEvents) {
+        if (event.type === 'entityInteract' && event.entityType === 'npc') {
+          if (!dialogueOpen && !dialogueClosing && frame.interactionPrompt?.entityId) {
+            const eid = frame.interactionPrompt.entityId;
+            getDialogueState(eid).then(dialogFrame => {
+              if (latestFrame?.interactionPrompt?.entityId !== eid) return;
+              dialogueFrame = dialogFrame;
+              dialogueEntityId = eid;
+              dialogueOpen = true;
+              dialogueCloseFrames = 0;
+              inventoryOpen = false;
+              volumeOpen = false;
+              jukeboxOpen = false;
+              jukeboxInfo = null;
+              shopOpen = false;
+              storeState = null;
+              avatarEditorOpen = false;
+              skillsOpen = false;
+              questLogOpen = false;
+            }).catch(e => console.error('Failed to get dialogue state:', e));
+          }
+        }
+      }
+    }
+
     // Update jukebox panel state from JukeboxUpdate events
     if (jukeboxOpen && jukeboxInfo && frame.audioEvents?.length) {
       for (const event of frame.audioEvents) {
@@ -373,6 +409,22 @@
           shopOpen = false;
           storeState = null;
           shopCloseFrames = 0;
+        }
+      }
+    }
+
+    // Close dialogue panel when the player walks out of interact_radius.
+    if (dialogueOpen && dialogueEntityId) {
+      if (frame.interactionPrompt?.entityId === dialogueEntityId) {
+        dialogueCloseFrames = 0;
+      } else {
+        dialogueCloseFrames++;
+        if (dialogueCloseFrames >= 2) {
+          dialogueOpen = false;
+          dialogueFrame = null;
+          dialogueEntityId = null;
+          dialogueCloseFrames = 0;
+          dialogueClosing = closeDialogue().catch(console.error).then(() => { dialogueClosing = null; });
         }
       }
     }
@@ -426,17 +478,17 @@
 
 <svelte:window onkeydown={(e) => {
   if (e.key === 'F3') { e.preventDefault(); toggleDebug(); }
-  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+  if ((e.key === 'i' || e.key === 'I') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
     volumeOpen = !volumeOpen;
     if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
   }
-  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+  if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
     avatarEditorOpen = !avatarEditorOpen;
     if (avatarEditorOpen) { inventoryOpen = false; volumeOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
@@ -447,10 +499,18 @@
     jukeboxInfo = null;
     jukeboxCloseFrames = 0;
   }
-  if ((e.key === 'k' || e.key === 'K') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen) {
+  if ((e.key === 'k' || e.key === 'K') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
     skillsOpen = !skillsOpen;
-    if (skillsOpen) { inventoryOpen = false; volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
+    if (skillsOpen) { inventoryOpen = false; volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; questLogOpen = false; }
+  }
+  if ((e.key === 'q' || e.key === 'Q') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
+    e.preventDefault();
+    questLogOpen = !questLogOpen;
+    if (questLogOpen) {
+      getQuestLog().then(log => { questLog = log; }).catch(console.error);
+      inventoryOpen = false; volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; skillsOpen = false;
+    }
   }
   // T key: initiate trade with nearest remote player (by distance, not hash order)
   if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !tradeRequestVisible && !shopOpen && latestFrame) {
@@ -641,6 +701,23 @@
         // Refresh recipes when closing skills panel (locked status may have changed)
         try { recipes = await getRecipes(); } catch { /* ignore */ }
       }}
+    />
+    <DialoguePanel
+      {dialogueFrame}
+      visible={dialogueOpen}
+      onClose={() => {
+        dialogueOpen = false;
+        dialogueFrame = null;
+        dialogueEntityId = null;
+        dialogueCloseFrames = 0;
+        dialogueClosing = closeDialogue().catch(console.error).then(() => { dialogueClosing = null; });
+      }}
+      onFrameUpdate={(frame) => { dialogueFrame = frame; }}
+    />
+    <QuestLogPanel
+      {questLog}
+      visible={questLogOpen}
+      onClose={() => { questLogOpen = false; }}
     />
     <AvatarEditor
       visible={avatarEditorOpen}

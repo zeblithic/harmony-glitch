@@ -49,6 +49,8 @@ pub struct EntityDef {
     pub audio_radius: Option<f64>,
     #[serde(default)]
     pub store: Option<String>,
+    #[serde(default)]
+    pub dialogue: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

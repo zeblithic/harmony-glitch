@@ -7,7 +7,8 @@
     { "id": "butterfly_1", "type": "butterfly", "x": 600, "y": -80 },
     { "id": "wood_tree_1", "type": "wood_tree", "x": -1400, "y": -2 },
     { "id": "jukebox_1", "type": "jukebox_tavern", "x": 500, "y": -2 },
-    { "id": "vendor_grocery_1", "type": "vendor_grocery", "x": -500, "y": -2 }
+    { "id": "vendor_grocery_1", "type": "vendor_grocery", "x": -500, "y": -2 },
+    { "id": "npc_greeter_1", "type": "npc_greeter", "x": 900, "y": -2 }
   ],
   "groundItems": [
     { "id": "pot_1", "itemId": "pot", "count": 1, "x": 0, "y": -2 }
