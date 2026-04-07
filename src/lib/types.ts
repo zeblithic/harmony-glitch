@@ -489,5 +489,4 @@ export interface QuestCompletedEntry {
 
 export interface QuestProgressFrame {
   activeCount: number;
-  hasReady: boolean;
 }

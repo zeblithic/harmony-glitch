@@ -989,20 +989,8 @@ impl GameState {
                 }
             },
             upgrades: self.upgrades.clone(),
-            quest_progress: {
-                let has_ready = self.quest_progress.active.keys().any(|qid| {
-                    crate::quest::tracker::is_quest_ready(
-                        qid,
-                        &self.quest_progress,
-                        &self.quest_defs,
-                        &self.inventory,
-                        &self.skill_progress,
-                    )
-                });
-                crate::quest::types::QuestProgressFrame {
-                    active_count: self.quest_progress.active.len(),
-                    has_ready,
-                }
+            quest_progress: crate::quest::types::QuestProgressFrame {
+                active_count: self.quest_progress.active.len(),
             },
         })
     }

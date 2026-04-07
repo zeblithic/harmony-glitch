@@ -295,5 +295,4 @@ pub struct QuestCompletedEntry {
 #[serde(rename_all = "camelCase")]
 pub struct QuestProgressFrame {
     pub active_count: usize,
-    pub has_ready: bool,
 }
