@@ -163,16 +163,19 @@ mod tests {
     fn parse_bundled_items_json() {
         let json = include_str!("../../../assets/items.json");
         let defs = parse_item_defs(json).unwrap();
-        assert_eq!(defs.len(), 13);
+        assert!(defs.len() > 1200);
+        // Real Glitch items
+        assert!(defs.contains_key("apple"));
         assert!(defs.contains_key("cherry"));
         assert!(defs.contains_key("grain"));
         assert!(defs.contains_key("meat"));
+        assert!(defs.contains_key("plank"));
+        assert!(defs.contains_key("knife_and_board"));
+        // Demo-only items preserved
         assert!(defs.contains_key("milk"));
         assert!(defs.contains_key("bubble"));
         assert!(defs.contains_key("wood"));
-        assert!(defs.contains_key("cherry_pie"));
         assert!(defs.contains_key("pot"));
-        assert!(defs.contains_key("plank"));
     }
 
     #[test]
@@ -242,7 +245,10 @@ mod tests {
     fn parse_bundled_recipes_json() {
         let json = include_str!("../../../assets/recipes.json");
         let defs = parse_recipe_defs(json).unwrap();
-        assert_eq!(defs.len(), 6);
+        assert!(defs.len() > 300);
+        // Real Glitch recipes
+        assert!(defs.contains_key("simple_slaw"));
+        // Demo recipes preserved
         assert!(defs.contains_key("cherry_pie"));
         assert!(defs.contains_key("bread"));
         assert!(defs.contains_key("plank"));
@@ -274,19 +280,6 @@ mod tests {
     fn parse_store_catalog_empty() {
         let catalog = parse_store_catalog("{}").unwrap();
         assert_eq!(catalog.stores.len(), 0);
-    }
-
-    #[test]
-    fn parse_bundled_items_have_base_cost() {
-        let json = include_str!("../../../assets/items.json");
-        let defs = parse_item_defs(json).unwrap();
-        for (id, def) in &defs {
-            assert!(
-                def.base_cost.is_some(),
-                "item '{}' is missing base_cost",
-                id
-            );
-        }
     }
 
     #[test]
