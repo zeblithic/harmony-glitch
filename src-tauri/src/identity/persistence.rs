@@ -62,7 +62,12 @@ fn try_load_profile(
         return Err("identity proof is invalid".into());
     }
 
-    Ok((identity, proof, profile.display_name, profile.setup_complete))
+    Ok((
+        identity,
+        proof,
+        profile.display_name,
+        profile.setup_complete,
+    ))
 }
 
 /// Load or create a player profile. Creates directory and new identity if none exists.
@@ -228,8 +233,7 @@ mod tests {
 
         // Write a profile with a fabricated (invalid) proof.
         let mut rng = rand::rngs::OsRng;
-        let (identity, _valid_proof) =
-            PrivateIdentity::generate_with_proof(&mut rng, &TEST_PARAMS);
+        let (identity, _valid_proof) = PrivateIdentity::generate_with_proof(&mut rng, &TEST_PARAMS);
         let identity_hex = hex::encode(identity.to_private_bytes());
         let tampered_proof = IdentityProof {
             nonce: 0xDEADBEEF,

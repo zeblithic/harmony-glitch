@@ -17,19 +17,14 @@ pub fn tick_quest_progress(
         };
         // Track how many of each item have been allocated to earlier objectives
         // so cumulative display matches is_quest_ready's cumulative check.
-        let mut allocated: std::collections::HashMap<&str, u32> =
-            std::collections::HashMap::new();
+        let mut allocated: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
         for (i, objective) in def.objectives.iter().enumerate() {
             let Some(slot) = active.objective_progress.get_mut(i) else {
                 continue;
             };
             match objective {
-                QuestObjective::Fetch {
-                    item_id, count, ..
-                }
-                | QuestObjective::Deliver {
-                    item_id, count, ..
-                } => {
+                QuestObjective::Fetch { item_id, count, .. }
+                | QuestObjective::Deliver { item_id, count, .. } => {
                     let total = inventory.count_item(item_id);
                     let used = allocated.get(item_id.as_str()).copied().unwrap_or(0);
                     let available = total.saturating_sub(used);
@@ -317,12 +312,24 @@ mod tests {
         let mut inventory = Inventory::new(16);
         inventory.add("cherry", 2, &item_defs);
 
-        tick_quest_progress(&mut progress, &quest_defs, &inventory, &skill_progress, "LADEMO001");
+        tick_quest_progress(
+            &mut progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "LADEMO001",
+        );
         assert_eq!(progress.active["fetch_quest"].objective_progress[0], 2);
 
         // Add more → capped at target count
         inventory.add("cherry", 5, &item_defs);
-        tick_quest_progress(&mut progress, &quest_defs, &inventory, &skill_progress, "LADEMO001");
+        tick_quest_progress(
+            &mut progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "LADEMO001",
+        );
         assert_eq!(progress.active["fetch_quest"].objective_progress[0], 3);
     }
 
@@ -362,15 +369,33 @@ mod tests {
         start_quest("visit_quest", &quest_defs, &mut progress).unwrap();
 
         // Wrong street
-        tick_quest_progress(&mut progress, &quest_defs, &inventory, &skill_progress, "LADEMO001");
+        tick_quest_progress(
+            &mut progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "LADEMO001",
+        );
         assert_eq!(progress.active["visit_quest"].objective_progress[0], 0);
 
         // Correct street
-        tick_quest_progress(&mut progress, &quest_defs, &inventory, &skill_progress, "LADEMO002");
+        tick_quest_progress(
+            &mut progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "LADEMO002",
+        );
         assert_eq!(progress.active["visit_quest"].objective_progress[0], 1);
 
         // Stays completed even after leaving
-        tick_quest_progress(&mut progress, &quest_defs, &inventory, &skill_progress, "LADEMO001");
+        tick_quest_progress(
+            &mut progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "LADEMO001",
+        );
         assert_eq!(progress.active["visit_quest"].objective_progress[0], 1);
     }
 
@@ -383,7 +408,13 @@ mod tests {
 
         // Skill not learned
         let skill_progress = SkillProgress::default();
-        tick_quest_progress(&mut progress, &quest_defs, &inventory, &skill_progress, "LADEMO001");
+        tick_quest_progress(
+            &mut progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "LADEMO001",
+        );
         assert_eq!(progress.active["skill_quest"].objective_progress[0], 0);
 
         // Skill learned
@@ -391,7 +422,13 @@ mod tests {
             learned: vec!["cooking_1".to_string()],
             learning: None,
         };
-        tick_quest_progress(&mut progress, &quest_defs, &inventory, &skill_progress, "LADEMO001");
+        tick_quest_progress(
+            &mut progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "LADEMO001",
+        );
         assert_eq!(progress.active["skill_quest"].objective_progress[0], 1);
     }
 
@@ -405,10 +442,22 @@ mod tests {
 
         let mut inventory = Inventory::new(16);
         inventory.add("cherry", 2, &item_defs);
-        assert!(!is_quest_ready("fetch_quest", &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(!is_quest_ready(
+            "fetch_quest",
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
 
         inventory.add("cherry", 1, &item_defs);
-        assert!(is_quest_ready("fetch_quest", &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(is_quest_ready(
+            "fetch_quest",
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
     }
 
     #[test]
@@ -417,6 +466,12 @@ mod tests {
         let inventory = Inventory::new(16);
         let skill_progress = SkillProgress::default();
         let progress = QuestProgress::default();
-        assert!(!is_quest_ready("fetch_quest", &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(!is_quest_ready(
+            "fetch_quest",
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
     }
 }

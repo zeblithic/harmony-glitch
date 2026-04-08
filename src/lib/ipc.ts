@@ -3,8 +3,13 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack, SkillDef, DialogueFrame, DialogueChoiceResult, QuestLogFrame } from './types';
 import type { SoundKit } from './engine/audio';
 
-export async function listStreets(): Promise<string[]> {
-  return invoke<string[]>('list_streets');
+export interface StreetListEntry {
+  tsid: string;
+  name: string;
+}
+
+export async function listStreets(): Promise<StreetListEntry[]> {
+  return invoke<StreetListEntry[]>('list_streets');
 }
 
 export async function loadStreet(name: string, saveState?: SavedState | null): Promise<StreetData> {

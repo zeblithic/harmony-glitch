@@ -118,10 +118,8 @@ fn main() {
         match tag {
             swf::Tag::ExportAssets(exports) => {
                 for export in exports {
-                    export_names.insert(
-                        export.id,
-                        export.name.to_str_lossy(swf::UTF_8).into_owned(),
-                    );
+                    export_names
+                        .insert(export.id, export.name.to_str_lossy(swf::UTF_8).into_owned());
                 }
             }
             swf::Tag::SymbolClass(symbols) => {
@@ -177,8 +175,7 @@ fn main() {
     // Determine stage size: use --match-stage reference or input's own stage
     let stage_size = if let Some(ref ref_path) = match_stage_path {
         let ref_data = fs::read(ref_path).expect("Cannot read reference SWF");
-        let ref_buf =
-            swf::decompress_swf(&ref_data[..]).expect("Cannot decompress reference SWF");
+        let ref_buf = swf::decompress_swf(&ref_data[..]).expect("Cannot decompress reference SWF");
         let ref_parsed = swf::parse_swf(&ref_buf).expect("Cannot parse reference SWF");
         ref_parsed.header.stage_size().clone()
     } else {
@@ -212,11 +209,7 @@ fn main() {
     };
 
     // Update max_frames for the selected sprites
-    let selected_max_frames = sprites_to_place
-        .iter()
-        .map(|(_, f)| *f)
-        .max()
-        .unwrap_or(1);
+    let selected_max_frames = sprites_to_place.iter().map(|(_, f)| *f).max().unwrap_or(1);
 
     // Parse raw tag bytes, filtering out End/ShowFrame/SetBackgroundColor.
     // PlaceObject tags from the original SWF are kept — most component SWFs

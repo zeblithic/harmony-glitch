@@ -36,8 +36,9 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
         })
     });
 
-    let layers = parse_layers(dynamic)?;
-    let signposts = parse_signposts(dynamic);
+    let (layers, layer_signposts) = parse_layers(dynamic)?;
+    let mut signposts = parse_signposts(dynamic); // demo XML: signposts at dynamic level
+    signposts.extend(layer_signposts); // real Glitch XML: signposts inside middleground
 
     Ok(StreetData {
         tsid,
@@ -53,17 +54,18 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
     })
 }
 
-fn parse_layers(dynamic: &XmlValue) -> Result<Vec<Layer>, String> {
+fn parse_layers(dynamic: &XmlValue) -> Result<(Vec<Layer>, Vec<Signpost>), String> {
     let layers_obj = match dynamic.get("layers") {
         Some(v) => v,
-        None => return Ok(vec![]),
+        None => return Ok((vec![], vec![])),
     };
     let layers_map = match layers_obj.as_object() {
         Some(m) => m,
-        None => return Ok(vec![]),
+        None => return Ok((vec![], vec![])),
     };
 
     let mut layers = Vec::new();
+    let mut signposts = Vec::new();
 
     for (layer_id, layer_val) in layers_map {
         let is_middleground = layer_id == "middleground"
@@ -82,6 +84,8 @@ fn parse_layers(dynamic: &XmlValue) -> Result<Vec<Layer>, String> {
         let filters = parse_filters(layer_val);
 
         let (platform_lines, walls, ladders) = if is_middleground {
+            // Real Glitch XMLs store signposts inside the middleground layer
+            signposts.extend(parse_signposts(layer_val));
             (
                 parse_platform_lines(layer_val),
                 parse_walls(layer_val),
@@ -107,7 +111,7 @@ fn parse_layers(dynamic: &XmlValue) -> Result<Vec<Layer>, String> {
 
     // Sort layers by z (back to front)
     layers.sort_by_key(|l| l.z);
-    Ok(layers)
+    Ok((layers, signposts))
 }
 
 fn parse_decos(layer: &XmlValue) -> Vec<Deco> {
@@ -727,5 +731,92 @@ mod tests {
         assert_eq!(street.name, "Custom Street");
         assert_eq!(street.layers.len(), 1);
         assert!(street.layers[0].is_middleground);
+    }
+
+    #[test]
+    fn signposts_inside_middleground_layer() {
+        // Real Glitch XMLs store signposts inside the middleground layer,
+        // not at the dynamic level like demo XMLs.
+        let xml = r#"
+        <game_object tsid="GA5101HF7F429V5" label="Empty Via 5">
+          <object id="dynamic">
+            <str id="tsid">LA5101HF7F429V5</str>
+            <str id="label">Empty Via 5</str>
+            <int id="l">-3000</int>
+            <int id="r">3000</int>
+            <int id="t">-1000</int>
+            <int id="b">0</int>
+            <int id="ground_y">0</int>
+            <object id="layers">
+              <object id="middleground">
+                <int id="w">6000</int>
+                <int id="h">1000</int>
+                <int id="z">0</int>
+                <str id="name">middleground</str>
+                <object id="decos"></object>
+                <object id="platform_lines">
+                  <object id="plat_1">
+                    <object id="start"><int id="x">-2800</int><int id="y">0</int></object>
+                    <object id="end"><int id="x">2800</int><int id="y">0</int></object>
+                  </object>
+                </object>
+                <object id="signposts">
+                  <object id="signpost_1">
+                    <int id="x">-2739</int>
+                    <int id="y">-403</int>
+                    <object id="connects">
+                      <object id="0">
+                        <str id="hub_id">86</str>
+                        <objref id="target" tsid="LA5157TDPC42IGK" label="Plains Rte C"/>
+                      </object>
+                      <object id="1">
+                        <str id="hub_id">86</str>
+                        <objref id="target" tsid="LA5146P2JC42B1Q" label="Empty Via 4"/>
+                      </object>
+                    </object>
+                  </object>
+                  <object id="signpost_2">
+                    <int id="x">2619</int>
+                    <int id="y">-385</int>
+                    <object id="connects">
+                      <object id="0">
+                        <objref id="target" tsid="LA514TDJOC42JUA" label="Parsin's Trail E"/>
+                      </object>
+                    </object>
+                  </object>
+                </object>
+              </object>
+            </object>
+          </object>
+        </game_object>
+        "#;
+
+        let street = parse_street(xml).unwrap();
+        assert_eq!(street.signposts.len(), 2);
+
+        let sp1 = street
+            .signposts
+            .iter()
+            .find(|s| s.id == "signpost_1")
+            .unwrap();
+        assert_eq!(sp1.x, -2739.0);
+        assert_eq!(sp1.y, -403.0);
+        assert_eq!(sp1.connects.len(), 2);
+        let sp1_tsids: Vec<&str> = sp1
+            .connects
+            .iter()
+            .map(|c| c.target_tsid.as_str())
+            .collect();
+        assert!(sp1_tsids.contains(&"LA5157TDPC42IGK"));
+        assert!(sp1_tsids.contains(&"LA5146P2JC42B1Q"));
+
+        let sp2 = street
+            .signposts
+            .iter()
+            .find(|s| s.id == "signpost_2")
+            .unwrap();
+        assert_eq!(sp2.x, 2619.0);
+        assert_eq!(sp2.connects.len(), 1);
+        assert_eq!(sp2.connects[0].target_tsid, "LA514TDJOC42JUA");
     }
 }

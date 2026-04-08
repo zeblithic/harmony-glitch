@@ -45,7 +45,9 @@ pub fn buy(
 
     // Apply haggling discount, minimum price of 1
     let unit_price = if haggling_discount > 0.0 {
-        ((base_cost as f64) * (1.0 - haggling_discount)).floor().max(1.0) as u32
+        ((base_cost as f64) * (1.0 - haggling_discount))
+            .floor()
+            .max(1.0) as u32
     } else {
         base_cost
     };
@@ -303,16 +305,19 @@ mod tests {
     #[test]
     fn buy_with_haggling_minimum_price() {
         let mut defs = test_item_defs();
-        defs.insert("cheap".to_string(), ItemDef {
-            id: "cheap".to_string(),
-            name: "Cheap".to_string(),
-            description: "Very cheap.".to_string(),
-            category: "misc".to_string(),
-            stack_limit: 50,
-            icon: "cheap".to_string(),
-            base_cost: Some(1),
-            energy_value: None,
-        });
+        defs.insert(
+            "cheap".to_string(),
+            ItemDef {
+                id: "cheap".to_string(),
+                name: "Cheap".to_string(),
+                description: "Very cheap.".to_string(),
+                category: "misc".to_string(),
+                stack_limit: 50,
+                icon: "cheap".to_string(),
+                base_cost: Some(1),
+                energy_value: None,
+            },
+        );
         let store = StoreDef {
             name: "Store".to_string(),
             buy_multiplier: 0.5,

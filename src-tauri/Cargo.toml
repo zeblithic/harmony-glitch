@@ -23,6 +23,11 @@ name = "extract-transforms"
 path = "src/bin/extract_transforms/main.rs"
 required-features = ["extract-transforms"]
 
+[[bin]]
+name = "street-import"
+path = "src/bin/street_import.rs"
+required-features = ["street-import"]
+
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
@@ -31,6 +36,7 @@ quick-xml = "0.37"
 swf = { version = "0.2", optional = true }
 png = { version = "0.17", optional = true }
 flate2 = { version = "1", optional = true }
+zip = { version = "2", optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 jpeg-decoder = { version = "0.3", optional = true }
 
@@ -52,6 +58,7 @@ extract-swf = ["swf", "png", "flate2", "clap", "jpeg-decoder"]
 swf-wrapper = ["swf"]
 extract-transforms = ["swf"]
 cas-tool = ["clap", "dep:harmony-content"]
+street-import = ["dep:zip", "clap"]
 
 [dev-dependencies]
 tempfile = "3"

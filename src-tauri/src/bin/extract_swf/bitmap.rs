@@ -81,7 +81,11 @@ fn decode_lossless(bitmap: &swf::DefineBitsLossless) -> Option<ExtractedBitmap> 
                     rgba.extend_from_slice(&[r, g, b, 255]);
                 }
             }
-            Some(ExtractedBitmap { width, height, rgba })
+            Some(ExtractedBitmap {
+                width,
+                height,
+                rgba,
+            })
         }
         swf::BitmapFormat::ColorMap8 { num_colors } => {
             let palette_size = (num_colors as usize + 1) * if is_v2 { 4 } else { 3 };
@@ -130,7 +134,11 @@ fn decode_lossless(bitmap: &swf::DefineBitsLossless) -> Option<ExtractedBitmap> 
                     }
                 }
             }
-            Some(ExtractedBitmap { width, height, rgba })
+            Some(ExtractedBitmap {
+                width,
+                height,
+                rgba,
+            })
         }
         swf::BitmapFormat::Rgb15 => {
             // Rgb15 is rare and not needed for Glitch assets
@@ -177,13 +185,16 @@ fn decode_jpeg(jpeg_data: &[u8], alpha_data: Option<&[u8]>) -> Option<ExtractedB
         }
     }
 
-    Some(ExtractedBitmap { width, height, rgba })
+    Some(ExtractedBitmap {
+        width,
+        height,
+        rgba,
+    })
 }
 
 /// Strip the erroneous FF D9 FF D8 header that some SWF-embedded JPEGs have.
 fn strip_swf_jpeg_header(data: &[u8]) -> &[u8] {
-    if data.len() >= 4 && data[0] == 0xFF && data[1] == 0xD9 && data[2] == 0xFF && data[3] == 0xD8
-    {
+    if data.len() >= 4 && data[0] == 0xFF && data[1] == 0xD9 && data[2] == 0xFF && data[3] == 0xD8 {
         &data[4..]
     } else {
         data
@@ -191,10 +202,7 @@ fn strip_swf_jpeg_header(data: &[u8]) -> &[u8] {
 }
 
 /// Write RGBA pixel data as a PNG file.
-pub fn write_png(
-    path: &Path,
-    bitmap: &ExtractedBitmap,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn write_png(path: &Path, bitmap: &ExtractedBitmap) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::create(path)?;
     let w = std::io::BufWriter::new(file);
     let mut encoder = png::Encoder::new(w, bitmap.width, bitmap.height);

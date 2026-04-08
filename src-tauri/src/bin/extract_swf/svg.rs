@@ -72,7 +72,11 @@ struct EdgeGroups {
 // Stage 1: Edge Walker
 // ---------------------------------------------------------------------------
 
-type StyleCollection = (EdgeGroups, Vec<(u32, swf::FillStyle)>, Vec<(u32, swf::LineStyle)>);
+type StyleCollection = (
+    EdgeGroups,
+    Vec<(u32, swf::FillStyle)>,
+    Vec<(u32, swf::LineStyle)>,
+);
 
 /// Walk the shape records and collect edges grouped by fill and line style.
 /// Returns (edge_groups, all_fill_styles, all_line_styles) where the style
@@ -138,18 +142,10 @@ fn walk_shape_edges(shape: &swf::Shape) -> StyleCollection {
                     };
                 }
                 if let Some(fs0) = sc.fill_style_0 {
-                    fill0 = if fs0 == 0 {
-                        0
-                    } else {
-                        fill_offset + fs0
-                    };
+                    fill0 = if fs0 == 0 { 0 } else { fill_offset + fs0 };
                 }
                 if let Some(fs1) = sc.fill_style_1 {
-                    fill1 = if fs1 == 0 {
-                        0
-                    } else {
-                        fill_offset + fs1
-                    };
+                    fill1 = if fs1 == 0 { 0 } else { fill_offset + fs1 };
                 }
                 if let Some(ls) = sc.line_style {
                     line = if ls == 0 { 0 } else { line_offset + ls };
@@ -254,9 +250,9 @@ fn connect_edges(edges: &[Edge]) -> Vec<SubPath> {
             }
 
             // O(1) amortized lookup for next edge by start point
-            let next = start_map.get(&current_end).and_then(|indices| {
-                indices.iter().copied().find(|&i| !used[i])
-            });
+            let next = start_map
+                .get(&current_end)
+                .and_then(|indices| indices.iter().copied().find(|&i| !used[i]));
 
             match next {
                 Some(i) => {
@@ -351,8 +347,10 @@ fn shape_to_svg(shape: &swf::Shape, gradient_id: &mut u32) -> (String, String) {
     let mut body = String::new();
 
     // Build a lookup: style_id -> FillStyle
-    let fill_map: HashMap<u32, &swf::FillStyle> = all_fills.iter().map(|(id, fs)| (*id, fs)).collect();
-    let line_map: HashMap<u32, &swf::LineStyle> = all_lines.iter().map(|(id, ls)| (*id, ls)).collect();
+    let fill_map: HashMap<u32, &swf::FillStyle> =
+        all_fills.iter().map(|(id, fs)| (*id, fs)).collect();
+    let line_map: HashMap<u32, &swf::LineStyle> =
+        all_lines.iter().map(|(id, ls)| (*id, ls)).collect();
 
     // Render fills first (painter's order: fills under lines)
     let mut fill_ids: Vec<u32> = groups.fills.keys().copied().collect();
@@ -370,7 +368,12 @@ fn shape_to_svg(shape: &swf::Shape, gradient_id: &mut u32) -> (String, String) {
             Some(swf::FillStyle::Color(c)) => {
                 let mut attrs = format!(r#"<path d="{}" fill="{}""#, d, svg_color(c));
                 if c.a < 255 {
-                    write!(attrs, r#" fill-opacity="{}""#, fmt_float(c.a as f64 / 255.0)).unwrap();
+                    write!(
+                        attrs,
+                        r#" fill-opacity="{}""#,
+                        fmt_float(c.a as f64 / 255.0)
+                    )
+                    .unwrap();
                 }
                 attrs.push_str("/>");
                 writeln!(body, "  {}", attrs).unwrap();
@@ -422,9 +425,7 @@ fn shape_to_svg(shape: &swf::Shape, gradient_id: &mut u32) -> (String, String) {
                     _ => "none".to_string(),
                 };
                 let stroke_opacity = match ls.fill_style() {
-                    swf::FillStyle::Color(c) if c.a < 255 => {
-                        Some(fmt_float(c.a as f64 / 255.0))
-                    }
+                    swf::FillStyle::Color(c) if c.a < 255 => Some(fmt_float(c.a as f64 / 255.0)),
                     _ => None,
                 };
 
@@ -494,12 +495,7 @@ fn write_linear_gradient(defs: &mut String, id: &str, g: &swf::Gradient) {
 }
 
 /// Write a `<radialGradient>` element into the defs string.
-fn write_radial_gradient(
-    defs: &mut String,
-    id: &str,
-    g: &swf::Gradient,
-    focal_point: Option<f64>,
-) {
+fn write_radial_gradient(defs: &mut String, id: &str, g: &swf::Gradient, focal_point: Option<f64>) {
     let transform = matrix_to_svg(&g.matrix);
     let spread = spread_method(g.spread);
 
@@ -551,7 +547,7 @@ fn write_gradient_stops(defs: &mut String, records: &[swf::GradientRecord]) {
 /// Convert GradientSpread to SVG spreadMethod value.
 fn spread_method(spread: swf::GradientSpread) -> &'static str {
     match spread {
-        swf::GradientSpread::Pad => "",        // SVG default
+        swf::GradientSpread::Pad => "", // SVG default
         swf::GradientSpread::Reflect => "reflect",
         swf::GradientSpread::Repeat => "repeat",
     }
@@ -658,12 +654,7 @@ pub fn convert_swf_to_svg(swf: &swf::Swf) -> String {
 
         if has_transform {
             let m = entry.matrix.unwrap();
-            writeln!(
-                all_body,
-                r#"  <g transform="{}">"#,
-                matrix_to_svg(m)
-            )
-            .unwrap();
+            writeln!(all_body, r#"  <g transform="{}">"#, matrix_to_svg(m)).unwrap();
             for line in paths.lines() {
                 if !line.is_empty() {
                     writeln!(all_body, "  {}", line).unwrap();
@@ -790,10 +781,7 @@ mod tests {
             },
             flags: ShapeFlag::empty(),
             styles: ShapeStyles {
-                fill_styles: vec![
-                    FillStyle::Color(Color::RED),
-                    FillStyle::Color(Color::BLUE),
-                ],
+                fill_styles: vec![FillStyle::Color(Color::RED), FillStyle::Color(Color::BLUE)],
                 line_styles: vec![],
             },
             shape: vec![
@@ -856,30 +844,12 @@ mod tests {
         let c2 = TwipsPoint { x: 1100, y: 1200 };
 
         let edges = vec![
-            Edge::Straight {
-                start: a1,
-                end: b1,
-            },
-            Edge::Straight {
-                start: a2,
-                end: b2,
-            },
-            Edge::Straight {
-                start: b1,
-                end: c1,
-            },
-            Edge::Straight {
-                start: b2,
-                end: c2,
-            },
-            Edge::Straight {
-                start: c1,
-                end: a1,
-            },
-            Edge::Straight {
-                start: c2,
-                end: a2,
-            },
+            Edge::Straight { start: a1, end: b1 },
+            Edge::Straight { start: a2, end: b2 },
+            Edge::Straight { start: b1, end: c1 },
+            Edge::Straight { start: b2, end: c2 },
+            Edge::Straight { start: c1, end: a1 },
+            Edge::Straight { start: c2, end: a2 },
         ];
 
         let paths = connect_edges(&edges);
@@ -892,7 +862,11 @@ mod tests {
         let (defs, body) = shape_to_svg(&shape, &mut 0);
 
         assert!(defs.is_empty(), "Solid color should not need defs");
-        assert!(body.contains(r#"fill="rgb(255,0,0)""#), "Should have red fill: {}", body);
+        assert!(
+            body.contains(r#"fill="rgb(255,0,0)""#),
+            "Should have red fill: {}",
+            body
+        );
         assert!(body.contains('M'), "Should have M command");
         assert!(body.contains('L'), "Should have L command");
         assert!(body.contains('Z'), "Should have Z close command");
@@ -927,17 +901,13 @@ mod tests {
         assert!(defs.contains(r#"x1="-819.2""#), "Should have x1: {}", defs);
         assert!(defs.contains(r#"x2="819.2""#), "Should have x2: {}", defs);
         assert!(defs.contains("<stop"), "Should have stops: {}", defs);
+        assert!(defs.contains(r#"offset="0""#), "First stop at 0: {}", defs);
+        assert!(defs.contains(r#"offset="1""#), "Last stop at 1: {}", defs);
         assert!(
-            defs.contains(r#"offset="0""#),
-            "First stop at 0: {}",
-            defs
+            body.contains("url(#g0)"),
+            "Should reference gradient: {}",
+            body
         );
-        assert!(
-            defs.contains(r#"offset="1""#),
-            "Last stop at 1: {}",
-            defs
-        );
-        assert!(body.contains("url(#g0)"), "Should reference gradient: {}", body);
     }
 
     #[test]
@@ -961,11 +931,9 @@ mod tests {
             flags: ShapeFlag::empty(),
             styles: ShapeStyles {
                 fill_styles: vec![],
-                line_styles: vec![
-                    LineStyle::new()
-                        .with_width(Twips::from_pixels(2.0))
-                        .with_color(Color::from_rgb(0x00FF00, 255)),
-                ],
+                line_styles: vec![LineStyle::new()
+                    .with_width(Twips::from_pixels(2.0))
+                    .with_color(Color::from_rgb(0x00FF00, 255))],
             },
             shape: vec![
                 ShapeRecord::StyleChange(Box::new(StyleChangeData {

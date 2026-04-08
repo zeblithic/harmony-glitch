@@ -13,25 +13,21 @@ pub fn atomic_write(path: &Path, data: &[u8], unix_mode: Option<u32>) -> Result<
     let tmp_path = path.with_extension("tmp");
 
     {
-        let mut f = std::fs::File::create(&tmp_path).map_err(|e| {
-            format!("Failed to create temp file {}: {e}", tmp_path.display())
-        })?;
+        let mut f = std::fs::File::create(&tmp_path)
+            .map_err(|e| format!("Failed to create temp file {}: {e}", tmp_path.display()))?;
 
         #[cfg(unix)]
         if let Some(mode) = unix_mode {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::Permissions::from_mode(mode);
-            f.set_permissions(perms).map_err(|e| {
-                format!("Failed to set permissions on {}: {e}", tmp_path.display())
-            })?;
+            f.set_permissions(perms)
+                .map_err(|e| format!("Failed to set permissions on {}: {e}", tmp_path.display()))?;
         }
 
-        f.write_all(data).map_err(|e| {
-            format!("Failed to write temp file {}: {e}", tmp_path.display())
-        })?;
-        f.sync_all().map_err(|e| {
-            format!("Failed to fsync temp file {}: {e}", tmp_path.display())
-        })?;
+        f.write_all(data)
+            .map_err(|e| format!("Failed to write temp file {}: {e}", tmp_path.display()))?;
+        f.sync_all()
+            .map_err(|e| format!("Failed to fsync temp file {}: {e}", tmp_path.display()))?;
     }
 
     std::fs::rename(&tmp_path, path).map_err(|e| {

@@ -229,7 +229,11 @@ mod tests {
             inventory.add("cherry", 10, &item_defs);
             let mut currants = 200u64;
             recover(&journal, &mut inventory, &mut currants, &item_defs);
-            (inventory.count_item("cherry"), inventory.count_item("grain"), currants)
+            (
+                inventory.count_item("cherry"),
+                inventory.count_item("grain"),
+                currants,
+            )
         };
 
         let (c1, g1, cur1) = run_recovery();

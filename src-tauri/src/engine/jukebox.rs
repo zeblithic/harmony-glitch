@@ -58,19 +58,19 @@ impl JukeboxState {
                     break;
                 }
                 self.elapsed_secs -= track.duration_secs;
-                self.current_track_index =
-                    (self.current_track_index + 1) % self.playlist.len();
+                self.current_track_index = (self.current_track_index + 1) % self.playlist.len();
             } else {
                 // Track not in catalog — skip to next without consuming time.
-                self.current_track_index =
-                    (self.current_track_index + 1) % self.playlist.len();
+                self.current_track_index = (self.current_track_index + 1) % self.playlist.len();
             }
         }
     }
 
     /// Returns the track ID at the current index, if the playlist is non-empty.
     pub fn current_track_id(&self) -> Option<&str> {
-        self.playlist.get(self.current_track_index).map(|s| s.as_str())
+        self.playlist
+            .get(self.current_track_index)
+            .map(|s| s.as_str())
     }
 
     /// Seek to a specific track index. Resets elapsed. Out-of-bounds indices are ignored.
@@ -94,7 +94,6 @@ impl JukeboxState {
         self.playing = false;
     }
 }
-
 
 /// Filters a playlist to only tracks that exist in the catalog.
 /// Logs a warning for each missing track ID.
@@ -179,8 +178,7 @@ mod tests {
     #[test]
     fn tick_auto_advances_to_next_track() {
         let catalog = make_catalog();
-        let mut state =
-            JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
+        let mut state = JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
         // track_a is 10s; tick 10.5s — should advance with 0.5s carried over
         state.tick(10.5, &catalog);
         assert_eq!(state.current_track_index, 1);
@@ -190,8 +188,7 @@ mod tests {
     #[test]
     fn tick_wraps_playlist() {
         let catalog = make_catalog();
-        let mut state =
-            JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
+        let mut state = JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
         // Advance past track_a to track_b
         state.tick(10.0, &catalog);
         assert_eq!(state.current_track_index, 1);
@@ -205,8 +202,7 @@ mod tests {
     fn tick_skips_multiple_tracks_on_large_dt() {
         let catalog = make_catalog();
         // track_a=10s, track_b=20s — tick 31s should skip both and land on track_a with 1s
-        let mut state =
-            JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
+        let mut state = JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
         state.tick(31.0, &catalog);
         assert_eq!(state.current_track_index, 0); // wrapped back to track_a
         assert!((state.elapsed_secs - 1.0).abs() < f64::EPSILON);
@@ -225,8 +221,7 @@ mod tests {
     #[test]
     fn select_track_resets_elapsed() {
         let catalog = make_catalog();
-        let mut state =
-            JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
+        let mut state = JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
         state.tick(5.0, &catalog);
         state.select_track(1);
         assert_eq!(state.current_track_index, 1);
@@ -236,8 +231,7 @@ mod tests {
 
     #[test]
     fn select_track_out_of_bounds_ignored() {
-        let mut state =
-            JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
+        let mut state = JukeboxState::new(vec!["track_a".to_string(), "track_b".to_string()]);
         state.select_track(99);
         // State unchanged
         assert_eq!(state.current_track_index, 0);

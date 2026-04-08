@@ -17,7 +17,10 @@ pub enum ManifestError {
     Io(std::io::Error),
     Json(serde_json::Error),
     #[allow(dead_code)]
-    InvalidHex { filename: String, hex: String },
+    InvalidHex {
+        filename: String,
+        hex: String,
+    },
 }
 
 impl fmt::Display for ManifestError {

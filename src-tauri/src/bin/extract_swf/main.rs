@@ -5,7 +5,10 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "extract-swf", about = "Extract bitmaps or convert vectors from SWF files")]
+#[command(
+    name = "extract-swf",
+    about = "Extract bitmaps or convert vectors from SWF files"
+)]
 struct Args {
     /// Source directory containing SWF files
     #[arg(long)]
@@ -136,7 +139,11 @@ fn walk_swfs(
         let entry = match entry {
             Ok(e) => e,
             Err(err) => {
-                errors.push(format!("Directory entry error in {}: {}", dir.display(), err));
+                errors.push(format!(
+                    "Directory entry error in {}: {}",
+                    dir.display(),
+                    err
+                ));
                 *skipped += 1;
                 continue;
             }

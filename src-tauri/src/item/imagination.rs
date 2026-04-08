@@ -60,10 +60,22 @@ pub const ENERGY_TANK: UpgradePath = UpgradePath {
     name: "Energy Tank",
     description: "Increase your maximum energy capacity.",
     tiers: [
-        UpgradeTier { cost: 100, effect_value: 50.0 },
-        UpgradeTier { cost: 200, effect_value: 75.0 },
-        UpgradeTier { cost: 400, effect_value: 100.0 },
-        UpgradeTier { cost: 800, effect_value: 125.0 },
+        UpgradeTier {
+            cost: 100,
+            effect_value: 50.0,
+        },
+        UpgradeTier {
+            cost: 200,
+            effect_value: 75.0,
+        },
+        UpgradeTier {
+            cost: 400,
+            effect_value: 100.0,
+        },
+        UpgradeTier {
+            cost: 800,
+            effect_value: 125.0,
+        },
     ],
 };
 
@@ -72,10 +84,22 @@ pub const HAGGLING: UpgradePath = UpgradePath {
     name: "Vendor Haggling",
     description: "Negotiate better prices at vendor shops.",
     tiers: [
-        UpgradeTier { cost: 100, effect_value: 0.05 },
-        UpgradeTier { cost: 200, effect_value: 0.10 },
-        UpgradeTier { cost: 400, effect_value: 0.15 },
-        UpgradeTier { cost: 800, effect_value: 0.20 },
+        UpgradeTier {
+            cost: 100,
+            effect_value: 0.05,
+        },
+        UpgradeTier {
+            cost: 200,
+            effect_value: 0.10,
+        },
+        UpgradeTier {
+            cost: 400,
+            effect_value: 0.15,
+        },
+        UpgradeTier {
+            cost: 800,
+            effect_value: 0.20,
+        },
     ],
 };
 
@@ -277,7 +301,10 @@ mod tests {
         let defs = test_item_defs();
         // "unicorn_horn" is not in defs → contributes 0
         // cherry x1 * 1 = 3
-        assert_eq!(earn_from_harvest(&[("unicorn_horn", 10), ("cherry", 1)], &defs), 3);
+        assert_eq!(
+            earn_from_harvest(&[("unicorn_horn", 10), ("cherry", 1)], &defs),
+            3
+        );
     }
 
     // -- buy_upgrade tests ---------------------------------------------------
@@ -391,7 +418,10 @@ mod tests {
             haggling_tier: 3,
         };
         let json = serde_json::to_string(&upgrades).unwrap();
-        assert!(json.contains("energyTankTier"), "expected camelCase: {json}");
+        assert!(
+            json.contains("energyTankTier"),
+            "expected camelCase: {json}"
+        );
         assert!(json.contains("hagglingTier"), "expected camelCase: {json}");
 
         let decoded: PlayerUpgrades = serde_json::from_str(&json).unwrap();

@@ -236,10 +236,7 @@ impl TradeManager {
         sender: &[u8; 16],
         now: f64,
     ) -> Result<(), String> {
-        let session = self
-            .active_trade
-            .as_mut()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_mut().ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
@@ -256,10 +253,7 @@ impl TradeManager {
 
     /// Called when the peer declines our trade request.
     pub fn receive_decline(&mut self, trade_id: TradeId, sender: &[u8; 16]) -> Result<(), String> {
-        let session = self
-            .active_trade
-            .as_ref()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_ref().ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
@@ -275,15 +269,8 @@ impl TradeManager {
 
     // ── Negotiation ─────────────────────────────────────────────────────
 
-    pub fn update_offer(
-        &mut self,
-        offer: TradeOffer,
-        now: f64,
-    ) -> Result<TradeMessage, String> {
-        let session = self
-            .active_trade
-            .as_mut()
-            .ok_or("No active trade")?;
+    pub fn update_offer(&mut self, offer: TradeOffer, now: f64) -> Result<TradeMessage, String> {
+        let session = self.active_trade.as_mut().ok_or("No active trade")?;
         if session.phase != TradePhase::Negotiating
             && session.phase != TradePhase::LockedRemote
             && session.phase != TradePhase::LockedLocal
@@ -291,18 +278,13 @@ impl TradeManager {
             return Err("Cannot update offer in current phase".into());
         }
         if offer.items.len() > MAX_OFFER_ITEMS {
-            return Err(format!(
-                "Too many item types (max {})",
-                MAX_OFFER_ITEMS
-            ));
+            return Err(format!("Too many item types (max {})", MAX_OFFER_ITEMS));
         }
         // Changing our offer invalidates both locks — the remote peer's
         // lock was computed against the old terms and is now stale.
         session.local_terms_hash = None;
         session.remote_terms_hash = None;
-        if session.phase == TradePhase::LockedLocal
-            || session.phase == TradePhase::LockedRemote
-        {
+        if session.phase == TradePhase::LockedLocal || session.phase == TradePhase::LockedRemote {
             session.phase = TradePhase::Negotiating;
         }
         session.local_offer = offer.clone();
@@ -321,10 +303,7 @@ impl TradeManager {
         offer: TradeOffer,
         now: f64,
     ) -> Result<(), String> {
-        let session = self
-            .active_trade
-            .as_mut()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_mut().ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
@@ -332,17 +311,13 @@ impl TradeManager {
             return Err("Sender mismatch".into());
         }
         match session.phase {
-            TradePhase::Negotiating
-            | TradePhase::LockedLocal
-            | TradePhase::LockedRemote => {}
+            TradePhase::Negotiating | TradePhase::LockedLocal | TradePhase::LockedRemote => {}
             _ => return Ok(()), // ignore stale/reordered updates
         }
         // Remote updating their offer invalidates both locks.
         session.remote_terms_hash = None;
         session.local_terms_hash = None;
-        if session.phase == TradePhase::LockedLocal
-            || session.phase == TradePhase::LockedRemote
-        {
+        if session.phase == TradePhase::LockedLocal || session.phase == TradePhase::LockedRemote {
             session.phase = TradePhase::Negotiating;
         }
         session.remote_offer = offer;
@@ -360,10 +335,7 @@ impl TradeManager {
         currants: u64,
         now: f64,
     ) -> Result<TradeMessage, String> {
-        let session = self
-            .active_trade
-            .as_ref()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_ref().ok_or("No active trade")?;
         match session.phase {
             TradePhase::Negotiating | TradePhase::LockedRemote => {}
             _ => return Err("Cannot lock in current phase".into()),
@@ -422,10 +394,7 @@ impl TradeManager {
 
     /// Unlock our side of the trade.
     pub fn unlock_trade(&mut self, now: f64) -> Result<TradeMessage, String> {
-        let session = self
-            .active_trade
-            .as_mut()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_mut().ok_or("No active trade")?;
         if session.phase != TradePhase::LockedLocal {
             return Err("Not locked".into());
         }
@@ -451,10 +420,7 @@ impl TradeManager {
         terms_hash: [u8; 16],
         now: f64,
     ) -> Result<bool, String> {
-        let session = self
-            .active_trade
-            .as_mut()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_mut().ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
@@ -462,9 +428,7 @@ impl TradeManager {
             return Err("Sender mismatch".into());
         }
         match session.phase {
-            TradePhase::Negotiating
-            | TradePhase::LockedLocal
-            | TradePhase::LockedRemote => {}
+            TradePhase::Negotiating | TradePhase::LockedLocal | TradePhase::LockedRemote => {}
             _ => return Ok(false), // ignore lock in wrong phase (e.g., UDP reorder before Accept)
         }
         session.remote_terms_hash = Some(terms_hash);
@@ -490,10 +454,7 @@ impl TradeManager {
         sender: &[u8; 16],
         now: f64,
     ) -> Result<(), String> {
-        let session = self
-            .active_trade
-            .as_mut()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_mut().ok_or("No active trade")?;
         if session.trade_id != trade_id {
             return Err("Trade ID mismatch".into());
         }
@@ -521,10 +482,7 @@ impl TradeManager {
         currants: &mut u64,
         item_defs: &ItemDefs,
     ) -> Result<TradeMessage, String> {
-        let session = self
-            .active_trade
-            .as_ref()
-            .ok_or("No active trade")?;
+        let session = self.active_trade.as_ref().ok_or("No active trade")?;
         if session.phase != TradePhase::Executing {
             return Err("Trade not ready for execution".into());
         }
@@ -705,9 +663,7 @@ fn offer_to_frame(offer: &TradeOffer, item_defs: &ItemDefs) -> TradeOfferFrame {
                     name: def
                         .map(|d| d.name.clone())
                         .unwrap_or_else(|| item.item_id.clone()),
-                    icon: def
-                        .map(|d| d.icon.clone())
-                        .unwrap_or_default(),
+                    icon: def.map(|d| d.icon.clone()).unwrap_or_default(),
                     count: item.count,
                 }
             })
@@ -776,9 +732,7 @@ mod tests {
         let mut bob_mgr = TradeManager::new(BOB);
 
         // Alice initiates trade.
-        let request = alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        let request = alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         assert!(alice_mgr.has_active_trade());
 
         // Bob receives request.
@@ -911,9 +865,7 @@ mod tests {
     #[test]
     fn initiator_receives_decline() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         alice_mgr.receive_decline(1, &BOB).unwrap();
         assert!(!alice_mgr.has_active_trade());
     }
@@ -923,9 +875,7 @@ mod tests {
     #[test]
     fn cancel_clears_active_trade() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         let cancel = alice_mgr.cancel_trade();
         assert!(cancel.is_some());
         assert!(!alice_mgr.has_active_trade());
@@ -936,9 +886,7 @@ mod tests {
         let mut alice_mgr = TradeManager::new(ALICE);
         let mut bob_mgr = TradeManager::new(BOB);
 
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         bob_mgr
             .receive_request(1, ALICE, "Alice".into(), 0.0)
             .unwrap();
@@ -953,9 +901,7 @@ mod tests {
     #[test]
     fn timeout_cancels_trade() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         let result = alice_mgr.tick(61.0);
         assert!(result.cancel_msg.is_some());
         assert!(!result.pending_expired);
@@ -965,9 +911,7 @@ mod tests {
     #[test]
     fn no_timeout_before_deadline() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         let result = alice_mgr.tick(59.0);
         assert!(result.cancel_msg.is_none());
         assert!(!result.pending_expired);
@@ -999,9 +943,7 @@ mod tests {
     #[test]
     fn double_initiate_rejected() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         let err = alice_mgr
             .initiate_trade(2, BOB, "Bob".into(), 0.0)
             .unwrap_err();
@@ -1050,9 +992,7 @@ mod tests {
     #[test]
     fn lock_before_negotiating_rejected() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         // Still in PendingResponse, can't lock.
         let empty = make_inventory(&[]);
         let err = alice_mgr.lock_trade(&empty, 0, 1.0).unwrap_err();
@@ -1064,9 +1004,7 @@ mod tests {
     #[test]
     fn trade_id_mismatch_rejected() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         let err = alice_mgr.receive_accept(999, &BOB, 1.0).unwrap_err();
         assert_eq!(err, "Trade ID mismatch");
     }
@@ -1080,9 +1018,7 @@ mod tests {
         let mut bob_mgr = TradeManager::new(BOB);
 
         // Set up and enter negotiation.
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         bob_mgr
             .receive_request(1, ALICE, "Alice".into(), 0.0)
             .unwrap();
@@ -1116,8 +1052,14 @@ mod tests {
         // Alice should be auto-unlocked and phase set to LockedRemote.
         let frame = alice_mgr.trade_frame(&defs).unwrap();
         assert_eq!(frame.phase, "lockedRemote");
-        assert!(!frame.local_locked, "Local should be auto-unlocked on hash mismatch");
-        assert!(frame.remote_locked, "Remote should still be shown as locked");
+        assert!(
+            !frame.local_locked,
+            "Local should be auto-unlocked on hash mismatch"
+        );
+        assert!(
+            frame.remote_locked,
+            "Remote should still be shown as locked"
+        );
     }
 
     #[test]
@@ -1127,9 +1069,7 @@ mod tests {
         let mut bob_mgr = TradeManager::new(BOB);
 
         // Set up and enter negotiation.
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         bob_mgr
             .receive_request(1, ALICE, "Alice".into(), 0.0)
             .unwrap();
@@ -1172,24 +1112,23 @@ mod tests {
     #[test]
     fn cancel_from_wrong_sender_rejected() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         // Eve (a third peer) tries to cancel Alice's trade with Bob.
         let eve: [u8; 16] = [0x03; 16];
         let err = alice_mgr.receive_cancel(1, &eve).unwrap_err();
         assert_eq!(err, "No matching trade to cancel");
-        assert!(alice_mgr.has_active_trade(), "Trade should survive spoofed cancel");
+        assert!(
+            alice_mgr.has_active_trade(),
+            "Trade should survive spoofed cancel"
+        );
     }
 
     #[test]
     fn update_from_wrong_sender_rejected() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         let eve: [u8; 16] = [0x03; 16];
@@ -1202,9 +1141,7 @@ mod tests {
     #[test]
     fn lock_from_wrong_sender_rejected() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         let eve: [u8; 16] = [0x03; 16];
@@ -1219,16 +1156,17 @@ mod tests {
     #[test]
     fn reordered_complete_does_not_clear_active_trade() {
         let mut alice_mgr = TradeManager::new(ALICE);
-        alice_mgr
-            .initiate_trade(1, BOB, "Bob".into(), 0.0)
-            .unwrap();
+        alice_mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
         alice_mgr.receive_accept(1, &BOB, 1.0).unwrap();
 
         // Bob's Complete arrives before his Lock (UDP reorder).
         alice_mgr.receive_complete(1, &BOB).unwrap();
 
         // Trade should still be active — not cleared by premature Complete.
-        assert!(alice_mgr.has_active_trade(), "Premature Complete must not clear trade");
+        assert!(
+            alice_mgr.has_active_trade(),
+            "Premature Complete must not clear trade"
+        );
     }
 
     // ── Execution validation ────────────────────────────────────────────
@@ -1327,8 +1265,7 @@ mod tests {
 
         let mut inv = make_inventory(&[]);
         let mut currants: u64 = 100;
-        mgr.execute_trade(&mut inv, &mut currants, &defs)
-            .unwrap();
+        mgr.execute_trade(&mut inv, &mut currants, &defs).unwrap();
         assert_eq!(currants, 80); // 100 - 50 + 30
     }
 
@@ -1338,8 +1275,7 @@ mod tests {
         let mut bob = TradeManager::new(BOB);
 
         mgr.initiate_trade(1, BOB, "Bob".into(), 0.0).unwrap();
-        bob.receive_request(1, ALICE, "Alice".into(), 0.0)
-            .unwrap();
+        bob.receive_request(1, ALICE, "Alice".into(), 0.0).unwrap();
         bob.accept_trade(1.0).unwrap();
         mgr.receive_accept(1, &BOB, 1.0).unwrap();
 

@@ -93,61 +93,40 @@ mod tests {
 
     #[test]
     fn sandbox_for_new_peer() {
-        assert_eq!(
-            determine_epoch(0.0, 0.5, false),
-            PeerEpoch::Sandbox
-        );
+        assert_eq!(determine_epoch(0.0, 0.5, false), PeerEpoch::Sandbox);
     }
 
     #[test]
     fn sandbox_at_boundary() {
-        assert_eq!(
-            determine_epoch(299.9, 0.5, false),
-            PeerEpoch::Sandbox
-        );
+        assert_eq!(determine_epoch(299.9, 0.5, false), PeerEpoch::Sandbox);
     }
 
     #[test]
     fn initiate_at_threshold() {
-        assert_eq!(
-            determine_epoch(300.0, 0.5, false),
-            PeerEpoch::Initiate
-        );
+        assert_eq!(determine_epoch(300.0, 0.5, false), PeerEpoch::Initiate);
     }
 
     #[test]
     fn initiate_with_low_trust() {
         // Enough copresence for Citizen but trust too low → Initiate
-        assert_eq!(
-            determine_epoch(1800.0, 0.59, false),
-            PeerEpoch::Initiate
-        );
+        assert_eq!(determine_epoch(1800.0, 0.59, false), PeerEpoch::Initiate);
     }
 
     #[test]
     fn citizen_by_time_and_trust() {
-        assert_eq!(
-            determine_epoch(1800.0, 0.6, false),
-            PeerEpoch::Citizen
-        );
+        assert_eq!(determine_epoch(1800.0, 0.6, false), PeerEpoch::Citizen);
     }
 
     #[test]
     fn citizen_by_vouch() {
         // Vouch overrides copresence requirements
-        assert_eq!(
-            determine_epoch(100.0, 0.5, true),
-            PeerEpoch::Citizen
-        );
+        assert_eq!(determine_epoch(100.0, 0.5, true), PeerEpoch::Citizen);
     }
 
     #[test]
     fn citizen_by_vouch_even_in_sandbox() {
         // Vouch works even with zero copresence
-        assert_eq!(
-            determine_epoch(0.0, 0.5, true),
-            PeerEpoch::Citizen
-        );
+        assert_eq!(determine_epoch(0.0, 0.5, true), PeerEpoch::Citizen);
     }
 
     #[test]

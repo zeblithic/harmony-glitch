@@ -236,12 +236,7 @@ impl GossipStore {
     /// or detect a critical violation. Upserts by subject so duplicate
     /// events (e.g. critical violation + shadow-ban for the same peer)
     /// don't waste rate-limit slots.
-    pub fn queue_outbound(
-        &mut self,
-        subject: &[u8; 16],
-        opinion: &Opinion,
-        violations: u32,
-    ) {
+    pub fn queue_outbound(&mut self, subject: &[u8; 16], opinion: &Opinion, violations: u32) {
         let envelope = GossipEnvelope {
             subject: *subject,
             belief: opinion.belief,
@@ -359,7 +354,14 @@ mod tests {
         [id; 16]
     }
 
-    fn make_envelope(subject: u8, b: f64, d: f64, u: f64, violations: u32, hop: u8) -> GossipEnvelope {
+    fn make_envelope(
+        subject: u8,
+        b: f64,
+        d: f64,
+        u: f64,
+        violations: u32,
+        hop: u8,
+    ) -> GossipEnvelope {
         GossipEnvelope {
             subject: hash(subject),
             belief: b,
