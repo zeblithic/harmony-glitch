@@ -1,62 +1,11189 @@
 {
-  "cherry_pie": {
-    "name": "Cherry Pie",
-    "description": "A delicious pie.",
-    "inputs": [{ "item": "cherry", "count": 5 }, { "item": "grain", "count": 2 }],
-    "tools": [{ "item": "pot", "count": 1 }],
-    "outputs": [{ "item": "cherry_pie", "count": 1 }],
-    "durationSecs": 10.0,
-    "energyCost": 15.0,
+  "abbasid_ribs": {
+    "name": "Abbasid Ribs",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "hototot_rub",
+        "count": 1
+      },
+      {
+        "item": "mild_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "abbasid_ribs",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 21,
     "category": "food"
+  },
+  "abbasidose": {
+    "name": "Abbasidose",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 4
+      },
+      {
+        "item": "element_green",
+        "count": 2
+      },
+      {
+        "item": "element_blue",
+        "count": 6
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "abbasidose",
+        "count": 1
+      },
+      {
+        "item": "diabolic_acid",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "ace_of_spades": {
+    "name": "Ace of Spades",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 4
+      },
+      {
+        "item": "molybdenum",
+        "count": 6
+      },
+      {
+        "item": "wood_post",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "ace_of_spades",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 100,
+    "category": "tool"
+  },
+  "alchemical_tongs": {
+    "name": "Alchemical Tongs",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 2
+      },
+      {
+        "item": "molybdenum",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "alchemical_tongs",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "alphose": {
+    "name": "Alphose",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 3
+      },
+      {
+        "item": "element_green",
+        "count": 5
+      },
+      {
+        "item": "element_blue",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "alphose",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "apple": {
+    "name": "Apple",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "apple",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "applejack": {
+    "name": "Applejack",
+    "description": "",
+    "inputs": [
+      {
+        "item": "apple",
+        "count": 1
+      },
+      {
+        "item": "oats",
+        "count": 1
+      },
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "applejack",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "awesome_pot": {
+    "name": "Awesome Pot",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "copper",
+        "count": 1
+      },
+      {
+        "item": "molybdenum",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "awesome_stew": {
+    "name": "Awesome Stew",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "saffron",
+        "count": 1
+      },
+      {
+        "item": "vegmageddon",
+        "count": 1
+      },
+      {
+        "item": "legumes_parisienne",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "awesome_stew",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 24,
+    "category": "food"
+  },
+  "bag_furniture_cabinet": {
+    "name": "Cabinet",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 2
+      },
+      {
+        "item": "wood_post",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 12
+      },
+      {
+        "item": "snail",
+        "count": 20
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bag_furniture_cabinet",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 200,
+    "category": "material"
+  },
+  "bag_furniture_sdb": {
+    "name": "Storage Display Box",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_rod",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 4
+      },
+      {
+        "item": "snail",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bag_furniture_sdb",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 40,
+    "category": "material"
+  },
+  "bag_furniture_smallcabinet": {
+    "name": "Small Cabinet",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 1
+      },
+      {
+        "item": "wood_post",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 10
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bag_furniture_smallcabinet",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 175,
+    "category": "material"
+  },
+  "bag_furniture_wallcabinet": {
+    "name": "Wall Cabinet",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 1
+      },
+      {
+        "item": "metal_rod",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 10
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bag_furniture_wallcabinet",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 180,
+    "category": "material"
+  },
+  "banana": {
+    "name": "Banana",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 6
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "banana",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "banana_no_names": {
+    "name": "Banana No-Names",
+    "description": "",
+    "inputs": [
+      {
+        "item": "banana",
+        "count": 1
+      },
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "banana_no_names",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "basic_omelet": {
+    "name": "Basic Omelet",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 3
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "basic_omelet",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "batterfly_bar": {
+    "name": "Batterfly Bounty Booster Bar",
+    "description": "",
+    "inputs": [
+      {
+        "item": "grain",
+        "count": 20
+      },
+      {
+        "item": "oats",
+        "count": 5
+      },
+      {
+        "item": "hot_pepper",
+        "count": 7
+      },
+      {
+        "item": "cumin",
+        "count": 5
+      },
+      {
+        "item": "plum",
+        "count": 5
+      },
+      {
+        "item": "hot_n_fizzy_sauce",
+        "count": 1
+      },
+      {
+        "item": "olive_oil",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "batterfly_bar",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 33,
+    "category": "food"
+  },
+  "beaker": {
+    "name": "Beaker",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_crystal",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 25,
+    "category": "tool"
+  },
+  "beam": {
+    "name": "Beam",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 4
+      },
+      {
+        "item": "fuel_cell",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "woodworker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "beam",
+        "count": 1
+      }
+    ],
+    "durationSecs": 20,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "bean_bean": {
+    "name": "Bean Tree Bean",
+    "description": "",
+    "inputs": [
+      {
+        "item": "nutmeg",
+        "count": 3
+      },
+      {
+        "item": "lemon",
+        "count": 3
+      },
+      {
+        "item": "general_vapour",
+        "count": 3
+      },
+      {
+        "item": "bean_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_bean",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "bean_bubble": {
+    "name": "Bubble Tree Bean",
+    "description": "",
+    "inputs": [
+      {
+        "item": "turmeric",
+        "count": 3
+      },
+      {
+        "item": "plum",
+        "count": 4
+      },
+      {
+        "item": "helium",
+        "count": 1
+      },
+      {
+        "item": "bean_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_bubble",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "bean_egg": {
+    "name": "Egg Plant Bean",
+    "description": "",
+    "inputs": [
+      {
+        "item": "camphor",
+        "count": 1
+      },
+      {
+        "item": "heavy_gas",
+        "count": 1
+      },
+      {
+        "item": "pineapple",
+        "count": 2
+      },
+      {
+        "item": "bean_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_egg",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "bean_fruit": {
+    "name": "Fruit Tree Bean",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cardamom",
+        "count": 3
+      },
+      {
+        "item": "laughing_gas",
+        "count": 2
+      },
+      {
+        "item": "bean_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_fruit",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "bean_gas": {
+    "name": "Gas Plant Bean",
+    "description": "",
+    "inputs": [
+      {
+        "item": "licorice",
+        "count": 4
+      },
+      {
+        "item": "beer",
+        "count": 1
+      },
+      {
+        "item": "hard_bubble",
+        "count": 2
+      },
+      {
+        "item": "bean_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_gas",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "bean_seasoner": {
+    "name": "Bean Seasoner",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 2
+      },
+      {
+        "item": "jellisac_clump",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "bean_spice": {
+    "name": "Spice Plant Bean",
+    "description": "",
+    "inputs": [
+      {
+        "item": "crying_gas",
+        "count": 1
+      },
+      {
+        "item": "carrot",
+        "count": 4
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 3
+      },
+      {
+        "item": "bean_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_spice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "bean_wood": {
+    "name": "Wood Tree Bean",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cinnamon",
+        "count": 5
+      },
+      {
+        "item": "white_gas",
+        "count": 1
+      },
+      {
+        "item": "mangosteen",
+        "count": 3
+      },
+      {
+        "item": "bean_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bean_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bean_wood",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 20,
+    "category": "material"
+  },
+  "berry_bowl": {
+    "name": "Berry Bowl",
+    "description": "",
+    "inputs": [
+      {
+        "item": "whortleberry",
+        "count": 4
+      },
+      {
+        "item": "cloudberry",
+        "count": 3
+      },
+      {
+        "item": "strawberry",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "berry_bowl",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "best_bean_dip": {
+    "name": "Best Bean Dip",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "cumin",
+        "count": 1
+      },
+      {
+        "item": "bean_plain",
+        "count": 10
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "best_bean_dip",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "big_salad": {
+    "name": "Big Salad",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tomato",
+        "count": 1
+      },
+      {
+        "item": "mushroom",
+        "count": 5
+      },
+      {
+        "item": "oily_dressing",
+        "count": 1
+      },
+      {
+        "item": "spinach",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "big_salad",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "birch_candy": {
+    "name": "Birch Candy",
+    "description": "",
+    "inputs": [
+      {
+        "item": "birch_syrup",
+        "count": 1
+      },
+      {
+        "item": "paper",
+        "count": 1
+      },
+      {
+        "item": "pepitas",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "birch_candy",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "black_pepper": {
+    "name": "Black Pepper",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "black_pepper",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "blender": {
+    "name": "Blender",
+    "description": "",
+    "inputs": [
+      {
+        "item": "copper",
+        "count": 1
+      },
+      {
+        "item": "jellisac_clump",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 25,
+    "category": "tool"
+  },
+  "blockmaker_chassis": {
+    "name": "Blockmaker Chassis",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "blockmaker_chassis",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3.333,
+    "energyCost": 100,
+    "category": "material"
+  },
+  "blockmaker_plates": {
+    "name": "Blockmaker Plates",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 2
+      },
+      {
+        "item": "metal_rod",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "blockmaker_plates",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3.333,
+    "energyCost": 150,
+    "category": "material"
+  },
+  "blue_bubble": {
+    "name": "Blue Bubble",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_bubble",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "bubble_tuner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "blue_bubble",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "board": {
+    "name": "Board",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plank",
+        "count": 4
+      },
+      {
+        "item": "fuel_cell",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "woodworker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "board",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2.5,
+    "energyCost": 0,
+    "category": "material"
   },
   "bread": {
     "name": "Bread",
     "description": "Simple baked bread.",
-    "inputs": [{ "item": "grain", "count": 4 }],
-    "tools": [{ "item": "pot", "count": 1 }],
-    "outputs": [{ "item": "bread", "count": 1 }],
-    "durationSecs": 8.0,
-    "energyCost": 12.0,
+    "inputs": [
+      {
+        "item": "grain",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bread",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 12,
     "category": "food"
   },
-  "steak": {
-    "name": "Steak",
-    "description": "Grilled meat on a wood fire.",
-    "inputs": [{ "item": "meat", "count": 2 }, { "item": "wood", "count": 1 }],
-    "tools": [{ "item": "pot", "count": 1 }],
-    "outputs": [{ "item": "steak", "count": 1 }],
-    "durationSecs": 12.0,
-    "energyCost": 18.0,
+  "bubble_and_squeak": {
+    "name": "Bubble and Squeak",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "carrot",
+        "count": 1
+      },
+      {
+        "item": "hard_bubble",
+        "count": 1
+      },
+      {
+        "item": "potato",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bubble_and_squeak",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "bubble_tea": {
+    "name": "Bubble Tea",
+    "description": "",
+    "inputs": [
+      {
+        "item": "blue_bubble",
+        "count": 5
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 4
+      },
+      {
+        "item": "hard_bubble",
+        "count": 2
+      },
+      {
+        "item": "plain_bubble",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bubble_tea",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 18,
+    "category": "food"
+  },
+  "bubble_tuner": {
+    "name": "Bubble Tuner",
+    "description": "",
+    "inputs": [
+      {
+        "item": "jellisac_clump",
+        "count": 6
+      },
+      {
+        "item": "barnacle_talc",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bubble_tuner",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "bubble_wand": {
+    "name": "Bubble Wand",
+    "description": "A wand for blowing bubbles.",
+    "inputs": [
+      {
+        "item": "bubble",
+        "count": 3
+      },
+      {
+        "item": "wood",
+        "count": 2
+      }
+    ],
+    "tools": [],
+    "outputs": [
+      {
+        "item": "bubble_wand",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 8,
+    "category": "tool"
+  },
+  "bun": {
+    "name": "Bun",
+    "description": "",
+    "inputs": [
+      {
+        "item": "flour",
+        "count": 1
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bun",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "bunch_of_grapes": {
+    "name": "Bunch of Grapes",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "bunch_of_grapes",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
     "category": "food"
   },
   "butter": {
     "name": "Butter",
     "description": "Churned from fresh milk.",
-    "inputs": [{ "item": "milk", "count": 3 }],
-    "tools": [{ "item": "pot", "count": 1 }],
-    "outputs": [{ "item": "butter", "count": 1 }],
-    "durationSecs": 6.0,
-    "energyCost": 9.0,
+    "inputs": [
+      {
+        "item": "milk",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "butter",
+        "count": 1
+      }
+    ],
+    "durationSecs": 6,
+    "energyCost": 9,
     "category": "food"
   },
-  "bubble_wand": {
-    "name": "Bubble Wand",
-    "description": "A wand for blowing bubbles.",
-    "inputs": [{ "item": "bubble", "count": 3 }, { "item": "wood", "count": 2 }],
-    "tools": [],
-    "outputs": [{ "item": "bubble_wand", "count": 1 }],
-    "durationSecs": 5.0,
-    "energyCost": 8.0,
+  "butterfly_egg": {
+    "name": "Butterfly Egg",
+    "description": "",
+    "inputs": [
+      {
+        "item": "blue_bubble",
+        "count": 8
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 10
+      },
+      {
+        "item": "honey",
+        "count": 10
+      },
+      {
+        "item": "egg_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "egg_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "butterfly_egg",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "butterfly_milker": {
+    "name": "Butterfly Milker",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 4
+      },
+      {
+        "item": "plain_metal",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "butterfly_milker",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 30,
+    "category": "material"
+  },
+  "camphor": {
+    "name": "Camphor",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "camphor",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "cardamom": {
+    "name": "Cardamom",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cardamom",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "carobish_treats": {
+    "name": "Raw Bio-Organic Carob-ish Treat",
+    "description": "",
+    "inputs": [
+      {
+        "item": "guano",
+        "count": 1
+      },
+      {
+        "item": "jellisac_clump",
+        "count": 1
+      },
+      {
+        "item": "pepitas",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "carobish_treats",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "carrot_margarita": {
+    "name": "Carrot Margarita",
+    "description": "",
+    "inputs": [
+      {
+        "item": "orange_juice",
+        "count": 1
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      },
+      {
+        "item": "lemon",
+        "count": 1
+      },
+      {
+        "item": "ice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "carrot_margarita",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 11,
+    "category": "food"
+  },
+  "cauldron": {
+    "name": "Cauldron",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 5
+      },
+      {
+        "item": "molybdenum",
+        "count": 4
+      },
+      {
+        "item": "metal_rod",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3.333,
+    "energyCost": 250,
     "category": "tool"
+  },
+  "cedar_plank_salmon": {
+    "name": "Cedar Plank Salmon",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plank",
+        "count": 2
+      },
+      {
+        "item": "salmon",
+        "count": 1
+      },
+      {
+        "item": "lemon",
+        "count": 2
+      },
+      {
+        "item": "olive_oil",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cedar_plank_salmon",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "cheese_plate": {
+    "name": "Cheese Plate",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cheese",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cheese_plate",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "cheezy_sammich": {
+    "name": "Cheezy Sammich",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "bun",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cheezy_sammich",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "cheezy_sauce": {
+    "name": "Cheezy Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      },
+      {
+        "item": "roux",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cheezy_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "cherry_pie": {
+    "name": "Cherry Pie",
+    "description": "A delicious pie.",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 5
+      },
+      {
+        "item": "grain",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cherry_pie",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 15,
+    "category": "food"
+  },
+  "chicken_egg": {
+    "name": "Chicken Egg",
+    "description": "",
+    "inputs": [
+      {
+        "item": "garlic",
+        "count": 10
+      },
+      {
+        "item": "white_gas",
+        "count": 1
+      },
+      {
+        "item": "egg_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "egg_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "chicken_egg",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "chillybusting_chili": {
+    "name": "Chilly-Busting Chili",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "death_to_veg",
+        "count": 1
+      },
+      {
+        "item": "legumes_parisienne",
+        "count": 2
+      },
+      {
+        "item": "naraka_flame_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "chillybusting_chili",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 31,
+    "category": "food"
+  },
+  "choice_crudites": {
+    "name": "Choice Crudites",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tomato",
+        "count": 1
+      },
+      {
+        "item": "parsnip",
+        "count": 1
+      },
+      {
+        "item": "zucchini",
+        "count": 1
+      },
+      {
+        "item": "mushroom",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "choice_crudites",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "cinnamon": {
+    "name": "Cinnamon",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cinnamon",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "class_axe": {
+    "name": "Class Axe",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 1
+      },
+      {
+        "item": "molybdenum",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "class_axe",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 50,
+    "category": "tool"
+  },
+  "cloud_11_smoothie": {
+    "name": "Cloud 11 Smoothie",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cloudberry",
+        "count": 11
+      },
+      {
+        "item": "banana",
+        "count": 1
+      },
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "milk_butterfly",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cloud_11_smoothie",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "cloudberry": {
+    "name": "Cloudberry",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cloudberry",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "cloudberry_daiquiri": {
+    "name": "Cloudberry Daiquiri",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "cloud_11_smoothie",
+        "count": 1
+      },
+      {
+        "item": "ice",
+        "count": 1
+      },
+      {
+        "item": "nutmeg",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cloudberry_daiquiri",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 17,
+    "category": "food"
+  },
+  "cloudberry_jam": {
+    "name": "Cloudberry Jam",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cloudberry",
+        "count": 11
+      },
+      {
+        "item": "ginger",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cloudberry_jam",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "cocktail_shaker": {
+    "name": "Cocktail Shaker",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "cold_taco": {
+    "name": "Cold Taco",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "tortilla",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cold_taco",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "common_crudites": {
+    "name": "Common Crudites",
+    "description": "",
+    "inputs": [
+      {
+        "item": "broccoli",
+        "count": 1
+      },
+      {
+        "item": "potato",
+        "count": 1
+      },
+      {
+        "item": "carrot",
+        "count": 1
+      },
+      {
+        "item": "cucumber",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "common_crudites",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "copper": {
+    "name": "Copper",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "element_red",
+        "count": 60
+      },
+      {
+        "item": "element_green",
+        "count": 30
+      }
+    ],
+    "tools": [
+      {
+        "item": "alchemical_tongs",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "copper",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "material"
+  },
+  "corn_off_the_cob": {
+    "name": "Corn-off-the-Cob",
+    "description": "",
+    "inputs": [
+      {
+        "item": "corn",
+        "count": 4
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "corn_off_the_cob",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "corn_syrup_squares": {
+    "name": "Hi-Sucrose Corn Syrup Square",
+    "description": "",
+    "inputs": [
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 1
+      },
+      {
+        "item": "corn",
+        "count": 1
+      },
+      {
+        "item": "pepitas",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "corn_syrup_squares",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "corny_fritter": {
+    "name": "Corny Fritter",
+    "description": "",
+    "inputs": [
+      {
+        "item": "corn",
+        "count": 3
+      },
+      {
+        "item": "egg_plain",
+        "count": 1
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "corny_fritter",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "cosmapolitan": {
+    "name": "Cosma-politan",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "fruity_juice",
+        "count": 1
+      },
+      {
+        "item": "ice",
+        "count": 1
+      },
+      {
+        "item": "lemon_juice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cosmapolitan",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 14,
+    "category": "food"
+  },
+  "cosmox": {
+    "name": "Cosmox",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 12
+      },
+      {
+        "item": "element_blue",
+        "count": 4
+      },
+      {
+        "item": "element_shiny",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cosmox",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "creamy_catsup": {
+    "name": "Creamy Catsup",
+    "description": "",
+    "inputs": [
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "red",
+        "count": 1
+      },
+      {
+        "item": "kings_of_condiments",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "creamy_catsup",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 9,
+    "category": "food"
+  },
+  "creamy_martini": {
+    "name": "Creamy Martini",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "milk_butterfly",
+        "count": 2
+      },
+      {
+        "item": "ice",
+        "count": 1
+      },
+      {
+        "item": "onion",
+        "count": 1
+      },
+      {
+        "item": "lemon",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "creamy_martini",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "crying_gas": {
+    "name": "Crying Gas",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_vapour",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "gassifier",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "crying_gas",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "material"
+  },
+  "crystallizer": {
+    "name": "Crystalmalizing Chamber",
+    "description": "",
+    "inputs": [
+      {
+        "item": "molybdenum",
+        "count": 20
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "crystallizer",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "cumin": {
+    "name": "Cumin",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "cumin",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "curry": {
+    "name": "Curry",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "curry",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "death_to_veg": {
+    "name": "Death to Veg",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tomato",
+        "count": 2
+      },
+      {
+        "item": "spinach",
+        "count": 3
+      },
+      {
+        "item": "onion",
+        "count": 1
+      },
+      {
+        "item": "zucchini",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "death_to_veg",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "deluxe_sammich": {
+    "name": "Deluxe Sammich",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "pickle",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "deluxe_sammich",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 9,
+    "category": "food"
+  },
+  "desssert_rub": {
+    "name": "Desssert Rub",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cinnamon",
+        "count": 3
+      },
+      {
+        "item": "cardamom",
+        "count": 1
+      },
+      {
+        "item": "nutmeg",
+        "count": 1
+      },
+      {
+        "item": "licorice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "desssert_rub",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 9,
+    "category": "food"
+  },
+  "diabolic_acid": {
+    "name": "Diabolic Acid",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 1
+      },
+      {
+        "item": "element_green",
+        "count": 1
+      },
+      {
+        "item": "element_blue",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "diabolic_acid",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "divine_crepes": {
+    "name": "Divine Crepes",
+    "description": "",
+    "inputs": [
+      {
+        "item": "swing_batter",
+        "count": 1
+      },
+      {
+        "item": "desssert_rub",
+        "count": 1
+      },
+      {
+        "item": "cloudberry_jam",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "divine_crepes",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 25,
+    "category": "food"
+  },
+  "earthshaker": {
+    "name": "Earthshaker",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 6
+      },
+      {
+        "item": "banana",
+        "count": 1
+      },
+      {
+        "item": "hot_n_fizzy_sauce",
+        "count": 1
+      },
+      {
+        "item": "garlic",
+        "count": 1
+      },
+      {
+        "item": "beer",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "earthshaker",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 17,
+    "category": "food"
+  },
+  "egg_seasoner": {
+    "name": "Egg Seasoner",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 2
+      },
+      {
+        "item": "jellisac_clump",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "egg_seasoner",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "eggy_scramble": {
+    "name": "Eggy Scramble",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 2
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "eggy_scramble",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "essence_of_gandlevery": {
+    "name": "Essence of Gandlevery",
+    "description": "",
+    "inputs": [
+      {
+        "item": "gandlevery",
+        "count": 3
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tincturing_kit",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "essence_of_gandlevery",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 11,
+    "category": "material"
+  },
+  "essence_of_hairball": {
+    "name": "Essence of Hairball",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hairball_flower",
+        "count": 5
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tincturing_kit",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "essence_of_hairball",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 17,
+    "category": "material"
+  },
+  "essence_of_purple": {
+    "name": "Essence of Purple",
+    "description": "",
+    "inputs": [
+      {
+        "item": "purple_flower",
+        "count": 23
+      },
+      {
+        "item": "hooch",
+        "count": 2
+      },
+      {
+        "item": "tangy_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tincturing_kit",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "essence_of_purple",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 18,
+    "category": "material"
+  },
+  "essence_of_rookswort": {
+    "name": "Essence of Rookswort",
+    "description": "",
+    "inputs": [
+      {
+        "item": "rookswort",
+        "count": 5
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tincturing_kit",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "essence_of_rookswort",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 19,
+    "category": "material"
+  },
+  "essence_of_rubeweed": {
+    "name": "Essence of Rubeweed",
+    "description": "",
+    "inputs": [
+      {
+        "item": "rubeweed",
+        "count": 5
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tincturing_kit",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "essence_of_rubeweed",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "essence_of_silvertongue": {
+    "name": "Essence of Silvertongue",
+    "description": "",
+    "inputs": [
+      {
+        "item": "silvertongue",
+        "count": 4
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tincturing_kit",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "essence_of_silvertongue",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 13,
+    "category": "material"
+  },
+  "essence_of_yellow_crumb": {
+    "name": "Essence of Yellow Crumb",
+    "description": "",
+    "inputs": [
+      {
+        "item": "yellow_crumb_flower",
+        "count": 6
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tincturing_kit",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "essence_of_yellow_crumb",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 20,
+    "category": "material"
+  },
+  "exotic_fruit_salad": {
+    "name": "Exotic Fruit Salad",
+    "description": "",
+    "inputs": [
+      {
+        "item": "pineapple",
+        "count": 1
+      },
+      {
+        "item": "orange",
+        "count": 1
+      },
+      {
+        "item": "banana",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "exotic_fruit_salad",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "exotic_juice": {
+    "name": "Exotic Juice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "pineapple",
+        "count": 1
+      },
+      {
+        "item": "banana",
+        "count": 1
+      },
+      {
+        "item": "mangosteen",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "exotic_juice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "expensive_grilled_cheese": {
+    "name": "Expensive Grilled Cheese",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "creamy_catsup",
+        "count": 1
+      },
+      {
+        "item": "cheese_very_stinky",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "expensive_grilled_cheese",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 22,
+    "category": "food"
+  },
+  "extremely_hallowed_shrine_powder": {
+    "name": "Extremely Hallowed Shrine Powder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "zillene",
+        "count": 175
+      },
+      {
+        "item": "humbabol",
+        "count": 160
+      },
+      {
+        "item": "groddlene",
+        "count": 40
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "extremely_hallowed_shrine_powder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 60,
+    "category": "material"
+  },
+  "face_smelter": {
+    "name": "Face Smelter",
+    "description": "",
+    "inputs": [
+      {
+        "item": "parsnip",
+        "count": 2
+      },
+      {
+        "item": "onion_sauce",
+        "count": 1
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "crying_gas",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "face_smelter",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 16,
+    "category": "food"
+  },
+  "fairly_hallowed_shrine_powder": {
+    "name": "Fairly Hallowed Shrine Powder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "zillene",
+        "count": 65
+      },
+      {
+        "item": "humbabol",
+        "count": 55
+      },
+      {
+        "item": "mabon",
+        "count": 20
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fairly_hallowed_shrine_powder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 30,
+    "category": "material"
+  },
+  "fancy_pick": {
+    "name": "Fancy Pick",
+    "description": "",
+    "inputs": [
+      {
+        "item": "molybdenum",
+        "count": 6
+      },
+      {
+        "item": "plain_metal",
+        "count": 6
+      },
+      {
+        "item": "plank",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fancy_pick",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "fertilidust": {
+    "name": "Fertilidust",
+    "description": "",
+    "inputs": [
+      {
+        "item": "humbabol",
+        "count": 40
+      },
+      {
+        "item": "potoxin",
+        "count": 20
+      },
+      {
+        "item": "cosmox",
+        "count": 10
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fertilidust",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 20,
+    "category": "material"
+  },
+  "fertilidust_lite": {
+    "name": "Fertilidust Lite",
+    "description": "",
+    "inputs": [
+      {
+        "item": "humbabol",
+        "count": 15
+      },
+      {
+        "item": "potoxin",
+        "count": 10
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fertilidust_lite",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 30,
+    "category": "material"
+  },
+  "flaming_humbaba": {
+    "name": "Flaming Humbaba",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "laughing_gas",
+        "count": 1
+      },
+      {
+        "item": "hot_n_fizzy_sauce",
+        "count": 1
+      },
+      {
+        "item": "fruity_juice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "flaming_humbaba",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 18,
+    "category": "food"
+  },
+  "flour": {
+    "name": "Flour",
+    "description": "",
+    "inputs": [
+      {
+        "item": "grain",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "flour",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 1,
+    "category": "food"
+  },
+  "flummery": {
+    "name": "Flummery",
+    "description": "",
+    "inputs": [
+      {
+        "item": "oats",
+        "count": 2
+      },
+      {
+        "item": "milk_butterfly",
+        "count": 2
+      },
+      {
+        "item": "whortleberry",
+        "count": 6
+      },
+      {
+        "item": "desssert_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "flummery",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 23,
+    "category": "food"
+  },
+  "focusing_orb": {
+    "name": "Focusing Orb",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_crystal",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "focusing_orb",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 50,
+    "category": "tool"
+  },
+  "fortifying_gruel": {
+    "name": "Fortifying Gruel",
+    "description": "",
+    "inputs": [
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      },
+      {
+        "item": "hot_n_fizzy_sauce",
+        "count": 1
+      },
+      {
+        "item": "oats",
+        "count": 10
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fortifying_gruel",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 22,
+    "category": "food"
+  },
+  "fried_egg": {
+    "name": "Fried Eggs",
+    "description": "",
+    "inputs": [
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      },
+      {
+        "item": "egg_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fried_egg",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 1,
+    "category": "food"
+  },
+  "fried_noodles": {
+    "name": "Fried Noodles",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_noodles",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fried_noodles",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "fried_rice": {
+    "name": "Fried Rice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "proper_rice",
+        "count": 1
+      },
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "death_to_veg",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fried_rice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 13,
+    "category": "food"
+  },
+  "friendly_acid": {
+    "name": "Friendly Acid",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 10
+      },
+      {
+        "item": "element_blue",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "friendly_acid",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "frog_in_a_hole": {
+    "name": "Frog-in-a-Hole",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 1
+      },
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "frog_in_a_hole",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "fruit_changing_machine": {
+    "name": "Fruit Changing Machine",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 1
+      },
+      {
+        "item": "copper",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "fruit_salad": {
+    "name": "Fruit Salad",
+    "description": "",
+    "inputs": [
+      {
+        "item": "apple",
+        "count": 1
+      },
+      {
+        "item": "bunch_of_grapes",
+        "count": 1
+      },
+      {
+        "item": "banana",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fruit_salad",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "fruity_juice": {
+    "name": "Fruity Juice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 4
+      },
+      {
+        "item": "plum",
+        "count": 2
+      },
+      {
+        "item": "orange",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fruity_juice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "frying_pan": {
+    "name": "Frying Pan",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "tin",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "fuel_cell": {
+    "name": "Fuel Cell",
+    "description": "",
+    "inputs": [
+      {
+        "item": "jellisac_clump",
+        "count": 12
+      },
+      {
+        "item": "peat",
+        "count": 8
+      },
+      {
+        "item": "fuel_cell",
+        "count": 1
+      },
+      {
+        "item": "white_gas",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "fuelmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "fuel_cell",
+        "count": 1
+      }
+    ],
+    "durationSecs": 20,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "furniture_armchair": {
+    "name": "Armchair",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      },
+      {
+        "item": "wood_post",
+        "count": 1
+      },
+      {
+        "item": "fiber",
+        "count": 70
+      },
+      {
+        "item": "board",
+        "count": 4
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_armchair",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 150,
+    "category": "material"
+  },
+  "furniture_bed": {
+    "name": "Bed",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      },
+      {
+        "item": "fiber",
+        "count": 240
+      },
+      {
+        "item": "wood_post",
+        "count": 3
+      },
+      {
+        "item": "board",
+        "count": 8
+      },
+      {
+        "item": "snail",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_bed",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 180,
+    "category": "material"
+  },
+  "furniture_bench": {
+    "name": "Bench",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 1
+      },
+      {
+        "item": "board",
+        "count": 12
+      },
+      {
+        "item": "snail",
+        "count": 16
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_bench",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 150,
+    "category": "material"
+  },
+  "furniture_bookcase": {
+    "name": "Bookcase",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 20
+      },
+      {
+        "item": "plank",
+        "count": 20
+      },
+      {
+        "item": "snail",
+        "count": 40
+      }
+    ],
+    "tools": [
+      {
+        "item": "alchemical_tongs",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_bookcase",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 180,
+    "category": "material"
+  },
+  "furniture_ceilingdeco": {
+    "name": "Hanging Decoration",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_rod",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 6
+      },
+      {
+        "item": "string",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_ceilingdeco",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 100,
+    "category": "material"
+  },
+  "furniture_ceilinglamp": {
+    "name": "Ceiling Lamp",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      },
+      {
+        "item": "metal_rod",
+        "count": 1
+      },
+      {
+        "item": "bulb",
+        "count": 1
+      },
+      {
+        "item": "snail",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_ceilinglamp",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 100,
+    "category": "material"
+  },
+  "furniture_chair": {
+    "name": "Chair",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 1
+      },
+      {
+        "item": "board",
+        "count": 4
+      },
+      {
+        "item": "snail",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_chair",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 75,
+    "category": "material"
+  },
+  "furniture_coffeetable": {
+    "name": "Coffee Table",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 12
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_coffeetable",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 160,
+    "category": "material"
+  },
+  "furniture_counter": {
+    "name": "Counter",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 18
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_counter",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 125,
+    "category": "material"
+  },
+  "furniture_desk": {
+    "name": "Desk",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 1
+      },
+      {
+        "item": "board",
+        "count": 8
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_desk",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 150,
+    "category": "material"
+  },
+  "furniture_door": {
+    "name": "Door",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 8
+      },
+      {
+        "item": "board",
+        "count": 16
+      },
+      {
+        "item": "snail",
+        "count": 20
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_door",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 250,
+    "category": "material"
+  },
+  "furniture_fireplace": {
+    "name": "Fireplace",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 16
+      },
+      {
+        "item": "firefly_jar",
+        "count": 7
+      },
+      {
+        "item": "dullite",
+        "count": 120
+      },
+      {
+        "item": "barnacle_talc",
+        "count": 16
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_fireplace",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 200,
+    "category": "material"
+  },
+  "furniture_floorlamp": {
+    "name": "Floor Lamp",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      },
+      {
+        "item": "metal_rod",
+        "count": 2
+      },
+      {
+        "item": "bulb",
+        "count": 1
+      },
+      {
+        "item": "snail",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_floorlamp",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 150,
+    "category": "material"
+  },
+  "furniture_loveseat": {
+    "name": "Loveseat",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      },
+      {
+        "item": "fiber",
+        "count": 80
+      },
+      {
+        "item": "wood_post",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 6
+      },
+      {
+        "item": "snail",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_loveseat",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 180,
+    "category": "material"
+  },
+  "furniture_roomdeco": {
+    "name": "Room Decoration",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 12
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_roomdeco",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 125,
+    "category": "material"
+  },
+  "furniture_rug": {
+    "name": "Rug",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 2
+      },
+      {
+        "item": "string",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "loomer",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_rug",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 125,
+    "category": "material"
+  },
+  "furniture_shelf": {
+    "name": "Shelf",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_rod",
+        "count": 2
+      },
+      {
+        "item": "board",
+        "count": 6
+      },
+      {
+        "item": "snail",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_shelf",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 150,
+    "category": "material"
+  },
+  "furniture_sidetable": {
+    "name": "Side Table",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 4
+      },
+      {
+        "item": "snail",
+        "count": 10
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_sidetable",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 40,
+    "category": "material"
+  },
+  "furniture_sofa": {
+    "name": "Sofa",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 2
+      },
+      {
+        "item": "fiber",
+        "count": 160
+      },
+      {
+        "item": "wood_post",
+        "count": 2
+      },
+      {
+        "item": "snail",
+        "count": 8
+      },
+      {
+        "item": "plank",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_sofa",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 180,
+    "category": "material"
+  },
+  "furniture_stool": {
+    "name": "Stool",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 3
+      },
+      {
+        "item": "snail",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_stool",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 20,
+    "category": "material"
+  },
+  "furniture_table": {
+    "name": "Table",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 4
+      },
+      {
+        "item": "board",
+        "count": 6
+      },
+      {
+        "item": "snail",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_table",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 180,
+    "category": "material"
+  },
+  "furniture_tabledeco": {
+    "name": "Tabletop Decoration",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 4
+      },
+      {
+        "item": "snail",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_tabledeco",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 30,
+    "category": "material"
+  },
+  "furniture_tablelamp": {
+    "name": "Table Lamp",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      },
+      {
+        "item": "metal_rod",
+        "count": 1
+      },
+      {
+        "item": "bulb",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_tablelamp",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 75,
+    "category": "material"
+  },
+  "furniture_walldeco": {
+    "name": "Wall Decoration",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 4
+      },
+      {
+        "item": "string",
+        "count": 1
+      },
+      {
+        "item": "snail",
+        "count": 6
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_walldeco",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 60,
+    "category": "material"
+  },
+  "furniture_walllamp": {
+    "name": "Wall Lamp",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      },
+      {
+        "item": "metal_rod",
+        "count": 1
+      },
+      {
+        "item": "bulb",
+        "count": 1
+      },
+      {
+        "item": "snail",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "furniture_walllamp",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 75,
+    "category": "material"
+  },
+  "gammas_pancakes": {
+    "name": "Gamma's Pancakes",
+    "description": "",
+    "inputs": [
+      {
+        "item": "birch_syrup",
+        "count": 1
+      },
+      {
+        "item": "swing_batter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "gammas_pancakes",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "garlic": {
+    "name": "Garlic",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "garlic",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "gassifier": {
+    "name": "Gassifier",
+    "description": "",
+    "inputs": [
+      {
+        "item": "copper",
+        "count": 1
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "gassifier",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "general_fabric": {
+    "name": "General Fabric",
+    "description": "",
+    "inputs": [
+      {
+        "item": "thread",
+        "count": 21
+      }
+    ],
+    "tools": [
+      {
+        "item": "loomer",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "general_fabric",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 32,
+    "category": "material"
+  },
+  "ginger": {
+    "name": "Ginger",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "ginger",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "girder": {
+    "name": "Girder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "molybdenum",
+        "count": 8
+      },
+      {
+        "item": "plain_metal",
+        "count": 12
+      },
+      {
+        "item": "fuel_cell",
+        "count": 12
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "girder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 30,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "glitchepoix": {
+    "name": "Glitchepoix",
+    "description": "",
+    "inputs": [
+      {
+        "item": "onion",
+        "count": 2
+      },
+      {
+        "item": "carrot",
+        "count": 2
+      },
+      {
+        "item": "cabbage",
+        "count": 1
+      },
+      {
+        "item": "zucchini",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "glitchepoix",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "grade_aa_earth_block": {
+    "name": "Urth Block",
+    "description": "",
+    "inputs": [
+      {
+        "item": "earth",
+        "count": 5
+      },
+      {
+        "item": "loam",
+        "count": 2
+      },
+      {
+        "item": "heavy_gas",
+        "count": 1
+      },
+      {
+        "item": "fuel_cell",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "blockmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "grade_aa_earth_block",
+        "count": 1
+      }
+    ],
+    "durationSecs": 15,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "grand_ol_grinder": {
+    "name": "Grand Ol' Grinder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "molybdenum",
+        "count": 11
+      },
+      {
+        "item": "plain_metal",
+        "count": 17
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "grand_ol_grinder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 20,
+    "energyCost": 75,
+    "category": "tool"
+  },
+  "greasy_frybread": {
+    "name": "Greasy Frybread",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "greasy_frybread",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "green": {
+    "name": "Green",
+    "description": "",
+    "inputs": [
+      {
+        "item": "broccoli",
+        "count": 2
+      },
+      {
+        "item": "cucumber",
+        "count": 2
+      },
+      {
+        "item": "spinach",
+        "count": 3
+      },
+      {
+        "item": "cabbage",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "green",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "green_eggs": {
+    "name": "Green Eggs",
+    "description": "",
+    "inputs": [
+      {
+        "item": "spinach",
+        "count": 1
+      },
+      {
+        "item": "egg_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "green_eggs",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 1,
+    "category": "food"
+  },
+  "grendalinunin": {
+    "name": "Grendalinunin",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 17
+      },
+      {
+        "item": "element_green",
+        "count": 7
+      },
+      {
+        "item": "element_blue",
+        "count": 4
+      },
+      {
+        "item": "element_shiny",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "grendalinunin",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "grilled_cheese": {
+    "name": "Grilled Cheese",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bun",
+        "count": 2
+      },
+      {
+        "item": "cheese",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "grilled_cheese",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "groddlene": {
+    "name": "Groddlene",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 6
+      },
+      {
+        "item": "element_green",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "groddlene",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "gurly_drink": {
+    "name": "Gurly Drink",
+    "description": "",
+    "inputs": [
+      {
+        "item": "fruity_juice",
+        "count": 1
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "ginger",
+        "count": 1
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "gurly_drink",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 16,
+    "category": "food"
+  },
+  "hard_bubble": {
+    "name": "Hard Bubble",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_bubble",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "bubble_tuner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hard_bubble",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "hash": {
+    "name": "Hash",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "potato",
+        "count": 2
+      },
+      {
+        "item": "corn",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hash",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "hatchet": {
+    "name": "Hatchet",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plank",
+        "count": 2
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "barnacle_talc",
+        "count": 1
+      },
+      {
+        "item": "plain_bubble",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hatchet",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 15,
+    "category": "tool"
+  },
+  "hearty_groddle_sammich": {
+    "name": "Hearty Groddle Sammich",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "hot_n_fizzy_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hearty_groddle_sammich",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 11,
+    "category": "food"
+  },
+  "hearty_omelet": {
+    "name": "Hearty Omelet",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 2
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "mushroom",
+        "count": 2
+      },
+      {
+        "item": "hot_n_fizzy_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hearty_omelet",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 13,
+    "category": "food"
+  },
+  "heavy_gas": {
+    "name": "Heavy Gas",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_vapour",
+        "count": 6
+      }
+    ],
+    "tools": [
+      {
+        "item": "gassifier",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "heavy_gas",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "helium": {
+    "name": "Helium",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_vapour",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "gassifier",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "helium",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 9,
+    "category": "material"
+  },
+  "heston_mash": {
+    "name": "Heston Mash",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hot_potatoes",
+        "count": 2
+      },
+      {
+        "item": "wavy_gravy",
+        "count": 1
+      },
+      {
+        "item": "kings_of_condiments",
+        "count": 1
+      },
+      {
+        "item": "garlic",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "heston_mash",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 43,
+    "category": "food"
+  },
+  "high_class_hoe": {
+    "name": "High-Class Hoe",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plank",
+        "count": 2
+      },
+      {
+        "item": "plain_metal",
+        "count": 5
+      },
+      {
+        "item": "molybdenum",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "high_class_hoe",
+        "count": 1
+      }
+    ],
+    "durationSecs": 20,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "hoe": {
+    "name": "Hoe",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plank",
+        "count": 1
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hoe",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 15,
+    "category": "tool"
+  },
+  "hot_n_fizzy_sauce": {
+    "name": "Hot 'n' Fizzy Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hot_pepper",
+        "count": 1
+      },
+      {
+        "item": "plain_bubble",
+        "count": 3
+      },
+      {
+        "item": "roux",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hot_n_fizzy_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "hot_pepper": {
+    "name": "Hot Pepper",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hot_pepper",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "hot_potatoes": {
+    "name": "Hot Potatoes",
+    "description": "",
+    "inputs": [
+      {
+        "item": "potato",
+        "count": 6
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hot_potatoes",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "hototot_rub": {
+    "name": "Hototot Rub",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cumin",
+        "count": 2
+      },
+      {
+        "item": "saffron",
+        "count": 1
+      },
+      {
+        "item": "turmeric",
+        "count": 1
+      },
+      {
+        "item": "curry",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hototot_rub",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "humbabol": {
+    "name": "Humbabol",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_blue",
+        "count": 1
+      },
+      {
+        "item": "element_shiny",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "humbabol",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "hungry_nachos": {
+    "name": "Hungry Nachos",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tortilla",
+        "count": 3
+      },
+      {
+        "item": "cheezy_sauce",
+        "count": 1
+      },
+      {
+        "item": "legumes_parisienne",
+        "count": 1
+      },
+      {
+        "item": "death_to_veg",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "hungry_nachos",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 36,
+    "category": "food"
+  },
+  "irrigator_9000": {
+    "name": "Irrigator 9000",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 7
+      },
+      {
+        "item": "molybdenum",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "irrigator_9000",
+        "count": 1
+      }
+    ],
+    "durationSecs": 20,
+    "energyCost": 50,
+    "category": "tool"
+  },
+  "ixite": {
+    "name": "Ixite",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 2
+      },
+      {
+        "item": "element_green",
+        "count": 3
+      },
+      {
+        "item": "element_blue",
+        "count": 2
+      },
+      {
+        "item": "element_shiny",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "ixite",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "ixstyle_braised_meat": {
+    "name": "Ix-style Braised Meat",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 5
+      },
+      {
+        "item": "blue_bubble",
+        "count": 4
+      },
+      {
+        "item": "naraka_flame_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "ixstyle_braised_meat",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 26,
+    "category": "food"
+  },
+  "juicy_carpaccio": {
+    "name": "Juicy Carpaccio",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "spinach",
+        "count": 2
+      },
+      {
+        "item": "kings_of_condiments",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "juicy_carpaccio",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "juju_shoo_shoo_powder": {
+    "name": "Juju Shoo-Shoo Powder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tiite",
+        "count": 25
+      },
+      {
+        "item": "groddlene",
+        "count": 75
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "juju_shoo_shoo_powder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 10,
+    "category": "material"
+  },
+  "kind_breakfurst_burrito": {
+    "name": "Kind BreakfURst Burrito (TM)",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tortilla",
+        "count": 1
+      },
+      {
+        "item": "legumes_parisienne",
+        "count": 1
+      },
+      {
+        "item": "green",
+        "count": 1
+      },
+      {
+        "item": "hototot_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "kind_breakfurst_burrito",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 28,
+    "category": "food"
+  },
+  "kings_of_condiments": {
+    "name": "King of Condiments",
+    "description": "",
+    "inputs": [
+      {
+        "item": "pinch_of_salt",
+        "count": 3
+      },
+      {
+        "item": "black_pepper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "kings_of_condiments",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "knife_and_board": {
+    "name": "Knife & Board",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plank",
+        "count": 4
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 10,
+    "category": "tool"
+  },
+  "krazy_salts": {
+    "name": "Krazy Salts",
+    "description": "",
+    "inputs": [
+      {
+        "item": "lemene",
+        "count": 11
+      },
+      {
+        "item": "ixite",
+        "count": 11
+      },
+      {
+        "item": "tiite",
+        "count": 11
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "krazy_salts",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 11,
+    "category": "material"
+  },
+  "laughing_gas": {
+    "name": "Laughing Gas",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_vapour",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "gassifier",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "laughing_gas",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "material"
+  },
+  "lazy_salad": {
+    "name": "Lazy Salad",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tomato",
+        "count": 2
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "lazy_salad",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "legumes_parisienne": {
+    "name": "Legumes Abbassidienne",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bean_plain",
+        "count": 17
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "legumes_parisienne",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "lemburger": {
+    "name": "Lemburger",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "creamy_catsup",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "lemburger",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 19,
+    "category": "food"
+  },
+  "lemene": {
+    "name": "Lemene",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 4
+      },
+      {
+        "item": "element_green",
+        "count": 3
+      },
+      {
+        "item": "element_blue",
+        "count": 2
+      },
+      {
+        "item": "element_shiny",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "lemene",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "lemon": {
+    "name": "Lemon",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "lemon",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "lemon_juice": {
+    "name": "Lemon Juice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "lemon",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "lemon_juice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "licorice": {
+    "name": "Licorice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "licorice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "lotsa_lox": {
+    "name": "Lotsa Lox",
+    "description": "",
+    "inputs": [
+      {
+        "item": "salmon",
+        "count": 1
+      },
+      {
+        "item": "onion",
+        "count": 1
+      },
+      {
+        "item": "lemon",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "lotsa_lox",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "luxury_tortellini": {
+    "name": "Luxury Tortellini",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_noodles",
+        "count": 2
+      },
+      {
+        "item": "cheese_very_very_stinky",
+        "count": 2
+      },
+      {
+        "item": "wicked_bolognese_sauce",
+        "count": 1
+      },
+      {
+        "item": "green",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "luxury_tortellini",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 54,
+    "category": "food"
+  },
+  "mabbish_coffee": {
+    "name": "Mabbish Coffee",
+    "description": "",
+    "inputs": [
+      {
+        "item": "coffee",
+        "count": 1
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "milk_butterfly",
+        "count": 1
+      },
+      {
+        "item": "cinnamon",
+        "count": 1
+      },
+      {
+        "item": "plain_bubble",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mabbish_coffee",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "mabon": {
+    "name": "Mabon",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_green",
+        "count": 7
+      },
+      {
+        "item": "element_blue",
+        "count": 7
+      },
+      {
+        "item": "element_shiny",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mabon",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "maburger_royale": {
+    "name": "Maburger Royale",
+    "description": "",
+    "inputs": [
+      {
+        "item": "urfu",
+        "count": 1
+      },
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "cheese_very_stinky",
+        "count": 1
+      },
+      {
+        "item": "death_to_veg",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "maburger_royale",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 25,
+    "category": "food"
+  },
+  "machine_stand": {
+    "name": "Machine Stand",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 1
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "machine_stand",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3.333,
+    "energyCost": 80,
+    "category": "material"
+  },
+  "mangosteen": {
+    "name": "Mangosteen",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mangosteen",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "meat_collector": {
+    "name": "Meat Collector",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 5
+      },
+      {
+        "item": "plain_metal",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "meat_collector",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 30,
+    "category": "material"
+  },
+  "meat_gumbo": {
+    "name": "Meat Gumbo",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "stock_sauce",
+        "count": 1
+      },
+      {
+        "item": "glitchepoix",
+        "count": 1
+      },
+      {
+        "item": "hototot_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "meat_gumbo",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 29,
+    "category": "food"
+  },
+  "meat_tetrazzini": {
+    "name": "Meat Tetrazzini",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "plain_noodles",
+        "count": 1
+      },
+      {
+        "item": "tangy_sauce",
+        "count": 1
+      },
+      {
+        "item": "mushroom",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "meat_tetrazzini",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 32,
+    "category": "food"
+  },
+  "mega_healthy_veggie_juice": {
+    "name": "Mega Healthy Veggie Juice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "carrot",
+        "count": 1
+      },
+      {
+        "item": "cabbage",
+        "count": 1
+      },
+      {
+        "item": "parsnip",
+        "count": 1
+      },
+      {
+        "item": "mangosteen",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mega_healthy_veggie_juice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "messy_fry_up": {
+    "name": "Messy Fry-Up",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 2
+      },
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "potato",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "messy_fry_up",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "metal_post": {
+    "name": "Metal Bar",
+    "description": "",
+    "inputs": [
+      {
+        "item": "copper",
+        "count": 2
+      },
+      {
+        "item": "tin",
+        "count": 3
+      },
+      {
+        "item": "fuel_cell",
+        "count": 6
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "metal_post",
+        "count": 1
+      }
+    ],
+    "durationSecs": 20,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "metal_rod": {
+    "name": "Metal Rod",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 1
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "fuel_cell",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "metal_rod",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "metalmaker_mechanism": {
+    "name": "Metalmaker Mechanism",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 2
+      },
+      {
+        "item": "molybdenum",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "metalmaker_mechanism",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3.333,
+    "energyCost": 120,
+    "category": "material"
+  },
+  "metalmaker_tooler": {
+    "name": "Metalmaker Tooler",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 2
+      },
+      {
+        "item": "metal_rod",
+        "count": 2
+      },
+      {
+        "item": "molybdenum",
+        "count": 2
+      },
+      {
+        "item": "tin",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "metalmaker_tooler",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3.333,
+    "energyCost": 175,
+    "category": "material"
+  },
+  "mexicali_eggs": {
+    "name": "Mexicali Eggs",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 2
+      },
+      {
+        "item": "bean_plain",
+        "count": 3
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "tortilla",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mexicali_eggs",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "mike_tyson_grill": {
+    "name": "Famous Pugilist Grill",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "copper",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "mild_sauce": {
+    "name": "Mild Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      },
+      {
+        "item": "milk_butterfly",
+        "count": 1
+      },
+      {
+        "item": "olive_oil",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mild_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "molybdenum": {
+    "name": "Molybdenum",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "element_blue",
+        "count": 5
+      },
+      {
+        "item": "element_shiny",
+        "count": 50
+      }
+    ],
+    "tools": [
+      {
+        "item": "alchemical_tongs",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "molybdenum",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "material"
+  },
+  "mustard": {
+    "name": "Mustard",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "mustard",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "naraka_flame_rub": {
+    "name": "Naraka Flame Rub",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ginger",
+        "count": 3
+      },
+      {
+        "item": "hot_pepper",
+        "count": 8
+      },
+      {
+        "item": "mustard",
+        "count": 2
+      },
+      {
+        "item": "garlic",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "naraka_flame_rub",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 10,
+    "category": "food"
+  },
+  "no_no_powder": {
+    "name": "No-No Powder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "lemene",
+        "count": 4
+      },
+      {
+        "item": "cosmox",
+        "count": 11
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "no_no_powder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "material"
+  },
+  "note_pole": {
+    "name": "Note Pole",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 1
+      },
+      {
+        "item": "metal_rod",
+        "count": 2
+      },
+      {
+        "item": "snail",
+        "count": 4
+      },
+      {
+        "item": "plank",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "note_pole",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3,
+    "energyCost": 50,
+    "category": "material"
+  },
+  "nutmeg": {
+    "name": "Nutmeg",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "nutmeg",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "oaty_cake": {
+    "name": "Oaty Cake",
+    "description": "",
+    "inputs": [
+      {
+        "item": "oats",
+        "count": 1
+      },
+      {
+        "item": "birch_syrup",
+        "count": 1
+      },
+      {
+        "item": "egg_plain",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "oaty_cake",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "obvious_panini": {
+    "name": "Obvious Panini",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "secret_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "obvious_panini",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 14,
+    "category": "food"
+  },
+  "older_spice": {
+    "name": "Old(er) Spice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "older_spice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "onion_rings": {
+    "name": "Onion Rings",
+    "description": "",
+    "inputs": [
+      {
+        "item": "onion",
+        "count": 1
+      },
+      {
+        "item": "swing_batter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "onion_rings",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "onion_sauce": {
+    "name": "Onion Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "nutmeg",
+        "count": 1
+      },
+      {
+        "item": "onion",
+        "count": 2
+      },
+      {
+        "item": "roux",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "onion_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "orange": {
+    "name": "Orange",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "orange",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "orange_juice": {
+    "name": "Orange Juice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "orange",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "orange_juice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "ore_grinder": {
+    "name": "Grinder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "molybdenum",
+        "count": 1
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "ore_grinder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 30,
+    "category": "tool"
+  },
+  "pad_tii": {
+    "name": "Pad Tii",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_noodles",
+        "count": 2
+      },
+      {
+        "item": "urfu",
+        "count": 1
+      },
+      {
+        "item": "egg_plain",
+        "count": 2
+      },
+      {
+        "item": "naraka_flame_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pad_tii",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 33,
+    "category": "food"
+  },
+  "papl_upside_down_pizza": {
+    "name": "Pineapple Upside Down Pizza",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cheese",
+        "count": 2
+      },
+      {
+        "item": "pineapple",
+        "count": 1
+      },
+      {
+        "item": "swing_batter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "papl_upside_down_pizza",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 11,
+    "category": "food"
+  },
+  "pi": {
+    "name": "Pi",
+    "description": "",
+    "inputs": [
+      {
+        "item": "flour",
+        "count": 14
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 7
+      },
+      {
+        "item": "older_spice",
+        "count": 3
+      },
+      {
+        "item": "tiite",
+        "count": 22
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pi",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 14,
+    "category": "food"
+  },
+  "pick": {
+    "name": "Pick",
+    "description": "",
+    "inputs": [
+      {
+        "item": "copper",
+        "count": 3
+      },
+      {
+        "item": "plain_metal",
+        "count": 5
+      },
+      {
+        "item": "plank",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pick",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 30,
+    "category": "tool"
+  },
+  "pickle": {
+    "name": "Pickle",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cucumber",
+        "count": 1
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      },
+      {
+        "item": "olive_oil",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pickle",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "piggy_egg": {
+    "name": "Piggy Egg",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hard_bubble",
+        "count": 7
+      },
+      {
+        "item": "potato",
+        "count": 2
+      },
+      {
+        "item": "apple",
+        "count": 3
+      },
+      {
+        "item": "egg_plain",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "egg_seasoner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "piggy_egg",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 20,
+    "category": "material"
+  },
+  "piggy_feeder": {
+    "name": "Piggy Feeder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 2
+      },
+      {
+        "item": "plain_metal",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "piggy_feeder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 30,
+    "category": "material"
+  },
+  "pinch_of_salt": {
+    "name": "Pinch of Salt",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 1,
+    "category": "food"
+  },
+  "pineapple": {
+    "name": "Pineapple",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pineapple",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "plain_crystal": {
+    "name": "Plain Crystal",
+    "description": "",
+    "inputs": [
+      {
+        "item": "barnacle_talc",
+        "count": 7
+      },
+      {
+        "item": "firefly_jar",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "crystallizer",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "plain_crystal",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 134,
+    "category": "material"
+  },
+  "plain_noodles": {
+    "name": "Plain Noodles",
+    "description": "",
+    "inputs": [
+      {
+        "item": "flour",
+        "count": 1
+      },
+      {
+        "item": "rice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "plain_noodles",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
   },
   "plank": {
     "name": "Plank",
     "description": "Processed lumber.",
-    "inputs": [{ "item": "wood", "count": 3 }],
+    "inputs": [
+      {
+        "item": "wood",
+        "count": 3
+      }
+    ],
     "tools": [],
-    "outputs": [{ "item": "plank", "count": 2 }],
-    "durationSecs": 4.0,
-    "energyCost": 6.0,
+    "outputs": [
+      {
+        "item": "plank",
+        "count": 2
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 6,
+    "category": "material"
+  },
+  "plum": {
+    "name": "Plum",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "plum",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "potato_patty": {
+    "name": "Potato Patty",
+    "description": "",
+    "inputs": [
+      {
+        "item": "potato",
+        "count": 1
+      },
+      {
+        "item": "onion",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potato_patty",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "potcorn": {
+    "name": "Potcorn",
+    "description": "",
+    "inputs": [
+      {
+        "item": "corn",
+        "count": 3
+      },
+      {
+        "item": "olive_oil",
+        "count": 2
+      },
+      {
+        "item": "potoxin",
+        "count": 3
+      },
+      {
+        "item": "paper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potcorn",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 11,
+    "category": "food"
+  },
+  "potians_feast": {
+    "name": "Potian's Feast",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ixstyle_braised_meat",
+        "count": 1
+      },
+      {
+        "item": "vegmageddon",
+        "count": 1
+      },
+      {
+        "item": "heston_mash",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potians_feast",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 75,
+    "category": "food"
+  },
+  "potion_alphabet_sauce": {
+    "name": "Alphabet Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_silvertongue",
+        "count": 1
+      },
+      {
+        "item": "helium",
+        "count": 2
+      },
+      {
+        "item": "rubemycin",
+        "count": 6
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_alphabet_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 30,
+    "category": "tool"
+  },
+  "potion_amorous_philtre": {
+    "name": "Amorous Philtre",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_purple",
+        "count": 1
+      },
+      {
+        "item": "laughing_gas",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_amorous_philtre",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 45,
+    "category": "tool"
+  },
+  "potion_ancestral_spirits": {
+    "name": "Ancestral Spirits",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_hairball",
+        "count": 2
+      },
+      {
+        "item": "essence_of_silvertongue",
+        "count": 1
+      },
+      {
+        "item": "essence_of_rubeweed",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_ancestral_spirits",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 80,
+    "category": "tool"
+  },
+  "potion_animal_youth": {
+    "name": "Potion of Animal Youth",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_gandlevery",
+        "count": 3
+      },
+      {
+        "item": "essence_of_purple",
+        "count": 1
+      },
+      {
+        "item": "blue_bubble",
+        "count": 13
+      },
+      {
+        "item": "guano",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_animal_youth",
+        "count": 1
+      }
+    ],
+    "durationSecs": 6,
+    "energyCost": 60,
+    "category": "tool"
+  },
+  "potion_avatar_large": {
+    "name": "Embiggenifying Potion",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_purple",
+        "count": 1
+      },
+      {
+        "item": "heavy_gas",
+        "count": 3
+      },
+      {
+        "item": "laughing_gas",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_avatar_large",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "potion_avatar_mixup": {
+    "name": "Phreaky Philter",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_purple",
+        "count": 2
+      },
+      {
+        "item": "essence_of_yellow_crumb",
+        "count": 2
+      },
+      {
+        "item": "krazy_salts",
+        "count": 3
+      },
+      {
+        "item": "laughing_gas",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_avatar_mixup",
+        "count": 1
+      }
+    ],
+    "durationSecs": 6,
+    "energyCost": 50,
+    "category": "tool"
+  },
+  "potion_avatar_small": {
+    "name": "De-Embiggenifying Potion",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_purple",
+        "count": 1
+      },
+      {
+        "item": "helium",
+        "count": 5
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 11
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_avatar_small",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "potion_charades": {
+    "name": "Charades Potion",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_silvertongue",
+        "count": 1
+      },
+      {
+        "item": "laughing_gas",
+        "count": 1
+      },
+      {
+        "item": "crying_gas",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_charades",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "potion_chris": {
+    "name": "Door Drink",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_rubeweed",
+        "count": 1
+      },
+      {
+        "item": "essence_of_gandlevery",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_chris",
+        "count": 1
+      }
+    ],
+    "durationSecs": 6,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "potion_elixir_of_avarice": {
+    "name": "Elixir of Avarice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_hairball",
+        "count": 1
+      },
+      {
+        "item": "essence_of_silvertongue",
+        "count": 1
+      },
+      {
+        "item": "helium",
+        "count": 3
+      },
+      {
+        "item": "krazy_salts",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_elixir_of_avarice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 60,
+    "category": "tool"
+  },
+  "potion_favor": {
+    "name": "Draught of Giant Amicability",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_silvertongue",
+        "count": 2
+      },
+      {
+        "item": "essence_of_yellow_crumb",
+        "count": 2
+      },
+      {
+        "item": "essence_of_rubeweed",
+        "count": 1
+      },
+      {
+        "item": "krazy_salts",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_favor",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 100,
+    "category": "tool"
+  },
+  "potion_garden_clear": {
+    "name": "Liquid Super-Hoe",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_hairball",
+        "count": 1
+      },
+      {
+        "item": "essence_of_rookswort",
+        "count": 1
+      },
+      {
+        "item": "white_gas",
+        "count": 5
+      },
+      {
+        "item": "hard_bubble",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_garden_clear",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 60,
+    "category": "tool"
+  },
+  "potion_garden_fertilize": {
+    "name": "Dung-Kicker Drops",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_hairball",
+        "count": 1
+      },
+      {
+        "item": "essence_of_gandlevery",
+        "count": 1
+      },
+      {
+        "item": "crying_gas",
+        "count": 5
+      },
+      {
+        "item": "guano",
+        "count": 50
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_garden_fertilize",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 80,
+    "category": "tool"
+  },
+  "potion_garden_harvest": {
+    "name": "Manyharvest Cordial",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_silvertongue",
+        "count": 2
+      },
+      {
+        "item": "essence_of_rubeweed",
+        "count": 2
+      },
+      {
+        "item": "helium",
+        "count": 5
+      },
+      {
+        "item": "hard_bubble",
+        "count": 11
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_garden_harvest",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 75,
+    "category": "tool"
+  },
+  "potion_garden_plant": {
+    "name": "Seed-Dibber Libation",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_gandlevery",
+        "count": 2
+      },
+      {
+        "item": "essence_of_yellow_crumb",
+        "count": 2
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 5
+      },
+      {
+        "item": "heavy_gas",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_garden_plant",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 70,
+    "category": "tool"
+  },
+  "potion_garden_water": {
+    "name": "Soak-All Solution",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_gandlevery",
+        "count": 3
+      },
+      {
+        "item": "essence_of_silvertongue",
+        "count": 2
+      },
+      {
+        "item": "blue_bubble",
+        "count": 11
+      },
+      {
+        "item": "crying_gas",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_garden_water",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 60,
+    "category": "tool"
+  },
+  "potion_keycutter_tonic": {
+    "name": "Keycutter Tonic",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_rubeweed",
+        "count": 1
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 11
+      },
+      {
+        "item": "krazy_salts",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_keycutter_tonic",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "potion_rainbow_juice": {
+    "name": "Rainbow Juice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "blue_bubble",
+        "count": 11
+      },
+      {
+        "item": "green_eggs",
+        "count": 11
+      },
+      {
+        "item": "strawberry",
+        "count": 13
+      },
+      {
+        "item": "orange_juice",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_rainbow_juice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 35,
+    "category": "tool"
+  },
+  "potion_rocky_regeneration_solution": {
+    "name": "Rocky Regeneration Solution",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_gandlevery",
+        "count": 7
+      },
+      {
+        "item": "heavy_gas",
+        "count": 14
+      },
+      {
+        "item": "hard_bubble",
+        "count": 14
+      },
+      {
+        "item": "krazy_salts",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_rocky_regeneration_solution",
+        "count": 1
+      }
+    ],
+    "durationSecs": 6,
+    "energyCost": 75,
+    "category": "tool"
+  },
+  "potion_rook_balm": {
+    "name": "Rook Balm",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_rookswort",
+        "count": 1
+      },
+      {
+        "item": "white_gas",
+        "count": 3
+      },
+      {
+        "item": "krazy_salts",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_rook_balm",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 45,
+    "category": "tool"
+  },
+  "potion_trantsformation_fluid": {
+    "name": "Trantsformation Fluid",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_rookswort",
+        "count": 2
+      },
+      {
+        "item": "essence_of_yellow_crumb",
+        "count": 1
+      },
+      {
+        "item": "essence_of_rubeweed",
+        "count": 1
+      },
+      {
+        "item": "guano",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_trantsformation_fluid",
+        "count": 1
+      }
+    ],
+    "durationSecs": 4,
+    "energyCost": 90,
+    "category": "tool"
+  },
+  "potion_tree_poison": {
+    "name": "Tree Poison",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_rookswort",
+        "count": 1
+      },
+      {
+        "item": "diabolic_acid",
+        "count": 13
+      },
+      {
+        "item": "krazy_salts",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_tree_poison",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 30,
+    "category": "tool"
+  },
+  "potion_tree_poison_antidote": {
+    "name": "Tree Poison Antidote",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_gandlevery",
+        "count": 1
+      },
+      {
+        "item": "spriggase",
+        "count": 5
+      },
+      {
+        "item": "friendly_acid",
+        "count": 7
+      },
+      {
+        "item": "guano",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_tree_poison_antidote",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "potion_xp": {
+    "name": "Draught of Wisdom",
+    "description": "",
+    "inputs": [
+      {
+        "item": "essence_of_silvertongue",
+        "count": 3
+      },
+      {
+        "item": "essence_of_gandlevery",
+        "count": 3
+      },
+      {
+        "item": "essence_of_hairball",
+        "count": 1
+      },
+      {
+        "item": "essence_of_purple",
+        "count": 1
+      },
+      {
+        "item": "guano",
+        "count": 23
+      }
+    ],
+    "tools": [
+      {
+        "item": "cauldron",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potion_xp",
+        "count": 1
+      }
+    ],
+    "durationSecs": 8,
+    "energyCost": 70,
+    "category": "tool"
+  },
+  "potoxin": {
+    "name": "Potoxin",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 7
+      },
+      {
+        "item": "element_green",
+        "count": 11
+      },
+      {
+        "item": "element_blue",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "potoxin",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "pottine": {
+    "name": "Pottine",
+    "description": "",
+    "inputs": [
+      {
+        "item": "potato",
+        "count": 4
+      },
+      {
+        "item": "wavy_gravy",
+        "count": 1
+      },
+      {
+        "item": "cheese_stinky",
+        "count": 1
+      },
+      {
+        "item": "olive_oil",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pottine",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 25,
+    "category": "food"
+  },
+  "powder_of_mild_fecundity": {
+    "name": "Powder of Mild Fecundity",
+    "description": "",
+    "inputs": [
+      {
+        "item": "alphose",
+        "count": 40
+      },
+      {
+        "item": "rubemycin",
+        "count": 45
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "powder_of_mild_fecundity",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 20,
+    "category": "material"
+  },
+  "powder_of_startling_fecundity": {
+    "name": "Powder of Startling Fecundity",
+    "description": "",
+    "inputs": [
+      {
+        "item": "grendalinunin",
+        "count": 60
+      },
+      {
+        "item": "rubemycin",
+        "count": 75
+      },
+      {
+        "item": "cosmox",
+        "count": 50
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "powder_of_startling_fecundity",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 50,
+    "category": "material"
+  },
+  "precious_potato_salad": {
+    "name": "Precious Potato Salad",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hot_potatoes",
+        "count": 2
+      },
+      {
+        "item": "vegmageddon",
+        "count": 1
+      },
+      {
+        "item": "trump_rub",
+        "count": 1
+      },
+      {
+        "item": "stock_sauce",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "precious_potato_salad",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 61,
+    "category": "food"
+  },
+  "proper_rice": {
+    "name": "Proper Rice",
+    "description": "",
+    "inputs": [
+      {
+        "item": "rice",
+        "count": 3
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "proper_rice",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "pumpkin_ale": {
+    "name": "Pumpkin Ale",
+    "description": "",
+    "inputs": [
+      {
+        "item": "pumpkin",
+        "count": 1
+      },
+      {
+        "item": "beer",
+        "count": 1
+      },
+      {
+        "item": "cinnamon",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pumpkin_ale",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 10,
+    "category": "food"
+  },
+  "pumpkin_pie": {
+    "name": "Pumpkin Pie",
+    "description": "",
+    "inputs": [
+      {
+        "item": "flour",
+        "count": 1
+      },
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      },
+      {
+        "item": "nutmeg",
+        "count": 1
+      },
+      {
+        "item": "pumpkin",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pumpkin_pie",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 12,
+    "category": "food"
+  },
+  "pungent_sunrise": {
+    "name": "Pungent Sunrise",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "fruit_salad",
+        "count": 1
+      },
+      {
+        "item": "exotic_juice",
+        "count": 1
+      },
+      {
+        "item": "camphor",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "pungent_sunrise",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 20,
+    "category": "food"
+  },
+  "red": {
+    "name": "Red",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tomato",
+        "count": 2
+      },
+      {
+        "item": "onion",
+        "count": 1
+      },
+      {
+        "item": "milk_butterfly",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "red",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "rich_tagine": {
+    "name": "Rich Tagine",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 3
+      },
+      {
+        "item": "trump_rub",
+        "count": 1
+      },
+      {
+        "item": "glitchepoix",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "rich_tagine",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 34,
+    "category": "food"
+  },
+  "roux": {
+    "name": "Roux",
+    "description": "",
+    "inputs": [
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      },
+      {
+        "item": "flour",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "roux",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "rubemycin": {
+    "name": "Rubemycin",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 5
+      },
+      {
+        "item": "element_green",
+        "count": 3
+      },
+      {
+        "item": "element_blue",
+        "count": 2
+      },
+      {
+        "item": "element_shiny",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "rubemycin",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "saffron": {
+    "name": "Saffron",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "saffron",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "salmon_jaella": {
+    "name": "Salmon Jaella",
+    "description": "",
+    "inputs": [
+      {
+        "item": "proper_rice",
+        "count": 1
+      },
+      {
+        "item": "salmon",
+        "count": 3
+      },
+      {
+        "item": "legumes_parisienne",
+        "count": 1
+      },
+      {
+        "item": "glitchepoix",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "salmon_jaella",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 22,
+    "category": "food"
+  },
+  "sammich": {
+    "name": "Sammich",
+    "description": "",
+    "inputs": [
+      {
+        "item": "bun",
+        "count": 1
+      },
+      {
+        "item": "meat",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sammich",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "saucepan": {
+    "name": "Saucepan",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "copper",
+        "count": 1
+      },
+      {
+        "item": "tin",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 15,
+    "category": "tool"
+  },
+  "savory_smoothie": {
+    "name": "Savory Smoothie",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "oily_dressing",
+        "count": 1
+      },
+      {
+        "item": "hard_bubble",
+        "count": 3
+      },
+      {
+        "item": "all_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "savory_smoothie",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 10,
+    "category": "food"
+  },
+  "scraper": {
+    "name": "Scraper",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 1
+      },
+      {
+        "item": "copper",
+        "count": 1
+      },
+      {
+        "item": "molybdenum",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "scraper",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "scrumptious_frittata": {
+    "name": "Scrumptious Frittata",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 2
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "spinach",
+        "count": 1
+      },
+      {
+        "item": "kings_of_condiments",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "scrumptious_frittata",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "secret_sauce": {
+    "name": "Secret Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "egg_plain",
+        "count": 1
+      },
+      {
+        "item": "black_pepper",
+        "count": 1
+      },
+      {
+        "item": "roux",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "secret_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "shovel": {
+    "name": "Shovel",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 3
+      },
+      {
+        "item": "plain_metal",
+        "count": 2
+      },
+      {
+        "item": "plank",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "shovel",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "simple_bbq": {
+    "name": "Simple BBQ",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "sweet_n_sour_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "simple_bbq",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 14,
+    "category": "food"
+  },
+  "simple_slaw": {
+    "name": "Simple Slaw",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cabbage",
+        "count": 1
+      },
+      {
+        "item": "corn",
+        "count": 1
+      },
+      {
+        "item": "bean_plain",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "simple_slaw",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "slow_gin_fizz": {
+    "name": "Slow Gin Fizz",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "fruity_juice",
+        "count": 1
+      },
+      {
+        "item": "blue_bubble",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "slow_gin_fizz",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "smelter": {
+    "name": "Smelter",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 2
+      },
+      {
+        "item": "copper",
+        "count": 2
+      },
+      {
+        "item": "molybdenum",
+        "count": 2
+      },
+      {
+        "item": "barnacle_talc",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "smelter",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 50,
+    "category": "tool"
+  },
+  "snack_pack": {
+    "name": "Snack Pack",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "apple",
+        "count": 1
+      },
+      {
+        "item": "pickle",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "snack_pack",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "sneezing_powder": {
+    "name": "Sneezing Powder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ixite",
+        "count": 20
+      },
+      {
+        "item": "tiite",
+        "count": 65
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sneezing_powder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "material"
+  },
+  "sno_cone_blue": {
+    "name": "Blue Sno Cone",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ice",
+        "count": 2
+      },
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "element_blue",
+        "count": 89
+      },
+      {
+        "item": "paper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sno_cone_blue",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "sno_cone_green": {
+    "name": "Green Sno Cone",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ice",
+        "count": 2
+      },
+      {
+        "item": "hooch",
+        "count": 2
+      },
+      {
+        "item": "element_green",
+        "count": 277
+      },
+      {
+        "item": "paper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sno_cone_green",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 12,
+    "category": "food"
+  },
+  "sno_cone_orange": {
+    "name": "Orange Sno Cone",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ice",
+        "count": 3
+      },
+      {
+        "item": "hooch",
+        "count": 2
+      },
+      {
+        "item": "element_red",
+        "count": 577
+      },
+      {
+        "item": "element_green",
+        "count": 409
+      },
+      {
+        "item": "paper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sno_cone_orange",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 23,
+    "category": "food"
+  },
+  "sno_cone_purple": {
+    "name": "Purple Sno Cone",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ice",
+        "count": 5
+      },
+      {
+        "item": "hooch",
+        "count": 3
+      },
+      {
+        "item": "element_red",
+        "count": 977
+      },
+      {
+        "item": "element_blue",
+        "count": 977
+      },
+      {
+        "item": "element_shiny",
+        "count": 409
+      },
+      {
+        "item": "paper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sno_cone_purple",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 85,
+    "category": "food"
+  },
+  "sno_cone_rainbow": {
+    "name": "Rainbo Sno Cone",
+    "description": "",
+    "inputs": [
+      {
+        "item": "sno_cone_blue",
+        "count": 1
+      },
+      {
+        "item": "sno_cone_green",
+        "count": 1
+      },
+      {
+        "item": "sno_cone_orange",
+        "count": 1
+      },
+      {
+        "item": "sno_cone_red",
+        "count": 1
+      },
+      {
+        "item": "sno_cone_purple",
+        "count": 1
+      },
+      {
+        "item": "paper",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sno_cone_rainbow",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 111,
+    "category": "food"
+  },
+  "sno_cone_red": {
+    "name": "Red Sno Cone",
+    "description": "",
+    "inputs": [
+      {
+        "item": "ice",
+        "count": 4
+      },
+      {
+        "item": "hooch",
+        "count": 2
+      },
+      {
+        "item": "element_red",
+        "count": 997
+      },
+      {
+        "item": "element_shiny",
+        "count": 499
+      },
+      {
+        "item": "paper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sno_cone_red",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 47,
+    "category": "food"
+  },
+  "sparkle_powder": {
+    "name": "Sparkle Powder",
+    "description": "",
+    "inputs": [
+      {
+        "item": "abbasidose",
+        "count": 30
+      },
+      {
+        "item": "spriggase",
+        "count": 30
+      }
+    ],
+    "tools": [
+      {
+        "item": "beaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sparkle_powder",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "spice_mill": {
+    "name": "Spice Mill",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 20,
+    "category": "tool"
+  },
+  "spicy_grog": {
+    "name": "Spicy Grog",
+    "description": "",
+    "inputs": [
+      {
+        "item": "hooch",
+        "count": 1
+      },
+      {
+        "item": "licorice",
+        "count": 1
+      },
+      {
+        "item": "all_spice",
+        "count": 1
+      },
+      {
+        "item": "hot_pepper",
+        "count": 1
+      },
+      {
+        "item": "mustard",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "cocktail_shaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "spicy_grog",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "spicy_quesadilla": {
+    "name": "Spicy Quesadilla",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "cheese",
+        "count": 1
+      },
+      {
+        "item": "mustard",
+        "count": 1
+      },
+      {
+        "item": "hot_pepper",
+        "count": 1
+      },
+      {
+        "item": "tortilla",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "spicy_quesadilla",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 9,
+    "category": "food"
+  },
+  "spigot": {
+    "name": "Spigot",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_rod",
+        "count": 1
+      },
+      {
+        "item": "copper",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "spigot",
+        "count": 1
+      }
+    ],
+    "durationSecs": 3.333,
+    "energyCost": 60,
+    "category": "tool"
+  },
+  "spinach_salad": {
+    "name": "Spinach Salad",
+    "description": "",
+    "inputs": [
+      {
+        "item": "spinach",
+        "count": 1
+      },
+      {
+        "item": "orange",
+        "count": 1
+      },
+      {
+        "item": "onion",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "spinach_salad",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "spindle": {
+    "name": "Spindle",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wood_post",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "spindle",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 15,
+    "category": "tool"
+  },
+  "splendid_spindle": {
+    "name": "Splendid Spindle",
+    "description": "",
+    "inputs": [
+      {
+        "item": "metal_post",
+        "count": 3
+      },
+      {
+        "item": "molybdenum",
+        "count": 2
+      },
+      {
+        "item": "tin",
+        "count": 4
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "splendid_spindle",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 75,
+    "category": "tool"
+  },
+  "spriggase": {
+    "name": "Spriggase",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 11
+      },
+      {
+        "item": "element_green",
+        "count": 7
+      },
+      {
+        "item": "element_blue",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "spriggase",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "steak": {
+    "name": "Steak",
+    "description": "Grilled meat on a wood fire.",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 2
+      },
+      {
+        "item": "wood",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "steak",
+        "count": 1
+      }
+    ],
+    "durationSecs": 12,
+    "energyCost": 18,
+    "category": "food"
+  },
+  "still": {
+    "name": "Still",
+    "description": "",
+    "inputs": [
+      {
+        "item": "spigot",
+        "count": 1
+      },
+      {
+        "item": "metal_rod",
+        "count": 5
+      },
+      {
+        "item": "tin",
+        "count": 4
+      },
+      {
+        "item": "board",
+        "count": 16
+      }
+    ],
+    "tools": [
+      {
+        "item": "metalmaker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "still",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 200,
+    "category": "material"
+  },
+  "stock_sauce": {
+    "name": "Stock sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "flour",
+        "count": 1
+      },
+      {
+        "item": "milk_butterfly",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "stock_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "strawberry": {
+    "name": "Strawberry",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "strawberry",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "food"
+  },
+  "string": {
+    "name": "String",
+    "description": "",
+    "inputs": [
+      {
+        "item": "thread",
+        "count": 5
+      }
+    ],
+    "tools": [
+      {
+        "item": "loomer",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "string",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "material"
+  },
+  "super_scraper": {
+    "name": "Super Scraper",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 7
+      },
+      {
+        "item": "copper",
+        "count": 7
+      },
+      {
+        "item": "molybdenum",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "super_scraper",
+        "count": 1
+      }
+    ],
+    "durationSecs": 20,
+    "energyCost": 75,
+    "category": "tool"
+  },
+  "super_veggie_kebabs": {
+    "name": "Super Veggie Kebabs",
+    "description": "",
+    "inputs": [
+      {
+        "item": "mushroom",
+        "count": 2
+      },
+      {
+        "item": "urfu",
+        "count": 1
+      },
+      {
+        "item": "vegmageddon",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "super_veggie_kebabs",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 28,
+    "category": "food"
+  },
+  "swank_zucchini_loaf": {
+    "name": "Swank Zucchini Loaf",
+    "description": "",
+    "inputs": [
+      {
+        "item": "zucchini",
+        "count": 4
+      },
+      {
+        "item": "swing_batter",
+        "count": 1
+      },
+      {
+        "item": "olive_oil",
+        "count": 2
+      },
+      {
+        "item": "trump_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "swank_zucchini_loaf",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 32,
+    "category": "food"
+  },
+  "sweet_n_sour_sauce": {
+    "name": "Sweet 'n' Sour Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "lemon",
+        "count": 1
+      },
+      {
+        "item": "red",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "sweet_n_sour_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "swing_batter": {
+    "name": "Swing Batter",
+    "description": "",
+    "inputs": [
+      {
+        "item": "flour",
+        "count": 1
+      },
+      {
+        "item": "egg_plain",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "swing_batter",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "tangy_noodles": {
+    "name": "Tangy Noodles",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_noodles",
+        "count": 1
+      },
+      {
+        "item": "lemon",
+        "count": 1
+      },
+      {
+        "item": "butterfly_butter",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tangy_noodles",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "tangy_sauce": {
+    "name": "Tangy Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "secret_sauce",
+        "count": 1
+      },
+      {
+        "item": "sweet_n_sour_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tangy_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 18,
+    "category": "food"
+  },
+  "tasty_pasta": {
+    "name": "Tasty Pasta",
+    "description": "",
+    "inputs": [
+      {
+        "item": "wicked_bolognese_sauce",
+        "count": 1
+      },
+      {
+        "item": "fried_noodles",
+        "count": 1
+      },
+      {
+        "item": "green",
+        "count": 1
+      },
+      {
+        "item": "glitchepoix",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tasty_pasta",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 35,
+    "category": "food"
+  },
+  "test_tube": {
+    "name": "Test Tube",
+    "description": "",
+    "inputs": [
+      {
+        "item": "barnacle_talc",
+        "count": 3
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 15,
+    "category": "tool"
+  },
+  "tiite": {
+    "name": "Tiite",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_red",
+        "count": 2
+      },
+      {
+        "item": "element_blue",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tiite",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "tin": {
+    "name": "Tin",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_metal",
+        "count": 1
+      },
+      {
+        "item": "element_red",
+        "count": 8
+      },
+      {
+        "item": "element_blue",
+        "count": 8
+      },
+      {
+        "item": "element_green",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "alchemical_tongs",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tin",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 2,
+    "category": "material"
+  },
+  "tinkertool": {
+    "name": "Tinkertool",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 2
+      },
+      {
+        "item": "copper",
+        "count": 3
+      },
+      {
+        "item": "plain_metal",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 40,
+    "category": "tool"
+  },
+  "tiny_bubble": {
+    "name": "Tiny Bubble",
+    "description": "",
+    "inputs": [
+      {
+        "item": "plain_bubble",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "bubble_tuner",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tiny_bubble",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 5,
+    "category": "food"
+  },
+  "tooberry_shake": {
+    "name": "Too-berry Shake",
+    "description": "",
+    "inputs": [
+      {
+        "item": "milk_butterfly",
+        "count": 1
+      },
+      {
+        "item": "strawberry",
+        "count": 4
+      },
+      {
+        "item": "whortleberry",
+        "count": 4
+      },
+      {
+        "item": "birch_syrup",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "blender",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tooberry_shake",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "tortilla": {
+    "name": "Tortilla",
+    "description": "",
+    "inputs": [
+      {
+        "item": "flour",
+        "count": 1
+      },
+      {
+        "item": "corn",
+        "count": 1
+      },
+      {
+        "item": "pinch_of_salt",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "tortilla",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 3,
+    "category": "food"
+  },
+  "trump_rub": {
+    "name": "Trump Rub",
+    "description": "",
+    "inputs": [
+      {
+        "item": "camphor",
+        "count": 1
+      },
+      {
+        "item": "older_spice",
+        "count": 1
+      },
+      {
+        "item": "turmeric",
+        "count": 1
+      },
+      {
+        "item": "cardamom",
+        "count": 1
+      },
+      {
+        "item": "nutmeg",
+        "count": 1
+      },
+      {
+        "item": "saffron",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "knife_and_board",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "trump_rub",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "food"
+  },
+  "turmeric": {
+    "name": "Turmeric",
+    "description": "",
+    "inputs": [
+      {
+        "item": "all_spice",
+        "count": 3
+      }
+    ],
+    "tools": [
+      {
+        "item": "spice_mill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "turmeric",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "urfu": {
+    "name": "Urfu",
+    "description": "",
+    "inputs": [
+      {
+        "item": "legumes_parisienne",
+        "count": 1
+      },
+      {
+        "item": "older_spice",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "frying_pan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "urfu",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 7,
+    "category": "food"
+  },
+  "vegmageddon": {
+    "name": "Vegmageddon",
+    "description": "",
+    "inputs": [
+      {
+        "item": "corn",
+        "count": 3
+      },
+      {
+        "item": "parsnip",
+        "count": 3
+      },
+      {
+        "item": "carrot",
+        "count": 3
+      },
+      {
+        "item": "broccoli",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "vegmageddon",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 11,
+    "category": "food"
+  },
+  "waffles": {
+    "name": "Waffles",
+    "description": "",
+    "inputs": [
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "swing_batter",
+        "count": 1
+      },
+      {
+        "item": "desssert_rub",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "mike_tyson_grill",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "waffles",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 19,
+    "category": "food"
+  },
+  "wall_segment": {
+    "name": "Wall Segment",
+    "description": "",
+    "inputs": [
+      {
+        "item": "beam",
+        "count": 1
+      },
+      {
+        "item": "wood_post",
+        "count": 4
+      },
+      {
+        "item": "board",
+        "count": 12
+      },
+      {
+        "item": "barnacle_talc",
+        "count": 15
+      }
+    ],
+    "tools": [
+      {
+        "item": "construction_tool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "wall_segment",
+        "count": 1
+      }
+    ],
+    "durationSecs": 5,
+    "energyCost": 150,
+    "category": "material"
+  },
+  "watering_can": {
+    "name": "Watering Can",
+    "description": "",
+    "inputs": [
+      {
+        "item": "tin",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "tinkertool",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "watering_can",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 10,
+    "category": "tool"
+  },
+  "wavy_gravy": {
+    "name": "Wavy Gravy",
+    "description": "",
+    "inputs": [
+      {
+        "item": "camphor",
+        "count": 1
+      },
+      {
+        "item": "stock_sauce",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "wavy_gravy",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 9,
+    "category": "food"
+  },
+  "white_gas": {
+    "name": "White Gas",
+    "description": "",
+    "inputs": [
+      {
+        "item": "general_vapour",
+        "count": 8
+      }
+    ],
+    "tools": [
+      {
+        "item": "gassifier",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "white_gas",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 15,
+    "category": "material"
+  },
+  "whortleberry": {
+    "name": "Whortleberry",
+    "description": "",
+    "inputs": [
+      {
+        "item": "cherry",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "fruit_changing_machine",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "whortleberry",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 4,
+    "category": "food"
+  },
+  "whortleberry_jelly": {
+    "name": "Whortleberry Jelly",
+    "description": "",
+    "inputs": [
+      {
+        "item": "honey",
+        "count": 1
+      },
+      {
+        "item": "cardamom",
+        "count": 1
+      },
+      {
+        "item": "whortleberry",
+        "count": 7
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "whortleberry_jelly",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 6,
+    "category": "food"
+  },
+  "wicked_bolognese_sauce": {
+    "name": "Wicked Bolognese Sauce",
+    "description": "",
+    "inputs": [
+      {
+        "item": "meat",
+        "count": 1
+      },
+      {
+        "item": "olive_oil",
+        "count": 1
+      },
+      {
+        "item": "hot_pepper",
+        "count": 1
+      },
+      {
+        "item": "red",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "saucepan",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "wicked_bolognese_sauce",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 8,
+    "category": "food"
+  },
+  "wood_post": {
+    "name": "Wood Post",
+    "description": "",
+    "inputs": [
+      {
+        "item": "board",
+        "count": 4
+      },
+      {
+        "item": "fuel_cell",
+        "count": 2
+      }
+    ],
+    "tools": [
+      {
+        "item": "woodworker",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "wood_post",
+        "count": 1
+      }
+    ],
+    "durationSecs": 10,
+    "energyCost": 0,
+    "category": "material"
+  },
+  "yummy_gruel": {
+    "name": "Yummy Gruel",
+    "description": "",
+    "inputs": [
+      {
+        "item": "desssert_rub",
+        "count": 1
+      },
+      {
+        "item": "tiny_bubble",
+        "count": 3
+      },
+      {
+        "item": "oats",
+        "count": 6
+      }
+    ],
+    "tools": [
+      {
+        "item": "awesome_pot",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "yummy_gruel",
+        "count": 1
+      }
+    ],
+    "durationSecs": 2,
+    "energyCost": 26,
+    "category": "food"
+  },
+  "zillene": {
+    "name": "Zillene",
+    "description": "",
+    "inputs": [
+      {
+        "item": "element_green",
+        "count": 5
+      },
+      {
+        "item": "element_blue",
+        "count": 3
+      },
+      {
+        "item": "element_shiny",
+        "count": 1
+      }
+    ],
+    "tools": [
+      {
+        "item": "test_tube",
+        "count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "item": "zillene",
+        "count": 1
+      }
+    ],
+    "durationSecs": 0.05,
+    "energyCost": 0,
     "category": "material"
   }
 }
