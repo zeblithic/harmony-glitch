@@ -296,6 +296,64 @@ this.recipes["5"] = {
     expect(recipes['simple_slaw']).toBeDefined();
     expect(recipes['hash']).toBeDefined();
   });
+
+  it('detects recipe output collision and skips the duplicate', () => {
+    const content = `
+this.recipes["1"] = {
+  name : "Simple Slaw",
+  tool : "knife_and_board",
+  energy_cost : 3,
+  wait_ms : 2000,
+  inputs : [
+    ["cabbage", 1],
+    ["corn", 1],
+  ],
+  outputs : [
+    ["simple_slaw", 1],
+  ],
+};
+
+this.recipes["99"] = {
+  name : "Fancy Slaw",
+  tool : "knife_and_board",
+  energy_cost : 5,
+  wait_ms : 3000,
+  inputs : [
+    ["cabbage", 2],
+    ["bean_plain", 3],
+  ],
+  outputs : [
+    ["simple_slaw", 1],
+  ],
+};
+`;
+    const { recipes, skipped } = parseRecipes(content, sampleItems);
+    expect(Object.keys(recipes)).toHaveLength(1);
+    expect(recipes['simple_slaw'].name).toBe('Simple Slaw');
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]).toContain("output 'simple_slaw' already claimed");
+  });
+
+  it('handles field with no space before colon', () => {
+    const content = `
+this.recipes["1"] = {
+  name:"Compact Slaw",
+  tool:"knife_and_board",
+  energy_cost:3,
+  wait_ms:2000,
+  inputs:[
+    ["cabbage", 1],
+  ],
+  outputs:[
+    ["simple_slaw", 1],
+  ],
+};
+`;
+    const { recipes, skipped } = parseRecipes(content, sampleItems);
+    expect(skipped).toHaveLength(0);
+    expect(recipes['simple_slaw']).toBeDefined();
+    expect(recipes['simple_slaw'].inputs).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

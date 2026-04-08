@@ -75,9 +75,10 @@ console.log(`Parsed ${glitchItems.size} Glitch items (${parseErrors} errors, ${f
 const recipeCatalogPath = join(sourceDir, 'catalog_recipes.js');
 console.log(`\nParsing recipes from ${recipeCatalogPath}...`);
 
-// Build items map for validation (Glitch items + demo items we'll merge later)
-const demoItemsPath = join(outputDir, 'items.json');
-const demoItems = JSON.parse(readFileSync(demoItemsPath, 'utf-8'));
+// Demo items that don't exist in real Glitch — hardcoded so import is idempotent.
+// These are referenced by entities.json, stores.json, and skills.json.
+const DEMO_ITEMS_PATH = join(import.meta.dirname, 'demo-items.json');
+const demoItems = JSON.parse(readFileSync(DEMO_ITEMS_PATH, 'utf-8'));
 
 // Combined map for recipe validation
 const allItemsMap = new Map(glitchItems);
@@ -126,8 +127,8 @@ for (const [id, def] of Object.entries(demoItems)) {
 
 console.log('Merging recipes...');
 
-const demoRecipesPath = join(outputDir, 'recipes.json');
-const demoRecipes = JSON.parse(readFileSync(demoRecipesPath, 'utf-8'));
+const DEMO_RECIPES_PATH = join(import.meta.dirname, 'demo-recipes.json');
+const demoRecipes = JSON.parse(readFileSync(DEMO_RECIPES_PATH, 'utf-8'));
 
 const mergedRecipes = {};
 const replacedDemoRecipes = [];

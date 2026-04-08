@@ -56,6 +56,12 @@ export function parseRecipes(content, itemsMap) {
     // Recipe ID = primary output item ID
     const recipeId = outputs[0].item;
 
+    // Detect collision: two recipes producing the same primary output
+    if (recipes[recipeId]) {
+      skipped.push(`recipe ${numId} (${name}): output '${recipeId}' already claimed by recipe '${recipes[recipeId].name}'`);
+      continue;
+    }
+
     // Derive category from output item
     const outputItem = itemsMap.get(recipeId);
     const category = outputItem ? outputItem.category : 'material';
@@ -90,7 +96,7 @@ function extractNumField(body, fieldName) {
 
 function extractItemArray(body, fieldName) {
   // Find the field, then use bracket-depth counting to extract the full array
-  const start = body.indexOf(`${fieldName} :`);
+  const start = body.search(new RegExp(`${fieldName}\\s*:`));
   if (start === -1) return [];
 
   const openBracket = body.indexOf('[', start);
