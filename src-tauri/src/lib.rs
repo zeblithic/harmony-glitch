@@ -1814,12 +1814,15 @@ fn load_street_xml(name: &str, app: &AppHandle) -> Result<String, String> {
         .get(name)
         .ok_or_else(|| format!("Unknown street: {name}"))?;
     let streets_dir = app.state::<StreetsDir>();
-    let path = streets_dir.0.join(&entry.filename);
-    if !path.starts_with(&streets_dir.0) {
+    if entry.filename.contains("..")
+        || entry.filename.contains('/')
+        || entry.filename.contains('\\')
+    {
         return Err(format!(
-            "Manifest filename for {name} escapes streets directory"
+            "Manifest filename for {name} contains unsafe path components"
         ));
     }
+    let path = streets_dir.0.join(&entry.filename);
     std::fs::read_to_string(path).map_err(|e| format!("Failed to read street {name}: {e}"))
 }
 
