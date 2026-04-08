@@ -46,10 +46,7 @@ fn main() {
     }
 
     // List all DefineSprites with significant frame counts
-    let mut high_frame_sprites: Vec<_> = sprites
-        .values()
-        .filter(|s| s.num_frames > 100)
-        .collect();
+    let mut high_frame_sprites: Vec<_> = sprites.values().filter(|s| s.num_frames > 100).collect();
     high_frame_sprites.sort_by_key(|s| std::cmp::Reverse(s.num_frames));
 
     if verbose {
@@ -184,8 +181,7 @@ fn main() {
                     if let Some(child_sprite) = sprites.get(&char_id) {
                         let child_frames = extract_display_list_frames(&child_sprite.tags);
                         // Use the same frame index (clamped to child's frame count)
-                        let child_frame_idx =
-                            frame_idx.min(child_frames.len().saturating_sub(1));
+                        let child_frame_idx = frame_idx.min(child_frames.len().saturating_sub(1));
                         if let Some(child_dl) = child_frames.get(child_frame_idx) {
                             let mut children = serde_json::Map::new();
                             for (_, child_placement) in child_dl {
@@ -202,10 +198,8 @@ fn main() {
                                 }
                             }
                             if !children.is_empty() {
-                                container_data.insert(
-                                    "children".into(),
-                                    serde_json::Value::Object(children),
-                                );
+                                container_data
+                                    .insert("children".into(), serde_json::Value::Object(children));
                             }
                         }
                     }
@@ -257,10 +251,8 @@ fn extract_display_list_frames(tags: &[swf::Tag]) -> Vec<HashMap<u16, Placement>
                     }
                     PlaceObjectAction::Replace(char_id) => {
                         // Replace character at depth
-                        let mut placement = display_list
-                            .get(&depth)
-                            .cloned()
-                            .unwrap_or(Placement {
+                        let mut placement =
+                            display_list.get(&depth).cloned().unwrap_or(Placement {
                                 character_id: None,
                                 name: None,
                                 tx: 0.0,
@@ -288,7 +280,10 @@ fn extract_display_list_frames(tags: &[swf::Tag]) -> Vec<HashMap<u16, Placement>
                             .as_ref()
                             .map(|m| m.ty.to_pixels())
                             .unwrap_or(0.0);
-                        let name = place.name.as_ref().map(|n| n.to_str_lossy(swf::UTF_8).into_owned());
+                        let name = place
+                            .name
+                            .as_ref()
+                            .map(|n| n.to_str_lossy(swf::UTF_8).into_owned());
 
                         display_list.insert(
                             depth,

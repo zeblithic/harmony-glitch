@@ -424,7 +424,10 @@ mod tests {
             "audioRadius": 400
         }"#;
         let def: EntityDef = serde_json::from_str(json).unwrap();
-        assert_eq!(def.playlist.as_ref().unwrap(), &vec!["track-a".to_string(), "track-b".to_string()]);
+        assert_eq!(
+            def.playlist.as_ref().unwrap(),
+            &vec!["track-a".to_string(), "track-b".to_string()]
+        );
         assert!((def.audio_radius.unwrap() - 400.0).abs() < 0.01);
     }
 

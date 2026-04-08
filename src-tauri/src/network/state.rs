@@ -1032,9 +1032,9 @@ impl NetworkState {
                     .peers
                     .iter()
                     .find(|(_, p)| {
-                        p.link
-                            .as_ref()
-                            .is_some_and(|l| *l.link_id() == dest_hash && l.state() == LinkState::Active)
+                        p.link.as_ref().is_some_and(|l| {
+                            *l.link_id() == dest_hash && l.state() == LinkState::Active
+                        })
                     })
                     .map(|(addr, _)| *addr);
 
@@ -1086,10 +1086,8 @@ impl NetworkState {
                     if session_state == Some(SessionState::Init) {
                         let mut opened = false;
                         if let Some(ref mut session) = peer.session {
-                            if let Ok(actions) =
-                                session.handle_event(SessionEvent::HandshakeReceived {
-                                    proof: plaintext,
-                                })
+                            if let Ok(actions) = session
+                                .handle_event(SessionEvent::HandshakeReceived { proof: plaintext })
                             {
                                 for action in &actions {
                                     if matches!(action, SessionAction::SessionOpened) {
@@ -1169,11 +1167,11 @@ impl NetworkState {
                     if let Some(ref mut session) = peer.session {
                         if session.state() == SessionState::Init {
                             let mut opened = false;
-                            if let Ok(actions) = session.handle_event(
-                                SessionEvent::HandshakeReceived {
+                            if let Ok(actions) =
+                                session.handle_event(SessionEvent::HandshakeReceived {
                                     proof: proof_bytes.to_vec(),
-                                },
-                            ) {
+                                })
+                            {
                                 for action in &actions {
                                     if matches!(action, SessionAction::SessionOpened) {
                                         opened = true;
@@ -1381,11 +1379,9 @@ impl NetworkState {
         };
 
         // Declare publishers for our topics.
-        let state_topic =
-            format!("harmony/glitch/street/{street}/player/{our_addr_hex}/state");
+        let state_topic = format!("harmony/glitch/street/{street}/player/{our_addr_hex}/state");
         // "chat" topic carries all infrequent event-driven messages (chat + trade).
-        let event_topic =
-            format!("harmony/glitch/street/{street}/player/{our_addr_hex}/chat");
+        let event_topic = format!("harmony/glitch/street/{street}/player/{our_addr_hex}/chat");
 
         let mut state_publisher_id = None;
         let mut event_publisher_id = None;
@@ -1432,10 +1428,7 @@ impl NetworkState {
 
         for action in &all_pubsub_actions {
             match action {
-                PubSubAction::Session(SessionAction::SendResourceDeclare {
-                    expr_id,
-                    key_expr,
-                }) => {
+                PubSubAction::Session(SessionAction::SendResourceDeclare { expr_id, key_expr }) => {
                     let msg = format!("RESDECL:{expr_id}:{key_expr}");
                     Self::send_control(link, rng, msg.as_bytes(), out);
                 }
@@ -1551,7 +1544,9 @@ impl NetworkState {
                 // The remote explicitly asked us to close — tear down the peer.
                 // Emit PresenceEvent::Left so the frontend knows they departed.
                 self.registry.handle_presence(
-                    &PresenceEvent::Left { address_hash: *addr },
+                    &PresenceEvent::Left {
+                        address_hash: *addr,
+                    },
                     now_secs_f64,
                 );
                 out.push(NetworkAction::PresenceChange(PresenceEvent::Left {
@@ -1581,7 +1576,9 @@ impl NetworkState {
                 }
                 if should_close {
                     self.registry.handle_presence(
-                        &PresenceEvent::Left { address_hash: *addr },
+                        &PresenceEvent::Left {
+                            address_hash: *addr,
+                        },
                         now_secs_f64,
                     );
                     out.push(NetworkAction::PresenceChange(PresenceEvent::Left {
@@ -1600,8 +1597,7 @@ impl NetworkState {
                     Some(p) => p,
                     None => return,
                 };
-                if let (Some(router), Some(session)) =
-                    (peer.router.as_mut(), peer.session.as_ref())
+                if let (Some(router), Some(session)) = (peer.router.as_mut(), peer.session.as_ref())
                 {
                     if let Ok(actions) = router.handle_event(
                         PubSubEvent::SubscriberDeclared {
@@ -1609,33 +1605,23 @@ impl NetworkState {
                         },
                         session,
                     ) {
-                        let link =
-                            peer.link.as_ref().filter(|l| l.state() == LinkState::Active);
+                        let link = peer
+                            .link
+                            .as_ref()
+                            .filter(|l| l.state() == LinkState::Active);
                         if let Some(link) = link {
                             for action in &actions {
                                 match action {
-                                    PubSubAction::Session(
-                                        SessionAction::SendResourceDeclare {
-                                            expr_id,
-                                            key_expr,
-                                        },
-                                    ) => {
+                                    PubSubAction::Session(SessionAction::SendResourceDeclare {
+                                        expr_id,
+                                        key_expr,
+                                    }) => {
                                         let msg = format!("RESDECL:{expr_id}:{key_expr}");
-                                        Self::send_control(
-                                            link,
-                                            rng,
-                                            msg.as_bytes(),
-                                            out,
-                                        );
+                                        Self::send_control(link, rng, msg.as_bytes(), out);
                                     }
                                     PubSubAction::SendSubscriberDeclare { key_expr } => {
                                         let msg = format!("SUB:{key_expr}");
-                                        Self::send_control(
-                                            link,
-                                            rng,
-                                            msg.as_bytes(),
-                                            out,
-                                        );
+                                        Self::send_control(link, rng, msg.as_bytes(), out);
                                     }
                                     _ => {}
                                 }
@@ -1658,12 +1644,12 @@ impl NetworkState {
                             None => return,
                         };
                         if let Some(session) = peer.session.as_mut() {
-                            if let Ok(actions) = session.handle_event(
-                                SessionEvent::ResourceDeclared {
+                            if let Ok(actions) =
+                                session.handle_event(SessionEvent::ResourceDeclared {
                                     expr_id,
                                     key_expr: key_expr.to_string(),
-                                },
-                            ) {
+                                })
+                            {
                                 let link = peer
                                     .link
                                     .as_ref()
@@ -1675,14 +1661,8 @@ impl NetworkState {
                                             key_expr,
                                         } = action
                                         {
-                                            let msg =
-                                                format!("RESDECL:{expr_id}:{key_expr}");
-                                            Self::send_control(
-                                                link,
-                                                rng,
-                                                msg.as_bytes(),
-                                                out,
-                                            );
+                                            let msg = format!("RESDECL:{expr_id}:{key_expr}");
+                                            Self::send_control(link, rng, msg.as_bytes(), out);
                                         }
                                     }
                                 }
@@ -1709,8 +1689,7 @@ impl NetworkState {
                                 .filter(|l| l.state() == LinkState::Active);
                             if let Some(link) = link {
                                 for action in &actions {
-                                    if let SessionAction::SendResourceUndeclare { expr_id } =
-                                        action
+                                    if let SessionAction::SendResourceUndeclare { expr_id } = action
                                     {
                                         let msg = format!("RESUNDECL:{expr_id}");
                                         Self::send_control(link, rng, msg.as_bytes(), out);
@@ -1758,13 +1737,7 @@ impl NetworkState {
                 (Some(r), Some(s)) => (r, s),
                 _ => return,
             };
-            match router.handle_event(
-                PubSubEvent::MessageReceived {
-                    expr_id,
-                    payload,
-                },
-                session,
-            ) {
+            match router.handle_event(PubSubEvent::MessageReceived { expr_id, payload }, session) {
                 Ok(actions) => actions,
                 Err(_) => return,
             }
@@ -1780,7 +1753,9 @@ impl NetworkState {
         for action in deliver_actions {
             match action {
                 PubSubAction::Deliver {
-                    key_expr: _, payload, ..
+                    key_expr: _,
+                    payload,
+                    ..
                 } => {
                     // Deserialize the NetMessage and route it.
                     if let Ok(msg) = serde_json::from_slice::<NetMessage>(&payload) {
@@ -1790,7 +1765,11 @@ impl NetworkState {
                             let copresence = self.trust_store.copresence_secs(addr);
                             let expectation = self.trust_store.expectation(addr);
                             let is_vouched = self.trust_store.vouched_by(addr).is_some();
-                            crate::trust::epoch::determine_epoch(copresence, expectation, is_vouched)
+                            crate::trust::epoch::determine_epoch(
+                                copresence,
+                                expectation,
+                                is_vouched,
+                            )
                         };
                         match msg {
                             NetMessage::PlayerState(state) => {
@@ -1800,9 +1779,7 @@ impl NetworkState {
                                 let params = crate::trust::policy::validation_params(tier);
 
                                 // Get/create per-peer validation state
-                                let val_state = self.validation_states
-                                    .entry(*addr)
-                                    .or_default();
+                                let val_state = self.validation_states.entry(*addr).or_default();
 
                                 // Shadow-banned peers are silently dropped
                                 if crate::trust::policy::is_shadow_banned(val_state, now_secs_f64) {
@@ -1819,7 +1796,10 @@ impl NetworkState {
                                 // can teleport on a non-validated frame and the next
                                 // validated frame sees zero displacement.
                                 let mut validated_clean = false;
-                                if crate::trust::policy::should_validate(frame, params.check_interval) {
+                                if crate::trust::policy::should_validate(
+                                    frame,
+                                    params.check_interval,
+                                ) {
                                     if let Some(ref bounds) = self.street_bounds {
                                         let violations = self.state_validator.validate(
                                             addr,
@@ -1843,7 +1823,8 @@ impl NetworkState {
                                             );
                                             // Voucher liability: penalize whoever vouched for this bad actor,
                                             // then revoke the vouch so the vouchee loses Citizen epoch.
-                                            if let Some(voucher) = self.trust_store.vouched_by(addr) {
+                                            if let Some(voucher) = self.trust_store.vouched_by(addr)
+                                            {
                                                 self.trust_store.apply_vouch_liability(
                                                     &voucher,
                                                     crate::trust::epoch::VOUCH_LIABILITY_WEIGHT,
@@ -1857,18 +1838,29 @@ impl NetworkState {
                                             // frame skips teleport detection entirely, letting
                                             // a peer teleport for free after one minor penalty.
                                             if !self.state_validator.has_baseline(addr) {
-                                                self.state_validator.accept_state(addr, state.x, state.y, now_secs_f64);
+                                                self.state_validator.accept_state(
+                                                    addr,
+                                                    state.x,
+                                                    state.y,
+                                                    now_secs_f64,
+                                                );
                                             }
                                             // Check whether shadow-ban should trigger
                                             let v_count = self.trust_store.violation_count(addr);
                                             let new_exp = self.trust_store.expectation(addr);
-                                            if let Some(duration) = crate::trust::policy::should_shadow_ban(v_count, new_exp) {
+                                            if let Some(duration) =
+                                                crate::trust::policy::should_shadow_ban(
+                                                    v_count, new_exp,
+                                                )
+                                            {
                                                 let until = if duration.is_infinite() {
                                                     f64::INFINITY
                                                 } else {
                                                     now_secs_f64 + duration
                                                 };
-                                                if let Some(vs) = self.validation_states.get_mut(addr) {
+                                                if let Some(vs) =
+                                                    self.validation_states.get_mut(addr)
+                                                {
                                                     vs.shadow_banned_until = Some(until);
                                                 }
                                                 // Sever: send CLOSE to the shadow-banned peer
@@ -1900,7 +1892,12 @@ impl NetworkState {
 
                                 // Update the validator baseline only for validated-clean frames.
                                 if validated_clean {
-                                    self.state_validator.accept_state(addr, state.x, state.y, now_secs_f64);
+                                    self.state_validator.accept_state(
+                                        addr,
+                                        state.x,
+                                        state.y,
+                                        now_secs_f64,
+                                    );
                                 }
 
                                 // ACCEPT: update registry and emit (rendering uses
@@ -1962,11 +1959,8 @@ impl NetworkState {
                                     .trust_store
                                     .direct_opinion(addr)
                                     .unwrap_or(crate::trust::opinion::Opinion::vacuous());
-                                self.gossip_store.ingest(
-                                    &envelope,
-                                    addr,
-                                    &trust_in_reporter,
-                                );
+                                self.gossip_store
+                                    .ingest(&envelope, addr, &trust_in_reporter);
                             }
                             NetMessage::Vouch(vouch_msg) => {
                                 if !crate::trust::epoch::can_vouch(peer_epoch) {
@@ -1995,10 +1989,7 @@ impl NetworkState {
                     let msg = format!("SUB:{key_expr}");
                     Self::send_control(link, rng, msg.as_bytes(), out);
                 }
-                PubSubAction::Session(SessionAction::SendResourceDeclare {
-                    expr_id,
-                    key_expr,
-                }) => {
+                PubSubAction::Session(SessionAction::SendResourceDeclare { expr_id, key_expr }) => {
                     let msg = format!("RESDECL:{expr_id}:{key_expr}");
                     Self::send_control(link, rng, msg.as_bytes(), out);
                 }
@@ -2048,8 +2039,7 @@ impl NetworkState {
             if !crate::trust::epoch::can_trade(self.peer_epoch(addr)) {
                 return;
             }
-            if let Ok(NetMessage::Trade(trade_msg)) =
-                serde_json::from_slice::<NetMessage>(payload)
+            if let Ok(NetMessage::Trade(trade_msg)) = serde_json::from_slice::<NetMessage>(payload)
             {
                 out.push(NetworkAction::TradeMessageReceived {
                     sender: *addr,
@@ -2104,7 +2094,10 @@ impl NetworkState {
             Some(p) => p,
             None => return false,
         };
-        let link = peer.link.as_ref().filter(|l| l.state() == LinkState::Active);
+        let link = peer
+            .link
+            .as_ref()
+            .filter(|l| l.state() == LinkState::Active);
 
         let mut should_remove = false;
         for action in session_actions {
@@ -2209,7 +2202,9 @@ impl NetworkState {
                 peer.session.as_ref(),
                 peer.link.as_ref(),
             ) {
-                (Some(r), Some(s), Some(l)) if s.state() == SessionState::Active && l.state() == LinkState::Active => {
+                (Some(r), Some(s), Some(l))
+                    if s.state() == SessionState::Active && l.state() == LinkState::Active =>
+                {
                     (r, s, l)
                 }
                 _ => continue,
@@ -2386,7 +2381,12 @@ mod tests {
 
     fn make_state() -> NetworkState {
         let (identity, proof) = make_identity_with_proof();
-        NetworkState::new(identity, "TestPlayer".to_string(), proof, PuzzleParams::TEST)
+        NetworkState::new(
+            identity,
+            "TestPlayer".to_string(),
+            proof,
+            PuzzleParams::TEST,
+        )
     }
 
     #[test]
@@ -2521,8 +2521,7 @@ mod tests {
         legacy_data.push(APP_DATA_SEPARATOR);
         legacy_data.extend_from_slice(b"meadow");
 
-        let dest_name =
-            DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
+        let dest_name = DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
         let announce = harmony_reticulum::ValidatedAnnounce {
             identity: peer_pub.clone(),
             destination_name: dest_name.clone(),
@@ -2556,8 +2555,7 @@ mod tests {
         };
 
         let app_data = encode_app_data("BadProofPeer", Some("meadow"), &bad_proof);
-        let dest_name =
-            DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
+        let dest_name = DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
         let announce = harmony_reticulum::ValidatedAnnounce {
             identity: peer_pub.clone(),
             destination_name: dest_name.clone(),
@@ -2607,7 +2605,7 @@ mod tests {
                 state_publisher_id: None,
                 event_publisher_id: None,
                 subscription_ids: Vec::new(),
-            unicast: None,
+                unicast: None,
             },
         );
         assert_eq!(state.peers.len(), 1);
@@ -2662,14 +2660,17 @@ mod tests {
                 (id_b, proof_b, pub_a, proof_a)
             };
 
-        let mut state =
-            NetworkState::new(lower_id, "Lower".to_string(), lower_proof, PuzzleParams::TEST);
+        let mut state = NetworkState::new(
+            lower_id,
+            "Lower".to_string(),
+            lower_proof,
+            PuzzleParams::TEST,
+        );
         let mut rng = OsRng;
         state.change_street("meadow", 1.0, &mut rng).unwrap();
 
         let app_data = encode_app_data("Higher", Some("meadow"), &higher_proof);
-        let dest_name =
-            DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
+        let dest_name = DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
         let destination_hash = dest_name.destination_hash(&higher_pub.address_hash);
         let announce = ValidatedAnnounce {
             identity: higher_pub.clone(),
@@ -2712,14 +2713,17 @@ mod tests {
                 (id_b, proof_b, pub_a, proof_a)
             };
 
-        let mut state =
-            NetworkState::new(higher_id, "Higher".to_string(), higher_proof, PuzzleParams::TEST);
+        let mut state = NetworkState::new(
+            higher_id,
+            "Higher".to_string(),
+            higher_proof,
+            PuzzleParams::TEST,
+        );
         let mut rng = OsRng;
         state.change_street("meadow", 1.0, &mut rng).unwrap();
 
         let app_data = encode_app_data("Lower", Some("meadow"), &lower_proof);
-        let dest_name =
-            DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
+        let dest_name = DestinationName::from_name("harmony", &["glitch", "player"]).unwrap();
         let destination_hash = dest_name.destination_hash(&lower_pub.address_hash);
         let announce = ValidatedAnnounce {
             identity: lower_pub.clone(),
@@ -2756,10 +2760,18 @@ mod tests {
                 (id_b, proof_b, id_a, proof_a)
             };
 
-        let mut state_low =
-            NetworkState::new(lower_id, "Lower".to_string(), lower_proof, PuzzleParams::TEST);
-        let mut state_high =
-            NetworkState::new(higher_id, "Higher".to_string(), higher_proof, PuzzleParams::TEST);
+        let mut state_low = NetworkState::new(
+            lower_id,
+            "Lower".to_string(),
+            lower_proof,
+            PuzzleParams::TEST,
+        );
+        let mut state_high = NetworkState::new(
+            higher_id,
+            "Higher".to_string(),
+            higher_proof,
+            PuzzleParams::TEST,
+        );
 
         state_low.change_street(street, 1.0, &mut rng).unwrap();
         state_high.change_street(street, 1.0, &mut rng).unwrap();
@@ -2781,10 +2793,8 @@ mod tests {
     /// Build a ValidatedAnnounce for a given NetworkState, suitable for feeding
     /// to another state's handle_announce_received.
     fn build_announce_for(state: &NetworkState) -> harmony_reticulum::ValidatedAnnounce {
-        let dest_name =
-            DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
-        let destination_hash =
-            dest_name.destination_hash(&state.public_identity.address_hash);
+        let dest_name = DestinationName::from_name(APP_NAME, DEST_ASPECTS).unwrap();
+        let destination_hash = dest_name.destination_hash(&state.public_identity.address_hash);
         let app_data = encode_app_data(
             &state.display_name,
             state.current_street.as_deref(),
@@ -2824,7 +2834,10 @@ mod tests {
             .peers
             .get(&state_b.public_identity.address_hash)
             .expect("A should have B as peer");
-        assert!(peer_b_in_a.link.is_some(), "A should have initiated a link to B");
+        assert!(
+            peer_b_in_a.link.is_some(),
+            "A should have initiated a link to B"
+        );
         assert_eq!(
             peer_b_in_a.link.as_ref().unwrap().state(),
             LinkState::Pending
@@ -2875,10 +2888,7 @@ mod tests {
 
         // B should have emitted a proof packet.
         let proof_packets = extract_packets(&actions_b);
-        assert!(
-            !proof_packets.is_empty(),
-            "B should emit a proof packet"
-        );
+        assert!(!proof_packets.is_empty(), "B should emit a proof packet");
 
         // 5. Feed B's proof to A via tick → A completes handshake, emits RTT.
         let proof_raw = &proof_packets[0];
@@ -2901,10 +2911,7 @@ mod tests {
 
         // A should have emitted an RTT packet.
         let rtt_packets = extract_packets(&actions_a);
-        assert!(
-            !rtt_packets.is_empty(),
-            "A should emit an RTT packet"
-        );
+        assert!(!rtt_packets.is_empty(), "A should emit an RTT packet");
 
         // 6. Feed A's RTT to B via tick → B activates link.
         let rtt_raw = &rtt_packets[0];
@@ -3108,9 +3115,7 @@ mod tests {
     /// setup, then shuttle all pending packets between them until both have
     /// routers AND all SUB/RESDECL control messages have been exchanged.
     /// Returns the pair and their address hashes.
-    fn drive_to_pubsub_ready(
-        street: &str,
-    ) -> (NetworkState, NetworkState, [u8; 16], [u8; 16]) {
+    fn drive_to_pubsub_ready(street: &str) -> (NetworkState, NetworkState, [u8; 16], [u8; 16]) {
         let mut rng = OsRng;
 
         let (mut state_a, mut state_b) = make_pair_on_street(street);
@@ -3235,8 +3240,7 @@ mod tests {
         let mut rng = OsRng;
 
         // 1. Drive both states through full handshake + session + router setup.
-        let (mut state_a, mut state_b, addr_a, addr_b) =
-            drive_to_pubsub_ready("meadow");
+        let (mut state_a, mut state_b, addr_a, addr_b) = drive_to_pubsub_ready("meadow");
 
         // Verify routers are set up.
         assert!(
@@ -3259,8 +3263,7 @@ mod tests {
             animation: 1,
         };
 
-        let publish_actions =
-            state_a.publish_player_state(&player_state, &mut rng);
+        let publish_actions = state_a.publish_player_state(&player_state, &mut rng);
 
         // 3. Extract packets from A and feed them to B.
         let a_packets = extract_packets(&publish_actions);
@@ -3540,18 +3543,21 @@ mod tests {
         // Create a third peer (must be in B's peer map for the membership check).
         let (subject_id, _) = make_identity_with_proof();
         let subject_hash = subject_id.identity.address_hash;
-        state_b.peers.insert(subject_hash, PeerState {
-            identity: subject_id.identity.clone(),
-            display_name: "Subject".into(),
-            street: "meadow".into(),
-            link: None,
-            session: None,
-            router: None,
-            state_publisher_id: None,
-            event_publisher_id: None,
-            subscription_ids: vec![],
-            unicast: None,
-        });
+        state_b.peers.insert(
+            subject_hash,
+            PeerState {
+                identity: subject_id.identity.clone(),
+                display_name: "Subject".into(),
+                street: "meadow".into(),
+                link: None,
+                session: None,
+                router: None,
+                state_publisher_id: None,
+                event_publisher_id: None,
+                subscription_ids: vec![],
+                unicast: None,
+            },
+        );
 
         // A sends a vouch for subject.
         let vouch_actions = state_a.send_vouch(subject_hash, &mut rng);
@@ -3610,18 +3616,21 @@ mod tests {
         // Create a subject peer in B's peer map.
         let (subject_id, _) = make_identity_with_proof();
         let subject_hash = subject_id.identity.address_hash;
-        state_b.peers.insert(subject_hash, PeerState {
-            identity: subject_id.identity.clone(),
-            display_name: "Subject".into(),
-            street: "meadow".into(),
-            link: None,
-            session: None,
-            router: None,
-            state_publisher_id: None,
-            event_publisher_id: None,
-            subscription_ids: vec![],
-            unicast: None,
-        });
+        state_b.peers.insert(
+            subject_hash,
+            PeerState {
+                identity: subject_id.identity.clone(),
+                display_name: "Subject".into(),
+                street: "meadow".into(),
+                link: None,
+                session: None,
+                router: None,
+                state_publisher_id: None,
+                event_publisher_id: None,
+                subscription_ids: vec![],
+                unicast: None,
+            },
+        );
 
         // A is Sandbox (no copresence) — vouch should be ignored.
         let vouch_actions = state_a.send_vouch(subject_hash, &mut rng);

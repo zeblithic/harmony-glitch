@@ -363,7 +363,8 @@ pub fn execute_interaction(
             }
 
             // Earn iMG from production
-            let img_earned = crate::item::imagination::earn_from_harvest(&produced_items, item_defs);
+            let img_earned =
+                crate::item::imagination::earn_from_harvest(&produced_items, item_defs);
             if img_earned > 0 {
                 *imagination = imagination.saturating_add(img_earned);
                 result.feedback.push(PickupFeedback {
@@ -1613,14 +1614,29 @@ mod tests {
         let mut rng = rand::rngs::mock::StepRng::new(0, 1);
         let mut energy = 100.0;
 
-        let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+        let nearest = NearestInteractable::Entity {
+            index: 0,
+            distance: 10.0,
+        };
         let mut imagination: u64 = 0;
         let result = execute_interaction(
-            &nearest, &mut inventory, &entities, &entity_defs, &world_items,
-            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy, &mut imagination,
+            &nearest,
+            &mut inventory,
+            &entities,
+            &entity_defs,
+            &world_items,
+            &item_defs,
+            &mut rng,
+            &mut entity_states,
+            0.0,
+            &mut energy,
+            &mut imagination,
         );
 
-        assert!(matches!(result.interaction_type, Some(InteractionType::Entity { .. })));
+        assert!(matches!(
+            result.interaction_type,
+            Some(InteractionType::Entity { .. })
+        ));
         assert!(inventory.count_item("cherry") > 0);
         assert!(energy < 100.0, "Energy should be deducted");
     }
@@ -1641,14 +1657,29 @@ mod tests {
         let mut rng = rand::rngs::mock::StepRng::new(0, 1);
         let mut energy = 0.0;
 
-        let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+        let nearest = NearestInteractable::Entity {
+            index: 0,
+            distance: 10.0,
+        };
         let mut imagination: u64 = 0;
         let result = execute_interaction(
-            &nearest, &mut inventory, &entities, &entity_defs, &world_items,
-            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy, &mut imagination,
+            &nearest,
+            &mut inventory,
+            &entities,
+            &entity_defs,
+            &world_items,
+            &item_defs,
+            &mut rng,
+            &mut entity_states,
+            0.0,
+            &mut energy,
+            &mut imagination,
         );
 
-        assert!(matches!(result.interaction_type, Some(InteractionType::Rejected)));
+        assert!(matches!(
+            result.interaction_type,
+            Some(InteractionType::Rejected)
+        ));
         assert_eq!(inventory.count_item("cherry"), 0);
         assert_eq!(energy, 0.0);
         assert!(result.feedback.iter().any(|f| f.text.contains("Too tired")));
@@ -1670,14 +1701,29 @@ mod tests {
         let mut rng = rand::rngs::mock::StepRng::new(0, 1);
         let mut energy = 3.0; // Below HARVEST_ENERGY_COST of 5.0
 
-        let nearest = NearestInteractable::Entity { index: 0, distance: 10.0 };
+        let nearest = NearestInteractable::Entity {
+            index: 0,
+            distance: 10.0,
+        };
         let mut imagination: u64 = 0;
         let result = execute_interaction(
-            &nearest, &mut inventory, &entities, &entity_defs, &world_items,
-            &item_defs, &mut rng, &mut entity_states, 0.0, &mut energy, &mut imagination,
+            &nearest,
+            &mut inventory,
+            &entities,
+            &entity_defs,
+            &world_items,
+            &item_defs,
+            &mut rng,
+            &mut entity_states,
+            0.0,
+            &mut energy,
+            &mut imagination,
         );
 
-        assert!(matches!(result.interaction_type, Some(InteractionType::Rejected)));
+        assert!(matches!(
+            result.interaction_type,
+            Some(InteractionType::Rejected)
+        ));
         assert_eq!(energy, 3.0, "Energy should not change on rejection");
     }
 
@@ -1694,8 +1740,17 @@ mod tests {
             distance: 10.0,
         };
         let result = execute_interaction(
-            &nearest, &mut inv, &entities, &entity_defs, &[], &item_defs,
-            &mut rng, &mut entity_states, 1.0, &mut energy, &mut imagination,
+            &nearest,
+            &mut inv,
+            &entities,
+            &entity_defs,
+            &[],
+            &item_defs,
+            &mut rng,
+            &mut entity_states,
+            1.0,
+            &mut energy,
+            &mut imagination,
         );
         // Should have earned iMG based on cherry base_cost=3
         assert!(imagination > 0);
@@ -1719,8 +1774,17 @@ mod tests {
             distance: 10.0,
         };
         execute_interaction(
-            &nearest, &mut inv, &entities, &entity_defs, &[], &item_defs,
-            &mut rng, &mut entity_states, 1.0, &mut energy, &mut imagination,
+            &nearest,
+            &mut inv,
+            &entities,
+            &entity_defs,
+            &[],
+            &item_defs,
+            &mut rng,
+            &mut entity_states,
+            1.0,
+            &mut energy,
+            &mut imagination,
         );
         assert!(imagination > 0);
     }

@@ -1,8 +1,8 @@
 use crate::item::inventory::Inventory;
 use crate::item::types::ItemDefs;
 use crate::quest::types::{
-    DialogueChoiceResult, DialogueCondition, DialogueDefs, DialogueEffect,
-    DialogueFrame, DialogueOptionFrame, QuestDefs, QuestObjective, QuestProgress,
+    DialogueChoiceResult, DialogueCondition, DialogueDefs, DialogueEffect, DialogueFrame,
+    DialogueOptionFrame, QuestDefs, QuestObjective, QuestProgress,
 };
 use crate::skill::types::SkillProgress;
 
@@ -76,9 +76,10 @@ pub fn evaluate_choice(
     // Re-validate that the selected option's conditions are still met.
     // The frontend only shows filtered options, but a direct IPC call
     // could pass a hidden option's index.
-    let conditions_met = option.conditions.iter().all(|c| {
-        check_condition(c, quest_progress, quest_defs, inventory, skill_progress)
-    });
+    let conditions_met = option
+        .conditions
+        .iter()
+        .all(|c| check_condition(c, quest_progress, quest_defs, inventory, skill_progress));
     if !conditions_met {
         return DialogueChoiceResult::End {
             feedback: vec!["Option not available.".to_string()],
@@ -139,27 +140,19 @@ pub fn check_condition(
             !quest_progress.active.contains_key(quest_id)
                 && !quest_progress.completed.contains(quest_id)
         }
-        DialogueCondition::QuestActive { quest_id } => {
-            quest_progress.active.contains_key(quest_id)
-        }
-        DialogueCondition::QuestReady { quest_id } => {
-            crate::quest::tracker::is_quest_ready(
-                quest_id,
-                quest_progress,
-                quest_defs,
-                inventory,
-                skill_progress,
-            )
-        }
+        DialogueCondition::QuestActive { quest_id } => quest_progress.active.contains_key(quest_id),
+        DialogueCondition::QuestReady { quest_id } => crate::quest::tracker::is_quest_ready(
+            quest_id,
+            quest_progress,
+            quest_defs,
+            inventory,
+            skill_progress,
+        ),
         DialogueCondition::QuestComplete { quest_id } => {
             quest_progress.completed.contains(quest_id)
         }
-        DialogueCondition::HasItem { item_id, count } => {
-            inventory.count_item(item_id) >= *count
-        }
-        DialogueCondition::SkillLearned { skill_id } => {
-            skill_progress.learned.contains(skill_id)
-        }
+        DialogueCondition::HasItem { item_id, count } => inventory.count_item(item_id) >= *count,
+        DialogueCondition::SkillLearned { skill_id } => skill_progress.learned.contains(skill_id),
     }
 }
 
@@ -178,8 +171,7 @@ pub fn apply_effect(
     let mut feedback = Vec::new();
     match effect {
         DialogueEffect::StartQuest { quest_id } => {
-            if let Ok(()) =
-                crate::quest::tracker::start_quest(quest_id, quest_defs, quest_progress)
+            if let Ok(()) = crate::quest::tracker::start_quest(quest_id, quest_defs, quest_progress)
             {
                 let name = quest_defs
                     .get(quest_id)
@@ -204,10 +196,7 @@ pub fn apply_effect(
                 // Fetch objectives don't consume items — they verify the player
                 // collected them but let the player keep them after completion.
                 for obj in &def.objectives {
-                    if let QuestObjective::Deliver {
-                        item_id, count, ..
-                    } = obj
-                    {
+                    if let QuestObjective::Deliver { item_id, count, .. } = obj {
                         inventory.remove_item(item_id, *count);
                     }
                 }
@@ -285,9 +274,9 @@ fn build_frame(
         .iter()
         .enumerate()
         .filter(|(_, opt)| {
-            opt.conditions.iter().all(|c| {
-                check_condition(c, quest_progress, quest_defs, inventory, skill_progress)
-            })
+            opt.conditions
+                .iter()
+                .all(|c| check_condition(c, quest_progress, quest_defs, inventory, skill_progress))
         })
         .map(|(i, opt)| DialogueOptionFrame {
             text: opt.text.clone(),
@@ -308,8 +297,8 @@ mod tests {
     use super::*;
     use crate::item::types::ItemDef;
     use crate::quest::types::{
-        ActiveQuest, DialogueNodeDef, DialogueOptionDef, DialogueTreeDef, QuestDef,
-        QuestObjective, QuestRewards,
+        ActiveQuest, DialogueNodeDef, DialogueOptionDef, DialogueTreeDef, QuestDef, QuestObjective,
+        QuestRewards,
     };
     use std::collections::HashMap;
 
@@ -456,9 +445,16 @@ mod tests {
         let skill_progress = SkillProgress::default();
         let quest_progress = QuestProgress::default();
 
-        let frame =
-            evaluate_start("test_tree", &defs, &quest_progress, &quest_defs, &inventory, &skill_progress, "npc_1")
-                .unwrap();
+        let frame = evaluate_start(
+            "test_tree",
+            &defs,
+            &quest_progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "npc_1",
+        )
+        .unwrap();
 
         // QuestNotStarted is true, QuestReady is false → 2 options visible
         assert_eq!(frame.options.len(), 2);
@@ -485,9 +481,16 @@ mod tests {
             },
         );
 
-        let frame =
-            evaluate_start("test_tree", &defs, &quest_progress, &quest_defs, &inventory, &skill_progress, "npc_1")
-                .unwrap();
+        let frame = evaluate_start(
+            "test_tree",
+            &defs,
+            &quest_progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress,
+            "npc_1",
+        )
+        .unwrap();
 
         // QuestNotStarted is false (active), QuestReady is false (0/3) → only "Bye"
         assert_eq!(frame.options.len(), 1);
@@ -506,7 +509,13 @@ mod tests {
 
         // Not started → true
         let progress = QuestProgress::default();
-        assert!(check_condition(&condition, &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(check_condition(
+            &condition,
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
 
         // Active → false
         let mut progress = QuestProgress::default();
@@ -517,12 +526,24 @@ mod tests {
                 objective_progress: vec![0],
             },
         );
-        assert!(!check_condition(&condition, &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(!check_condition(
+            &condition,
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
 
         // Completed → false
         let mut progress = QuestProgress::default();
         progress.completed.push("test_fetch".to_string());
-        assert!(!check_condition(&condition, &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(!check_condition(
+            &condition,
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
     }
 
     #[test]
@@ -538,7 +559,13 @@ mod tests {
         // Not active → false
         let progress = QuestProgress::default();
         let inventory = Inventory::new(16);
-        assert!(!check_condition(&condition, &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(!check_condition(
+            &condition,
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
 
         // Active but not enough items → false
         let mut progress = QuestProgress::default();
@@ -551,11 +578,23 @@ mod tests {
         );
         let mut inventory = Inventory::new(16);
         inventory.add("cherry", 2, &item_defs);
-        assert!(!check_condition(&condition, &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(!check_condition(
+            &condition,
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
 
         // Active with enough items → true
         inventory.add("cherry", 1, &item_defs);
-        assert!(check_condition(&condition, &progress, &quest_defs, &inventory, &skill_progress));
+        assert!(check_condition(
+            &condition,
+            &progress,
+            &quest_defs,
+            &inventory,
+            &skill_progress
+        ));
     }
 
     #[test]
@@ -583,7 +622,10 @@ mod tests {
         );
 
         assert!(quest_progress.active.contains_key("test_fetch"));
-        assert_eq!(quest_progress.active["test_fetch"].objective_progress, vec![0]);
+        assert_eq!(
+            quest_progress.active["test_fetch"].objective_progress,
+            vec![0]
+        );
         assert!(feedback.iter().any(|f| f.contains("Quest started")));
     }
 

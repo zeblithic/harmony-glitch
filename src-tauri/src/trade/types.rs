@@ -214,14 +214,38 @@ mod tests {
         // Worst case: 8 distinct items with realistic Glitch item names.
         let offer = TradeOffer {
             items: vec![
-                ItemStack { item_id: "cherry_pie".into(), count: 20 },
-                ItemStack { item_id: "grain".into(), count: 99 },
-                ItemStack { item_id: "bubble_wand".into(), count: 5 },
-                ItemStack { item_id: "plank".into(), count: 50 },
-                ItemStack { item_id: "steak".into(), count: 10 },
-                ItemStack { item_id: "butter".into(), count: 15 },
-                ItemStack { item_id: "bread".into(), count: 20 },
-                ItemStack { item_id: "pot".into(), count: 1 },
+                ItemStack {
+                    item_id: "cherry_pie".into(),
+                    count: 20,
+                },
+                ItemStack {
+                    item_id: "grain".into(),
+                    count: 99,
+                },
+                ItemStack {
+                    item_id: "bubble_wand".into(),
+                    count: 5,
+                },
+                ItemStack {
+                    item_id: "plank".into(),
+                    count: 50,
+                },
+                ItemStack {
+                    item_id: "steak".into(),
+                    count: 10,
+                },
+                ItemStack {
+                    item_id: "butter".into(),
+                    count: 15,
+                },
+                ItemStack {
+                    item_id: "bread".into(),
+                    count: 20,
+                },
+                ItemStack {
+                    item_id: "pot".into(),
+                    count: 1,
+                },
             ],
             currants: 999_999,
         };
@@ -258,11 +282,17 @@ mod tests {
     #[test]
     fn terms_hash_deterministic_regardless_of_role() {
         let offer_a = TradeOffer {
-            items: vec![ItemStack { item_id: "cherry".into(), count: 5 }],
+            items: vec![ItemStack {
+                item_id: "cherry".into(),
+                count: 5,
+            }],
             currants: 100,
         };
         let offer_b = TradeOffer {
-            items: vec![ItemStack { item_id: "grain".into(), count: 3 }],
+            items: vec![ItemStack {
+                item_id: "grain".into(),
+                count: 3,
+            }],
             currants: 0,
         };
         let hash_a = [0x01; 16];
@@ -276,11 +306,17 @@ mod tests {
     #[test]
     fn terms_hash_differs_for_different_offers() {
         let offer_a = TradeOffer {
-            items: vec![ItemStack { item_id: "cherry".into(), count: 5 }],
+            items: vec![ItemStack {
+                item_id: "cherry".into(),
+                count: 5,
+            }],
             currants: 0,
         };
         let offer_b = TradeOffer {
-            items: vec![ItemStack { item_id: "cherry".into(), count: 6 }],
+            items: vec![ItemStack {
+                item_id: "cherry".into(),
+                count: 6,
+            }],
             currants: 0,
         };
         let empty = TradeOffer::empty();

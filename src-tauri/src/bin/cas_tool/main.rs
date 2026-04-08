@@ -10,7 +10,10 @@ use crate::manifest::Manifest;
 use crate::store::{cid_to_hex, hex_to_cid, FileBookStore};
 
 #[derive(Parser)]
-#[command(name = "cas-tool", about = "Content-addressed storage for asset pipeline")]
+#[command(
+    name = "cas-tool",
+    about = "Content-addressed storage for asset pipeline"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -150,17 +153,23 @@ fn restore(
     for (filename, hex) in &manifest.files {
         // Reject path traversal attempts in manifest filenames
         let path = std::path::Path::new(filename);
-        if path.components().any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)))
-            || path.components().count() != 1
+        if path.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        }) || path.components().count() != 1
         {
             return Err(format!(
                 "unsafe filename in manifest: '{}' — only plain basenames are allowed",
                 filename
-            ).into());
+            )
+            .into());
         }
-        let cid = hex_to_cid(hex).map_err(|_| {
-            format!("invalid hex CID for '{}': '{}'", filename, hex)
-        })?;
+        let cid = hex_to_cid(hex)
+            .map_err(|_| format!("invalid hex CID for '{}': '{}'", filename, hex))?;
         if !store.contains(&cid) {
             return Err(format!(
                 "missing book {} for file '{}'. Run the full pipeline to populate the store.",
@@ -218,11 +227,14 @@ fn main() {
                 result.total, result.new, result.unchanged
             );
         }
-        Command::Restore { manifest, output, store } => {
+        Command::Restore {
+            manifest,
+            output,
+            store,
+        } => {
             let store_dir = store.unwrap_or_else(default_store_dir);
             let book_store = FileBookStore::open(store_dir).expect("failed to open book store");
-            let result = restore(&manifest, &output, &book_store)
-                .expect("restore failed");
+            let result = restore(&manifest, &output, &book_store).expect("restore failed");
             println!(
                 "Restored {} files ({} written, {} already present)",
                 result.total, result.written, result.skipped
@@ -458,10 +470,7 @@ mod tests {
         // Build a manifest manually with a CID not in the store
         let fake_cid = ContentId::for_book(b"not stored", ContentFlags::default()).unwrap();
         let fake_hex = cid_to_hex(&fake_cid);
-        let manifest_json = format!(
-            "{{\"files\":{{\"missing_file.txt\":\"{}\"}}}}",
-            fake_hex
-        );
+        let manifest_json = format!("{{\"files\":{{\"missing_file.txt\":\"{}\"}}}}", fake_hex);
         let manifest_path = tmp.path().join("manifest.json");
         std::fs::write(&manifest_path, &manifest_json).unwrap();
 

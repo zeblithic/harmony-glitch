@@ -201,10 +201,7 @@ mod tests {
         let mut reg = RemotePlayerRegistry::new();
         assert_eq!(reg.count(), 0);
 
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
         assert_eq!(reg.count(), 1);
 
         reg.handle_presence(
@@ -219,10 +216,7 @@ mod tests {
     #[test]
     fn update_position() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
 
         reg.update_state(&make_hash(1), make_state(100.0, -50.0), 2.0);
 
@@ -243,10 +237,7 @@ mod tests {
     #[test]
     fn purges_stale_players() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
         reg.update_state(&make_hash(1), make_state(0.0, 0.0), 1.0);
 
         // At t=12.0, player's last_update was 1.0 — 11 seconds ago, exceeds STALE_TIMEOUT
@@ -257,10 +248,7 @@ mod tests {
     #[test]
     fn purges_newly_joined_without_updates() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
         // Within timeout — should NOT be purged
         reg.purge_stale(5.0);
         assert_eq!(reg.count(), 1);
@@ -273,14 +261,8 @@ mod tests {
     #[test]
     fn clear_removes_all() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
-        reg.handle_presence(
-            &make_joined(2, "Bob"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
+        reg.handle_presence(&make_joined(2, "Bob"), 1.0);
         assert_eq!(reg.count(), 2);
 
         reg.clear();
@@ -290,10 +272,7 @@ mod tests {
     #[test]
     fn rejoin_resets_player_state() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
         reg.update_state(&make_hash(1), make_state(500.0, -200.0), 2.0);
 
         // Leave and rejoin
@@ -303,10 +282,7 @@ mod tests {
             },
             3.0,
         );
-        reg.handle_presence(
-            &make_joined(1, "Alice v2"),
-            4.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice v2"), 4.0);
 
         assert_eq!(reg.count(), 1);
         let frames = reg.frames();
@@ -318,10 +294,7 @@ mod tests {
     #[test]
     fn refresh_liveness_prevents_stale_purge() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
 
         // At t=8, refresh liveness (simulates re-announce).
         reg.refresh_liveness(&make_hash(1), 8.0);
@@ -343,10 +316,7 @@ mod tests {
     #[test]
     fn update_display_name_propagates_to_frames() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "OldName"),
-            1.0,
-        );
+        reg.handle_presence(&make_joined(1, "OldName"), 1.0);
         assert_eq!(reg.frames()[0].display_name, "OldName");
 
         reg.update_display_name(&make_hash(1), "NewName".into());
@@ -356,14 +326,8 @@ mod tests {
     #[test]
     fn purge_stale_returns_removed_hashes() {
         let mut reg = RemotePlayerRegistry::new();
-        reg.handle_presence(
-            &make_joined(1, "Alice"),
-            1.0,
-        );
-        reg.handle_presence(
-            &make_joined(2, "Bob"),
-            5.0,
-        );
+        reg.handle_presence(&make_joined(1, "Alice"), 1.0);
+        reg.handle_presence(&make_joined(2, "Bob"), 5.0);
 
         // At t=12, Alice (joined at 1.0) is stale, Bob (joined at 5.0) is not.
         let purged = reg.purge_stale(12.0);
