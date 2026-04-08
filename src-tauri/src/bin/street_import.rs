@@ -119,7 +119,7 @@ fn main() {
         manifest.streets.len(),
         args.output.display()
     );
-    println!("  Skipped: {skipped} non-street entries (L-prefix metadata)");
+    println!("  Skipped: {skipped} non-street entries (non-G-prefix or non-XML)");
     println!(
         "  Signposts: {} total across {} streets",
         signpost_report.total_signposts, signpost_report.streets_with_signposts
@@ -292,7 +292,11 @@ mod tests {
     fn connectivity_empty() {
         let manifest = make_manifest(&[]);
         let report = analyze_signpost_connectivity(&[], &manifest);
+        assert_eq!(report.streets_with_signposts, 0);
+        assert_eq!(report.total_signposts, 0);
         assert_eq!(report.total_targets, 0);
+        assert_eq!(report.resolved_targets, 0);
+        assert_eq!(report.unreachable_targets, 0);
     }
 
     #[test]
