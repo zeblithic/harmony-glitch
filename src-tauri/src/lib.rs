@@ -23,8 +23,8 @@ use street::types::StreetData;
 use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Manager};
 use tauri::http;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Shared monotonic epoch — all time fed to NetworkState is relative to this.
 struct MonotonicEpoch(Instant);
@@ -54,6 +54,13 @@ struct PlayerIdentityWrapper {
 /// Path to the sound-kits directory, created on startup.
 struct SoundKitsDir(std::path::PathBuf);
 
+/// Path to the imported streets directory. Contains individual XML files
+/// and a manifest.json. May not exist if no import has been run.
+struct StreetsDir(std::path::PathBuf);
+
+/// Cached street manifest, loaded once at startup.
+struct StreetManifestState(street::manifest::StreetManifest);
+
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct SoundKitMeta {
@@ -70,11 +77,33 @@ struct NetworkWrapper(Mutex<NetworkState>);
 /// Shared UDP transport — owned by the game loop, used for sends.
 struct TransportWrapper(Mutex<UdpTransport>);
 
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StreetListEntry {
+    tsid: String,
+    name: String,
+}
+
 #[tauri::command]
-fn list_streets() -> Vec<String> {
-    // For Phase A: return hardcoded demo street names.
-    // Later: scan assets directory or query content network.
-    vec!["demo_meadow".to_string(), "demo_heights".to_string()]
+fn list_streets(manifest: tauri::State<StreetManifestState>) -> Vec<StreetListEntry> {
+    let mut entries = vec![
+        StreetListEntry {
+            tsid: "LADEMO001".into(),
+            name: "Demo Meadow".into(),
+        },
+        StreetListEntry {
+            tsid: "LADEMO002".into(),
+            name: "Demo Heights".into(),
+        },
+    ];
+    for (tsid, entry) in &manifest.0.streets {
+        entries.push(StreetListEntry {
+            tsid: tsid.clone(),
+            name: entry.name.clone(),
+        });
+    }
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    entries
 }
 
 /// Validate a sound kit ID: alphanumeric, hyphens, and underscores only.
@@ -86,7 +115,10 @@ fn validate_kit_id(id: &str) -> Result<(), String> {
     if id.contains('.') || id.contains('/') || id.contains('\\') {
         return Err(format!("Invalid kit ID: {id}"));
     }
-    if !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !id
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         return Err(format!("Invalid kit ID: {id}"));
     }
     Ok(())
@@ -177,7 +209,7 @@ fn get_saved_state(app: AppHandle) -> Result<Option<serde_json::Value>, String> 
     let save = crate::engine::state::read_save_state(&save_path)?;
     match save {
         Some(s) => {
-            if load_street_xml(&s.street_id).is_err() {
+            if load_street_xml(&s.street_id, &app).is_err() {
                 return Ok(None);
             }
             Ok(Some(serde_json::to_value(&s).map_err(|e| e.to_string())?))
@@ -238,8 +270,8 @@ fn load_street(
     save_state: Option<serde_json::Value>,
     app: AppHandle,
 ) -> Result<StreetData, String> {
-    // Load XML from bundled assets
-    let xml = load_street_xml(&name)?;
+    // Load XML from bundled assets or imported streets directory
+    let xml = load_street_xml(&name, &app)?;
     let street_data = parse_street(&xml)?;
     let entity_json = load_entity_placement(&name)?;
     let placement = item::loader::parse_entity_placements(&entity_json)?;
@@ -260,7 +292,9 @@ fn load_street(
         if let Some(ref save_json) = save_state {
             match serde_json::from_value::<crate::engine::state::SaveState>(save_json.clone()) {
                 Ok(save) => state.restore_save(&save),
-                Err(e) => eprintln!("[persistence] Failed to deserialize save_state in load_street: {e}"),
+                Err(e) => {
+                    eprintln!("[persistence] Failed to deserialize save_state in load_street: {e}")
+                }
             }
         }
 
@@ -268,9 +302,7 @@ fn load_street(
         let piw = app.state::<PlayerIdentityWrapper>();
         let journal_path = piw.data_dir.join("trade_journal.json");
         if let Some(journal) = trade::journal::read_journal(&journal_path) {
-            let already_saved = state
-                .last_trade_id
-                .is_some_and(|id| id == journal.trade_id);
+            let already_saved = state.last_trade_id.is_some_and(|id| id == journal.trade_id);
             if !already_saved {
                 state.recover_trade_journal(&journal);
                 // Save immediately so recovery is durable.
@@ -827,19 +859,19 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Accept { trade_id, .. } => {
-            if trade_mgr.receive_accept(trade_id, &authenticated_sender, now_secs(app)).is_ok() {
-                let _ = app.emit(
-                    "trade_event",
-                    serde_json::json!({"type": "accepted"}),
-                );
+            if trade_mgr
+                .receive_accept(trade_id, &authenticated_sender, now_secs(app))
+                .is_ok()
+            {
+                let _ = app.emit("trade_event", serde_json::json!({"type": "accepted"}));
             }
         }
         TradeMessage::Decline { trade_id, .. } => {
-            if trade_mgr.receive_decline(trade_id, &authenticated_sender).is_ok() {
-                let _ = app.emit(
-                    "trade_event",
-                    serde_json::json!({"type": "declined"}),
-                );
+            if trade_mgr
+                .receive_decline(trade_id, &authenticated_sender)
+                .is_ok()
+            {
+                let _ = app.emit("trade_event", serde_json::json!({"type": "declined"}));
             }
         }
         TradeMessage::Update {
@@ -867,9 +899,12 @@ fn handle_trade_message(
             terms_hash,
             ..
         } => {
-            if let Ok(both_locked) =
-                trade_mgr.receive_remote_lock(trade_id, &authenticated_sender, terms_hash, now_secs(app))
-            {
+            if let Ok(both_locked) = trade_mgr.receive_remote_lock(
+                trade_id,
+                &authenticated_sender,
+                terms_hash,
+                now_secs(app),
+            ) {
                 if both_locked {
                     // Both locked with matching hash — execute trade.
                     // Write journal BEFORE execution so a crash can be recovered.
@@ -894,12 +929,13 @@ fn handle_trade_message(
                         return;
                     }
                     let state_wrapper = app.state::<GameStateWrapper>();
-                    let mut guard =
-                        state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut guard = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
                     let state = &mut *guard;
-                    match trade_mgr
-                        .execute_trade(&mut state.inventory, &mut state.currants, &state.item_defs)
-                    {
+                    match trade_mgr.execute_trade(
+                        &mut state.inventory,
+                        &mut state.currants,
+                        &state.item_defs,
+                    ) {
                         Ok(complete_msg) => {
                             // Save state immediately after trade execution.
                             guard.last_trade_id = Some(trade_id);
@@ -914,17 +950,17 @@ fn handle_trade_message(
                                 eprintln!("[trade] Retaining journal — save failed, trade recoverable on restart");
                             }
                             drop(guard);
-                            let _ = app.emit(
-                                "trade_event",
-                                serde_json::json!({"type": "completed"}),
-                            );
+                            let _ =
+                                app.emit("trade_event", serde_json::json!({"type": "completed"}));
                             // Send Complete courtesy message to peer + record trust signal.
                             let net = app.state::<NetworkWrapper>();
-                            let mut ns =
-                                net.0.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut ns = net.0.lock().unwrap_or_else(|e| e.into_inner());
                             ns.trust_store.record_trade_success(&authenticated_sender);
-                            let actions =
-                                ns.send_trade_message(&complete_msg, &authenticated_sender, &mut rand::rngs::OsRng);
+                            let actions = ns.send_trade_message(
+                                &complete_msg,
+                                &authenticated_sender,
+                                &mut rand::rngs::OsRng,
+                            );
                             drop(ns);
                             drop(trade_mgr);
                             execute_network_actions(app, actions);
@@ -955,7 +991,10 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Unlock { trade_id, .. } => {
-            if trade_mgr.receive_remote_unlock(trade_id, &authenticated_sender, now_secs(app)).is_ok() {
+            if trade_mgr
+                .receive_remote_unlock(trade_id, &authenticated_sender, now_secs(app))
+                .is_ok()
+            {
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "unlocked", "who": "remote"}),
@@ -963,7 +1002,10 @@ fn handle_trade_message(
             }
         }
         TradeMessage::Cancel { trade_id, .. } => {
-            if trade_mgr.receive_cancel(trade_id, &authenticated_sender).is_ok() {
+            if trade_mgr
+                .receive_cancel(trade_id, &authenticated_sender)
+                .is_ok()
+            {
                 let _ = app.emit(
                     "trade_event",
                     serde_json::json!({"type": "cancelled", "reason": "peerCancelled"}),
@@ -982,15 +1024,23 @@ fn now_secs(app: &AppHandle) -> f64 {
 }
 
 /// Validate that the player is within interact_radius of the given entity.
-fn validate_entity_proximity(state: &engine::state::GameState, entity_id: &str) -> Result<(), String> {
-    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+fn validate_entity_proximity(
+    state: &engine::state::GameState,
+    entity_id: &str,
+) -> Result<(), String> {
+    let entity = state
+        .world_entities
+        .iter()
+        .find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type);
     let radius = def.map(|d| d.interact_radius).unwrap_or(60.0);
     let dx = state.player.x - entity.x;
     let dy = state.player.y - entity.y;
     let dist = (dx * dx + dy * dy).sqrt();
-    if dist > radius { return Err("Too far".to_string()); }
+    if dist > radius {
+        return Err("Too far".to_string());
+    }
     Ok(())
 }
 
@@ -999,7 +1049,9 @@ fn jukebox_play(entity_id: String, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     validate_entity_proximity(&state, &entity_id)?;
-    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.play(); }
+    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) {
+        jb.play();
+    }
     Ok(())
 }
 
@@ -1008,16 +1060,24 @@ fn jukebox_pause(entity_id: String, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     validate_entity_proximity(&state, &entity_id)?;
-    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.pause(); }
+    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) {
+        jb.pause();
+    }
     Ok(())
 }
 
 #[tauri::command]
-fn jukebox_select_track(entity_id: String, track_index: usize, app: AppHandle) -> Result<(), String> {
+fn jukebox_select_track(
+    entity_id: String,
+    track_index: usize,
+    app: AppHandle,
+) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     validate_entity_proximity(&state, &entity_id)?;
-    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) { jb.select_track(track_index); }
+    if let Some(jb) = state.jukebox_states.get_mut(&entity_id) {
+        jb.select_track(track_index);
+    }
     Ok(())
 }
 
@@ -1025,7 +1085,10 @@ fn jukebox_select_track(entity_id: String, track_index: usize, app: AppHandle) -
 fn get_jukebox_state(entity_id: String, app: AppHandle) -> Result<serde_json::Value, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+    let entity = state
+        .world_entities
+        .iter()
+        .find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
     let def = state.entity_defs.get(&entity.entity_type);
     let name = def.map(|d| d.name.as_str()).unwrap_or("Jukebox");
@@ -1033,15 +1096,18 @@ fn get_jukebox_state(entity_id: String, app: AppHandle) -> Result<serde_json::Va
     let jb = state.jukebox_states.get(&entity_id);
     let playlist: Vec<serde_json::Value> = jb
         .map(|jb| {
-            jb.playlist.iter().map(|track_id| {
-                let track_def = state.track_catalog.tracks.get(track_id);
-                serde_json::json!({
-                    "id": track_id,
-                    "title": track_def.map(|t| t.title.as_str()).unwrap_or("Unknown"),
-                    "artist": track_def.map(|t| t.artist.as_str()).unwrap_or("Unknown"),
-                    "durationSecs": track_def.map(|t| t.duration_secs).unwrap_or(0.0),
+            jb.playlist
+                .iter()
+                .map(|track_id| {
+                    let track_def = state.track_catalog.tracks.get(track_id);
+                    serde_json::json!({
+                        "id": track_id,
+                        "title": track_def.map(|t| t.title.as_str()).unwrap_or("Unknown"),
+                        "artist": track_def.map(|t| t.artist.as_str()).unwrap_or("Unknown"),
+                        "durationSecs": track_def.map(|t| t.duration_secs).unwrap_or(0.0),
+                    })
                 })
-            }).collect()
+                .collect()
         })
         .unwrap_or_default();
 
@@ -1061,44 +1127,64 @@ fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Valu
     let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     // No proximity check — this is a read-only query used to refresh
     // the shop panel after buy/sell (which already validate proximity).
-    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+    let entity = state
+        .world_entities
+        .iter()
+        .find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
-    let def = state.entity_defs.get(&entity.entity_type)
+    let def = state
+        .entity_defs
+        .get(&entity.entity_type)
         .ok_or_else(|| format!("Unknown entity type: {}", entity.entity_type))?;
-    let store_id = def.store.as_ref()
+    let store_id = def
+        .store
+        .as_ref()
         .ok_or_else(|| format!("Entity '{}' is not a vendor", entity.entity_type))?;
-    let store = state.store_catalog.stores.get(store_id)
+    let store = state
+        .store_catalog
+        .stores
+        .get(store_id)
         .ok_or_else(|| format!("Unknown store: {store_id}"))?;
 
-    let vendor_inventory: Vec<serde_json::Value> = store.inventory.iter().filter_map(|item_id| {
-        let item_def = state.item_defs.get(item_id)?;
-        let base_cost = item_def.base_cost?;
-        Some(serde_json::json!({
-            "itemId": item_id,
-            "name": item_def.name,
-            "baseCost": base_cost,
-            "stackLimit": item_def.stack_limit,
-        }))
-    }).collect();
+    let vendor_inventory: Vec<serde_json::Value> = store
+        .inventory
+        .iter()
+        .filter_map(|item_id| {
+            let item_def = state.item_defs.get(item_id)?;
+            let base_cost = item_def.base_cost?;
+            Some(serde_json::json!({
+                "itemId": item_id,
+                "name": item_def.name,
+                "baseCost": base_cost,
+                "stackLimit": item_def.stack_limit,
+            }))
+        })
+        .collect();
 
     // Build player sellable inventory: deduplicate by item_id
     let mut seen = std::collections::HashMap::<String, u32>::new();
     for stack in state.inventory.slots.iter().flatten() {
         *seen.entry(stack.item_id.clone()).or_insert(0) += stack.count;
     }
-    let mut player_inventory: Vec<serde_json::Value> = seen.iter().filter_map(|(item_id, &count)| {
-        let sell = item::vendor::sell_price(item_id, &state.item_defs, store)?;
-        let item_def = state.item_defs.get(item_id)?;
-        Some(serde_json::json!({
-            "itemId": item_id,
-            "name": item_def.name,
-            "count": count,
-            "sellPrice": sell,
-        }))
-    }).collect();
+    let mut player_inventory: Vec<serde_json::Value> = seen
+        .iter()
+        .filter_map(|(item_id, &count)| {
+            let sell = item::vendor::sell_price(item_id, &state.item_defs, store)?;
+            let item_def = state.item_defs.get(item_id)?;
+            Some(serde_json::json!({
+                "itemId": item_id,
+                "name": item_def.name,
+                "count": count,
+                "sellPrice": sell,
+            }))
+        })
+        .collect();
     // Sort by item name for stable display order across refreshes
     player_inventory.sort_by(|a, b| {
-        a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or(""))
+        a["name"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["name"].as_str().unwrap_or(""))
     });
 
     Ok(serde_json::json!({
@@ -1111,25 +1197,48 @@ fn get_store_state(entity_id: String, app: AppHandle) -> Result<serde_json::Valu
 }
 
 #[tauri::command]
-fn vendor_buy(entity_id: String, item_id: String, count: u32, app: AppHandle) -> Result<u64, String> {
+fn vendor_buy(
+    entity_id: String,
+    item_id: String,
+    count: u32,
+    app: AppHandle,
+) -> Result<u64, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     validate_entity_proximity(&state, &entity_id)?;
 
-    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+    let entity = state
+        .world_entities
+        .iter()
+        .find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
-    let def = state.entity_defs.get(&entity.entity_type)
+    let def = state
+        .entity_defs
+        .get(&entity.entity_type)
         .ok_or_else(|| format!("Unknown entity type: {}", entity.entity_type))?;
-    let store_id = def.store.as_ref()
+    let store_id = def
+        .store
+        .as_ref()
         .ok_or_else(|| format!("Entity '{}' is not a vendor", entity.entity_type))?;
-    let store = state.store_catalog.stores.get(store_id)
+    let store = state
+        .store_catalog
+        .stores
+        .get(store_id)
         .ok_or_else(|| format!("Unknown store: {store_id}"))?
         .clone();
     let item_defs = state.item_defs.clone();
 
     let currants = state.currants;
     let discount = item::imagination::haggling_discount(state.upgrades.haggling_tier);
-    let new_balance = item::vendor::buy(&item_id, count, currants, &mut state.inventory, &item_defs, &store, discount)?;
+    let new_balance = item::vendor::buy(
+        &item_id,
+        count,
+        currants,
+        &mut state.inventory,
+        &item_defs,
+        &store,
+        discount,
+    )?;
     state.currants = new_balance;
 
     let total = currants - new_balance;
@@ -1151,24 +1260,46 @@ fn vendor_buy(entity_id: String, item_id: String, count: u32, app: AppHandle) ->
 }
 
 #[tauri::command]
-fn vendor_sell(entity_id: String, item_id: String, count: u32, app: AppHandle) -> Result<u64, String> {
+fn vendor_sell(
+    entity_id: String,
+    item_id: String,
+    count: u32,
+    app: AppHandle,
+) -> Result<u64, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     validate_entity_proximity(&state, &entity_id)?;
 
-    let entity = state.world_entities.iter().find(|e| e.id == entity_id)
+    let entity = state
+        .world_entities
+        .iter()
+        .find(|e| e.id == entity_id)
         .ok_or_else(|| format!("Unknown entity: {entity_id}"))?;
-    let def = state.entity_defs.get(&entity.entity_type)
+    let def = state
+        .entity_defs
+        .get(&entity.entity_type)
         .ok_or_else(|| format!("Unknown entity type: {}", entity.entity_type))?;
-    let store_id = def.store.as_ref()
+    let store_id = def
+        .store
+        .as_ref()
         .ok_or_else(|| format!("Entity '{}' is not a vendor", entity.entity_type))?;
-    let store = state.store_catalog.stores.get(store_id)
+    let store = state
+        .store_catalog
+        .stores
+        .get(store_id)
         .ok_or_else(|| format!("Unknown store: {store_id}"))?
         .clone();
     let item_defs = state.item_defs.clone();
 
     let old_balance = state.currants;
-    let new_balance = item::vendor::sell(&item_id, count, old_balance, &mut state.inventory, &item_defs, &store)?;
+    let new_balance = item::vendor::sell(
+        &item_id,
+        count,
+        old_balance,
+        &mut state.inventory,
+        &item_defs,
+        &store,
+    )?;
     state.currants = new_balance;
 
     let total = new_balance - old_balance;
@@ -1198,7 +1329,13 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
     let energy = state.energy;
     let max_energy = state.max_energy;
 
-    let (new_energy, new_max) = item::energy::eat(&item_id, energy, max_energy, &mut state.inventory, &item_defs)?;
+    let (new_energy, new_max) = item::energy::eat(
+        &item_id,
+        energy,
+        max_energy,
+        &mut state.inventory,
+        &item_defs,
+    )?;
     state.energy = new_energy;
 
     let gained = new_energy - energy;
@@ -1237,11 +1374,7 @@ fn buy_upgrade(upgrade_id: String, app: AppHandle) -> Result<serde_json::Value, 
 
     let mut imagination = state.imagination;
     let mut upgrades = state.upgrades.clone();
-    let result = item::imagination::buy_upgrade(
-        &upgrade_id,
-        &mut imagination,
-        &mut upgrades,
-    )?;
+    let result = item::imagination::buy_upgrade(&upgrade_id, &mut imagination, &mut upgrades)?;
     state.imagination = imagination;
     state.upgrades = upgrades;
 
@@ -1319,15 +1452,14 @@ fn trade_accept(app: AppHandle) -> Result<(), String> {
         let trade = app.state::<TradeWrapper>();
         let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
         let msg = mgr.accept_trade(now_secs(&app))?;
-        let peer = mgr.active_peer_hash().ok_or("No active trade after accept")?;
+        let peer = mgr
+            .active_peer_hash()
+            .ok_or("No active trade after accept")?;
         (msg, peer)
     };
     send_trade_msg(&app, &msg, &peer_hash);
     // Emit accepted event so the responder's own UI transitions from prompt to trade panel.
-    let _ = app.emit(
-        "trade_event",
-        serde_json::json!({"type": "accepted"}),
-    );
+    let _ = app.emit("trade_event", serde_json::json!({"type": "accepted"}));
     Ok(())
 }
 
@@ -1336,7 +1468,9 @@ fn trade_decline(app: AppHandle) -> Result<(), String> {
     let (msg, peer_hash) = {
         let trade = app.state::<TradeWrapper>();
         let mut mgr = trade.0.lock().map_err(|e| e.to_string())?;
-        let peer = mgr.pending_peer_hash().ok_or("No pending trade to decline")?;
+        let peer = mgr
+            .pending_peer_hash()
+            .ok_or("No pending trade to decline")?;
         let msg = mgr.decline_trade()?;
         (msg, peer)
     };
@@ -1424,17 +1558,16 @@ fn trade_lock(app: AppHandle) -> Result<(), String> {
                 if saved {
                     trade::journal::clear_journal(&journal_path);
                 } else {
-                    eprintln!("[trade] Retaining journal — save failed, trade recoverable on restart");
+                    eprintln!(
+                        "[trade] Retaining journal — save failed, trade recoverable on restart"
+                    );
                 }
                 drop(guard);
                 drop(mgr);
                 // Defer network sends until after all locks are released.
                 send_trade_msg(&app, &lock_msg, &peer_hash);
                 send_trade_msg(&app, &complete_msg, &peer_hash);
-                let _ = app.emit(
-                    "trade_event",
-                    serde_json::json!({"type": "completed"}),
-                );
+                let _ = app.emit("trade_event", serde_json::json!({"type": "completed"}));
             }
             Err(e) => {
                 // Do NOT send lock_msg — the peer would see both locked,
@@ -1657,20 +1790,28 @@ fn game_loop(app: AppHandle) {
     }
 }
 
-fn load_street_xml(name: &str) -> Result<String, String> {
-    // Phase A: embed street XML at compile time so the binary is self-contained
-    // and doesn't depend on CARGO_MANIFEST_DIR paths at runtime.
-    // Accepts both short names ("demo_meadow") and TSIDs ("LADEMO001") since
-    // signpost connections reference streets by TSID.
+fn load_street_xml(name: &str, app: &AppHandle) -> Result<String, String> {
+    // Demo streets are always available via compile-time embedding.
     match name {
         "demo_meadow" | "LADEMO001" => {
-            Ok(include_str!("../../assets/streets/demo_meadow.xml").to_string())
+            return Ok(include_str!("../../assets/streets/demo_meadow.xml").to_string());
         }
         "demo_heights" | "LADEMO002" => {
-            Ok(include_str!("../../assets/streets/demo_heights.xml").to_string())
+            return Ok(include_str!("../../assets/streets/demo_heights.xml").to_string());
         }
-        _ => Err(format!("Unknown street: {}", name)),
+        _ => {}
     }
+
+    // Look up imported streets by TSID in the manifest.
+    let manifest = app.state::<StreetManifestState>();
+    let entry = manifest
+        .0
+        .streets
+        .get(name)
+        .ok_or_else(|| format!("Unknown street: {name}"))?;
+    let streets_dir = app.state::<StreetsDir>();
+    std::fs::read_to_string(streets_dir.0.join(&entry.filename))
+        .map_err(|e| format!("Failed to read street {name}: {e}"))
 }
 
 fn load_entity_placement(name: &str) -> Result<String, String> {
@@ -1978,6 +2119,18 @@ pub fn run() {
         .manage(GameLoopHandle(Mutex::new(None)))
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
+
+            // Streets directory: env override or default under app data dir
+            let streets_dir = std::env::var("HARMONY_STREETS_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| data_dir.join("streets"));
+            let manifest = street::manifest::StreetManifest::load(&streets_dir.join("manifest.json"));
+            if !manifest.streets.is_empty() {
+                println!("[streets] Loaded manifest with {} imported streets", manifest.streets.len());
+            }
+            app.manage(StreetsDir(streets_dir));
+            app.manage(StreetManifestState(manifest));
+
             let kits_dir = data_dir.join("sound-kits");
             if let Err(e) = std::fs::create_dir_all(&kits_dir) {
                 eprintln!("[sound-kits] Failed to create {}: {e}", kits_dir.display());

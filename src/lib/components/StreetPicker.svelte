@@ -1,5 +1,6 @@
 <script lang="ts">
   import { listStreets, loadStreet } from '../ipc';
+  import type { StreetListEntry } from '../ipc';
   import type { StreetData } from '../types';
   import { onMount } from 'svelte';
 
@@ -7,10 +8,17 @@
     onStreetLoaded: (street: StreetData) => void;
   } = $props();
 
-  let streets = $state<string[]>([]);
+  let streets = $state<StreetListEntry[]>([]);
+  let search = $state('');
   let initialLoading = $state(true);
   let loading = $state(false);
   let error = $state<string | null>(null);
+
+  let filtered = $derived(
+    search.length > 0
+      ? streets.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
+      : streets
+  );
 
   onMount(async () => {
     try {
@@ -22,11 +30,11 @@
     }
   });
 
-  async function handleSelect(name: string) {
+  async function handleSelect(tsid: string) {
     loading = true;
     error = null;
     try {
-      const street = await loadStreet(name);
+      const street = await loadStreet(tsid);
       onStreetLoaded(street);
     } catch (e) {
       error = `Failed to load street: ${e}`;
@@ -46,20 +54,32 @@
     {#if initialLoading}Loading streets…{:else if loading}Loading street, please wait…{/if}
   </div>
 
+  {#if streets.length > 4}
+    <input
+      type="search"
+      class="search-input"
+      placeholder="Search {streets.length} streets…"
+      bind:value={search}
+      aria-label="Search streets"
+    />
+  {/if}
+
   <div class="street-list">
-    {#each streets as name}
+    {#each filtered as entry}
       <button
         type="button"
         class="street-btn"
-        onclick={() => handleSelect(name)}
+        onclick={() => handleSelect(entry.tsid)}
         disabled={loading}
       >
-        {name.replace(/_/g, ' ')}
+        {entry.name}
       </button>
     {/each}
 
     {#if initialLoading}
       <p class="empty">Loading streets…</p>
+    {:else if filtered.length === 0 && search.length > 0}
+      <p class="empty">No streets matching "{search}"</p>
     {:else if streets.length === 0 && !error}
       <p class="empty">No streets available</p>
     {/if}
@@ -94,12 +114,28 @@
     font-size: 0.85rem;
   }
 
+  .search-input {
+    padding: 8px 16px;
+    border: 1px solid #444;
+    border-radius: 8px;
+    background: #1a1a3a;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    width: 280px;
+    outline: none;
+  }
+
+  .search-input:focus {
+    border-color: #5865f2;
+  }
 
   .street-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
     margin-top: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
   }
 
   .street-btn {
@@ -110,7 +146,6 @@
     color: #e0e0e0;
     font-size: 1rem;
     cursor: pointer;
-    text-transform: capitalize;
   }
 
   .street-btn:hover:not(:disabled) {
