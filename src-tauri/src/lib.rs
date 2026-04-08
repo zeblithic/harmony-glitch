@@ -97,6 +97,10 @@ fn list_streets(manifest: tauri::State<StreetManifestState>) -> Vec<StreetListEn
         },
     ];
     for (tsid, entry) in &manifest.0.streets {
+        // Skip if already covered by embedded demo streets
+        if tsid == "LADEMO001" || tsid == "LADEMO002" {
+            continue;
+        }
         entries.push(StreetListEntry {
             tsid: tsid.clone(),
             name: entry.name.clone(),
@@ -1810,8 +1814,13 @@ fn load_street_xml(name: &str, app: &AppHandle) -> Result<String, String> {
         .get(name)
         .ok_or_else(|| format!("Unknown street: {name}"))?;
     let streets_dir = app.state::<StreetsDir>();
-    std::fs::read_to_string(streets_dir.0.join(&entry.filename))
-        .map_err(|e| format!("Failed to read street {name}: {e}"))
+    let path = streets_dir.0.join(&entry.filename);
+    if !path.starts_with(&streets_dir.0) {
+        return Err(format!(
+            "Manifest filename for {name} escapes streets directory"
+        ));
+    }
+    std::fs::read_to_string(path).map_err(|e| format!("Failed to read street {name}: {e}"))
 }
 
 fn load_entity_placement(name: &str) -> Result<String, String> {
