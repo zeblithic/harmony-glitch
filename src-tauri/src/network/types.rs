@@ -51,6 +51,7 @@ pub enum NetMessage {
     Gossip(crate::trust::gossip::GossipEnvelope),
     Vouch(crate::trust::epoch::VouchMessage),
     Emote(crate::emote::EmoteMessage),
+    Social(crate::social::SocialMessage),
 }
 
 #[cfg(test)]

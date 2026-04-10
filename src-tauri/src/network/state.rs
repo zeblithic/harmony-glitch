@@ -1986,6 +1986,10 @@ impl NetworkState {
                                 // Emote handling is done at the application layer (lib.rs),
                                 // not in NetworkState. The message is forwarded via actions.
                             }
+                            NetMessage::Social(_) => {
+                                // Social handling is done at the application layer (lib.rs),
+                                // not in NetworkState. The message is forwarded via actions.
+                            }
                         }
                     }
                 }
