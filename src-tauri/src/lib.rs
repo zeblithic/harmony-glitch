@@ -824,8 +824,17 @@ fn buddy_request(peer_hash: String, app: AppHandle) -> Result<(), String> {
     if state.social.buddies.is_blocked(&peer_bytes) {
         return Err("Player is blocked".to_string());
     }
+    drop(state);
 
-    // Network send is a placeholder — will be wired in a later task.
+    let net = app.state::<NetworkWrapper>();
+    let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_hash = net_state.our_address_hash();
+    let actions = net_state.publish_social(
+        social::SocialMessage::BuddyRequest { from: our_hash },
+        &mut rand::rngs::OsRng,
+    );
+    drop(net_state);
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
@@ -856,7 +865,17 @@ fn buddy_accept(peer_hash: String, app: AppHandle) -> Result<(), String> {
         co_presence_total: 0.0,
         last_seen_date: None,
     });
+    drop(state);
 
+    let net = app.state::<NetworkWrapper>();
+    let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_hash = net_state.our_address_hash();
+    let actions = net_state.publish_social(
+        social::SocialMessage::BuddyAccept { from: our_hash },
+        &mut rand::rngs::OsRng,
+    );
+    drop(net_state);
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
@@ -874,6 +893,17 @@ fn buddy_decline(peer_hash: String, app: AppHandle) -> Result<(), String> {
         .buddies
         .pending_requests
         .retain(|r| r.from != peer_bytes);
+    drop(state);
+
+    let net = app.state::<NetworkWrapper>();
+    let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_hash = net_state.our_address_hash();
+    let actions = net_state.publish_social(
+        social::SocialMessage::BuddyDecline { from: our_hash },
+        &mut rand::rngs::OsRng,
+    );
+    drop(net_state);
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
@@ -890,6 +920,17 @@ fn buddy_remove(peer_hash: String, app: AppHandle) -> Result<(), String> {
     if !state.social.buddies.remove_buddy(&peer_bytes) {
         return Err("Not a buddy".to_string());
     }
+    drop(state);
+
+    let net = app.state::<NetworkWrapper>();
+    let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_hash = net_state.our_address_hash();
+    let actions = net_state.publish_social(
+        social::SocialMessage::BuddyRemove { from: our_hash },
+        &mut rand::rngs::OsRng,
+    );
+    drop(net_state);
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
