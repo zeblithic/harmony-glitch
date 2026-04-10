@@ -2,6 +2,7 @@ pub mod avatar;
 pub mod engine;
 pub mod identity;
 pub mod item;
+pub mod mood;
 pub mod network;
 pub mod persistence;
 pub mod physics;
