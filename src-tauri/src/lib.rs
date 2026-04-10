@@ -1045,7 +1045,22 @@ fn party_invite(peer_hash: String, app: AppHandle) -> Result<(), String> {
         return Err("Player is already in the party".to_string());
     }
 
-    // Network send is a placeholder — will be wired in a later task.
+    let member_hashes = party.member_hashes();
+    drop(state);
+
+    // Broadcast the invite
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.publish_social(
+            social::SocialMessage::PartyInvite {
+                leader: our_address,
+                members: member_hashes,
+            },
+            &mut rand::rngs::OsRng,
+        )
+    };
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
@@ -1067,8 +1082,19 @@ fn party_accept(app: AppHandle) -> Result<(), String> {
     state
         .social
         .party
-        .accept_invite(our_address, our_name, now)
+        .accept_invite(our_address, our_name.clone(), now)
         .map_err(|e| e.to_string())?;
+    drop(state);
+
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.publish_social(
+            social::SocialMessage::PartyAccept { from: our_address },
+            &mut rand::rngs::OsRng,
+        )
+    };
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
@@ -1077,6 +1103,17 @@ fn party_decline(app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
     state.social.party.decline_invite();
+    drop(state);
+
+    let net = app.state::<NetworkWrapper>();
+    let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    let actions = net_state.publish_social(
+        social::SocialMessage::PartyDecline { from: our_address },
+        &mut rand::rngs::OsRng,
+    );
+    drop(net_state);
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
@@ -1095,6 +1132,17 @@ fn party_leave(app: AppHandle) -> Result<(), String> {
         .party
         .leave_party(&our_address)
         .map_err(|e| e.to_string())?;
+    drop(state);
+
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.publish_social(
+            social::SocialMessage::PartyLeave { from: our_address },
+            &mut rand::rngs::OsRng,
+        )
+    };
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
@@ -1123,6 +1171,17 @@ fn party_kick(peer_hash: String, app: AppHandle) -> Result<(), String> {
     party
         .kick_member(&our_address, &peer_bytes)
         .map_err(|e| e.to_string())?;
+    drop(state);
+
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.publish_social(
+            social::SocialMessage::PartyKick { target: peer_bytes },
+            &mut rand::rngs::OsRng,
+        )
+    };
+    execute_network_actions(&app, actions);
     Ok(())
 }
 
