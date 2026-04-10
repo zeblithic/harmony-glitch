@@ -202,3 +202,11 @@ export async function closeDialogue(): Promise<void> {
 export async function getQuestLog(): Promise<QuestLogFrame> {
   return invoke<QuestLogFrame>('get_quest_log');
 }
+
+// ── Social ────────────────────────────────────────────────────────────
+
+export interface MoodResult { mood: number; maxMood: number; multiplier: number; }
+export interface EmoteHiResult { variant: string; targeted: boolean; }
+
+export async function getMood(): Promise<MoodResult> { return invoke<MoodResult>('get_mood'); }
+export async function emoteHi(): Promise<EmoteHiResult> { return invoke<EmoteHiResult>('emote_hi'); }

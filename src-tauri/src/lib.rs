@@ -723,6 +723,68 @@ fn get_quest_log(app: AppHandle) -> Result<quest::types::QuestLogFrame, String> 
     Ok(quest::types::QuestLogFrame { active, completed })
 }
 
+// ── Social: Mood & Emotes ────────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_mood(app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "mood": state.social.mood.mood,
+        "maxMood": state.social.mood.max_mood,
+        "multiplier": state.social.mood.multiplier(),
+    }))
+}
+
+#[tauri::command]
+fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let our_variant = state.social.emotes.active_variant();
+
+    // Find nearest remote player
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let remote_frames = net_state.remote_frames();
+    drop(net_state);
+
+    let mut nearest_hash: Option<[u8; 16]> = None;
+    let mut nearest_dist = f64::MAX;
+
+    for rf in &remote_frames {
+        if let Ok(bytes) = hex::decode(&rf.address_hash) {
+            if bytes.len() == 16 {
+                let mut addr = [0u8; 16];
+                addr.copy_from_slice(&bytes);
+                let dx = state.player.x - rf.x;
+                let dy = state.player.y - rf.y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                if dist <= 400.0 && dist < nearest_dist {
+                    nearest_dist = dist;
+                    nearest_hash = Some(addr);
+                }
+            }
+        }
+    }
+
+    // Check cooldown and blocked
+    if let Some(target) = nearest_hash {
+        if !state.social.emotes.can_hi(&target) {
+            return Err("Already greeted today".to_string());
+        }
+        if state.social.buddies.is_blocked(&target) {
+            return Err("Player is blocked".to_string());
+        }
+        state.social.emotes.record_hi_sent(target);
+    }
+
+    Ok(serde_json::json!({
+        "variant": our_variant.as_str(),
+        "targeted": nearest_hash.is_some(),
+    }))
+}
+
 #[tauri::command]
 fn craft_recipe(recipe_id: String, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
@@ -2276,6 +2338,8 @@ pub fn run() {
             dialogue_choose,
             close_dialogue,
             get_quest_log,
+            get_mood,
+            emote_hi,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");
