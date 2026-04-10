@@ -132,6 +132,12 @@ export interface CameraFrame {
   y: number;
 }
 
+export interface EmoteAnimationFrame {
+  variant: string;
+  targetHash: string | null;
+  startedAt: number;
+}
+
 export interface RemotePlayerFrame {
   addressHash: string;
   displayName: string;
@@ -141,6 +147,10 @@ export interface RemotePlayerFrame {
   onGround: boolean;
   animation: AnimationState;
   avatar: AvatarAppearance | null;
+  epoch: string;
+  isBuddy: boolean;
+  partyRole: string | null;
+  emoteAnimation: EmoteAnimationFrame | null;
 }
 
 export interface TransitionInfo {
@@ -177,6 +187,13 @@ export interface LearningFrame {
   progress: number;
 }
 
+export interface NearestSocialTarget {
+  addressHash: string;
+  displayName: string;
+  isBuddy: boolean;
+  inParty: boolean;
+}
+
 export interface RenderFrame {
   player: PlayerFrame;
   remotePlayers: RemotePlayerFrame[];
@@ -197,6 +214,9 @@ export interface RenderFrame {
   skillProgress: SkillProgressFrame;
   upgrades: PlayerUpgrades;
   questProgress: QuestProgressFrame;
+  mood: number;
+  maxMood: number;
+  nearestSocialTarget: NearestSocialTarget | null;
 }
 
 export interface NetworkStatus {
@@ -235,6 +255,7 @@ export interface ItemStackFrame {
   count: number;
   stackLimit: number;
   energyValue: number | null;
+  moodValue: number | null;
 }
 
 export interface WorldEntityFrame {

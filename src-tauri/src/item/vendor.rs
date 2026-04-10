@@ -131,6 +131,7 @@ mod tests {
                 icon: "cherry".to_string(),
                 base_cost: Some(3),
                 energy_value: Some(12),
+                mood_value: None,
             },
         );
         defs.insert(
@@ -144,6 +145,7 @@ mod tests {
                 icon: "quest_item".to_string(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         defs
@@ -180,6 +182,7 @@ mod tests {
                 icon: "cheap_item".to_string(),
                 base_cost: Some(1),
                 energy_value: None,
+                mood_value: None,
             },
         );
         let store = StoreDef {
@@ -245,6 +248,7 @@ mod tests {
                 icon: "gem".to_string(),
                 base_cost: Some(100),
                 energy_value: None,
+                mood_value: None,
             },
         );
         let store = test_store(); // store only sells "cherry"
@@ -316,6 +320,7 @@ mod tests {
                 icon: "cheap".to_string(),
                 base_cost: Some(1),
                 energy_value: None,
+                mood_value: None,
             },
         );
         let store = StoreDef {

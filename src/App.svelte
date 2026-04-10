@@ -13,6 +13,7 @@
   import ShopPanel from './lib/components/ShopPanel.svelte';
   import CurrantHud from './lib/components/CurrantHud.svelte';
   import EnergyHud from './lib/components/EnergyHud.svelte';
+  import MoodHud from './lib/components/MoodHud.svelte';
   import ImaginationHud from './lib/components/ImaginationHud.svelte';
   import UpgradePanel from './lib/components/UpgradePanel.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
@@ -22,7 +23,12 @@
   import SkillsPanel from './lib/components/SkillsPanel.svelte';
   import DialoguePanel from './lib/components/DialoguePanel.svelte';
   import QuestLogPanel from './lib/components/QuestLogPanel.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog } from './lib/ipc';
+  import EmoteAnimation from './lib/components/EmoteAnimation.svelte';
+  import PartyPanel from './lib/components/PartyPanel.svelte';
+  import BuddyListPanel from './lib/components/BuddyListPanel.svelte';
+  import SocialPrompt from './lib/components/SocialPrompt.svelte';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, partyLeave, partyKick, buddyRemove, blockPlayer } from './lib/ipc';
+  import type { PartyMemberInfo, BuddyEntry } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
@@ -73,6 +79,13 @@
   let dialogueClosing: Promise<void> | null = null;
   let questLogOpen = $state(false);
   let questLog = $state<QuestLogFrame | null>(null);
+
+  // Social state
+  let buddyListOpen = $state(false);
+  let buddies = $state<BuddyEntry[]>([]);
+  let partyInParty = $state(false);
+  let partyMembers = $state<PartyMemberInfo[]>([]);
+  let partyIsLeader = $state(false);
 
   onMount(async () => {
     try {
@@ -512,15 +525,17 @@
       inventoryOpen = false; volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; skillsOpen = false;
     }
   }
-  // T key: initiate trade with nearest remote player (by distance, not hash order)
+  // H key: send Hi emote
+  if ((e.key === 'h' || e.key === 'H') && currentStreet && !chatFocused && latestFrame) {
+    e.preventDefault();
+    emoteHi().catch(console.error);
+  }
+  // T key: initiate trade with nearest remote player (computed by Rust)
   if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !tradeRequestVisible && !shopOpen && latestFrame) {
-    const px = latestFrame.player.x, py = latestFrame.player.y;
-    const nearest = latestFrame.remotePlayers
-      ?.map(p => ({ p, d: Math.hypot(p.x - px, p.y - py) }))
-      .sort((a, b) => a.d - b.d)[0]?.p;
-    if (nearest) {
+    const target = latestFrame.nearestSocialTarget;
+    if (target) {
       e.preventDefault();
-      tradeInitiate(nearest.addressHash).then(() => {
+      tradeInitiate(target.addressHash).then(() => {
         tradeOpen = true;
         inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
         tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
@@ -680,6 +695,7 @@
     <StreetNameHud name={currentStreet.name} />
     <CurrantHud currants={latestFrame?.currants ?? 0} />
     <EnergyHud energy={latestFrame?.energy ?? 600} maxEnergy={latestFrame?.maxEnergy ?? 600} />
+    <MoodHud mood={latestFrame?.mood ?? 100} maxMood={latestFrame?.maxMood ?? 100} />
     <ImaginationHud
       imagination={latestFrame?.imagination ?? 0}
       onOpen={() => { upgradePanelOpen = true; }}
@@ -719,6 +735,47 @@
       visible={questLogOpen}
       onClose={() => { questLogOpen = false; }}
     />
+    <PartyPanel
+      inParty={partyInParty}
+      members={partyMembers}
+      isLeader={partyIsLeader}
+      onLeave={() => partyLeave().catch(console.error)}
+      onKick={(hash) => partyKick(hash).catch(console.error)}
+    />
+    <BuddyListPanel
+      {buddies}
+      visible={buddyListOpen}
+      onRemove={(hash) => buddyRemove(hash).catch(console.error)}
+      onBlock={(hash) => blockPlayer(hash).catch(console.error)}
+    />
+    {#if latestFrame}
+      {#each latestFrame.remotePlayers.filter(p => p.emoteAnimation !== null) as rp (rp.addressHash)}
+        <EmoteAnimation
+          animation={rp.emoteAnimation!}
+          x={rp.x - (latestFrame.camera.x)}
+          y={rp.y - (latestFrame.camera.y)}
+        />
+      {/each}
+    {/if}
+    {#if latestFrame?.nearestSocialTarget}
+      {@const target = latestFrame.nearestSocialTarget}
+      <SocialPrompt
+        visible={!chatFocused && !tradeOpen && !shopOpen && !dialogueOpen}
+        targetName={target.displayName}
+        canHi={true}
+        canTrade={true}
+        canInvite={false}
+        canBuddy={false}
+        onHi={() => emoteHi().catch(console.error)}
+        onTrade={() => tradeInitiate(target.addressHash).then(() => {
+          tradeOpen = true;
+          inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
+          tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
+        }).catch(console.error)}
+        onInvite={() => {}}
+        onBuddy={() => {}}
+      />
+    {/if}
     <AvatarEditor
       visible={avatarEditorOpen}
       manifest={avatarManifest}

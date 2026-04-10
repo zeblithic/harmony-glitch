@@ -6,7 +6,8 @@
     "stackLimit": 12,
     "icon": "abbasid_ribs",
     "baseCost": 201,
-    "energyValue": 201
+    "energyValue": 201,
+    "moodValue": 60
   },
   "abbasidose": {
     "name": "Abbasidose",
@@ -51,7 +52,8 @@
     "stackLimit": 250,
     "icon": "all_spice",
     "baseCost": 3,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "alphabet_sauce": {
     "name": "Alphabet Sauce",
@@ -96,7 +98,8 @@
     "stackLimit": 100,
     "icon": "apple",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "applejack": {
     "name": "Applejack",
@@ -105,7 +108,8 @@
     "stackLimit": 40,
     "icon": "applejack",
     "baseCost": 25,
-    "energyValue": 25
+    "energyValue": 25,
+    "moodValue": 8
   },
   "artifact_bag_of_tent_pegs": {
     "name": "Bag of Tent Pegs",
@@ -118,7 +122,7 @@
   },
   "artifact_ball_of_string": {
     "name": "Ball of String",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. This ball of string - which appears to be a spun mixture of long blonde hair and patch-weeds - was discovered by Birdie and Swift when they were on one of their major childhood explorations of the North/South-Western coastline. Thinner than any string they’d ever seen, and stronger, the ball is now very depleted, much of it having been used for tough yet lightweight travel socks.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. This ball of string - which appears to be a spun mixture of long blonde hair and patch-weeds - was discovered by Birdie and Swift when they were on one of their major childhood explorations of the North/South-Western coastline. Thinner than any string they\u2019d ever seen, and stronger, the ball is now very depleted, much of it having been used for tough yet lightweight travel socks.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_ball_of_string",
@@ -127,7 +131,7 @@
   },
   "artifact_bee_key": {
     "name": "U.S. Bee Key",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The most serious part of the quinto-annual festivities of the feast of Humbaba (Humbabarians love a party) is the solemn parade circle of the bee army. Trained by bee-experts, the Unilateral Squadron of Bees (or U.S.Bee) would circle the forest clearing, each wearing one of Humbaba’s treasured fancy bee hats, each with a folded note containing a secret tucked underneath it. This key unlocked the strongroom in which these hats were kept.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The most serious part of the quinto-annual festivities of the feast of Humbaba (Humbabarians love a party) is the solemn parade circle of the bee army. Trained by bee-experts, the Unilateral Squadron of Bees (or U.S.Bee) would circle the forest clearing, each wearing one of Humbaba\u2019s treasured fancy bee hats, each with a folded note containing a secret tucked underneath it. This key unlocked the strongroom in which these hats were kept.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_bee_key",
@@ -136,7 +140,7 @@
   },
   "artifact_bronze_ladle": {
     "name": "Bronze Ladle",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The traditional gift given to children born under the auspices of Grendaline, this heavy bronze ladle was used by Phoebe on the giant’s feast day to distribute a thick spicy fish-based stew - known as Grendlebo - to those attending the festivities. In line with Grendaline’s love of multi-use objects, it could also be used as a sturdy hat.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The traditional gift given to children born under the auspices of Grendaline, this heavy bronze ladle was used by Phoebe on the giant\u2019s feast day to distribute a thick spicy fish-based stew - known as Grendlebo - to those attending the festivities. In line with Grendaline\u2019s love of multi-use objects, it could also be used as a sturdy hat.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_bronze_ladle",
@@ -235,7 +239,7 @@
   },
   "artifact_button_bird": {
     "name": "Button in the Shape of a Bird",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. For a while, the intricately carved buttons that fastened the garments of Grendalinians were the envy of everyone. Though slightly scuffed and with a chip to the beak, this button, which once adorned the bonnet of Phoebe - a Grendalinian cocktail guru with an ever-present glint in her eye - so perfectly resembles a miniature Sandpiper that the fact it doesn’t run off onto nearby beach is a constant surprise to anyone who sees it.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. For a while, the intricately carved buttons that fastened the garments of Grendalinians were the envy of everyone. Though slightly scuffed and with a chip to the beak, this button, which once adorned the bonnet of Phoebe - a Grendalinian cocktail guru with an ever-present glint in her eye - so perfectly resembles a miniature Sandpiper that the fact it doesn\u2019t run off onto nearby beach is a constant surprise to anyone who sees it.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_button_bird",
@@ -253,7 +257,7 @@
   },
   "artifact_button_frog": {
     "name": "Button in the Shape of a Frog",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Button-making - creating perfect miniatures out of moulded sudstone, carved dullite or cast ore - was once the most highly prized and closely guarded skill of those who sought Grendaline’s favor. Harris Toofanies, the Grendalinian whose cape this button once graced, made up for his unfortunate name with his exemplary button-making skill. Careful examination and cleaning reveals that the eyes on the frog button, individually carved out of sapphire, move as the wearer walks.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Button-making - creating perfect miniatures out of moulded sudstone, carved dullite or cast ore - was once the most highly prized and closely guarded skill of those who sought Grendaline\u2019s favor. Harris Toofanies, the Grendalinian whose cape this button once graced, made up for his unfortunate name with his exemplary button-making skill. Careful examination and cleaning reveals that the eyes on the frog button, individually carved out of sapphire, move as the wearer walks.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_button_frog",
@@ -262,7 +266,7 @@
   },
   "artifact_button_wasp": {
     "name": "Button in the Shape of a Wasp",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Created by master-buttonwrangler Phil O’Kleon to fasten the bonnet he wore on the Feast of Grendaline, this button was renowned not only for its vivid stripes of amber and dullite, but by the fact that if the body is twisted, very carefully, and then released, it buzzed loud enough to knock spices from the trees and cause small avalanches in the wintery place from some miles away. This function was disabled some time before the great forgetting.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Created by master-buttonwrangler Phil O\u2019Kleon to fasten the bonnet he wore on the Feast of Grendaline, this button was renowned not only for its vivid stripes of amber and dullite, but by the fact that if the body is twisted, very carefully, and then released, it buzzed loud enough to knock spices from the trees and cause small avalanches in the wintery place from some miles away. This function was disabled some time before the great forgetting.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_button_wasp",
@@ -361,7 +365,7 @@
   },
   "artifact_ear_trumpet": {
     "name": "Ear Trumpet",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Carefully curved to hear not only from short distances, but long distances, through walls and round corners as well. This ear trumpet once belonged to a loyal supplicant of Friendly, Anton, who would use it to pick up all manner of snippets of juicy gossip and scandalous rumor, and then to relay it to the giant as he worked, turning it around to form a megaphone, and standing on Friendly’s shoulder to be heard.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Carefully curved to hear not only from short distances, but long distances, through walls and round corners as well. This ear trumpet once belonged to a loyal supplicant of Friendly, Anton, who would use it to pick up all manner of snippets of juicy gossip and scandalous rumor, and then to relay it to the giant as he worked, turning it around to form a megaphone, and standing on Friendly\u2019s shoulder to be heard.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_ear_trumpet",
@@ -370,7 +374,7 @@
   },
   "artifact_ebony_teaspoon": {
     "name": "Ebony Teaspoon",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The traditional gift for any child born under the moons of Friendly, this ebony teaspoon, as dark and almost as strong as the coffee Friendly himself would brew, was generally kept in the refrigerator of most homes that had one for luck. The “luck” in this case being the fact that if you didn’t keep it somewhere brightly lit, you would lose it almost immediately, and Friendly’s reaction if he found out would make you feel very unlucky indeed.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The traditional gift for any child born under the moons of Friendly, this ebony teaspoon, as dark and almost as strong as the coffee Friendly himself would brew, was generally kept in the refrigerator of most homes that had one for luck. The \u201cluck\u201d in this case being the fact that if you didn\u2019t keep it somewhere brightly lit, you would lose it almost immediately, and Friendly\u2019s reaction if he found out would make you feel very unlucky indeed.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_ebony_teaspoon",
@@ -379,7 +383,7 @@
   },
   "artifact_fan": {
     "name": "Fan",
-    "description": "Carefully made for Cecily in her declining years, by her great niece, Margaret, intended as a gift that brought the breath of Cosma to her aging great aunt’s cheek. It is made from the wings of brightly coloured butterflies, sewn on to a structure of plank splinters, and hinged with cherry stalks, At least, that is what it is meant to look like. Butterfly wings are delicate things.",
+    "description": "Carefully made for Cecily in her declining years, by her great niece, Margaret, intended as a gift that brought the breath of Cosma to her aging great aunt\u2019s cheek. It is made from the wings of brightly coloured butterflies, sewn on to a structure of plank splinters, and hinged with cherry stalks, At least, that is what it is meant to look like. Butterfly wings are delicate things.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_fan",
@@ -424,7 +428,7 @@
   },
   "artifact_goggles": {
     "name": "Oversized Brass-Rimmed Protective Goggles",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. There’s a list somewhere of all the things from which this particular class of protective goggle can protect the wearer. Weena, one of the great scientists of the beforetimes, ran a series of tests flinging various substances at testers and making a mark on her notepad whenever someone said “ouch”, and a larger mark if they suddenly stopped saying anything at all. Erring on the side of caution, most goggle-wearers trusted them to protect against hard airs, soft liquids and lukewarm steam, and learned just to avoid Weena entirely.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. There\u2019s a list somewhere of all the things from which this particular class of protective goggle can protect the wearer. Weena, one of the great scientists of the beforetimes, ran a series of tests flinging various substances at testers and making a mark on her notepad whenever someone said \u201couch\u201d, and a larger mark if they suddenly stopped saying anything at all. Erring on the side of caution, most goggle-wearers trusted them to protect against hard airs, soft liquids and lukewarm steam, and learned just to avoid Weena entirely.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_goggles",
@@ -451,7 +455,7 @@
   },
   "artifact_heart_shaped_lump": {
     "name": "Heart-Shaped Lump of Lead",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Apparently dropped in the middle of a busy street, this is a lump of heavy, dull grey metal in the shape of a heart. Or it would be in the shape of a heart, if it wasn’t torn almost all the way through, making it a deal more puzzling, and a lot less prized in the otherwise lucrative ‘ornamental lumpy metal hearts’ market. It cannot be melted, ground down or carried too long without killer backache.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Apparently dropped in the middle of a busy street, this is a lump of heavy, dull grey metal in the shape of a heart. Or it would be in the shape of a heart, if it wasn\u2019t torn almost all the way through, making it a deal more puzzling, and a lot less prized in the otherwise lucrative \u2018ornamental lumpy metal hearts\u2019 market. It cannot be melted, ground down or carried too long without killer backache.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_heart_shaped_lump",
@@ -469,7 +473,7 @@
   },
   "artifact_magical_pendant": {
     "name": "Magical Pendant",
-    "description": "A high priestess of Grendaline once bestowed this piece of jewelry, known as the ‘Kommangerrit Neckpiece” to Helen, having observed that her low confidence was stalling her romantic life. Helen, who became the most desirable girl in Groddle, and believed it to have magical properties, though under duress, the priestess would admit that the vaguely suggestive shape and beer-scented pheromones sprinkled on it might have been more responsible.",
+    "description": "A high priestess of Grendaline once bestowed this piece of jewelry, known as the \u2018Kommangerrit Neckpiece\u201d to Helen, having observed that her low confidence was stalling her romantic life. Helen, who became the most desirable girl in Groddle, and believed it to have magical properties, though under duress, the priestess would admit that the vaguely suggestive shape and beer-scented pheromones sprinkled on it might have been more responsible.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_magical_pendant",
@@ -505,7 +509,7 @@
   },
   "artifact_metal_tap": {
     "name": "Metal Tap",
-    "description": "Originally attached to a large heated bubble-tea-holder in the palace of Friendly, this evenly-pouring, generously-gauged tap carved to look like a chicken’s rear end, and with a handle the shape of a new moon, has subsequently been put into use straining salmon juice, broaching beaver dams, and, regrettably, tapping fermented watermelons at some of Humbaba’s crazier parties.",
+    "description": "Originally attached to a large heated bubble-tea-holder in the palace of Friendly, this evenly-pouring, generously-gauged tap carved to look like a chicken\u2019s rear end, and with a handle the shape of a new moon, has subsequently been put into use straining salmon juice, broaching beaver dams, and, regrettably, tapping fermented watermelons at some of Humbaba\u2019s crazier parties.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_metal_tap",
@@ -514,7 +518,7 @@
   },
   "artifact_mirror_with_scribbles": {
     "name": "A Mirror with Scribbles On It",
-    "description": "A loyal Cosmapolitan, Algie once gave this to his best friend in Groddle Forest, Jack, in retaliation for bestowing the nickname ‘Pond-scum’ upon him. A normal mirror, Algie hung it in such a way that he could reach in through Jack’s window at night and draw on it. Leading Jack to believe that he was sprouting unheard of amounts of ear hair overnight, every night.",
+    "description": "A loyal Cosmapolitan, Algie once gave this to his best friend in Groddle Forest, Jack, in retaliation for bestowing the nickname \u2018Pond-scum\u2019 upon him. A normal mirror, Algie hung it in such a way that he could reach in through Jack\u2019s window at night and draw on it. Leading Jack to believe that he was sprouting unheard of amounts of ear hair overnight, every night.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_mirror_with_scribbles",
@@ -712,7 +716,7 @@
   },
   "artifact_nose_of_china": {
     "name": "Fake Nose Made of China",
-    "description": "Initially worn on high days and holidays by the loyal supplicants to Humbaba, this fake nose was created in the mould (literally) of Dorothy the Mad Humbabarian Elder’s original falsenez. Painted with inks made by mixing the dyes of various flowers, leaves and spices with donated piggy spittle, the faded scene on this chipped but magnificent nose is intended to portray the birth of Humbaba herself. It is a somewhat messy scene.",
+    "description": "Initially worn on high days and holidays by the loyal supplicants to Humbaba, this fake nose was created in the mould (literally) of Dorothy the Mad Humbabarian Elder\u2019s original falsenez. Painted with inks made by mixing the dyes of various flowers, leaves and spices with donated piggy spittle, the faded scene on this chipped but magnificent nose is intended to portray the birth of Humbaba herself. It is a somewhat messy scene.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_nose_of_china",
@@ -748,7 +752,7 @@
   },
   "artifact_nose_of_plastic": {
     "name": "Fake Nose Made of Plastic with Glasses Attached",
-    "description": "For those who belonged to the Humbabarian fashionable set, wearing a simple fake nose to a party was no longer considered a costume, since that’s what they wore all the time anyway. Pelagea, niece of Douglas and Dorothy, created a new strain of ultrafalsenez, which would attach other facial characteristics such as, in this case, a mustache of piggy eyelashes and a pair of glasses made from batterfly claws.",
+    "description": "For those who belonged to the Humbabarian fashionable set, wearing a simple fake nose to a party was no longer considered a costume, since that\u2019s what they wore all the time anyway. Pelagea, niece of Douglas and Dorothy, created a new strain of ultrafalsenez, which would attach other facial characteristics such as, in this case, a mustache of piggy eyelashes and a pair of glasses made from batterfly claws.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_nose_of_plastic",
@@ -784,7 +788,7 @@
   },
   "artifact_platinumium_spork": {
     "name": "Platinumium Spork",
-    "description": "The traditional gift given to a child born under the auspices of Alph, this particular platinumium Spork belonged to a baby named Weena, who was only allowed to gaze at it, glinting, rounded and pointy, from her crib. Not so much because of the rarity of the material - but because of her mother Jules' fear that she would take someone’s eye out experimenting with it.",
+    "description": "The traditional gift given to a child born under the auspices of Alph, this particular platinumium Spork belonged to a baby named Weena, who was only allowed to gaze at it, glinting, rounded and pointy, from her crib. Not so much because of the rarity of the material - but because of her mother Jules' fear that she would take someone\u2019s eye out experimenting with it.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_platinumium_spork",
@@ -811,7 +815,7 @@
   },
   "artifact_roll_of_blueprints": {
     "name": "Roll of Blueprints for a Prototype Something",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. In a wild flurry of imagination, Weena the visionary had drawn, in a flash of inspiration a meticulous set of plans for a vehicle that would be able to plunge to unimaginable depths. Sketching quickly and with great urgency, there are parts where the dullite nib has almost town through the special graded scientific paper, dyed with whortleberries. Some lines and measurements are still visible though, and the words, ‘core’, ‘degrees’, ‘important’ and ‘potato’.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. In a wild flurry of imagination, Weena the visionary had drawn, in a flash of inspiration a meticulous set of plans for a vehicle that would be able to plunge to unimaginable depths. Sketching quickly and with great urgency, there are parts where the dullite nib has almost town through the special graded scientific paper, dyed with whortleberries. Some lines and measurements are still visible though, and the words, \u2018core\u2019, \u2018degrees\u2019, \u2018important\u2019 and \u2018potato\u2019.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_roll_of_blueprints",
@@ -820,7 +824,7 @@
   },
   "artifact_scarf": {
     "name": "Extremely Long Scarf",
-    "description": "Tanu and Sitha’s mother, a worrity woman of many arms and several dozen busy fingers, could whip up a knitted scarf like this one in twelve minutes if the wind turned. The “double rainbow” scarf (named for its colours and ability to stretch twice around the house) could bundle every child in a regular-sized Alphibian family at once. Once, a scarf was given to a tall handsome stranger who wore it all on his own, but no one caught the strange man’s name.",
+    "description": "Tanu and Sitha\u2019s mother, a worrity woman of many arms and several dozen busy fingers, could whip up a knitted scarf like this one in twelve minutes if the wind turned. The \u201cdouble rainbow\u201d scarf (named for its colours and ability to stretch twice around the house) could bundle every child in a regular-sized Alphibian family at once. Once, a scarf was given to a tall handsome stranger who wore it all on his own, but no one caught the strange man\u2019s name.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_scarf",
@@ -892,7 +896,7 @@
   },
   "artifact_stainless_precious_metal_fork": {
     "name": "Stainless Precious Metal Fork",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The traditional gift given to children born under the auspices of the detached but watchful giant Tii, this once pristine and perfectly balanced stainless metalwork was once given to a particularly attractive large-headed baby by the name of Marley LeChuck. Never intended as an implement of feeding (which is lucky, given the murderously pointed prongs) the Tii-ite fork was chimed against hard surfaces to produce a sonorous, resonant, meditative ’tiiiiiiiing’.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. The traditional gift given to children born under the auspices of the detached but watchful giant Tii, this once pristine and perfectly balanced stainless metalwork was once given to a particularly attractive large-headed baby by the name of Marley LeChuck. Never intended as an implement of feeding (which is lucky, given the murderously pointed prongs) the Tii-ite fork was chimed against hard surfaces to produce a sonorous, resonant, meditative \u2019tiiiiiiiing\u2019.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_stainless_precious_metal_fork",
@@ -901,7 +905,7 @@
   },
   "artifact_three_cornered_hat": {
     "name": "Three-Cornered Hat",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Knowing of Tii’s love of all things faceted and precise, the Tii-ites once sought to curry favor from their giant by creating hats of perfectly measured geometric shapes. The idea was that, looking down at them, Tii would merely see perfect prime-number-sided objects scuttling far below, and be pleased. The great head-measurer and millinery-material manipulator, Elaine Melange created this hat for the great Tii-ite scholar, Luigi.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Knowing of Tii\u2019s love of all things faceted and precise, the Tii-ites once sought to curry favor from their giant by creating hats of perfectly measured geometric shapes. The idea was that, looking down at them, Tii would merely see perfect prime-number-sided objects scuttling far below, and be pleased. The great head-measurer and millinery-material manipulator, Elaine Melange created this hat for the great Tii-ite scholar, Luigi.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_three_cornered_hat",
@@ -910,7 +914,7 @@
   },
   "artifact_toenail_clippers": {
     "name": "Ornate Toenail Clippers",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Cast in the strong but malleable metals of the ore found in Lower Groddle, these fancy clippers are decorated with a misty disc of opal in the stem. At least you hope it’s opal. It’s entirely possible they’re known as ‘toenail clippers’ because this is a fragment of giant toenail, discarded, carved into a thousand thousand splinters, polished up and sold to the followers of Friendly for a scandalous number of currants. Wouldn’t be the first time.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Cast in the strong but malleable metals of the ore found in Lower Groddle, these fancy clippers are decorated with a misty disc of opal in the stem. At least you hope it\u2019s opal. It\u2019s entirely possible they\u2019re known as \u2018toenail clippers\u2019 because this is a fragment of giant toenail, discarded, carved into a thousand thousand splinters, polished up and sold to the followers of Friendly for a scandalous number of currants. Wouldn\u2019t be the first time.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_toenail_clippers",
@@ -919,7 +923,7 @@
   },
   "artifact_top_hat": {
     "name": "Very Tall Top Hat",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. “Keep it under your hat” is a phrase that, for too long, has been considered a metaphor, meaning to keep something concealed, tucked into one’s most prized mind-pocket. But for the followers of Alph, this was a literal instruction. This hat, belonging to Dovim, a scientist of Alph’s highest order, was consequently one of the highest hats allowed in Alphibian society. Things that Dovim could keep under it included bottles of whiskey, blueprints, bunting and, on one occasion, his youngest child.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. \u201cKeep it under your hat\u201d is a phrase that, for too long, has been considered a metaphor, meaning to keep something concealed, tucked into one\u2019s most prized mind-pocket. But for the followers of Alph, this was a literal instruction. This hat, belonging to Dovim, a scientist of Alph\u2019s highest order, was consequently one of the highest hats allowed in Alphibian society. Things that Dovim could keep under it included bottles of whiskey, blueprints, bunting and, on one occasion, his youngest child.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_top_hat",
@@ -937,7 +941,7 @@
   },
   "artifact_torn_manuscript": {
     "name": "Torn Manuscript",
-    "description": "This small fragment, dusted with shiny elements is all that remains of a VERY long very bad novel. But since, once upon a time, a tired finger took the pains to carefully hammer it out on a rudimentary typewriter, it should be kept. However, since the fragment of complex story that can be seen seems to focus on hot, passionate clinches between the giants - it’s probably best we can’t read it.",
+    "description": "This small fragment, dusted with shiny elements is all that remains of a VERY long very bad novel. But since, once upon a time, a tired finger took the pains to carefully hammer it out on a rudimentary typewriter, it should be kept. However, since the fragment of complex story that can be seen seems to focus on hot, passionate clinches between the giants - it\u2019s probably best we can\u2019t read it.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_torn_manuscript",
@@ -982,7 +986,7 @@
   },
   "artifact_twenty_nine_cornered_hat": {
     "name": "Twenty-Nine Cornered Hat",
-    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Deep in the beforetimes, the supplicants of Tii decided that in order to please their great overseer, they would make perfectly-measured, prime-number-sided hats. Elaine Melange, millinery-material manipulator had such success with the simple three, five and seven-cornered hats that she became ambitious. This unwieldy, unattractive, much battered, stained, and long-buried example of one of her “High Prime” collection is testament to her ambition’s collapse.",
+    "description": "This is a lost artifact, known only through ancient stories of long-deceased ancestors, and has not been discovered in Ur. Deep in the beforetimes, the supplicants of Tii decided that in order to please their great overseer, they would make perfectly-measured, prime-number-sided hats. Elaine Melange, millinery-material manipulator had such success with the simple three, five and seven-cornered hats that she became ambitious. This unwieldy, unattractive, much battered, stained, and long-buried example of one of her \u201cHigh Prime\u201d collection is testament to her ambition\u2019s collapse.",
     "category": "material",
     "stackLimit": 1,
     "icon": "artifact_twenty_nine_cornered_hat",
@@ -1068,7 +1072,8 @@
     "stackLimit": 12,
     "icon": "awesome_stew",
     "baseCost": 268,
-    "energyValue": 268
+    "energyValue": 268,
+    "moodValue": 80
   },
   "bacon": {
     "name": "Rasher of Bacon",
@@ -1077,7 +1082,8 @@
     "stackLimit": 20,
     "icon": "bacon",
     "baseCost": 20,
-    "energyValue": 100
+    "energyValue": 100,
+    "moodValue": 30
   },
   "bag_alchemistry_kit": {
     "name": "Alchemistry Kit",
@@ -1153,7 +1159,7 @@
   },
   "bag_cabinet_barrel": {
     "name": "Barrel",
-    "description": "Firm, rounded and sturd… Ah, what's the point? It's a Barrel. A big, bog-standard barrelly barrel-style barrel. It's just a Barrel. You know, like the kind of thing Hooch goes in? It's a Barrel. Move on. Nothing to see here.",
+    "description": "Firm, rounded and sturd\u2026 Ah, what's the point? It's a Barrel. A big, bog-standard barrelly barrel-style barrel. It's just a Barrel. You know, like the kind of thing Hooch goes in? It's a Barrel. Move on. Nothing to see here.",
     "category": "material",
     "stackLimit": 1,
     "icon": "bag_cabinet_barrel",
@@ -1405,7 +1411,7 @@
   },
   "bag_gift_box_wrapped": {
     "name": "Gift Box",
-    "description": "One mystery surprise gift box, filled with… well, filled with gifts. But what gifts? There's only one way to find out… No, not asking the person who gave it to you. The OTHER, non-spoilerific way. Open it!",
+    "description": "One mystery surprise gift box, filled with\u2026 well, filled with gifts. But what gifts? There's only one way to find out\u2026 No, not asking the person who gave it to you. The OTHER, non-spoilerific way. Open it!",
     "category": "material",
     "stackLimit": 1,
     "icon": "bag_gift_box_wrapped",
@@ -1432,7 +1438,7 @@
   },
   "bag_notice_board": {
     "name": "Notice Board",
-    "description": "A notice board. You can post notes on it yourself, or read notes someone else has posted. Take a gander at it and see if you can find anything interesting — reading builds character!",
+    "description": "A notice board. You can post notes on it yourself, or read notes someone else has posted. Take a gander at it and see if you can find anything interesting \u2014 reading builds character!",
     "category": "material",
     "stackLimit": 1,
     "icon": "bag_notice_board",
@@ -1572,7 +1578,8 @@
     "stackLimit": 100,
     "icon": "banana",
     "baseCost": 10,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "banana_no_names": {
     "name": "Banana No-Names",
@@ -1581,7 +1588,8 @@
     "stackLimit": 20,
     "icon": "banana_no_names",
     "baseCost": 40,
-    "energyValue": 40
+    "energyValue": 40,
+    "moodValue": 12
   },
   "barnacle": {
     "name": "Mortar Barnacle",
@@ -1603,7 +1611,7 @@
   },
   "barnacle_talc": {
     "name": "Barnacle Talc",
-    "description": "The post-Grinder form of the lovable barnacle, this smooth off-white powder is bound to be good for something. If only you knew what…",
+    "description": "The post-Grinder form of the lovable barnacle, this smooth off-white powder is bound to be good for something. If only you knew what\u2026",
     "category": "material",
     "stackLimit": 20,
     "icon": "barnacle_talc",
@@ -1617,7 +1625,8 @@
     "stackLimit": 20,
     "icon": "basic_omelet",
     "baseCost": 46,
-    "energyValue": 46
+    "energyValue": 46,
+    "moodValue": 14
   },
   "batterfly_bar": {
     "name": "Batterfly Bounty Booster Bar",
@@ -1626,7 +1635,8 @@
     "stackLimit": 10,
     "icon": "batterfly_bar",
     "baseCost": 41,
-    "energyValue": 41
+    "energyValue": 41,
+    "moodValue": 12
   },
   "beachball": {
     "name": "Beachball",
@@ -1716,7 +1726,8 @@
     "stackLimit": 250,
     "icon": "bean_plain",
     "baseCost": 1,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "bean_seasoner": {
     "name": "Bean Seasoner",
@@ -1761,7 +1772,8 @@
     "stackLimit": 20,
     "icon": "berry_bowl",
     "baseCost": 46,
-    "energyValue": 46
+    "energyValue": 46,
+    "moodValue": 14
   },
   "beryl": {
     "name": "Chunk of Beryl",
@@ -1779,7 +1791,8 @@
     "stackLimit": 20,
     "icon": "best_bean_dip",
     "baseCost": 54,
-    "energyValue": 54
+    "energyValue": 54,
+    "moodValue": 16
   },
   "big_salad": {
     "name": "Big Salad",
@@ -1788,7 +1801,8 @@
     "stackLimit": 12,
     "icon": "big_salad",
     "baseCost": 58,
-    "energyValue": 58
+    "energyValue": 58,
+    "moodValue": 17
   },
   "birch_candy": {
     "name": "Birch Candy",
@@ -1797,7 +1811,8 @@
     "stackLimit": 20,
     "icon": "birch_candy",
     "baseCost": 13,
-    "energyValue": 13
+    "energyValue": 13,
+    "moodValue": 4
   },
   "birch_syrup": {
     "name": "Birch Syrup",
@@ -1806,7 +1821,8 @@
     "stackLimit": 40,
     "icon": "birch_syrup",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "black_pepper": {
     "name": "Black Pepper",
@@ -1815,7 +1831,8 @@
     "stackLimit": 200,
     "icon": "black_pepper",
     "baseCost": 4,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "blender": {
     "name": "Blender",
@@ -1869,11 +1886,12 @@
     "stackLimit": 100,
     "icon": "blue_bubble",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "board": {
     "name": "Board",
-    "description": "A solid wooden board, reminiscent of some kind of ginormous Plank – unsurprisingly, since that's what it's made of.",
+    "description": "A solid wooden board, reminiscent of some kind of ginormous Plank \u2013 unsurprisingly, since that's what it's made of.",
     "category": "material",
     "stackLimit": 100,
     "icon": "board",
@@ -1896,7 +1914,8 @@
     "stackLimit": 20,
     "icon": "bread",
     "baseCost": 16,
-    "energyValue": 80
+    "energyValue": 80,
+    "moodValue": 20
   },
   "brick": {
     "name": "Brick",
@@ -1914,7 +1933,8 @@
     "stackLimit": 80,
     "icon": "broccoli",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "broken_sign": {
     "name": "Bug Acknowledgment",
@@ -1940,7 +1960,8 @@
     "stackLimit": 12,
     "icon": "bubble_and_squeak",
     "baseCost": 60,
-    "energyValue": 60
+    "energyValue": 60,
+    "moodValue": 18
   },
   "bubble_tea": {
     "name": "Bubble Tea",
@@ -1949,7 +1970,8 @@
     "stackLimit": 24,
     "icon": "bubble_tea",
     "baseCost": 172,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "bubble_tuner": {
     "name": "Bubble Tuner",
@@ -1984,7 +2006,8 @@
     "stackLimit": 40,
     "icon": "bun",
     "baseCost": 9,
-    "energyValue": 9
+    "energyValue": 9,
+    "moodValue": 3
   },
   "bunch_of_grapes": {
     "name": "Bunch of Grapes",
@@ -1993,7 +2016,8 @@
     "stackLimit": 100,
     "icon": "bunch_of_grapes",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "bunch_of_grapes_hell": {
     "name": "Bunch of Hellish Grapes",
@@ -2020,7 +2044,8 @@
     "stackLimit": 20,
     "icon": "butter",
     "baseCost": 15,
-    "energyValue": 60
+    "energyValue": 60,
+    "moodValue": 15
   },
   "butterfly_butter": {
     "name": "Butterfly Butter",
@@ -2029,7 +2054,8 @@
     "stackLimit": 40,
     "icon": "butterfly_butter",
     "baseCost": 10,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "butterfly_egg": {
     "name": "Butterfly Egg",
@@ -2074,7 +2100,8 @@
     "stackLimit": 80,
     "icon": "cabbage",
     "baseCost": 7,
-    "energyValue": 7
+    "energyValue": 7,
+    "moodValue": 2
   },
   "camera": {
     "name": "Camera",
@@ -2092,7 +2119,8 @@
     "stackLimit": 200,
     "icon": "camphor",
     "baseCost": 20,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "card_carrying_qualification": {
     "name": "Card-Carrying Qualification",
@@ -2110,7 +2138,8 @@
     "stackLimit": 200,
     "icon": "cardamom",
     "baseCost": 12,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "carobish_treats": {
     "name": "Raw Bio-Organic Carob-ish Treat",
@@ -2119,7 +2148,8 @@
     "stackLimit": 20,
     "icon": "carobish_treats",
     "baseCost": 41,
-    "energyValue": 41
+    "energyValue": 41,
+    "moodValue": 12
   },
   "carrot": {
     "name": "Carrot",
@@ -2128,7 +2158,8 @@
     "stackLimit": 80,
     "icon": "carrot",
     "baseCost": 6,
-    "energyValue": 6
+    "energyValue": 6,
+    "moodValue": 2
   },
   "carrot_margarita": {
     "name": "Carrot Margarita",
@@ -2137,7 +2168,8 @@
     "stackLimit": 24,
     "icon": "carrot_margarita",
     "baseCost": 90,
-    "energyValue": 8
+    "energyValue": 8,
+    "moodValue": 2
   },
   "caterpillar": {
     "name": "Caterpillar",
@@ -2164,7 +2196,8 @@
     "stackLimit": 12,
     "icon": "cedar_plank_salmon",
     "baseCost": 70,
-    "energyValue": 70
+    "energyValue": 70,
+    "moodValue": 21
   },
   "cheese": {
     "name": "Cheese",
@@ -2173,7 +2206,8 @@
     "stackLimit": 20,
     "icon": "cheese",
     "baseCost": 15,
-    "energyValue": 15
+    "energyValue": 15,
+    "moodValue": 4
   },
   "cheese_plate": {
     "name": "Cheese Plate",
@@ -2182,7 +2216,8 @@
     "stackLimit": 20,
     "icon": "cheese_plate",
     "baseCost": 58,
-    "energyValue": 58
+    "energyValue": 58,
+    "moodValue": 17
   },
   "cheese_stinky": {
     "name": "Stinky Cheese",
@@ -2191,16 +2226,18 @@
     "stackLimit": 10,
     "icon": "cheese_stinky",
     "baseCost": 21,
-    "energyValue": 21
+    "energyValue": 21,
+    "moodValue": 6
   },
   "cheese_very_stinky": {
     "name": "Very Stinky Cheese",
-    "description": "Smelling like a manatee bathed in celery juice and old surgical stockings, goodness knows what would happen if you aged this connoisseurial cheese any longer. You could give it a go, though…",
+    "description": "Smelling like a manatee bathed in celery juice and old surgical stockings, goodness knows what would happen if you aged this connoisseurial cheese any longer. You could give it a go, though\u2026",
     "category": "food",
     "stackLimit": 10,
     "icon": "cheese_very_stinky",
     "baseCost": 27,
-    "energyValue": 27
+    "energyValue": 27,
+    "moodValue": 8
   },
   "cheese_very_very_stinky": {
     "name": "Very, Very Stinky Cheese",
@@ -2209,7 +2246,8 @@
     "stackLimit": 10,
     "icon": "cheese_very_very_stinky",
     "baseCost": 33,
-    "energyValue": 33
+    "energyValue": 33,
+    "moodValue": 10
   },
   "cheezy_sammich": {
     "name": "Cheezy Sammich",
@@ -2218,7 +2256,8 @@
     "stackLimit": 40,
     "icon": "cheezy_sammich",
     "baseCost": 37,
-    "energyValue": 37
+    "energyValue": 37,
+    "moodValue": 11
   },
   "cheezy_sauce": {
     "name": "Cheezy Sauce",
@@ -2227,7 +2266,8 @@
     "stackLimit": 20,
     "icon": "cheezy_sauce",
     "baseCost": 59,
-    "energyValue": 59
+    "energyValue": 59,
+    "moodValue": 18
   },
   "cherry": {
     "name": "Cherry",
@@ -2236,7 +2276,8 @@
     "stackLimit": 250,
     "icon": "cherry",
     "baseCost": 1,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "cherry_pie": {
     "name": "Cherry Pie",
@@ -2245,7 +2286,8 @@
     "stackLimit": 10,
     "icon": "cherry_pie",
     "baseCost": 20,
-    "energyValue": 100
+    "energyValue": 100,
+    "moodValue": 30
   },
   "chick": {
     "name": "Chick",
@@ -2272,7 +2314,8 @@
     "stackLimit": 12,
     "icon": "chillybusting_chili",
     "baseCost": 349,
-    "energyValue": 349
+    "energyValue": 349,
+    "moodValue": 105
   },
   "choice_crudites": {
     "name": "Choice Crudites",
@@ -2281,7 +2324,8 @@
     "stackLimit": 20,
     "icon": "choice_crudites",
     "baseCost": 42,
-    "energyValue": 42
+    "energyValue": 42,
+    "moodValue": 13
   },
   "cinnamon": {
     "name": "Cinnamon",
@@ -2290,7 +2334,8 @@
     "stackLimit": 200,
     "icon": "cinnamon",
     "baseCost": 8,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "class_axe": {
     "name": "Class Axe",
@@ -2335,7 +2380,8 @@
     "stackLimit": 100,
     "icon": "cloudberry",
     "baseCost": 2,
-    "energyValue": 2
+    "energyValue": 2,
+    "moodValue": 1
   },
   "cloudberry_daiquiri": {
     "name": "Cloudberry Daiquiri",
@@ -2344,7 +2390,8 @@
     "stackLimit": 24,
     "icon": "cloudberry_daiquiri",
     "baseCost": 142,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "cloudberry_jam": {
     "name": "Cloudberry Jam",
@@ -2353,7 +2400,8 @@
     "stackLimit": 20,
     "icon": "cloudberry_jam",
     "baseCost": 39,
-    "energyValue": 39
+    "energyValue": 39,
+    "moodValue": 12
   },
   "club_house_picture": {
     "name": "Curious Painting",
@@ -2389,7 +2437,8 @@
     "stackLimit": 12,
     "icon": "cold_taco",
     "baseCost": 69,
-    "energyValue": 69
+    "energyValue": 69,
+    "moodValue": 21
   },
   "collectors_edition_2010_glitchmas_yeti": {
     "name": "Collectors' Edition 2010 Glitchmas Yeti",
@@ -2407,7 +2456,8 @@
     "stackLimit": 20,
     "icon": "common_crudites",
     "baseCost": 33,
-    "energyValue": 33
+    "energyValue": 33,
+    "moodValue": 10
   },
   "conch": {
     "name": "Conch",
@@ -2438,7 +2488,7 @@
   },
   "contraband": {
     "name": "Contraband",
-    "description": "This is a surprisingly light package of *something* given to you by a smuggler who might ask you to take it from one place to another for reasons you cannot fully grasp. Still, a job's a job, right? What business is it of yours what's in the package. It DOES smell familiar, though…",
+    "description": "This is a surprisingly light package of *something* given to you by a smuggler who might ask you to take it from one place to another for reasons you cannot fully grasp. Still, a job's a job, right? What business is it of yours what's in the package. It DOES smell familiar, though\u2026",
     "category": "material",
     "stackLimit": 1,
     "icon": "contraband",
@@ -2461,7 +2511,8 @@
     "stackLimit": 80,
     "icon": "corn",
     "baseCost": 6,
-    "energyValue": 6
+    "energyValue": 6,
+    "moodValue": 2
   },
   "corn_off_the_cob": {
     "name": "Corn-off-the-Cob",
@@ -2470,7 +2521,8 @@
     "stackLimit": 20,
     "icon": "corn_off_the_cob",
     "baseCost": 55,
-    "energyValue": 55
+    "energyValue": 55,
+    "moodValue": 16
   },
   "corn_syrup_squares": {
     "name": "Hi-Sucrose Corn Syrup Square",
@@ -2479,7 +2531,8 @@
     "stackLimit": 20,
     "icon": "corn_syrup_squares",
     "baseCost": 31,
-    "energyValue": 31
+    "energyValue": 31,
+    "moodValue": 9
   },
   "cornucopia_crops": {
     "name": "Cornucopia of Crops",
@@ -2506,7 +2559,8 @@
     "stackLimit": 20,
     "icon": "corny_fritter",
     "baseCost": 39,
-    "energyValue": 39
+    "energyValue": 39,
+    "moodValue": 12
   },
   "cosmapolitan": {
     "name": "Cosma-politan",
@@ -2515,7 +2569,8 @@
     "stackLimit": 24,
     "icon": "cosmapolitan",
     "baseCost": 131,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "cosmox": {
     "name": "Cosmox",
@@ -2560,7 +2615,8 @@
     "stackLimit": 12,
     "icon": "creamy_catsup",
     "baseCost": 81,
-    "energyValue": 81
+    "energyValue": 81,
+    "moodValue": 24
   },
   "creamy_martini": {
     "name": "Creamy Martini",
@@ -2569,7 +2625,8 @@
     "stackLimit": 24,
     "icon": "creamy_martini",
     "baseCost": 60,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "crown_game_lock": {
     "name": "Crown Game Lock",
@@ -2632,7 +2689,8 @@
     "stackLimit": 80,
     "icon": "cucumber",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "cumin": {
     "name": "Cumin",
@@ -2641,7 +2699,8 @@
     "stackLimit": 200,
     "icon": "cumin",
     "baseCost": 8,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "cup_of_water": {
     "name": "Cup of Water",
@@ -2659,7 +2718,8 @@
     "stackLimit": 200,
     "icon": "curry",
     "baseCost": 5,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "dcpu16": {
     "name": "DCPU-16",
@@ -2677,7 +2737,8 @@
     "stackLimit": 40,
     "icon": "death_to_veg",
     "baseCost": 39,
-    "energyValue": 39
+    "energyValue": 39,
+    "moodValue": 12
   },
   "deluxe_sammich": {
     "name": "Deluxe Sammich",
@@ -2686,7 +2747,8 @@
     "stackLimit": 12,
     "icon": "deluxe_sammich",
     "baseCost": 86,
-    "energyValue": 86
+    "energyValue": 86,
+    "moodValue": 26
   },
   "depression_button": {
     "name": "Depression Button",
@@ -2704,7 +2766,8 @@
     "stackLimit": 50,
     "icon": "desssert_rub",
     "baseCost": 78,
-    "energyValue": 8
+    "energyValue": 8,
+    "moodValue": 2
   },
   "diabolic_acid": {
     "name": "Diabolic Acid",
@@ -2749,7 +2812,8 @@
     "stackLimit": 12,
     "icon": "divine_crepes",
     "baseCost": 279,
-    "energyValue": 279
+    "energyValue": 279,
+    "moodValue": 84
   },
   "doll_ayn_rand": {
     "name": "Ayn Rand Doll",
@@ -2888,7 +2952,7 @@
   },
   "drink_ticket": {
     "name": "Diabolical Drink Ticket",
-    "description": "Printed in infernal inks on fire-resistant paper, a Diabolical Drink Ticket can be given to Hell's Bartender in exchange for the potent Wine of the Dead—a fermented beverage which revitalizes the devitalized. No one knows what the Bartender does with the tickets, but rumour has it that in sufficient numbers they can be redeemed for either an all-expenses-paid vacation to Ix or the apocalypse.",
+    "description": "Printed in infernal inks on fire-resistant paper, a Diabolical Drink Ticket can be given to Hell's Bartender in exchange for the potent Wine of the Dead\u2014a fermented beverage which revitalizes the devitalized. No one knows what the Bartender does with the tickets, but rumour has it that in sufficient numbers they can be redeemed for either an all-expenses-paid vacation to Ix or the apocalypse.",
     "category": "material",
     "stackLimit": 5,
     "icon": "drink_ticket",
@@ -2938,7 +3002,8 @@
     "stackLimit": 24,
     "icon": "earthshaker",
     "baseCost": 152,
-    "energyValue": 30
+    "energyValue": 30,
+    "moodValue": 9
   },
   "egg_plain": {
     "name": "Egg",
@@ -2947,7 +3012,8 @@
     "stackLimit": 250,
     "icon": "egg_plain",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "egg_seasoner": {
     "name": "Egg Seasoner",
@@ -2965,7 +3031,8 @@
     "stackLimit": 1,
     "icon": "egghunt_egg_1",
     "baseCost": 150,
-    "energyValue": 50
+    "energyValue": 50,
+    "moodValue": 15
   },
   "egghunt_egg_2": {
     "name": "Bugsbury Creme Egg",
@@ -2974,7 +3041,8 @@
     "stackLimit": 1,
     "icon": "egghunt_egg_2",
     "baseCost": 150,
-    "energyValue": 50
+    "energyValue": 50,
+    "moodValue": 15
   },
   "egghunt_egg_3": {
     "name": "Pysanka",
@@ -2983,7 +3051,8 @@
     "stackLimit": 1,
     "icon": "egghunt_egg_3",
     "baseCost": 150,
-    "energyValue": 50
+    "energyValue": 50,
+    "moodValue": 15
   },
   "egghunt_egg_4": {
     "name": "Secular Holiday Egg",
@@ -2992,7 +3061,8 @@
     "stackLimit": 1,
     "icon": "egghunt_egg_4",
     "baseCost": 150,
-    "energyValue": 50
+    "energyValue": 50,
+    "moodValue": 15
   },
   "egghunt_egg_5": {
     "name": "Golden Egg",
@@ -3001,7 +3071,8 @@
     "stackLimit": 1,
     "icon": "egghunt_egg_5",
     "baseCost": 150,
-    "energyValue": 50
+    "energyValue": 50,
+    "moodValue": 15
   },
   "eggy_scramble": {
     "name": "Eggy Scramble",
@@ -3010,7 +3081,8 @@
     "stackLimit": 40,
     "icon": "eggy_scramble",
     "baseCost": 32,
-    "energyValue": 32
+    "energyValue": 32,
+    "moodValue": 10
   },
   "element_blue": {
     "name": "Blue Element",
@@ -3149,7 +3221,7 @@
   },
   "emotional_bear": {
     "name": "Emotional Bear",
-    "description": "When you can't express how you're feeling, this furry companion will emote on your behalf. Particularly when equipped with Lips for kissing or a Moon for you-know-whatting…",
+    "description": "When you can't express how you're feeling, this furry companion will emote on your behalf. Particularly when equipped with Lips for kissing or a Moon for you-know-whatting\u2026",
     "category": "material",
     "stackLimit": 1,
     "icon": "emotional_bear",
@@ -3280,7 +3352,8 @@
     "stackLimit": 20,
     "icon": "exotic_fruit_salad",
     "baseCost": 33,
-    "energyValue": 33
+    "energyValue": 33,
+    "moodValue": 10
   },
   "exotic_juice": {
     "name": "Exotic Juice",
@@ -3289,7 +3362,8 @@
     "stackLimit": 24,
     "icon": "exotic_juice",
     "baseCost": 54,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "expensive_grilled_cheese": {
     "name": "Expensive Grilled Cheese",
@@ -3298,7 +3372,8 @@
     "stackLimit": 12,
     "icon": "expensive_grilled_cheese",
     "baseCost": 220,
-    "energyValue": 220
+    "energyValue": 220,
+    "moodValue": 66
   },
   "extremely_hallowed_shrine_powder": {
     "name": "Extremely Hallowed Shrine Powder",
@@ -3316,7 +3391,8 @@
     "stackLimit": 24,
     "icon": "face_smelter",
     "baseCost": 141,
-    "energyValue": 30
+    "energyValue": 30,
+    "moodValue": 9
   },
   "faded_heart": {
     "name": "Faded Heart",
@@ -3415,7 +3491,8 @@
     "stackLimit": 24,
     "icon": "flaming_humbaba",
     "baseCost": 168,
-    "energyValue": 20
+    "energyValue": 20,
+    "moodValue": 6
   },
   "flour": {
     "name": "Flour",
@@ -3424,7 +3501,8 @@
     "stackLimit": 80,
     "icon": "flour",
     "baseCost": 7,
-    "energyValue": 7
+    "energyValue": 7,
+    "moodValue": 2
   },
   "flummery": {
     "name": "Flummery",
@@ -3433,7 +3511,8 @@
     "stackLimit": 12,
     "icon": "flummery",
     "baseCost": 229,
-    "energyValue": 229
+    "energyValue": 229,
+    "moodValue": 69
   },
   "focusing_orb": {
     "name": "Focusing Orb",
@@ -3451,7 +3530,8 @@
     "stackLimit": 12,
     "icon": "fortifying_gruel",
     "baseCost": 271,
-    "energyValue": 271
+    "energyValue": 271,
+    "moodValue": 81
   },
   "fortune": {
     "name": "Fortune",
@@ -3505,7 +3585,8 @@
     "stackLimit": 40,
     "icon": "fried_egg",
     "baseCost": 11,
-    "energyValue": 11
+    "energyValue": 11,
+    "moodValue": 3
   },
   "fried_noodles": {
     "name": "Fried Noodles",
@@ -3514,7 +3595,8 @@
     "stackLimit": 20,
     "icon": "fried_noodles",
     "baseCost": 35,
-    "energyValue": 35
+    "energyValue": 35,
+    "moodValue": 10
   },
   "fried_rice": {
     "name": "Fried Rice",
@@ -3523,7 +3605,8 @@
     "stackLimit": 12,
     "icon": "fried_rice",
     "baseCost": 114,
-    "energyValue": 114
+    "energyValue": 114,
+    "moodValue": 34
   },
   "friendly_acid": {
     "name": "Friendly Acid",
@@ -3541,7 +3624,8 @@
     "stackLimit": 20,
     "icon": "frog_in_a_hole",
     "baseCost": 44,
-    "energyValue": 44
+    "energyValue": 44,
+    "moodValue": 13
   },
   "fruit_changing_machine": {
     "name": "Fruit Changing Machine",
@@ -3559,7 +3643,8 @@
     "stackLimit": 20,
     "icon": "fruit_salad",
     "baseCost": 29,
-    "energyValue": 29
+    "energyValue": 29,
+    "moodValue": 9
   },
   "fruity_juice": {
     "name": "Fruity Juice",
@@ -4126,7 +4211,8 @@
     "stackLimit": 20,
     "icon": "gammas_pancakes",
     "baseCost": 57,
-    "energyValue": 57
+    "energyValue": 57,
+    "moodValue": 17
   },
   "gandlevery": {
     "name": "Gandlevery",
@@ -4135,7 +4221,8 @@
     "stackLimit": 50,
     "icon": "gandlevery",
     "baseCost": 40,
-    "energyValue": 40
+    "energyValue": 40,
+    "moodValue": 12
   },
   "garden": {
     "name": "Garden",
@@ -4162,7 +4249,8 @@
     "stackLimit": 200,
     "icon": "garlic",
     "baseCost": 4,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "gassifier": {
     "name": "Gassifier",
@@ -4252,7 +4340,8 @@
     "stackLimit": 200,
     "icon": "ginger",
     "baseCost": 4,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "girder": {
     "name": "Girder",
@@ -4270,7 +4359,8 @@
     "stackLimit": 40,
     "icon": "glitchepoix",
     "baseCost": 45,
-    "energyValue": 45
+    "energyValue": 45,
+    "moodValue": 14
   },
   "glitchmas_card": {
     "name": "Glitchmas Card",
@@ -4337,7 +4427,7 @@
   },
   "grade_a_earth_block": {
     "name": "Grade A Earth Block",
-    "description": "Made from earth and spice, and everything … uh … earth & spice, that's it.",
+    "description": "Made from earth and spice, and everything \u2026 uh \u2026 earth & spice, that's it.",
     "category": "material",
     "stackLimit": 5,
     "icon": "grade_a_earth_block",
@@ -4369,7 +4459,8 @@
     "stackLimit": 250,
     "icon": "grain",
     "baseCost": 1,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "grain_bushel": {
     "name": "Bushel of Grain",
@@ -4405,7 +4496,8 @@
     "stackLimit": 20,
     "icon": "greasy_frybread",
     "baseCost": 53,
-    "energyValue": 53
+    "energyValue": 53,
+    "moodValue": 16
   },
   "green": {
     "name": "Green",
@@ -4414,7 +4506,8 @@
     "stackLimit": 40,
     "icon": "green",
     "baseCost": 48,
-    "energyValue": 48
+    "energyValue": 48,
+    "moodValue": 14
   },
   "green_eggs": {
     "name": "Green Egg",
@@ -4423,7 +4516,8 @@
     "stackLimit": 40,
     "icon": "green_eggs",
     "baseCost": 12,
-    "energyValue": 12
+    "energyValue": 12,
+    "moodValue": 4
   },
   "greeter_stone": {
     "name": "Greeter Stone",
@@ -4459,7 +4553,8 @@
     "stackLimit": 12,
     "icon": "grilled_cheese",
     "baseCost": 90,
-    "energyValue": 90
+    "energyValue": 90,
+    "moodValue": 27
   },
   "groddlene": {
     "name": "Groddlene",
@@ -4486,7 +4581,8 @@
     "stackLimit": 24,
     "icon": "gurly_drink",
     "baseCost": 160,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "hairball_flower": {
     "name": "Hairball Flower",
@@ -4495,7 +4591,8 @@
     "stackLimit": 50,
     "icon": "hairball_flower",
     "baseCost": 66,
-    "energyValue": 66
+    "energyValue": 66,
+    "moodValue": 20
   },
   "hard_bubble": {
     "name": "Hard Bubble",
@@ -4504,7 +4601,8 @@
     "stackLimit": 100,
     "icon": "hard_bubble",
     "baseCost": 15,
-    "energyValue": 15
+    "energyValue": 15,
+    "moodValue": 4
   },
   "hash": {
     "name": "Hash",
@@ -4513,7 +4611,8 @@
     "stackLimit": 12,
     "icon": "hash",
     "baseCost": 57,
-    "energyValue": 57
+    "energyValue": 57,
+    "moodValue": 17
   },
   "hatchet": {
     "name": "Hatchet",
@@ -4531,7 +4630,8 @@
     "stackLimit": 12,
     "icon": "hearty_groddle_sammich",
     "baseCost": 93,
-    "energyValue": 93
+    "energyValue": 93,
+    "moodValue": 28
   },
   "hearty_omelet": {
     "name": "Hearty Omelet",
@@ -4540,7 +4640,8 @@
     "stackLimit": 12,
     "icon": "hearty_omelet",
     "baseCost": 120,
-    "energyValue": 120
+    "energyValue": 120,
+    "moodValue": 36
   },
   "heavy_gas": {
     "name": "Heavy Gas",
@@ -4639,7 +4740,8 @@
     "stackLimit": 10,
     "icon": "heston_mash",
     "baseCost": 576,
-    "energyValue": 576
+    "energyValue": 576,
+    "moodValue": 173
   },
   "hi_overlay": {
     "name": "Hi Overlay",
@@ -4720,7 +4822,8 @@
     "stackLimit": 40,
     "icon": "honey",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "hooch": {
     "name": "Hooch",
@@ -4738,7 +4841,8 @@
     "stackLimit": 20,
     "icon": "hot_n_fizzy_sauce",
     "baseCost": 48,
-    "energyValue": 48
+    "energyValue": 48,
+    "moodValue": 14
   },
   "hot_pepper": {
     "name": "Hot Pepper",
@@ -4747,7 +4851,8 @@
     "stackLimit": 200,
     "icon": "hot_pepper",
     "baseCost": 4,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "hot_potatoes": {
     "name": "Hot Potatoes",
@@ -4756,7 +4861,8 @@
     "stackLimit": 40,
     "icon": "hot_potatoes",
     "baseCost": 66,
-    "energyValue": 66
+    "energyValue": 66,
+    "moodValue": 20
   },
   "hototot_rub": {
     "name": "Hototot Rub",
@@ -4765,7 +4871,8 @@
     "stackLimit": 50,
     "icon": "hototot_rub",
     "baseCost": 77,
-    "energyValue": 8
+    "energyValue": 8,
+    "moodValue": 2
   },
   "humbabol": {
     "name": "Humbabol",
@@ -4783,7 +4890,8 @@
     "stackLimit": 10,
     "icon": "hungry_nachos",
     "baseCost": 508,
-    "energyValue": 508
+    "energyValue": 508,
+    "moodValue": 152
   },
   "ice": {
     "name": "Ice",
@@ -4792,7 +4900,8 @@
     "stackLimit": 40,
     "icon": "ice",
     "baseCost": 6,
-    "energyValue": 6
+    "energyValue": 6,
+    "moodValue": 2
   },
   "ice_knob": {
     "name": "Ice Nubbin",
@@ -4931,7 +5040,7 @@
   },
   "invoking_garden": {
     "name": "Blessed Cornucopia of Crops",
-    "description": "Precisely like a regular Cornucopia of Crops… except sparklier, more blessed, and with the ability to invoke into being a whole new small but perfectly formed Crop Garden when placed in the right location. So quite a lot better than a regular Cornucopia of Crops, then.",
+    "description": "Precisely like a regular Cornucopia of Crops\u2026 except sparklier, more blessed, and with the ability to invoke into being a whole new small but perfectly formed Crop Garden when placed in the right location. So quite a lot better than a regular Cornucopia of Crops, then.",
     "category": "material",
     "stackLimit": 1,
     "icon": "invoking_garden",
@@ -5044,7 +5153,8 @@
     "stackLimit": 12,
     "icon": "ixstyle_braised_meat",
     "baseCost": 234,
-    "energyValue": 234
+    "energyValue": 234,
+    "moodValue": 70
   },
   "jellisac": {
     "name": "Jellisac Growth",
@@ -5089,7 +5199,8 @@
     "stackLimit": 12,
     "icon": "juicy_carpaccio",
     "baseCost": 71,
-    "energyValue": 71
+    "energyValue": 71,
+    "moodValue": 21
   },
   "juju_paperweight": {
     "name": "Ancestral Paperweight",
@@ -5134,7 +5245,8 @@
     "stackLimit": 20,
     "icon": "kind_breakfurst_burrito",
     "baseCost": 292,
-    "energyValue": 292
+    "energyValue": 292,
+    "moodValue": 88
   },
   "kings_of_condiments": {
     "name": "King of Condiments",
@@ -5143,7 +5255,8 @@
     "stackLimit": 50,
     "icon": "kings_of_condiments",
     "baseCost": 20,
-    "energyValue": 2
+    "energyValue": 2,
+    "moodValue": 1
   },
   "knife_and_board": {
     "name": "Knife & Board",
@@ -5179,7 +5292,8 @@
     "stackLimit": 40,
     "icon": "lazy_salad",
     "baseCost": 38,
-    "energyValue": 38
+    "energyValue": 38,
+    "moodValue": 11
   },
   "legitimate_post": {
     "name": "Legitimate Post",
@@ -5197,7 +5311,8 @@
     "stackLimit": 40,
     "icon": "legumes_parisienne",
     "baseCost": 22,
-    "energyValue": 22
+    "energyValue": 22,
+    "moodValue": 7
   },
   "lemburger": {
     "name": "Lemburger",
@@ -5206,7 +5321,8 @@
     "stackLimit": 12,
     "icon": "lemburger",
     "baseCost": 187,
-    "energyValue": 187
+    "energyValue": 187,
+    "moodValue": 56
   },
   "lemene": {
     "name": "Lemene",
@@ -5224,7 +5340,8 @@
     "stackLimit": 100,
     "icon": "lemon",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "lemon_juice": {
     "name": "Lemon Juice",
@@ -5233,7 +5350,8 @@
     "stackLimit": 24,
     "icon": "lemon_juice",
     "baseCost": 39,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "letter_block": {
     "name": "Letter Block",
@@ -5251,7 +5369,8 @@
     "stackLimit": 200,
     "icon": "licorice",
     "baseCost": 8,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "light_beam": {
     "name": "Light Beam",
@@ -5305,7 +5424,8 @@
     "stackLimit": 20,
     "icon": "lotsa_lox",
     "baseCost": 34,
-    "energyValue": 34
+    "energyValue": 34,
+    "moodValue": 10
   },
   "luxury_tortellini": {
     "name": "Luxury Tortellini",
@@ -5314,7 +5434,8 @@
     "stackLimit": 10,
     "icon": "luxury_tortellini",
     "baseCost": 758,
-    "energyValue": 758
+    "energyValue": 758,
+    "moodValue": 227
   },
   "mabbish_coffee": {
     "name": "Mabbish Coffee",
@@ -5323,7 +5444,8 @@
     "stackLimit": 24,
     "icon": "mabbish_coffee",
     "baseCost": 54,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "mabon": {
     "name": "Mabon",
@@ -5341,7 +5463,8 @@
     "stackLimit": 20,
     "icon": "maburger_royale",
     "baseCost": 350,
-    "energyValue": 350
+    "energyValue": 350,
+    "moodValue": 105
   },
   "machine_stand": {
     "name": "Machine Stand",
@@ -5404,7 +5527,8 @@
     "stackLimit": 100,
     "icon": "mangosteen",
     "baseCost": 10,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "marker_quoin": {
     "name": "Quoin Marker",
@@ -5422,7 +5546,8 @@
     "stackLimit": 60,
     "icon": "meat",
     "baseCost": 10,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "meat_collector": {
     "name": "Meat Collector",
@@ -5440,7 +5565,8 @@
     "stackLimit": 12,
     "icon": "meat_gumbo",
     "baseCost": 225,
-    "energyValue": 225
+    "energyValue": 225,
+    "moodValue": 68
   },
   "meat_tetrazzini": {
     "name": "Meat Tetrazzini",
@@ -5449,7 +5575,8 @@
     "stackLimit": 12,
     "icon": "meat_tetrazzini",
     "baseCost": 192,
-    "energyValue": 192
+    "energyValue": 192,
+    "moodValue": 58
   },
   "mega_healthy_veggie_juice": {
     "name": "Mega Healthy Veggie Juice",
@@ -5458,7 +5585,8 @@
     "stackLimit": 24,
     "icon": "mega_healthy_veggie_juice",
     "baseCost": 46,
-    "energyValue": 20
+    "energyValue": 20,
+    "moodValue": 6
   },
   "mental_abstraction": {
     "name": "Abstraction",
@@ -5701,7 +5829,8 @@
     "stackLimit": 12,
     "icon": "messy_fry_up",
     "baseCost": 60,
-    "energyValue": 60
+    "energyValue": 60,
+    "moodValue": 18
   },
   "metal_post": {
     "name": "Metal Bar",
@@ -5764,7 +5893,8 @@
     "stackLimit": 12,
     "icon": "mexicali_eggs",
     "baseCost": 78,
-    "energyValue": 78
+    "energyValue": 78,
+    "moodValue": 23
   },
   "mike_tyson_grill": {
     "name": "Famous Pugilist Grill",
@@ -5782,7 +5912,8 @@
     "stackLimit": 12,
     "icon": "mild_sauce",
     "baseCost": 26,
-    "energyValue": 26
+    "energyValue": 26,
+    "moodValue": 8
   },
   "milk": {
     "name": "Milk",
@@ -5791,7 +5922,8 @@
     "stackLimit": 50,
     "icon": "milk",
     "baseCost": 4,
-    "energyValue": 15
+    "energyValue": 15,
+    "moodValue": 4
   },
   "milk_butterfly": {
     "name": "Butterfly Milk",
@@ -5917,7 +6049,8 @@
     "stackLimit": 40,
     "icon": "mushroom",
     "baseCost": 3,
-    "energyValue": 3
+    "energyValue": 3,
+    "moodValue": 1
   },
   "musicblock_b_brown_01": {
     "name": "Musicblock BB-1",
@@ -6178,7 +6311,8 @@
     "stackLimit": 200,
     "icon": "mustard",
     "baseCost": 4,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "naraka_flame_rub": {
     "name": "Naraka Flame Rub",
@@ -6187,7 +6321,8 @@
     "stackLimit": 50,
     "icon": "naraka_flame_rub",
     "baseCost": 84,
-    "energyValue": 8
+    "energyValue": 8,
+    "moodValue": 2
   },
   "newxp_chain": {
     "name": "Chain",
@@ -6209,7 +6344,7 @@
   },
   "no_no_powder": {
     "name": "No-No Powder",
-    "description": "Some tempting no-no powder. You know you shouldn't, but maybe just this once …",
+    "description": "Some tempting no-no powder. You know you shouldn't, but maybe just this once \u2026",
     "category": "material",
     "stackLimit": 10,
     "icon": "no_no_powder",
@@ -6290,7 +6425,7 @@
   },
   "npc_butterfly": {
     "name": "Butterfly",
-    "description": "A morphously blue butterfly. As any fool knows, butter can't fly, but milk apparently can. Butterflies may need a little kindness (or massage) before they give up the milk, but milk can always be turned into butter… and cheese… and who knows what else?",
+    "description": "A morphously blue butterfly. As any fool knows, butter can't fly, but milk apparently can. Butterflies may need a little kindness (or massage) before they give up the milk, but milk can always be turned into butter\u2026 and cheese\u2026 and who knows what else?",
     "category": "material",
     "stackLimit": 1,
     "icon": "npc_butterfly",
@@ -6667,8 +6802,8 @@
     "energyValue": null
   },
   "npc_cubimal_senorfunpickle": {
-    "name": "Señor Funpickle Cubimal",
-    "description": "It's a Señor Funpickle Cubimal! Collect all Series 2 Cubimals!",
+    "name": "Se\u00f1or Funpickle Cubimal",
+    "description": "It's a Se\u00f1or Funpickle Cubimal! Collect all Series 2 Cubimals!",
     "category": "material",
     "stackLimit": 1,
     "icon": "npc_cubimal_senorfunpickle",
@@ -6839,7 +6974,7 @@
   },
   "npc_garden_gnome": {
     "name": "Garden Gnome",
-    "description": "Hey, it's that weird old tiny bearded life-companion you've been hoping for! When placed in your yard, house or on your home street, your new little chum will reveal his hidden (or \"creepy\") talents…",
+    "description": "Hey, it's that weird old tiny bearded life-companion you've been hoping for! When placed in your yard, house or on your home street, your new little chum will reveal his hidden (or \"creepy\") talents\u2026",
     "category": "material",
     "stackLimit": 1,
     "icon": "npc_garden_gnome",
@@ -7654,7 +7789,8 @@
     "stackLimit": 200,
     "icon": "nutmeg",
     "baseCost": 12,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "oats": {
     "name": "Oats",
@@ -7663,7 +7799,8 @@
     "stackLimit": 40,
     "icon": "oats",
     "baseCost": 8,
-    "energyValue": 8
+    "energyValue": 8,
+    "moodValue": 2
   },
   "oaty_cake": {
     "name": "Oaty Cake",
@@ -7672,7 +7809,8 @@
     "stackLimit": 20,
     "icon": "oaty_cake",
     "baseCost": 32,
-    "energyValue": 32
+    "energyValue": 32,
+    "moodValue": 10
   },
   "obvious_panini": {
     "name": "Obvious Panini",
@@ -7681,7 +7819,8 @@
     "stackLimit": 12,
     "icon": "obvious_panini",
     "baseCost": 132,
-    "energyValue": 132
+    "energyValue": 132,
+    "moodValue": 40
   },
   "oily_dressing": {
     "name": "Oily Dressing",
@@ -7690,7 +7829,8 @@
     "stackLimit": 40,
     "icon": "oily_dressing",
     "baseCost": 3,
-    "energyValue": 3
+    "energyValue": 3,
+    "moodValue": 1
   },
   "older_spice": {
     "name": "Old(er) Spice",
@@ -7699,7 +7839,8 @@
     "stackLimit": 200,
     "icon": "older_spice",
     "baseCost": 20,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "olive_oil": {
     "name": "Olive Oil",
@@ -7708,7 +7849,8 @@
     "stackLimit": 40,
     "icon": "olive_oil",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "onion": {
     "name": "Onion",
@@ -7717,7 +7859,8 @@
     "stackLimit": 80,
     "icon": "onion",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "onion_rings": {
     "name": "Onion Ring",
@@ -7726,7 +7869,8 @@
     "stackLimit": 40,
     "icon": "onion_rings",
     "baseCost": 51,
-    "energyValue": 51
+    "energyValue": 51,
+    "moodValue": 15
   },
   "onion_sauce": {
     "name": "Onion Sauce",
@@ -7735,7 +7879,8 @@
     "stackLimit": 12,
     "icon": "onion_sauce",
     "baseCost": 64,
-    "energyValue": 64
+    "energyValue": 64,
+    "moodValue": 19
   },
   "orange": {
     "name": "Orange",
@@ -7744,7 +7889,8 @@
     "stackLimit": 100,
     "icon": "orange",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "orange_juice": {
     "name": "Orange Juice",
@@ -7753,7 +7899,8 @@
     "stackLimit": 24,
     "icon": "orange_juice",
     "baseCost": 39,
-    "energyValue": 15
+    "energyValue": 15,
+    "moodValue": 4
   },
   "ore_grinder": {
     "name": "Grinder",
@@ -7771,7 +7918,8 @@
     "stackLimit": 20,
     "icon": "pad_tii",
     "baseCost": 392,
-    "energyValue": 392
+    "energyValue": 392,
+    "moodValue": 118
   },
   "padding": {
     "name": "Padding",
@@ -7816,7 +7964,8 @@
     "stackLimit": 12,
     "icon": "papl_upside_down_pizza",
     "baseCost": 111,
-    "energyValue": 111
+    "energyValue": 111,
+    "moodValue": 33
   },
   "paradise_ticket_abysmal_thrill": {
     "name": "Ticket to Abysmal Thrill",
@@ -7960,7 +8109,8 @@
     "stackLimit": 80,
     "icon": "parsnip",
     "baseCost": 6,
-    "energyValue": 6
+    "energyValue": 6,
+    "moodValue": 2
   },
   "party_atm": {
     "name": "Party ATM",
@@ -7982,7 +8132,7 @@
   },
   "party_pack_aquarius": {
     "name": "Aquarius Party Pack",
-    "description": "Swim, float & drift your way around this quoin-laden party space. And, remember … quoining is always more fun with friends!",
+    "description": "Swim, float & drift your way around this quoin-laden party space. And, remember \u2026 quoining is always more fun with friends!",
     "category": "material",
     "stackLimit": 1,
     "icon": "party_pack_aquarius",
@@ -8036,7 +8186,7 @@
   },
   "party_pack_taster_aquarius": {
     "name": "Aquarius Party Pack Taster",
-    "description": "Swim, float & drift your way around this quoin-laden party space. And, remember … quoining is always more fun with friends!",
+    "description": "Swim, float & drift your way around this quoin-laden party space. And, remember \u2026 quoining is always more fun with friends!",
     "category": "material",
     "stackLimit": 1,
     "icon": "party_pack_taster_aquarius",
@@ -8203,7 +8353,8 @@
     "stackLimit": 50,
     "icon": "pepitas",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "petrified_rock_large": {
     "name": "Large Petrified Rock",
@@ -8243,12 +8394,13 @@
   },
   "pi": {
     "name": "Pi",
-    "description": "The recipe for Pi was described in ancient times by Alphimedes of Salatu, who also purportedly invented a heat ray for attacking the Rook. (If the heat ray ever existed, it has long since been lost.) It was later improved upon by Ludolph the Cerulean, named for his bright blue skin. Ludolph gave a Pi to several of the giants. Tii immediately stated that Pi was irrational. Pot, on the other hand, declared this to be the best pie he’d ever eaten - transcendental, in fact.",
+    "description": "The recipe for Pi was described in ancient times by Alphimedes of Salatu, who also purportedly invented a heat ray for attacking the Rook. (If the heat ray ever existed, it has long since been lost.) It was later improved upon by Ludolph the Cerulean, named for his bright blue skin. Ludolph gave a Pi to several of the giants. Tii immediately stated that Pi was irrational. Pot, on the other hand, declared this to be the best pie he\u2019d ever eaten - transcendental, in fact.",
     "category": "food",
     "stackLimit": 5,
     "icon": "pi",
     "baseCost": 314,
-    "energyValue": 227
+    "energyValue": 227,
+    "moodValue": 68
   },
   "pick": {
     "name": "Pick",
@@ -8266,7 +8418,8 @@
     "stackLimit": 40,
     "icon": "pickle",
     "baseCost": 21,
-    "energyValue": 21
+    "energyValue": 21,
+    "moodValue": 6
   },
   "pig_bait": {
     "name": "Pig Bait",
@@ -8320,7 +8473,8 @@
     "stackLimit": 200,
     "icon": "pinch_of_salt",
     "baseCost": 2,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "pineapple": {
     "name": "Pineapple",
@@ -8329,7 +8483,8 @@
     "stackLimit": 100,
     "icon": "pineapple",
     "baseCost": 7,
-    "energyValue": 7
+    "energyValue": 7,
+    "moodValue": 2
   },
   "plain_bubble": {
     "name": "Plain Bubble",
@@ -8338,7 +8493,8 @@
     "stackLimit": 250,
     "icon": "plain_bubble",
     "baseCost": 2,
-    "energyValue": 2
+    "energyValue": 2,
+    "moodValue": 1
   },
   "plain_crystal": {
     "name": "Plain Crystal",
@@ -8365,7 +8521,8 @@
     "stackLimit": 40,
     "icon": "plain_noodles",
     "baseCost": 13,
-    "energyValue": 13
+    "energyValue": 13,
+    "moodValue": 4
   },
   "plank": {
     "name": "Plank",
@@ -8374,7 +8531,8 @@
     "stackLimit": 250,
     "icon": "plank",
     "baseCost": 5,
-    "energyValue": 2
+    "energyValue": 2,
+    "moodValue": 1
   },
   "plate_of_beans": {
     "name": "Plate of Beans",
@@ -8410,7 +8568,8 @@
     "stackLimit": 100,
     "icon": "plum",
     "baseCost": 3,
-    "energyValue": 3
+    "energyValue": 3,
+    "moodValue": 1
   },
   "portal": {
     "name": "Hyperspacetime Portal Door",
@@ -8436,7 +8595,8 @@
     "stackLimit": 80,
     "icon": "potato",
     "baseCost": 7,
-    "energyValue": 7
+    "energyValue": 7,
+    "moodValue": 2
   },
   "potato_patty": {
     "name": "Potato Patty",
@@ -8445,7 +8605,8 @@
     "stackLimit": 20,
     "icon": "potato_patty",
     "baseCost": 33,
-    "energyValue": 33
+    "energyValue": 33,
+    "moodValue": 10
   },
   "potcorn": {
     "name": "Potcorn",
@@ -8454,7 +8615,8 @@
     "stackLimit": 40,
     "icon": "potcorn",
     "baseCost": 136,
-    "energyValue": 136
+    "energyValue": 136,
+    "moodValue": 41
   },
   "potians_feast": {
     "name": "Potian's Feast",
@@ -8463,7 +8625,8 @@
     "stackLimit": 10,
     "icon": "potians_feast",
     "baseCost": 1000,
-    "energyValue": 1000
+    "energyValue": 1000,
+    "moodValue": 300
   },
   "potion_alphabet_sauce": {
     "name": "Alphabet Sauce",
@@ -8706,7 +8869,8 @@
     "stackLimit": 20,
     "icon": "pottine",
     "baseCost": 267,
-    "energyValue": 267
+    "energyValue": 267,
+    "moodValue": 80
   },
   "powder_of_mild_fecundity": {
     "name": "Powder of Mild Fecundity",
@@ -8733,7 +8897,8 @@
     "stackLimit": 10,
     "icon": "precious_potato_salad",
     "baseCost": 860,
-    "energyValue": 860
+    "energyValue": 860,
+    "moodValue": 258
   },
   "proper_rice": {
     "name": "Proper Rice",
@@ -8742,7 +8907,8 @@
     "stackLimit": 20,
     "icon": "proper_rice",
     "baseCost": 26,
-    "energyValue": 26
+    "energyValue": 26,
+    "moodValue": 8
   },
   "proto_barnacle_pod": {
     "name": "Barnacle Pod",
@@ -9048,7 +9214,8 @@
     "stackLimit": 11,
     "icon": "pumpkin",
     "baseCost": 41,
-    "energyValue": 41
+    "energyValue": 41,
+    "moodValue": 12
   },
   "pumpkin_ale": {
     "name": "Pumpkin Ale",
@@ -9156,7 +9323,8 @@
     "stackLimit": 5,
     "icon": "pumpkin_pie",
     "baseCost": 111,
-    "energyValue": 111
+    "energyValue": 111,
+    "moodValue": 33
   },
   "pungent_sunrise": {
     "name": "Pungent Sunrise",
@@ -9165,7 +9333,8 @@
     "stackLimit": 24,
     "icon": "pungent_sunrise",
     "baseCost": 197,
-    "energyValue": 20
+    "energyValue": 20,
+    "moodValue": 6
   },
   "purple_apparition": {
     "name": "Scion of Purple",
@@ -9183,7 +9352,8 @@
     "stackLimit": 50,
     "icon": "purple_flower",
     "baseCost": 12,
-    "energyValue": 12
+    "energyValue": 12,
+    "moodValue": 4
   },
   "quest_req_icon_hellhole": {
     "name": "Quest Log icon: Hell Hole",
@@ -9372,7 +9542,8 @@
     "stackLimit": 40,
     "icon": "red",
     "baseCost": 30,
-    "energyValue": 30
+    "energyValue": 30,
+    "moodValue": 9
   },
   "rice": {
     "name": "Rice",
@@ -9381,7 +9552,8 @@
     "stackLimit": 80,
     "icon": "rice",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "rich_tagine": {
     "name": "Rich Tagine",
@@ -9390,7 +9562,8 @@
     "stackLimit": 12,
     "icon": "rich_tagine",
     "baseCost": 332,
-    "energyValue": 332
+    "energyValue": 332,
+    "moodValue": 100
   },
   "rock_beryl_1": {
     "name": "Beryl Rock",
@@ -9543,7 +9716,8 @@
     "stackLimit": 50,
     "icon": "rookswort",
     "baseCost": 75,
-    "energyValue": 75
+    "energyValue": 75,
+    "moodValue": 22
   },
   "roux": {
     "name": "Roux",
@@ -9552,7 +9726,8 @@
     "stackLimit": 40,
     "icon": "roux",
     "baseCost": 22,
-    "energyValue": 22
+    "energyValue": 22,
+    "moodValue": 7
   },
   "rube_potato": {
     "name": "Rube Shaped Potato",
@@ -9579,7 +9754,8 @@
     "stackLimit": 50,
     "icon": "rubeweed",
     "baseCost": 55,
-    "energyValue": 55
+    "energyValue": 55,
+    "moodValue": 16
   },
   "saffron": {
     "name": "Saffron",
@@ -9588,7 +9764,8 @@
     "stackLimit": 200,
     "icon": "saffron",
     "baseCost": 12,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "salmon": {
     "name": "Pocket Salmon",
@@ -9597,7 +9774,8 @@
     "stackLimit": 40,
     "icon": "salmon",
     "baseCost": 15,
-    "energyValue": 15
+    "energyValue": 15,
+    "moodValue": 4
   },
   "salmon_jaella": {
     "name": "Salmon Jaella",
@@ -9606,7 +9784,8 @@
     "stackLimit": 20,
     "icon": "salmon_jaella",
     "baseCost": 241,
-    "energyValue": 241
+    "energyValue": 241,
+    "moodValue": 72
   },
   "sammich": {
     "name": "Sammich",
@@ -9615,7 +9794,8 @@
     "stackLimit": 20,
     "icon": "sammich",
     "baseCost": 29,
-    "energyValue": 29
+    "energyValue": 29,
+    "moodValue": 9
   },
   "saucepan": {
     "name": "Saucepan",
@@ -9651,7 +9831,8 @@
     "stackLimit": 20,
     "icon": "scrumptious_frittata",
     "baseCost": 78,
-    "energyValue": 78
+    "energyValue": 78,
+    "moodValue": 23
   },
   "secret_sauce": {
     "name": "Secret Sauce",
@@ -9660,7 +9841,8 @@
     "stackLimit": 20,
     "icon": "secret_sauce",
     "baseCost": 47,
-    "energyValue": 47
+    "energyValue": 47,
+    "moodValue": 14
   },
   "seed_broccoli": {
     "name": "Broccoli Seed",
@@ -9795,7 +9977,8 @@
     "stackLimit": 40,
     "icon": "sesame_oil",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "set_square": {
     "name": "Set Square",
@@ -9849,7 +10032,8 @@
     "stackLimit": 50,
     "icon": "silvertongue",
     "baseCost": 50,
-    "energyValue": 50
+    "energyValue": 50,
+    "moodValue": 15
   },
   "simple_bbq": {
     "name": "Simple BBQ",
@@ -9858,7 +10042,8 @@
     "stackLimit": 12,
     "icon": "simple_bbq",
     "baseCost": 116,
-    "energyValue": 116
+    "energyValue": 116,
+    "moodValue": 35
   },
   "simple_slaw": {
     "name": "Simple Slaw",
@@ -9867,7 +10052,8 @@
     "stackLimit": 20,
     "icon": "simple_slaw",
     "baseCost": 27,
-    "energyValue": 27
+    "energyValue": 27,
+    "moodValue": 8
   },
   "sloth_knocker": {
     "name": "Knocker",
@@ -9885,7 +10071,8 @@
     "stackLimit": 24,
     "icon": "slow_gin_fizz",
     "baseCost": 76,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "small_worthless": {
     "name": "Small shiny object with no intrinsic value",
@@ -9912,7 +10099,8 @@
     "stackLimit": 20,
     "icon": "snack_pack",
     "baseCost": 66,
-    "energyValue": 66
+    "energyValue": 66,
+    "moodValue": 20
   },
   "snail": {
     "name": "Snail",
@@ -9939,7 +10127,8 @@
     "stackLimit": 10,
     "icon": "sno_cone_blue",
     "baseCost": 75,
-    "energyValue": 75
+    "energyValue": 75,
+    "moodValue": 22
   },
   "sno_cone_green": {
     "name": "Green Sno Cone",
@@ -9948,7 +10137,8 @@
     "stackLimit": 10,
     "icon": "sno_cone_green",
     "baseCost": 150,
-    "energyValue": 150
+    "energyValue": 150,
+    "moodValue": 45
   },
   "sno_cone_orange": {
     "name": "Orange Sno Cone",
@@ -9957,7 +10147,8 @@
     "stackLimit": 10,
     "icon": "sno_cone_orange",
     "baseCost": 300,
-    "energyValue": 300
+    "energyValue": 300,
+    "moodValue": 90
   },
   "sno_cone_purple": {
     "name": "Purple Sno Cone",
@@ -9966,7 +10157,8 @@
     "stackLimit": 10,
     "icon": "sno_cone_purple",
     "baseCost": 1100,
-    "energyValue": 1100
+    "energyValue": 1100,
+    "moodValue": 330
   },
   "sno_cone_rainbow": {
     "name": "Rainbo Sno Cone",
@@ -9975,7 +10167,8 @@
     "stackLimit": 10,
     "icon": "sno_cone_rainbow",
     "baseCost": 2200,
-    "energyValue": 2200
+    "energyValue": 2200,
+    "moodValue": 660
   },
   "sno_cone_red": {
     "name": "Red Sno Cone",
@@ -9984,7 +10177,8 @@
     "stackLimit": 10,
     "icon": "sno_cone_red",
     "baseCost": 600,
-    "energyValue": 600
+    "energyValue": 600,
+    "moodValue": 180
   },
   "sparkle_powder": {
     "name": "Sparkle Powder",
@@ -10006,7 +10200,7 @@
   },
   "special_item_that_only_beta_testers_get": {
     "name": "Special Item That Only Beta Testers Get",
-    "description": "Best selling toy in a year that the historians have glossed over, sales plummeted when it was discovered that many of the advertised functions of Señor Funpickle could cause injury, death, or severe unpopularity. Hastily rebranded, the remaining stock were quietly farmed out as commemorative free gifts at a time known as \"The Great Reset\".",
+    "description": "Best selling toy in a year that the historians have glossed over, sales plummeted when it was discovered that many of the advertised functions of Se\u00f1or Funpickle could cause injury, death, or severe unpopularity. Hastily rebranded, the remaining stock were quietly farmed out as commemorative free gifts at a time known as \"The Great Reset\".",
     "category": "material",
     "stackLimit": 1,
     "icon": "special_item_that_only_beta_testers_get",
@@ -10029,7 +10223,8 @@
     "stackLimit": 24,
     "icon": "spicy_grog",
     "baseCost": 51,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "spicy_quesadilla": {
     "name": "Spicy Quesadilla",
@@ -10038,7 +10233,8 @@
     "stackLimit": 12,
     "icon": "spicy_quesadilla",
     "baseCost": 86,
-    "energyValue": 86
+    "energyValue": 86,
+    "moodValue": 26
   },
   "spigot": {
     "name": "Spigot",
@@ -10056,7 +10252,8 @@
     "stackLimit": 80,
     "icon": "spinach",
     "baseCost": 3,
-    "energyValue": 3
+    "energyValue": 3,
+    "moodValue": 1
   },
   "spinach_salad": {
     "name": "Spinach Salad",
@@ -10065,7 +10262,8 @@
     "stackLimit": 40,
     "icon": "spinach_salad",
     "baseCost": 18,
-    "energyValue": 18
+    "energyValue": 18,
+    "moodValue": 5
   },
   "spindle": {
     "name": "Spindle",
@@ -10101,7 +10299,8 @@
     "stackLimit": 10,
     "icon": "steak",
     "baseCost": 22,
-    "energyValue": 90
+    "energyValue": 90,
+    "moodValue": 25
   },
   "still": {
     "name": "Still",
@@ -10119,7 +10318,8 @@
     "stackLimit": 40,
     "icon": "stock_sauce",
     "baseCost": 34,
-    "energyValue": 34
+    "energyValue": 34,
+    "moodValue": 10
   },
   "stoot_barfield_pullstring_doll": {
     "name": "Stoot Barfield Pullstring Doll",
@@ -10137,7 +10337,8 @@
     "stackLimit": 100,
     "icon": "strawberry",
     "baseCost": 4,
-    "energyValue": 4
+    "energyValue": 4,
+    "moodValue": 1
   },
   "street_spirit": {
     "name": "Street Spirit",
@@ -10195,7 +10396,7 @@
   },
   "subway_gate": {
     "name": "A Red Button",
-    "description": "A button on an old ruin — but still operative! — subway gate.",
+    "description": "A button on an old ruin \u2014 but still operative! \u2014 subway gate.",
     "category": "material",
     "stackLimit": 1,
     "icon": "subway_gate",
@@ -10227,7 +10428,8 @@
     "stackLimit": 12,
     "icon": "super_veggie_kebabs",
     "baseCost": 256,
-    "energyValue": 256
+    "energyValue": 256,
+    "moodValue": 77
   },
   "swank_zucchini_loaf": {
     "name": "Swank Zucchini Loaf",
@@ -10236,7 +10438,8 @@
     "stackLimit": 10,
     "icon": "swank_zucchini_loaf",
     "baseCost": 441,
-    "energyValue": 441
+    "energyValue": 441,
+    "moodValue": 132
   },
   "sweet_n_sour_sauce": {
     "name": "Sweet 'n' Sour Sauce",
@@ -10245,7 +10448,8 @@
     "stackLimit": 20,
     "icon": "sweet_n_sour_sauce",
     "baseCost": 63,
-    "energyValue": 63
+    "energyValue": 63,
+    "moodValue": 19
   },
   "swf_1": {
     "name": "SWF",
@@ -10281,7 +10485,8 @@
     "stackLimit": 40,
     "icon": "swing_batter",
     "baseCost": 31,
-    "energyValue": 31
+    "energyValue": 31,
+    "moodValue": 9
   },
   "switch_simple": {
     "name": "Simple Switch",
@@ -10299,7 +10504,8 @@
     "stackLimit": 20,
     "icon": "tangy_noodles",
     "baseCost": 54,
-    "energyValue": 54
+    "energyValue": 54,
+    "moodValue": 16
   },
   "tangy_sauce": {
     "name": "Tangy Sauce",
@@ -10308,7 +10514,8 @@
     "stackLimit": 12,
     "icon": "tangy_sauce",
     "baseCost": 154,
-    "energyValue": 154
+    "energyValue": 154,
+    "moodValue": 46
   },
   "tasty_pasta": {
     "name": "Tasty Pasta",
@@ -10317,11 +10524,12 @@
     "stackLimit": 12,
     "icon": "tasty_pasta",
     "baseCost": 338,
-    "energyValue": 338
+    "energyValue": 338,
+    "moodValue": 101
   },
   "teleportation_script": {
     "name": "Teleportation Script",
-    "description": "A lovingly handcrafted Teleportation Script (Or \"a magical location incantation scribbled on some Paper with a Quill). This will zip you on a one-way ticket to somewhere specific… as long as you have a Teleportation Token or the energy to pay for your ride.",
+    "description": "A lovingly handcrafted Teleportation Script (Or \"a magical location incantation scribbled on some Paper with a Quill). This will zip you on a one-way ticket to somewhere specific\u2026 as long as you have a Teleportation Token or the energy to pay for your ride.",
     "category": "material",
     "stackLimit": 1,
     "icon": "teleportation_script",
@@ -10330,7 +10538,7 @@
   },
   "teleportation_script_imbued": {
     "name": "Imbued Teleportation Script",
-    "description": "Free ride! A pre-imbued teleportation script (well, a magical location-incantation scribbled on some Paper with a Quill), this will zip you on a one way ticket somewhere specific… For free! Because someone already paid for your ride.",
+    "description": "Free ride! A pre-imbued teleportation script (well, a magical location-incantation scribbled on some Paper with a Quill), this will zip you on a one way ticket somewhere specific\u2026 For free! Because someone already paid for your ride.",
     "category": "material",
     "stackLimit": 1,
     "icon": "teleportation_script_imbued",
@@ -10461,7 +10669,8 @@
     "stackLimit": 100,
     "icon": "tiny_bubble",
     "baseCost": 10,
-    "energyValue": 10
+    "energyValue": 10,
+    "moodValue": 3
   },
   "token_of_appreciation": {
     "name": "Token of Appreciation",
@@ -10479,7 +10688,8 @@
     "stackLimit": 80,
     "icon": "tomato",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "tooberry_shake": {
     "name": "Too-Berry Shake",
@@ -10488,7 +10698,8 @@
     "stackLimit": 24,
     "icon": "tooberry_shake",
     "baseCost": 76,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "tortilla": {
     "name": "Tortilla",
@@ -10497,7 +10708,8 @@
     "stackLimit": 40,
     "icon": "tortilla",
     "baseCost": 19,
-    "energyValue": 19
+    "energyValue": 19,
+    "moodValue": 6
   },
   "tower_expander": {
     "name": "Workbench",
@@ -10789,7 +11001,7 @@
   },
   "trophy_street_creator_dirt": {
     "name": "Street Creator Dirt Trophy",
-    "description": "This Trophy, artfully depicting a master of dirt, marks a street-building career so great that the holder collected… well, all five parts of this trophy.",
+    "description": "This Trophy, artfully depicting a master of dirt, marks a street-building career so great that the holder collected\u2026 well, all five parts of this trophy.",
     "category": "material",
     "stackLimit": 1,
     "icon": "trophy_street_creator_dirt",
@@ -11010,7 +11222,8 @@
     "stackLimit": 50,
     "icon": "trump_rub",
     "baseCost": 128,
-    "energyValue": 13
+    "energyValue": 13,
+    "moodValue": 4
   },
   "turmeric": {
     "name": "Turmeric",
@@ -11019,7 +11232,8 @@
     "stackLimit": 200,
     "icon": "turmeric",
     "baseCost": 12,
-    "energyValue": 1
+    "energyValue": 1,
+    "moodValue": 1
   },
   "upgrade_card_craftybot_lesson": {
     "name": "Craftybot Lesson Voucher",
@@ -11055,7 +11269,8 @@
     "stackLimit": 40,
     "icon": "urfu",
     "baseCost": 73,
-    "energyValue": 73
+    "energyValue": 73,
+    "moodValue": 22
   },
   "vegmageddon": {
     "name": "Vegmageddon",
@@ -11064,7 +11279,8 @@
     "stackLimit": 40,
     "icon": "vegmageddon",
     "baseCost": 90,
-    "energyValue": 90
+    "energyValue": 90,
+    "moodValue": 27
   },
   "visiting_stone": {
     "name": "Visiting Stone",
@@ -11082,7 +11298,8 @@
     "stackLimit": 20,
     "icon": "waffles",
     "baseCost": 185,
-    "energyValue": 185
+    "energyValue": 185,
+    "moodValue": 56
   },
   "wall_button": {
     "name": "Wall Button",
@@ -11136,7 +11353,8 @@
     "stackLimit": 12,
     "icon": "wavy_gravy",
     "baseCost": 75,
-    "energyValue": 75
+    "energyValue": 75,
+    "moodValue": 22
   },
   "whistle_stand_button": {
     "name": "Precious Equipment Protection Unit (P.E.P.U.)",
@@ -11163,7 +11381,8 @@
     "stackLimit": 100,
     "icon": "whortleberry",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   },
   "whortleberry_jelly": {
     "name": "Whortleberry Jelly",
@@ -11172,7 +11391,8 @@
     "stackLimit": 12,
     "icon": "whortleberry_jelly",
     "baseCost": 75,
-    "energyValue": 75
+    "energyValue": 75,
+    "moodValue": 22
   },
   "wicked_bolognese_sauce": {
     "name": "Wicked Bolognese Sauce",
@@ -11181,7 +11401,8 @@
     "stackLimit": 12,
     "icon": "wicked_bolognese_sauce",
     "baseCost": 79,
-    "energyValue": 79
+    "energyValue": 79,
+    "moodValue": 24
   },
   "wine_of_the_dead": {
     "name": "Wine of the Dead",
@@ -11261,7 +11482,8 @@
     "stackLimit": 50,
     "icon": "yellow_crumb_flower",
     "baseCost": 66,
-    "energyValue": 66
+    "energyValue": 66,
+    "moodValue": 20
   },
   "your_papers": {
     "name": "Your Papers",
@@ -11279,7 +11501,8 @@
     "stackLimit": 12,
     "icon": "yummy_gruel",
     "baseCost": 237,
-    "energyValue": 237
+    "energyValue": 237,
+    "moodValue": 71
   },
   "zillene": {
     "name": "Zillene",
@@ -11297,6 +11520,7 @@
     "stackLimit": 80,
     "icon": "zucchini",
     "baseCost": 5,
-    "energyValue": 5
+    "energyValue": 5,
+    "moodValue": 2
   }
 }

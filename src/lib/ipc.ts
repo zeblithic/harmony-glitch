@@ -202,3 +202,31 @@ export async function closeDialogue(): Promise<void> {
 export async function getQuestLog(): Promise<QuestLogFrame> {
   return invoke<QuestLogFrame>('get_quest_log');
 }
+
+// ── Social ────────────────────────────────────────────────────────────
+
+export interface MoodResult { mood: number; maxMood: number; multiplier: number; }
+export interface EmoteHiResult { variant: string; targeted: boolean; }
+
+export async function getMood(): Promise<MoodResult> { return invoke<MoodResult>('get_mood'); }
+export async function emoteHi(): Promise<EmoteHiResult> { return invoke<EmoteHiResult>('emote_hi'); }
+export interface BuddyEntry { addressHash: string; displayName: string; addedDate: string; coPresenceTotal: number; lastSeenDate: string | null; }
+export interface BuddyListResult { buddies: BuddyEntry[]; }
+export interface BlockedListResult { blocked: string[]; }
+export interface PartyMemberInfo { addressHash: string; displayName: string; isLeader: boolean; }
+export interface PartyStateResult { inParty: boolean; leader: string | null; members: PartyMemberInfo[]; }
+
+export async function buddyRequest(peerHash: string): Promise<void> { return invoke<void>('buddy_request', { peerHash }); }
+export async function buddyAccept(peerHash: string): Promise<void> { return invoke<void>('buddy_accept', { peerHash }); }
+export async function buddyDecline(peerHash: string): Promise<void> { return invoke<void>('buddy_decline', { peerHash }); }
+export async function buddyRemove(peerHash: string): Promise<void> { return invoke<void>('buddy_remove', { peerHash }); }
+export async function blockPlayer(peerHash: string): Promise<void> { return invoke<void>('block_player', { peerHash }); }
+export async function unblockPlayer(peerHash: string): Promise<void> { return invoke<void>('unblock_player', { peerHash }); }
+export async function getBuddyList(): Promise<BuddyListResult> { return invoke<BuddyListResult>('get_buddy_list'); }
+export async function getBlockedList(): Promise<BlockedListResult> { return invoke<BlockedListResult>('get_blocked_list'); }
+export async function partyInvite(peerHash: string): Promise<void> { return invoke<void>('party_invite', { peerHash }); }
+export async function partyAccept(): Promise<void> { return invoke<void>('party_accept'); }
+export async function partyDecline(): Promise<void> { return invoke<void>('party_decline'); }
+export async function partyLeave(): Promise<void> { return invoke<void>('party_leave'); }
+export async function partyKick(peerHash: string): Promise<void> { return invoke<void>('party_kick', { peerHash }); }
+export async function getPartyState(): Promise<PartyStateResult> { return invoke<PartyStateResult>('get_party_state'); }

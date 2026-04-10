@@ -196,6 +196,7 @@ mod tests {
                     icon: id.into(),
                     base_cost: None,
                     energy_value: None,
+                    mood_value: None,
                 },
             );
         }

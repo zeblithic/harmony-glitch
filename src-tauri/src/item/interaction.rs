@@ -14,11 +14,23 @@ const GROUND_ITEM_PICKUP_RADIUS: f64 = 60.0;
 /// Energy cost per harvest action.
 const HARVEST_ENERGY_COST: f64 = 5.0;
 
+/// Interaction radius for remote players (pixels).
+const SOCIAL_INTERACTION_RADIUS: f64 = 400.0;
+
 /// What kind of interactable is nearest.
 #[derive(Debug)]
 pub enum NearestInteractable {
     Entity { index: usize, distance: f64 },
     GroundItem { index: usize, distance: f64 },
+    RemotePlayer { address_hash: [u8; 16], distance: f64, x: f64, y: f64 },
+}
+
+/// A remote player's position for proximity scanning.
+#[derive(Debug, Clone)]
+pub struct RemotePlayerPosition {
+    pub address_hash: [u8; 16],
+    pub x: f64,
+    pub y: f64,
 }
 
 /// Find the nearest interactable within range of the player.
@@ -30,6 +42,7 @@ pub fn proximity_scan(
     entities: &[WorldEntity],
     entity_defs: &EntityDefs,
     world_items: &[WorldItem],
+    remote_players: &[RemotePlayerPosition],
 ) -> Option<NearestInteractable> {
     let mut best: Option<NearestInteractable> = None;
     let mut best_dist = f64::MAX;
@@ -61,6 +74,21 @@ pub fn proximity_scan(
             best = Some(NearestInteractable::GroundItem {
                 index: i,
                 distance: dist,
+            });
+        }
+    }
+
+    for rp in remote_players {
+        let dx = player_x - rp.x;
+        let dy = player_y - rp.y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist <= SOCIAL_INTERACTION_RADIUS && dist < best_dist {
+            best_dist = dist;
+            best = Some(NearestInteractable::RemotePlayer {
+                address_hash: rp.address_hash,
+                distance: dist,
+                x: rp.x,
+                y: rp.y,
             });
         }
     }
@@ -182,6 +210,14 @@ pub fn build_prompt(
                 entity_id: None,
             }
         }
+        NearestInteractable::RemotePlayer { x, y, .. } => InteractionPrompt {
+            verb: "Wave".into(),
+            target_name: "Player".into(),
+            target_x: *x,
+            target_y: *y,
+            actionable: true,
+            entity_id: None,
+        },
     }
 }
 
@@ -446,6 +482,9 @@ pub fn execute_interaction(
                 result.interaction_type = Some(InteractionType::Rejected);
             }
         }
+        NearestInteractable::RemotePlayer { .. } => {
+            // Social interactions with remote players are handled at a higher level.
+        }
     }
 
     result
@@ -472,6 +511,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         defs
@@ -517,7 +557,7 @@ mod tests {
             x: 50.0,
             y: 0.0,
         }];
-        let result = proximity_scan(40.0, 0.0, &entities, &entity_defs, &[]);
+        let result = proximity_scan(40.0, 0.0, &entities, &entity_defs, &[], &[]);
         assert!(matches!(
             result,
             Some(NearestInteractable::Entity { index: 0, .. })
@@ -533,7 +573,7 @@ mod tests {
             x: 500.0,
             y: 0.0,
         }];
-        let result = proximity_scan(0.0, 0.0, &entities, &entity_defs, &[]);
+        let result = proximity_scan(0.0, 0.0, &entities, &entity_defs, &[], &[]);
         assert!(result.is_none());
     }
 
@@ -553,7 +593,7 @@ mod tests {
             x: 10.0,
             y: 0.0,
         }];
-        let result = proximity_scan(10.0, 0.0, &entities, &entity_defs, &items);
+        let result = proximity_scan(10.0, 0.0, &entities, &entity_defs, &items, &[]);
         assert!(matches!(result, Some(NearestInteractable::Entity { .. })));
     }
 
@@ -567,7 +607,7 @@ mod tests {
             x: 30.0,
             y: 0.0,
         }];
-        let result = proximity_scan(20.0, 0.0, &[], &entity_defs, &items);
+        let result = proximity_scan(20.0, 0.0, &[], &entity_defs, &items, &[]);
         assert!(matches!(
             result,
             Some(NearestInteractable::GroundItem { index: 0, .. })
@@ -1593,6 +1633,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: Some(3),
                 energy_value: None,
+                mood_value: None,
             },
         );
         (entities, entity_defs, item_defs)
@@ -1787,5 +1828,54 @@ mod tests {
             &mut imagination,
         );
         assert!(imagination > 0);
+    }
+
+    #[test]
+    fn proximity_scan_finds_nearest_remote_player() {
+        let entity_defs = test_entity_defs();
+        let rp = RemotePlayerPosition {
+            address_hash: [1u8; 16],
+            x: 100.0,
+            y: 0.0,
+        };
+        let result = proximity_scan(0.0, 0.0, &[], &entity_defs, &[], &[rp]);
+        assert!(matches!(
+            result,
+            Some(NearestInteractable::RemotePlayer { address_hash: [1, ..], .. })
+        ));
+    }
+
+    #[test]
+    fn proximity_scan_remote_player_outside_400px_ignored() {
+        let entity_defs = test_entity_defs();
+        let rp = RemotePlayerPosition {
+            address_hash: [2u8; 16],
+            x: 500.0,
+            y: 0.0,
+        };
+        let result = proximity_scan(0.0, 0.0, &[], &entity_defs, &[], &[rp]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn proximity_scan_entity_preferred_when_closer() {
+        let entity_defs = test_entity_defs();
+        let entities = vec![WorldEntity {
+            id: "t1".into(),
+            entity_type: "fruit_tree".into(),
+            x: 50.0,
+            y: 0.0,
+        }];
+        let rp = RemotePlayerPosition {
+            address_hash: [3u8; 16],
+            x: 100.0,
+            y: 0.0,
+        };
+        // Entity at 50px, remote player at 100px — entity should win
+        let result = proximity_scan(0.0, 0.0, &entities, &entity_defs, &[], &[rp]);
+        assert!(matches!(
+            result,
+            Some(NearestInteractable::Entity { index: 0, .. })
+        ));
     }
 }
