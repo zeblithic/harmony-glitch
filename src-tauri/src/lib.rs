@@ -1345,7 +1345,7 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
     )?;
     state.energy = new_energy;
     if mood_gained > 0.0 {
-        state.mood.apply_mood_change(mood_gained);
+        state.social.mood.apply_mood_change(mood_gained);
     }
 
     let gained = new_energy - energy;

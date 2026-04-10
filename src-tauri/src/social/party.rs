@@ -155,7 +155,7 @@ pub struct PendingPartyInvite {
 }
 
 /// Runtime party state for one player.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PartyState {
     pub party: Option<ActiveParty>,
     pub pending_invite: Option<PendingPartyInvite>,

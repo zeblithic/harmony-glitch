@@ -81,6 +81,7 @@ pub fn daily_variant(identity: &[u8; 16], date: &str) -> HiVariant {
 }
 
 /// Per-session emote state — tracks who we've greeted and who greeted us.
+#[derive(Debug, Clone)]
 pub struct EmoteState {
     /// Players we've sent a Hi to today (no repeats per day).
     pub hi_today: HashSet<[u8; 16]>,

@@ -80,6 +80,12 @@ pub struct SaveState {
     pub mood: f64,
     #[serde(default = "default_mood")]
     pub max_mood: f64,
+    #[serde(default)]
+    pub buddies: Vec<crate::social::BuddySaveEntry>,
+    #[serde(default)]
+    pub blocked: Vec<String>,
+    #[serde(default)]
+    pub last_hi_date: Option<String>,
 }
 
 /// The complete game state.
@@ -133,7 +139,7 @@ pub struct GameState {
     pub quest_progress: crate::quest::types::QuestProgress,
     /// Active dialogue session (if any).
     pub active_dialogue: Option<crate::quest::types::ActiveDialogue>,
-    pub mood: crate::mood::MoodState,
+    pub social: crate::social::SocialState,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -274,7 +280,7 @@ impl GameState {
             dialogue_defs,
             quest_progress: crate::quest::types::QuestProgress::default(),
             active_dialogue: None,
-            mood: crate::mood::MoodState::default(),
+            social: crate::social::SocialState::new([0u8; 16], ""),
         }
     }
 
@@ -430,8 +436,14 @@ impl GameState {
         self.energy = (self.energy - PASSIVE_ENERGY_DECAY_RATE * dt).max(0.0);
 
         // Passive mood decay
-        let in_dialogue = self.active_dialogue.is_some();
-        self.mood.tick(dt, self.game_time, in_dialogue, false);
+        {
+            let ctx = crate::social::SocialTickContext {
+                current_date: "",
+                in_dialogue: self.active_dialogue.is_some(),
+                game_time: self.game_time,
+            };
+            self.social.tick(dt, &ctx);
+        }
 
         // Drain pending audio events from IPC commands (craft_recipe, load_street)
         let mut audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
@@ -1008,8 +1020,8 @@ impl GameState {
             quest_progress: crate::quest::types::QuestProgressFrame {
                 active_count: self.quest_progress.active.len(),
             },
-            mood: self.mood.mood,
-            max_mood: self.mood.max_mood,
+            mood: self.social.mood.mood,
+            max_mood: self.social.mood.max_mood,
         })
     }
 
@@ -1080,8 +1092,11 @@ impl GameState {
             skill_progress: self.skill_progress.clone(),
             upgrades: self.upgrades.clone(),
             quest_progress: self.quest_progress.clone(),
-            mood: self.mood.mood,
-            max_mood: self.mood.max_mood,
+            mood: self.social.mood.mood,
+            max_mood: self.social.mood.max_mood,
+            buddies: self.social.buddies.to_save_entries(),
+            blocked: self.social.buddies.blocked_to_hex(),
+            last_hi_date: Some(self.social.emotes.current_date.clone()),
         })
     }
 
@@ -1121,7 +1136,11 @@ impl GameState {
         self.skill_progress = save.skill_progress.clone();
         self.upgrades = save.upgrades.clone();
         self.quest_progress = save.quest_progress.clone();
-        self.mood = crate::mood::MoodState::new_with_grace(save.mood, save.max_mood, self.game_time);
+        self.social.mood = crate::mood::MoodState::new_with_grace(save.mood, save.max_mood, self.game_time);
+        self.social.buddies.restore_from_save(&save.buddies, &save.blocked);
+        if let Some(ref date) = save.last_hi_date {
+            self.social.emotes.check_date_change(date);
+        }
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -3662,6 +3681,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3696,6 +3718,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(
@@ -3727,6 +3752,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3762,6 +3790,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
 
         write_save_state(&path, &save).unwrap();
@@ -3832,6 +3863,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         state.restore_save(&save);
 
@@ -3887,6 +3921,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         state.restore_save(&save);
 
@@ -3917,6 +3954,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3945,6 +3985,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3978,6 +4021,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();
@@ -4021,6 +4067,9 @@ mod save_tests {
             quest_progress: crate::quest::types::QuestProgress::default(),
             mood: 100.0,
             max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
         };
         let json = serde_json::to_string(&save).unwrap();
         let parsed: SaveState = serde_json::from_str(&json).unwrap();
@@ -4124,5 +4173,25 @@ mod save_tests {
         let reserialized = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&reserialized).unwrap();
         assert!((restored.mood - 72.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn save_state_buddies_default_empty() {
+        let json = r#"{"streetId":"demo","x":0,"y":0,"facing":"right","inventory":[],"currants":50}"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert!(save.buddies.is_empty());
+        assert!(save.blocked.is_empty());
+    }
+
+    #[test]
+    fn save_state_buddies_round_trip() {
+        let json = r#"{"streetId":"demo","x":0,"y":0,"facing":"right","inventory":[],"currants":50,"buddies":[{"addressHash":"01010101010101010101010101010101","displayName":"Alice","addedDate":"2026-04-10","coPresenceTotal":100.0,"lastSeenDate":"2026-04-10"}],"blocked":["02020202020202020202020202020202"]}"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert_eq!(save.buddies.len(), 1);
+        assert_eq!(save.blocked.len(), 1);
+        let reserialized = serde_json::to_string(&save).unwrap();
+        let restored: SaveState = serde_json::from_str(&reserialized).unwrap();
+        assert_eq!(restored.buddies.len(), 1);
+        assert_eq!(restored.blocked.len(), 1);
     }
 }

@@ -50,7 +50,7 @@ pub struct PendingBuddyRequest {
 }
 
 /// Runtime buddy state for one player.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct BuddyState {
     pub buddies: Vec<BuddyEntry>,
     pub blocked: Vec<[u8; 16]>,
