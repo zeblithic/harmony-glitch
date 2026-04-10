@@ -1,4 +1,5 @@
 pub mod avatar;
+pub mod emote;
 pub mod engine;
 pub mod identity;
 pub mod item;
