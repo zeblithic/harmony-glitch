@@ -50,6 +50,7 @@ pub enum NetMessage {
     Trade(TradeMessage),
     Gossip(crate::trust::gossip::GossipEnvelope),
     Vouch(crate::trust::epoch::VouchMessage),
+    Emote(crate::emote::EmoteMessage),
 }
 
 #[cfg(test)]
@@ -275,6 +276,40 @@ mod tests {
         assert!(
             bytes.len() <= MAX_PAYLOAD,
             "Typical AvatarUpdate is {} bytes, max is {}",
+            bytes.len(),
+            MAX_PAYLOAD
+        );
+    }
+
+    #[test]
+    fn net_message_emote_round_trip() {
+        let msg = NetMessage::Emote(crate::emote::EmoteMessage {
+            emote_type: crate::emote::EmoteType::Hi,
+            variant: crate::emote::HiVariant::Hearts,
+            target: Some([1u8; 16]),
+        });
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
+        match decoded {
+            NetMessage::Emote(e) => {
+                assert_eq!(e.variant, crate::emote::HiVariant::Hearts);
+                assert_eq!(e.target, Some([1u8; 16]));
+            }
+            _ => panic!("Expected Emote variant"),
+        }
+    }
+
+    #[test]
+    fn emote_message_fits_in_mtu() {
+        let msg = NetMessage::Emote(crate::emote::EmoteMessage {
+            emote_type: crate::emote::EmoteType::Hi,
+            variant: crate::emote::HiVariant::Rocketships,
+            target: Some([0xFF; 16]),
+        });
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        assert!(
+            bytes.len() <= MAX_PAYLOAD,
+            "EmoteMessage is {} bytes, max is {}",
             bytes.len(),
             MAX_PAYLOAD
         );

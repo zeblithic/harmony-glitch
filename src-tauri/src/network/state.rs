@@ -1982,6 +1982,10 @@ impl NetworkState {
                                 }
                                 self.trust_store.record_vouch(&vouch_msg.subject, addr);
                             }
+                            NetMessage::Emote(_) => {
+                                // Emote handling is done at the application layer (lib.rs),
+                                // not in NetworkState. The message is forwarded via actions.
+                            }
                         }
                     }
                 }
