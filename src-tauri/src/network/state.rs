@@ -27,7 +27,7 @@ use zeroize::Zeroizing;
 use crate::avatar::types::AvatarAppearance;
 use crate::engine::state::RemotePlayerFrame;
 use crate::network::registry::RemotePlayerRegistry;
-use crate::network::types::{ChatMessage, NetMessage, PlayerNetState, PresenceEvent};
+use crate::network::types::{ChatChannel, ChatMessage, NetMessage, PlayerNetState, PresenceEvent};
 use crate::trade::types::TradeMessage;
 
 // ── Constants ────────────────────────────────────────────────────────────
@@ -501,6 +501,7 @@ impl NetworkState {
             text: truncated,
             sender: self.public_identity.address_hash,
             sender_name: self.display_name.clone(),
+            channel: ChatChannel::Street,
         };
 
         // Echo locally so the sender sees their own speech bubble.

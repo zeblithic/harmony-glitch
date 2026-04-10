@@ -17,6 +17,15 @@ pub struct PlayerNetState {
     pub animation: u8,
 }
 
+/// Chat channel — street (public) or party (private).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatChannel {
+    #[default]
+    Street,
+    Party,
+}
+
 /// Chat message — ephemeral, no history.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChatMessage {
@@ -26,6 +35,9 @@ pub struct ChatMessage {
     pub sender: [u8; 16],
     /// Sender's display name at time of sending.
     pub sender_name: String,
+    /// Chat channel (street or party).
+    #[serde(default)]
+    pub channel: ChatChannel,
 }
 
 /// Presence event — join/leave a street.
@@ -110,6 +122,7 @@ mod tests {
             text: "Hello world!".into(),
             sender: [0xAB; 16],
             sender_name: "Alice".into(),
+            channel: ChatChannel::Street,
         };
         let msg = NetMessage::Chat(chat.clone());
         let bytes = serde_json::to_vec(&msg).unwrap();
@@ -130,6 +143,7 @@ mod tests {
             text: "x".repeat(200),
             sender: [0xFF; 16],
             sender_name: "A".repeat(30),
+            channel: ChatChannel::Street,
         });
         let bytes = serde_json::to_vec(&msg).unwrap();
         assert!(
@@ -146,6 +160,7 @@ mod tests {
             text: emoji_text,
             sender: [0xFF; 16],
             sender_name: "A".repeat(30),
+            channel: ChatChannel::Street,
         });
         let bytes_emoji = serde_json::to_vec(&msg_emoji).unwrap();
         assert!(
@@ -314,5 +329,25 @@ mod tests {
             bytes.len(),
             MAX_PAYLOAD
         );
+    }
+
+    #[test]
+    fn chat_message_defaults_to_street_channel() {
+        let json = r#"{"text":"hello","sender":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"sender_name":"Alice"}"#;
+        let msg: ChatMessage = serde_json::from_str(json).unwrap();
+        assert_eq!(msg.channel, ChatChannel::Street);
+    }
+
+    #[test]
+    fn chat_message_party_channel_round_trip() {
+        let msg = ChatMessage {
+            text: "hello team".to_string(),
+            sender: [1u8; 16],
+            sender_name: "Alice".to_string(),
+            channel: ChatChannel::Party,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let restored: ChatMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.channel, ChatChannel::Party);
     }
 }
