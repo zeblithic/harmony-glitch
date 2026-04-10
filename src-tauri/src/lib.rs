@@ -1370,12 +1370,15 @@ fn handle_social_message(
         }
     }
 
-    let sender_name = {
+    let (sender_name, our_address) = {
         let net = app.state::<NetworkWrapper>();
         let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
-        net_state
-            .peer_display_name(&authenticated_sender)
-            .unwrap_or_default()
+        (
+            net_state
+                .peer_display_name(&authenticated_sender)
+                .unwrap_or_default(),
+            net_state.our_address_hash(),
+        )
     };
 
     let state_wrapper = app.state::<GameStateWrapper>();
@@ -1490,10 +1493,10 @@ fn handle_social_message(
         SocialMessage::PartyLeave { from } => {
             if let Some(ref mut party) = state.social.party.party {
                 let (_remaining, new_leader) = party.remove_member(&from);
-                if party.members.len() <= 1 {
+                let dissolving = party.members.len() <= 1;
+                if dissolving {
                     state.social.party.party = None;
-                }
-                if let Some(leader) = new_leader {
+                } else if let Some(leader) = new_leader {
                     let _ = app.emit(
                         "party_leader_changed",
                         serde_json::json!({ "newLeaderHash": hex::encode(leader) }),
@@ -1506,11 +1509,6 @@ fn handle_social_message(
             );
         }
         SocialMessage::PartyKick { target } => {
-            let net = app.state::<NetworkWrapper>();
-            let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
-            let our_address = net_state.our_address_hash();
-            drop(net_state);
-
             if target == our_address {
                 // We got kicked
                 state.social.party.party = None;
