@@ -77,8 +77,14 @@ impl BuddyState {
 
     // ── Buddy mutations ──────────────────────────────────────────────────
 
-    /// Add a buddy entry. Ignores duplicates.
+    /// Add a buddy entry. Ignores duplicates and blocked addresses.
+    /// Clears any pending request from this address.
     pub fn add_buddy(&mut self, entry: BuddyEntry) {
+        if self.is_blocked(&entry.address_hash) {
+            return;
+        }
+        self.pending_requests
+            .retain(|r| r.from != entry.address_hash);
         if !self.is_buddy(&entry.address_hash) {
             self.buddies.push(entry);
         }

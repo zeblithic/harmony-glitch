@@ -256,23 +256,6 @@ mod tests {
 
     // ── handle_incoming_hi ────────────────────────────────────────────────────
 
-    /// Force `active_variant` to return a specific value by picking an identity
-    /// whose daily seed for the test date matches `wanted`, or by using
-    /// `caught_variant`.
-    fn state_with_active_variant(active: HiVariant) -> EmoteState {
-        let date = "2026-04-10";
-        // Brute-force a seed identity whose daily variant matches `active`.
-        for seed in 0u8..=255 {
-            let id = test_identity(seed);
-            if daily_variant(&id, date) == active {
-                return EmoteState::new(id, date);
-            }
-        }
-        // Fallback: any identity + override via caught_variant.
-        let mut s = EmoteState::new(test_identity(0xFF), date);
-        s.caught_variant = Some(active);
-        s
-    }
 
     #[test]
     fn handle_incoming_hi_no_match_gives_5() {

@@ -5547,7 +5547,7 @@
     "icon": "meat",
     "baseCost": 10,
     "energyValue": 10,
-    "moodValue": 5
+    "moodValue": 3
   },
   "meat_collector": {
     "name": "Meat Collector",

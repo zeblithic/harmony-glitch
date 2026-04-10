@@ -38,6 +38,9 @@ impl MoodState {
     /// Decay is suppressed during dialogue or while the grace period is active.
     /// `party_bonus` reduces the effective decay by 25% when true.
     pub fn tick(&mut self, dt: f64, game_time: f64, in_dialogue: bool, party_bonus: bool) {
+        if !dt.is_finite() || dt <= 0.0 || !game_time.is_finite() {
+            return;
+        }
         if in_dialogue || game_time < self.mood_grace_until {
             return;
         }
