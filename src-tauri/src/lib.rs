@@ -784,6 +784,22 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
         state.social.emotes.record_hi_sent(target);
     }
 
+    // Drop game state lock before network publish
+    drop(state);
+
+    // Broadcast emote to all peers on the street
+    let emote_msg = emote::EmoteMessage {
+        emote_type: emote::EmoteType::Hi,
+        variant: our_variant,
+        target: nearest_hash,
+    };
+    let actions = {
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.publish_emote(emote_msg, &mut rand::rngs::OsRng)
+    };
+    execute_network_actions(&app, actions);
+
     Ok(serde_json::json!({
         "variant": our_variant.as_str(),
         "targeted": nearest_hash.is_some(),
