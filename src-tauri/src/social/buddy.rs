@@ -155,6 +155,9 @@ impl BuddyState {
 
     /// Add `seconds` to a buddy's co-presence total and update last_seen_date.
     pub fn record_copresence(&mut self, addr: &[u8; 16], seconds: f64, date: &str) -> bool {
+        if !seconds.is_finite() || seconds < 0.0 {
+            return false;
+        }
         match self.buddies.iter_mut().find(|b| &b.address_hash == addr) {
             Some(b) => {
                 b.co_presence_total += seconds;
@@ -183,18 +186,21 @@ impl BuddyState {
         self.buddies.clear();
         self.blocked.clear();
         self.pending_requests.clear();
-        for entry in entries {
-            if let Some(buddy) = BuddyEntry::from_save_entry(entry) {
-                self.buddies.push(buddy);
-            }
-        }
+        // Load blocked list first so add_buddy can enforce the invariant.
         for hex_str in blocked_hex {
             if let Ok(bytes) = hex::decode(hex_str) {
                 if bytes.len() == 16 {
                     let mut addr = [0u8; 16];
                     addr.copy_from_slice(&bytes);
-                    self.blocked.push(addr);
+                    if !self.is_blocked(&addr) {
+                        self.blocked.push(addr);
+                    }
                 }
+            }
+        }
+        for entry in entries {
+            if let Some(buddy) = BuddyEntry::from_save_entry(entry) {
+                self.add_buddy(buddy);
             }
         }
     }

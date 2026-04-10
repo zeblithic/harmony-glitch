@@ -38,7 +38,7 @@ impl MoodState {
     /// Decay is suppressed during dialogue or while the grace period is active.
     /// `party_bonus` reduces the effective decay by 25% when true.
     pub fn tick(&mut self, dt: f64, game_time: f64, in_dialogue: bool, party_bonus: bool) {
-        if !dt.is_finite() || dt <= 0.0 || !game_time.is_finite() {
+        if !dt.is_finite() || dt <= 0.0 || !game_time.is_finite() || game_time < 0.0 {
             return;
         }
         if in_dialogue || game_time < self.mood_grace_until {
@@ -161,5 +161,25 @@ mod tests {
         assert_eq!(s.mood, 80.0);
         assert_eq!(s.max_mood, 100.0);
         assert!((s.mood_grace_until - (game_time + MOOD_GRACE_DURATION)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn tick_ignores_invalid_inputs() {
+        let mut s = MoodState::default();
+
+        s.tick(f64::NAN, 1.0, false, false);
+        assert_eq!(s.mood, 100.0);
+
+        s.tick(f64::INFINITY, 1.0, false, false);
+        assert_eq!(s.mood, 100.0);
+
+        s.tick(60.0, f64::NAN, false, false);
+        assert_eq!(s.mood, 100.0);
+
+        s.tick(60.0, -1.0, false, false);
+        assert_eq!(s.mood, 100.0);
+
+        s.tick(-10.0, 1.0, false, false);
+        assert_eq!(s.mood, 100.0);
     }
 }

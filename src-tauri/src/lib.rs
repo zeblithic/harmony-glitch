@@ -840,11 +840,6 @@ fn buddy_accept(peer_hash: String, app: AppHandle) -> Result<(), String> {
         co_presence_total: 0.0,
         last_seen_date: None,
     });
-    state
-        .social
-        .buddies
-        .pending_requests
-        .retain(|r| r.from != peer_bytes);
 
     Ok(())
 }
