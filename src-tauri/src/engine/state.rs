@@ -42,6 +42,10 @@ fn default_upgrades() -> PlayerUpgrades {
     PlayerUpgrades::default()
 }
 
+fn default_mood() -> f64 {
+    100.0
+}
+
 /// Minimal player state for save/load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +76,10 @@ pub struct SaveState {
     /// Quest progress (active + completed quests).
     #[serde(default)]
     pub quest_progress: crate::quest::types::QuestProgress,
+    #[serde(default = "default_mood")]
+    pub mood: f64,
+    #[serde(default = "default_mood")]
+    pub max_mood: f64,
 }
 
 /// The complete game state.
@@ -125,6 +133,7 @@ pub struct GameState {
     pub quest_progress: crate::quest::types::QuestProgress,
     /// Active dialogue session (if any).
     pub active_dialogue: Option<crate::quest::types::ActiveDialogue>,
+    pub mood: crate::mood::MoodState,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -162,6 +171,8 @@ pub struct RenderFrame {
     pub skill_progress: SkillProgressFrame,
     pub upgrades: PlayerUpgrades,
     pub quest_progress: crate::quest::types::QuestProgressFrame,
+    pub mood: f64,
+    pub max_mood: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,6 +274,7 @@ impl GameState {
             dialogue_defs,
             quest_progress: crate::quest::types::QuestProgress::default(),
             active_dialogue: None,
+            mood: crate::mood::MoodState::default(),
         }
     }
 
@@ -416,6 +428,10 @@ impl GameState {
 
         // Passive energy decay
         self.energy = (self.energy - PASSIVE_ENERGY_DECAY_RATE * dt).max(0.0);
+
+        // Passive mood decay
+        let in_dialogue = self.active_dialogue.is_some();
+        self.mood.tick(dt, self.game_time, in_dialogue, false);
 
         // Drain pending audio events from IPC commands (craft_recipe, load_street)
         let mut audio_events: Vec<AudioEvent> = std::mem::take(&mut self.pending_audio_events);
@@ -992,6 +1008,8 @@ impl GameState {
             quest_progress: crate::quest::types::QuestProgressFrame {
                 active_count: self.quest_progress.active.len(),
             },
+            mood: self.mood.mood,
+            max_mood: self.mood.max_mood,
         })
     }
 
@@ -1062,6 +1080,8 @@ impl GameState {
             skill_progress: self.skill_progress.clone(),
             upgrades: self.upgrades.clone(),
             quest_progress: self.quest_progress.clone(),
+            mood: self.mood.mood,
+            max_mood: self.mood.max_mood,
         })
     }
 
@@ -1101,6 +1121,7 @@ impl GameState {
         self.skill_progress = save.skill_progress.clone();
         self.upgrades = save.upgrades.clone();
         self.quest_progress = save.quest_progress.clone();
+        self.mood = crate::mood::MoodState::new_with_grace(save.mood, save.max_mood, self.game_time);
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -3634,6 +3655,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3666,6 +3689,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(
@@ -3695,6 +3720,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3728,6 +3755,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
 
         write_save_state(&path, &save).unwrap();
@@ -3796,6 +3825,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         state.restore_save(&save);
 
@@ -3849,6 +3880,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         state.restore_save(&save);
 
@@ -3877,6 +3910,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -3903,6 +3938,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -3934,6 +3971,8 @@ mod save_tests {
             skill_progress: SkillProgress::default(),
             upgrades: PlayerUpgrades::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();
@@ -3975,6 +4014,8 @@ mod save_tests {
             },
             skill_progress: SkillProgress::default(),
             quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
         };
         let json = serde_json::to_string(&save).unwrap();
         let parsed: SaveState = serde_json::from_str(&json).unwrap();
@@ -4059,5 +4100,24 @@ mod save_tests {
         // iMG earned on craft completion: cherry_pie base_cost=20, 2x = 40
         assert_eq!(state.imagination - before, 40);
         assert!(frame.pickup_feedback.iter().any(|f| f.text.contains("iMG")));
+    }
+
+    #[test]
+    fn save_state_mood_default() {
+        let json = r#"{"streetId":"demo","x":0,"y":0,"facing":"right","inventory":[],"currants":50}"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert_eq!(save.mood, 100.0);
+        assert_eq!(save.max_mood, 100.0);
+    }
+
+    #[test]
+    fn save_state_mood_round_trip() {
+        let json = r#"{"streetId":"demo","x":0,"y":0,"facing":"right","inventory":[],"currants":50,"mood":72.5,"maxMood":100.0}"#;
+        let save: SaveState = serde_json::from_str(json).unwrap();
+        assert!((save.mood - 72.5).abs() < f64::EPSILON);
+        assert!((save.max_mood - 100.0).abs() < f64::EPSILON);
+        let reserialized = serde_json::to_string(&save).unwrap();
+        let restored: SaveState = serde_json::from_str(&reserialized).unwrap();
+        assert!((restored.mood - 72.5).abs() < f64::EPSILON);
     }
 }
