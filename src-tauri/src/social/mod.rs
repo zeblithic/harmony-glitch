@@ -33,6 +33,11 @@ impl SocialState {
         }
     }
 
+    /// Update the identity used for emote daily variant seeding.
+    pub fn set_identity(&mut self, identity: [u8; 16]) {
+        self.emotes.set_identity(identity);
+    }
+
     pub fn tick(&mut self, dt: f64, ctx: &SocialTickContext) {
         self.emotes.check_date_change(ctx.current_date);
         let party_bonus = self.party.has_party_bonus();

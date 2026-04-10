@@ -22,7 +22,7 @@ const SOCIAL_INTERACTION_RADIUS: f64 = 400.0;
 pub enum NearestInteractable {
     Entity { index: usize, distance: f64 },
     GroundItem { index: usize, distance: f64 },
-    RemotePlayer { address_hash: [u8; 16], distance: f64 },
+    RemotePlayer { address_hash: [u8; 16], distance: f64, x: f64, y: f64 },
 }
 
 /// A remote player's position for proximity scanning.
@@ -87,6 +87,8 @@ pub fn proximity_scan(
             best = Some(NearestInteractable::RemotePlayer {
                 address_hash: rp.address_hash,
                 distance: dist,
+                x: rp.x,
+                y: rp.y,
             });
         }
     }
@@ -208,11 +210,11 @@ pub fn build_prompt(
                 entity_id: None,
             }
         }
-        NearestInteractable::RemotePlayer { .. } => InteractionPrompt {
+        NearestInteractable::RemotePlayer { x, y, .. } => InteractionPrompt {
             verb: "Wave".into(),
             target_name: "Player".into(),
-            target_x: 0.0,
-            target_y: 0.0,
+            target_x: *x,
+            target_y: *y,
             actionable: true,
             entity_id: None,
         },

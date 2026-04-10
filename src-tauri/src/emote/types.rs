@@ -106,6 +106,11 @@ impl EmoteState {
         }
     }
 
+    /// Update the identity used for daily variant seeding.
+    pub fn set_identity(&mut self, identity: [u8; 16]) {
+        self.identity = identity;
+    }
+
     /// The variant we're currently broadcasting.
     /// Uses `caught_variant` if set, otherwise falls back to the daily seed.
     pub fn active_variant(&self) -> HiVariant {
@@ -135,10 +140,12 @@ impl EmoteState {
 
     /// Handle an incoming Hi from `sender` carrying `sender_variant`.
     ///
+    /// Always adopts the sender's variant (viral spreading).
+    ///
     /// Returns the mood delta:
     /// - `0.0` if sender is blocked or we already received a Hi from them today.
-    /// - `5.0` if variants don't match.
-    /// - `10.0` if variants match (also catches the sender's variant).
+    /// - `5.0` if sender's variant didn't match our old active variant.
+    /// - `10.0` if sender's variant matched our old active variant.
     pub fn handle_incoming_hi(
         &mut self,
         sender: [u8; 16],
@@ -153,11 +160,12 @@ impl EmoteState {
         }
         self.hi_received_today.insert(sender);
 
-        if sender_variant == self.active_variant() {
-            self.caught_variant = Some(sender_variant);
-            10.0
+        let old_variant = self.active_variant();
+        self.caught_variant = Some(sender_variant); // Always adopt (viral spreading)
+        if sender_variant == old_variant {
+            10.0 // Natural match bonus
         } else {
-            5.0
+            5.0 // Non-matching, but adopted their variant
         }
     }
 }
@@ -311,6 +319,23 @@ mod tests {
         let mut state = EmoteState::new(id, date);
         let delta = state.handle_incoming_hi(test_identity(0xDD), our_variant, true);
         assert_eq!(delta, 0.0);
+    }
+
+    #[test]
+    fn handle_incoming_hi_viral_spreading_adopts_non_matching_variant() {
+        let date = "2026-04-10";
+        let id = test_identity(0x42);
+        let mut state = EmoteState::new(id, date);
+        let our_variant = state.active_variant();
+        let other_variant = HiVariant::ALL
+            .iter()
+            .copied()
+            .find(|&v| v != our_variant)
+            .unwrap();
+        state.handle_incoming_hi(test_identity(0xAA), other_variant, false);
+        // After receiving a non-matching Hi, active_variant should change
+        assert_eq!(state.active_variant(), other_variant);
+        assert_eq!(state.caught_variant, Some(other_variant));
     }
 
     #[test]

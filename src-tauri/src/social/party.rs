@@ -105,7 +105,7 @@ impl ActiveParty {
             let next = self
                 .members
                 .iter()
-                .min_by(|a, b| a.joined_at.partial_cmp(&b.joined_at).unwrap())
+                .min_by(|a, b| a.joined_at.total_cmp(&b.joined_at))
                 .map(|m| m.address_hash)
                 .unwrap();
             self.leader = next;
@@ -227,12 +227,12 @@ impl PartyState {
                 });
             }
         }
-        // Add self.
-        let _ = party.add_member(PartyMember {
+        // Add self — propagate error (e.g. party full).
+        party.add_member(PartyMember {
             address_hash: self_hash,
             display_name: self_name,
             joined_at: now,
-        });
+        })?;
         self.party = Some(party);
         Ok(())
     }
@@ -454,6 +454,25 @@ mod tests {
         let mut s = PartyState::new();
         let result = s.accept_invite(addr(0x01), "Me".into(), 0.0);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn accept_invite_returns_err_when_party_full() {
+        let mut s = PartyState::new();
+        // Invite from leader with 4 existing members (leader + 3 others = 4).
+        // Adding self would make 5, but if there are already 4 others + leader = 5,
+        // self would be the 6th → party full.
+        let existing_members: Vec<[u8; 16]> = (2u8..=5).map(|i| addr(i)).collect();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "Leader".into(),
+            members: existing_members,
+            received_at: 100.0,
+        });
+        // leader (0x01) + members 0x02..0x05 = 5 members, adding self (0x06) should fail
+        let result = s.accept_invite(addr(0x06), "Me".into(), 150.0);
+        assert!(result.is_err(), "should fail when party is full");
+        assert!(!s.in_party(), "should not join party when add_member fails");
     }
 
     #[test]

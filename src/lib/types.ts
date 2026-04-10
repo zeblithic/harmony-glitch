@@ -187,6 +187,13 @@ export interface LearningFrame {
   progress: number;
 }
 
+export interface NearestSocialTarget {
+  addressHash: string;
+  displayName: string;
+  isBuddy: boolean;
+  inParty: boolean;
+}
+
 export interface RenderFrame {
   player: PlayerFrame;
   remotePlayers: RemotePlayerFrame[];
@@ -209,6 +216,7 @@ export interface RenderFrame {
   questProgress: QuestProgressFrame;
   mood: number;
   maxMood: number;
+  nearestSocialTarget: NearestSocialTarget | null;
 }
 
 export interface NetworkStatus {

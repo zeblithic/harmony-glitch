@@ -14,17 +14,15 @@
 
 {#if inParty}
   <div class="party-panel">
-    <div
+    <button
+      type="button"
       class="party-header"
-      role="button"
-      tabindex="0"
       aria-expanded={!collapsed}
       onclick={() => { collapsed = !collapsed; }}
-      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); collapsed = !collapsed; } }}
     >
       <span class="party-title">Party</span>
       <span class="party-toggle">{collapsed ? '▶' : '▼'}</span>
-    </div>
+    </button>
     {#if !collapsed}
       <ul class="party-member-list">
         {#each members as member (member.addressHash)}
@@ -75,10 +73,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
     padding: 6px 10px;
     cursor: pointer;
     background: rgba(255, 255, 255, 0.05);
+    border: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font: inherit;
+    color: inherit;
   }
 
   .party-header:hover {

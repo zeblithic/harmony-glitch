@@ -176,6 +176,7 @@ impl BuddyState {
     pub fn restore_from_save(&mut self, entries: &[BuddySaveEntry], blocked_hex: &[String]) {
         self.buddies.clear();
         self.blocked.clear();
+        self.pending_requests.clear();
         for entry in entries {
             if let Some(buddy) = BuddyEntry::from_save_entry(entry) {
                 self.buddies.push(buddy);

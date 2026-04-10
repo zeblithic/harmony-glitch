@@ -1,4 +1,5 @@
 pub mod avatar;
+pub mod date_util;
 pub mod emote;
 pub mod engine;
 pub mod identity;
@@ -741,13 +742,17 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
-    let our_variant = state.social.emotes.active_variant();
-
-    // Find nearest remote player
+    // Find nearest remote player and get our identity
     let net = app.state::<NetworkWrapper>();
     let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_hash = net_state.our_address_hash();
     let remote_frames = net_state.remote_frames();
     drop(net_state);
+
+    // Ensure emote state has the real identity
+    state.social.set_identity(our_hash);
+
+    let our_variant = state.social.emotes.active_variant();
 
     let mut nearest_hash: Option<[u8; 16]> = None;
     let mut nearest_dist = f64::MAX;
@@ -1108,26 +1113,7 @@ fn get_party_state(app: AppHandle) -> Result<serde_json::Value, String> {
 
 /// Returns today's date as a "YYYY-MM-DD" string using the system clock.
 fn today_date_string() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    // Days since Unix epoch
-    let days = secs / 86400;
-    // Compute year, month, day from days using proleptic Gregorian calendar.
-    // Algorithm from http://howardhinnant.github.io/date_algorithms.html
-    let z = days as i64 + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    format!("{y:04}-{m:02}-{d:02}")
+    crate::date_util::today_date_string()
 }
 
 #[tauri::command]
@@ -2166,25 +2152,51 @@ fn game_loop(app: AppHandle) {
                 frame.remote_players = net_state.remote_frames();
             }
 
-            // 7b. Annotate remote players with social state
+            // 7b. Annotate remote players with social state + compute nearest social target
             {
                 let state_wrapper = app.state::<GameStateWrapper>();
                 let game_state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+
+                let mut nearest_target: Option<(f64, engine::state::NearestSocialTarget)> = None;
+
                 for rp in &mut frame.remote_players {
                     if let Ok(bytes) = hex::decode(&rp.address_hash) {
                         if bytes.len() == 16 {
                             let mut addr = [0u8; 16];
                             addr.copy_from_slice(&bytes);
                             rp.is_buddy = game_state.social.buddies.is_buddy(&addr);
+                            let mut in_party = false;
                             if let Some(ref party) = game_state.social.party.party {
-                                rp.party_role = party.role_of(&addr).map(|r| match r {
-                                    crate::social::party::PartyRole::Leader => "Leader".to_string(),
-                                    crate::social::party::PartyRole::Member => "Member".to_string(),
+                                rp.party_role = party.role_of(&addr).map(|r| {
+                                    in_party = true;
+                                    match r {
+                                        crate::social::party::PartyRole::Leader => "Leader".to_string(),
+                                        crate::social::party::PartyRole::Member => "Member".to_string(),
+                                    }
                                 });
+                            }
+
+                            // Compute distance for nearest social target
+                            let dx = frame.player.x - rp.x;
+                            let dy = frame.player.y - rp.y;
+                            let dist = (dx * dx + dy * dy).sqrt();
+                            const SOCIAL_INTERACTION_RADIUS: f64 = 400.0;
+                            if dist <= SOCIAL_INTERACTION_RADIUS {
+                                let is_closer = nearest_target.as_ref().is_none_or(|(d, _)| dist < *d);
+                                if is_closer {
+                                    nearest_target = Some((dist, engine::state::NearestSocialTarget {
+                                        address_hash: rp.address_hash.clone(),
+                                        display_name: rp.display_name.clone(),
+                                        is_buddy: rp.is_buddy,
+                                        in_party,
+                                    }));
+                                }
                             }
                         }
                     }
                 }
+
+                frame.nearest_social_target = nearest_target.map(|(_, t)| t);
             }
 
             // 8. Publish local player state via NetworkState

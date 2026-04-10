@@ -23,7 +23,10 @@ impl Default for MoodState {
 
 impl MoodState {
     /// Creates a new MoodState with a grace period starting from `game_time`.
+    /// Clamps `max_mood` to non-negative and `mood` to `[0.0, max_mood]`.
     pub fn new_with_grace(mood: f64, max_mood: f64, game_time: f64) -> Self {
+        let max_mood = max_mood.max(0.0);
+        let mood = mood.clamp(0.0, max_mood);
         Self {
             mood,
             max_mood,
@@ -43,8 +46,10 @@ impl MoodState {
     }
 
     /// Applies a mood delta, clamping the result to [0.0, max_mood].
+    /// Guards against negative max_mood.
     pub fn apply_mood_change(&mut self, delta: f64) {
-        self.mood = (self.mood + delta).clamp(0.0, self.max_mood);
+        let max = self.max_mood.max(0.0);
+        self.mood = (self.mood + delta).clamp(0.0, max);
     }
 
     /// Returns the iMG multiplier for the current mood state.

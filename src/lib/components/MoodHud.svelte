@@ -1,6 +1,6 @@
 <script lang="ts">
   let { mood = 0, maxMood = 100 }: { mood: number; maxMood: number } = $props();
-  let percent = $derived(maxMood > 0 ? Math.min(100, (mood / maxMood) * 100) : 0);
+  let percent = $derived(maxMood > 0 ? Math.max(0, Math.min(100, (mood / maxMood) * 100)) : 0);
   let isLow = $derived(mood < maxMood * 0.5);
   let displayMood = $derived(Math.floor(mood));
 </script>

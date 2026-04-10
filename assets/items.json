@@ -1763,7 +1763,8 @@
     "stackLimit": 24,
     "icon": "beer",
     "baseCost": 10,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 3
   },
   "berry_bowl": {
     "name": "Berry Bowl",
@@ -2277,7 +2278,7 @@
     "icon": "cherry",
     "baseCost": 1,
     "energyValue": 1,
-    "moodValue": 3
+    "moodValue": 1
   },
   "cherry_pie": {
     "name": "Cherry Pie",
@@ -2371,7 +2372,8 @@
     "stackLimit": 24,
     "icon": "cloud_11_smoothie",
     "baseCost": 69,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 21
   },
   "cloudberry": {
     "name": "Cloudberry",
@@ -2428,7 +2430,8 @@
     "stackLimit": 24,
     "icon": "coffee",
     "baseCost": 5,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 2
   },
   "cold_taco": {
     "name": "Cold Taco",
@@ -2588,7 +2591,8 @@
     "stackLimit": 24,
     "icon": "crabato_juice",
     "baseCost": 50,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 15
   },
   "crabphones": {
     "name": "CrabPod Headphones",
@@ -3653,7 +3657,8 @@
     "stackLimit": 24,
     "icon": "fruity_juice",
     "baseCost": 24,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 7
   },
   "frying_pan": {
     "name": "Frying Pan",
@@ -4460,7 +4465,7 @@
     "icon": "grain",
     "baseCost": 1,
     "energyValue": 1,
-    "moodValue": 2
+    "moodValue": 1
   },
   "grain_bushel": {
     "name": "Bushel of Grain",
@@ -4832,7 +4837,8 @@
     "stackLimit": 24,
     "icon": "hooch",
     "baseCost": 15,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 5
   },
   "hot_n_fizzy_sauce": {
     "name": "Hot 'n' Fizzy Sauce",
@@ -5932,7 +5938,8 @@
     "stackLimit": 80,
     "icon": "milk_butterfly",
     "baseCost": 8,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 2
   },
   "million_craant_trophy": {
     "name": "Million Currant Trophy",
@@ -9224,7 +9231,8 @@
     "stackLimit": 10,
     "icon": "pumpkin_ale",
     "baseCost": 83,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 25
   },
   "pumpkin_carved_1": {
     "name": "Jack the Pumpkin",
@@ -9813,7 +9821,8 @@
     "stackLimit": 24,
     "icon": "savory_smoothie",
     "baseCost": 96,
-    "energyValue": null
+    "energyValue": null,
+    "moodValue": 29
   },
   "scraper": {
     "name": "Scraper",

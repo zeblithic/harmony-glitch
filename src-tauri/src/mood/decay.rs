@@ -18,7 +18,7 @@ pub fn mood_decay(mood: f64, max_mood: f64, dt: f64) -> f64 {
     let pct = mood / max_mood;
     let rate = if pct > THRESHOLD_HIGH {
         DECAY_HIGH
-    } else if pct > THRESHOLD_MID {
+    } else if pct >= THRESHOLD_MID {
         DECAY_MID
     } else {
         DECAY_LOW
@@ -113,13 +113,13 @@ mod tests {
     }
 
     #[test]
-    fn decay_boundary_exactly_50_is_low_tier() {
-        // pct == 0.50, which is NOT >0.50, so low tier applies
+    fn decay_boundary_exactly_50_is_mid_tier() {
+        // pct == 0.50 is >=0.50, so mid tier applies
         let mood = 50.0_f64;
         let max_mood = 100.0_f64;
         let dt = 60.0_f64;
         let result = mood_decay(mood, max_mood, dt);
-        let expected = mood - DECAY_LOW * max_mood * dt;
+        let expected = mood - DECAY_MID * max_mood * dt;
         assert!((result - expected).abs() < 1e-10, "got {result}, expected {expected}");
     }
 

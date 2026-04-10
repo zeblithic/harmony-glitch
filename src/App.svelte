@@ -530,15 +530,12 @@
     e.preventDefault();
     emoteHi().catch(console.error);
   }
-  // T key: initiate trade with nearest remote player (by distance, not hash order)
+  // T key: initiate trade with nearest remote player (computed by Rust)
   if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !tradeRequestVisible && !shopOpen && latestFrame) {
-    const px = latestFrame.player.x, py = latestFrame.player.y;
-    const nearest = latestFrame.remotePlayers
-      ?.map(p => ({ p, d: Math.hypot(p.x - px, p.y - py) }))
-      .sort((a, b) => a.d - b.d)[0]?.p;
-    if (nearest) {
+    const target = latestFrame.nearestSocialTarget;
+    if (target) {
       e.preventDefault();
-      tradeInitiate(nearest.addressHash).then(() => {
+      tradeInitiate(target.addressHash).then(() => {
         tradeOpen = true;
         inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
         tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
@@ -760,28 +757,24 @@
         />
       {/each}
     {/if}
-    {#if latestFrame && latestFrame.remotePlayers.length > 0}
-      {@const nearest = latestFrame.remotePlayers
-        .map(p => ({ p, d: Math.hypot(p.x - latestFrame!.player.x, p.y - latestFrame!.player.y) }))
-        .sort((a, b) => a.d - b.d)[0]?.p}
-      {#if nearest && Math.hypot(nearest.x - latestFrame.player.x, nearest.y - latestFrame.player.y) < 200}
-        <SocialPrompt
-          visible={!chatFocused && !tradeOpen && !shopOpen && !dialogueOpen}
-          targetName={nearest.displayName}
-          canHi={true}
-          canTrade={true}
-          canInvite={!partyInParty}
-          canBuddy={!nearest.isBuddy}
-          onHi={() => emoteHi().catch(console.error)}
-          onTrade={() => tradeInitiate(nearest.addressHash).then(() => {
-            tradeOpen = true;
-            inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
-            tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
-          }).catch(console.error)}
-          onInvite={() => { /* partyInvite wired via partyInvite(nearest.addressHash) */ }}
-          onBuddy={() => { /* buddyRequest wired via buddyRequest(nearest.addressHash) */ }}
-        />
-      {/if}
+    {#if latestFrame?.nearestSocialTarget}
+      {@const target = latestFrame.nearestSocialTarget}
+      <SocialPrompt
+        visible={!chatFocused && !tradeOpen && !shopOpen && !dialogueOpen}
+        targetName={target.displayName}
+        canHi={true}
+        canTrade={true}
+        canInvite={false}
+        canBuddy={false}
+        onHi={() => emoteHi().catch(console.error)}
+        onTrade={() => tradeInitiate(target.addressHash).then(() => {
+          tradeOpen = true;
+          inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
+          tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
+        }).catch(console.error)}
+        onInvite={() => {}}
+        onBuddy={() => {}}
+      />
     {/if}
     <AvatarEditor
       visible={avatarEditorOpen}

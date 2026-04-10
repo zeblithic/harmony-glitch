@@ -154,6 +154,16 @@ pub struct TransitionFrame {
     pub generation: u64,
 }
 
+/// The nearest remote player within social interaction range.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NearestSocialTarget {
+    pub address_hash: String,
+    pub display_name: String,
+    pub is_buddy: bool,
+    pub in_party: bool,
+}
+
 /// Data sent to the frontend each tick for rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,6 +189,7 @@ pub struct RenderFrame {
     pub quest_progress: crate::quest::types::QuestProgressFrame,
     pub mood: f64,
     pub max_mood: f64,
+    pub nearest_social_target: Option<NearestSocialTarget>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -454,8 +465,9 @@ impl GameState {
 
         // Passive mood decay
         {
+            let today = crate::date_util::today_date_string();
             let ctx = crate::social::SocialTickContext {
-                current_date: "",
+                current_date: &today,
                 in_dialogue: self.active_dialogue.is_some(),
                 game_time: self.game_time,
             };
@@ -1040,6 +1052,7 @@ impl GameState {
             },
             mood: self.social.mood.mood,
             max_mood: self.social.mood.max_mood,
+            nearest_social_target: None, // Populated in lib.rs after remote players are augmented
         })
     }
 

@@ -105,7 +105,8 @@
     gap: 8px;
   }
 
-  .buddy-entry:hover .buddy-actions {
+  .buddy-entry:hover .buddy-actions,
+  .buddy-entry:focus-within .buddy-actions {
     opacity: 1;
   }
 
@@ -150,6 +151,14 @@
   }
 
   .buddy-action-btn:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .buddy-action-btn:focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 2px;
     color: #fff;
     border-color: rgba(255, 255, 255, 0.4);
     background: rgba(255, 255, 255, 0.08);

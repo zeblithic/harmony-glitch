@@ -35,14 +35,13 @@
 </script>
 
 {#if shouldRender}
-  <div class="social-prompt" role="menu" aria-label="Social actions for {targetName}">
+  <div class="social-prompt" role="group" aria-label="Social actions for {targetName}">
     <div class="social-prompt-name">{targetName}</div>
     <div class="social-actions">
       {#each actions as act (act.label)}
         <button
           type="button"
           class="social-action"
-          role="menuitem"
           aria-label="{act.label} {targetName}"
           onclick={act.action}
         >
