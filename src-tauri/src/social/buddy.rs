@@ -55,6 +55,8 @@ pub struct BuddyState {
     pub buddies: Vec<BuddyEntry>,
     pub blocked: Vec<[u8; 16]>,
     pub pending_requests: Vec<PendingBuddyRequest>,
+    /// Addresses we've sent outgoing buddy requests to (not yet accepted/declined).
+    outgoing_requests: Vec<[u8; 16]>,
 }
 
 /// Timeout (seconds) before a pending buddy request expires.
@@ -115,6 +117,27 @@ impl BuddyState {
         self.blocked.len() < before
     }
 
+    // ── Outgoing requests ─────────────────────────────────────────────────
+
+    /// Record that we sent a buddy request to `addr`.
+    pub fn record_outgoing_request(&mut self, addr: [u8; 16]) {
+        if !self.outgoing_requests.contains(&addr) {
+            self.outgoing_requests.push(addr);
+        }
+    }
+
+    /// Returns true if we have an outstanding outgoing request to `addr`.
+    pub fn has_outgoing_request(&self, addr: &[u8; 16]) -> bool {
+        self.outgoing_requests.contains(addr)
+    }
+
+    /// Remove and return true if we had an outgoing request to `addr`.
+    pub fn consume_outgoing_request(&mut self, addr: &[u8; 16]) -> bool {
+        let before = self.outgoing_requests.len();
+        self.outgoing_requests.retain(|a| a != addr);
+        self.outgoing_requests.len() < before
+    }
+
     // ── Pending requests ─────────────────────────────────────────────────
 
     /// Enqueue an incoming buddy request (ignored if sender is blocked or already a buddy).
@@ -138,6 +161,11 @@ impl BuddyState {
     pub fn expire_requests(&mut self, now: f64) {
         self.pending_requests
             .retain(|r| (now - r.received_at) <= PENDING_TIMEOUT_SECS);
+    }
+
+    /// Remove the pending request from `addr`, if any.
+    pub fn remove_pending_request(&mut self, addr: &[u8; 16]) {
+        self.pending_requests.retain(|r| &r.from != addr);
     }
 
     // ── Buddy data updates ───────────────────────────────────────────────
@@ -436,6 +464,64 @@ mod tests {
     fn record_copresence_returns_false_if_not_buddy() {
         let mut state = BuddyState::new();
         assert!(!state.record_copresence(&make_addr(0x0E), 100.0, "2026-04-10"));
+    }
+
+    // ── Outgoing requests ──────────────────────────────────────────────────
+
+    #[test]
+    fn record_outgoing_request_tracks_address() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50));
+        assert!(state.has_outgoing_request(&make_addr(0x50)));
+        assert!(!state.has_outgoing_request(&make_addr(0x51)));
+    }
+
+    #[test]
+    fn record_outgoing_request_ignores_duplicates() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50));
+        state.record_outgoing_request(make_addr(0x50));
+        assert_eq!(state.outgoing_requests.len(), 1);
+    }
+
+    #[test]
+    fn consume_outgoing_request_returns_true_and_removes() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50));
+        assert!(state.consume_outgoing_request(&make_addr(0x50)));
+        assert!(!state.has_outgoing_request(&make_addr(0x50)));
+    }
+
+    #[test]
+    fn consume_outgoing_request_returns_false_if_absent() {
+        let mut state = BuddyState::new();
+        assert!(!state.consume_outgoing_request(&make_addr(0x99)));
+    }
+
+    // ── Remove pending request ────────────────────────────────────────────
+
+    #[test]
+    fn remove_pending_request_clears_matching() {
+        let mut state = BuddyState::new();
+        state.add_pending_request(PendingBuddyRequest {
+            from: make_addr(0x60),
+            from_name: "Foo".into(),
+            received_at: 0.0,
+        });
+        state.remove_pending_request(&make_addr(0x60));
+        assert!(state.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn remove_pending_request_noop_if_absent() {
+        let mut state = BuddyState::new();
+        state.add_pending_request(PendingBuddyRequest {
+            from: make_addr(0x61),
+            from_name: "Bar".into(),
+            received_at: 0.0,
+        });
+        state.remove_pending_request(&make_addr(0x99));
+        assert_eq!(state.pending_requests.len(), 1);
     }
 
     // ── Persistence ───────────────────────────────────────────────────────

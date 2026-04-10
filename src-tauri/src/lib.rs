@@ -816,7 +816,7 @@ fn buddy_request(peer_hash: String, app: AppHandle) -> Result<(), String> {
         .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
 
     let state_wrapper = app.state::<GameStateWrapper>();
-    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
     if state.social.buddies.is_buddy(&peer_bytes) {
         return Err("Already a buddy".to_string());
@@ -824,6 +824,7 @@ fn buddy_request(peer_hash: String, app: AppHandle) -> Result<(), String> {
     if state.social.buddies.is_blocked(&peer_bytes) {
         return Err("Player is blocked".to_string());
     }
+    state.social.buddies.record_outgoing_request(peer_bytes);
     drop(state);
 
     let net = app.state::<NetworkWrapper>();
@@ -888,11 +889,7 @@ fn buddy_decline(peer_hash: String, app: AppHandle) -> Result<(), String> {
 
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-    state
-        .social
-        .buddies
-        .pending_requests
-        .retain(|r| r.from != peer_bytes);
+    state.social.buddies.remove_pending_request(&peer_bytes);
     drop(state);
 
     let net = app.state::<NetworkWrapper>();
@@ -1038,6 +1035,10 @@ fn party_invite(peer_hash: String, app: AppHandle) -> Result<(), String> {
         .as_ref()
         .ok_or("Not in a party")?;
 
+    if !party.is_leader(&our_address) {
+        return Err("Only the party leader can invite".to_string());
+    }
+
     if party.members.len() >= social::party::MAX_PARTY_SIZE {
         return Err("Party is full".to_string());
     }
@@ -1046,6 +1047,7 @@ fn party_invite(peer_hash: String, app: AppHandle) -> Result<(), String> {
     }
 
     let member_hashes = party.member_hashes();
+    state.social.party.record_outgoing_invite(peer_bytes);
     drop(state);
 
     // Broadcast the invite
@@ -1468,6 +1470,10 @@ fn handle_social_message(
             );
         }
         SocialMessage::BuddyAccept { from, .. } => {
+            // Only accept if we actually sent them a request.
+            if !state.social.buddies.consume_outgoing_request(&from) {
+                return; // unsolicited accept — ignore
+            }
             let today = today_date_string();
             state.social.buddies.add_buddy(social::buddy::BuddyEntry {
                 address_hash: from,
@@ -1521,6 +1527,10 @@ fn handle_social_message(
             );
         }
         SocialMessage::PartyAccept { from, .. } => {
+            // Only accept if we actually invited them.
+            if !state.social.party.consume_outgoing_invite(&from) {
+                return; // unsolicited accept — ignore
+            }
             let now = now_secs(app);
             if let Some(ref mut party) = state.social.party.party {
                 if party.add_member(social::party::PartyMember {
@@ -1535,6 +1545,25 @@ fn handle_social_message(
                             "memberName": sender_name,
                         }),
                     );
+                    // Fan-out: notify other party members about the new join.
+                    // Collect data while we hold the game lock, publish after releasing.
+                    let member_hash = from;
+                    let member_name = sender_name.clone();
+                    let our_addr = our_address;
+                    drop(state);
+                    let net = app.state::<NetworkWrapper>();
+                    let mut net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                    let actions = net_state.publish_social(
+                        social::SocialMessage::PartyMemberJoined {
+                            from: our_addr,
+                            member: member_hash,
+                            display_name: member_name,
+                        },
+                        &mut rand::rngs::OsRng,
+                    );
+                    drop(net_state);
+                    execute_network_actions(app, actions);
+                    return; // state already dropped — skip the implicit drop
                 }
             }
         }

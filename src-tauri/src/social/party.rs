@@ -159,6 +159,8 @@ pub struct PendingPartyInvite {
 pub struct PartyState {
     pub party: Option<ActiveParty>,
     pub pending_invite: Option<PendingPartyInvite>,
+    /// Addresses we've sent outgoing party invites to (not yet accepted/declined/expired).
+    outgoing_invites: Vec<[u8; 16]>,
 }
 
 impl PartyState {
@@ -270,6 +272,22 @@ impl PartyState {
                 self.pending_invite = None;
             }
         }
+    }
+
+    // ── Outgoing invites ──────────────────────────────────────────────────
+
+    /// Record that we sent a party invite to `addr`.
+    pub fn record_outgoing_invite(&mut self, addr: [u8; 16]) {
+        if !self.outgoing_invites.contains(&addr) {
+            self.outgoing_invites.push(addr);
+        }
+    }
+
+    /// Remove and return true if we had an outgoing invite to `addr`.
+    pub fn consume_outgoing_invite(&mut self, addr: &[u8; 16]) -> bool {
+        let before = self.outgoing_invites.len();
+        self.outgoing_invites.retain(|a| a != addr);
+        self.outgoing_invites.len() < before
     }
 }
 
@@ -550,5 +568,36 @@ mod tests {
         });
         s.expire_invite(50.0);
         assert!(s.pending_invite.is_some());
+    }
+
+    // ── Outgoing invites ──────────────────────────────────────────────────
+
+    #[test]
+    fn record_outgoing_invite_tracks_address() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10));
+        assert!(s.outgoing_invites.contains(&addr(0x10)));
+    }
+
+    #[test]
+    fn record_outgoing_invite_ignores_duplicates() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10));
+        s.record_outgoing_invite(addr(0x10));
+        assert_eq!(s.outgoing_invites.len(), 1);
+    }
+
+    #[test]
+    fn consume_outgoing_invite_returns_true_and_removes() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10));
+        assert!(s.consume_outgoing_invite(&addr(0x10)));
+        assert!(s.outgoing_invites.is_empty());
+    }
+
+    #[test]
+    fn consume_outgoing_invite_returns_false_if_absent() {
+        let mut s = PartyState::new();
+        assert!(!s.consume_outgoing_invite(&addr(0x99)));
     }
 }
