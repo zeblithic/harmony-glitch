@@ -315,6 +315,7 @@ mod tests {
                 icon: "cherry".to_string(),
                 base_cost: Some(3),
                 energy_value: Some(12),
+                mood_value: None,
             },
         );
         defs

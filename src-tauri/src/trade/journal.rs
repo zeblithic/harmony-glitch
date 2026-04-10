@@ -103,6 +103,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: Some(2),
                 energy_value: None,
+                mood_value: None,
             },
         );
         defs.insert(
@@ -116,6 +117,7 @@ mod tests {
                 icon: "grain".into(),
                 base_cost: Some(1),
                 energy_value: None,
+                mood_value: None,
             },
         );
         defs

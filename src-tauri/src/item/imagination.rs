@@ -233,6 +233,7 @@ mod tests {
                 icon: "cherry".to_string(),
                 base_cost: Some(3),
                 energy_value: Some(12),
+                mood_value: None,
             },
         );
         // bread: base_cost = 16
@@ -247,6 +248,7 @@ mod tests {
                 icon: "bread".to_string(),
                 base_cost: Some(16),
                 energy_value: Some(30),
+                mood_value: None,
             },
         );
         // pot: no base_cost
@@ -261,6 +263,7 @@ mod tests {
                 icon: "pot".to_string(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         defs

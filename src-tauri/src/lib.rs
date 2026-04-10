@@ -1334,7 +1334,7 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
     let energy = state.energy;
     let max_energy = state.max_energy;
 
-    let (new_energy, new_max) = item::energy::eat(
+    let (new_energy, new_max, mood_gained) = item::energy::eat(
         &item_id,
         energy,
         max_energy,
@@ -1342,6 +1342,9 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
         &item_defs,
     )?;
     state.energy = new_energy;
+    if mood_gained > 0.0 {
+        state.mood.apply_mood_change(mood_gained);
+    }
 
     let gained = new_energy - energy;
     let px = state.player.x;
@@ -1357,6 +1360,19 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
         age_secs: 0.0,
         color: None,
     });
+    if mood_gained > 0.0 {
+        let fb_id = state.next_feedback_id;
+        state.next_feedback_id += 1;
+        state.pickup_feedback.push(item::types::PickupFeedback {
+            id: fb_id,
+            text: format!("+{} mood", mood_gained.round() as u32),
+            success: true,
+            x: px,
+            y: py,
+            age_secs: 0.0,
+            color: Some("#c084fc".to_string()),
+        });
+    }
 
     Ok(serde_json::json!({
         "energy": new_energy,

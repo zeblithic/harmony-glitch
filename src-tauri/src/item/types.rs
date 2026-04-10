@@ -17,6 +17,8 @@ pub struct ItemDef {
     pub base_cost: Option<u32>,
     #[serde(default)]
     pub energy_value: Option<u32>,
+    #[serde(default)]
+    pub mood_value: Option<u32>,
 }
 
 /// A stack of items in inventory.
@@ -306,6 +308,7 @@ pub struct ItemStackFrame {
     pub count: u32,
     pub stack_limit: u32,
     pub energy_value: Option<u32>,
+    pub mood_value: Option<u32>,
 }
 
 /// Prompt shown when player is near an interactable.
@@ -558,6 +561,7 @@ mod tests {
             icon: "cherry".into(),
             base_cost: None,
             energy_value: None,
+            mood_value: None,
         };
         let json = serde_json::to_string(&def).unwrap();
         assert!(json.contains("stackLimit"));

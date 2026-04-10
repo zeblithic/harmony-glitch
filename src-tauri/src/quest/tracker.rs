@@ -172,6 +172,7 @@ mod tests {
                 icon: "cherry".to_string(),
                 base_cost: Some(3),
                 energy_value: Some(12),
+                mood_value: None,
             },
         );
         defs.insert(
@@ -185,6 +186,7 @@ mod tests {
                 icon: "bread".to_string(),
                 base_cost: Some(8),
                 energy_value: Some(50),
+                mood_value: None,
             },
         );
         defs

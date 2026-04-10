@@ -472,6 +472,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         defs
@@ -1593,6 +1594,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: Some(3),
                 energy_value: None,
+                mood_value: None,
             },
         );
         (entities, entity_defs, item_defs)

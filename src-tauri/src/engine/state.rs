@@ -1221,6 +1221,7 @@ impl GameState {
                             count: stack.count,
                             stack_limit: def.map(|d| d.stack_limit).unwrap_or(1),
                             energy_value: def.and_then(|d| d.energy_value),
+                            mood_value: def.and_then(|d| d.mood_value),
                         }
                     })
                 })
@@ -1635,6 +1636,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2045,6 +2047,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2139,6 +2142,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2634,6 +2638,7 @@ mod tests {
                 icon: "cherry".into(),
                 base_cost: None,
                 energy_value: None,
+                mood_value: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
