@@ -1763,8 +1763,7 @@
     "stackLimit": 24,
     "icon": "beer",
     "baseCost": 10,
-    "energyValue": null,
-    "moodValue": 3
+    "energyValue": null
   },
   "berry_bowl": {
     "name": "Berry Bowl",
@@ -2372,8 +2371,7 @@
     "stackLimit": 24,
     "icon": "cloud_11_smoothie",
     "baseCost": 69,
-    "energyValue": null,
-    "moodValue": 21
+    "energyValue": null
   },
   "cloudberry": {
     "name": "Cloudberry",
@@ -2430,8 +2428,7 @@
     "stackLimit": 24,
     "icon": "coffee",
     "baseCost": 5,
-    "energyValue": null,
-    "moodValue": 2
+    "energyValue": null
   },
   "cold_taco": {
     "name": "Cold Taco",
@@ -2591,8 +2588,7 @@
     "stackLimit": 24,
     "icon": "crabato_juice",
     "baseCost": 50,
-    "energyValue": null,
-    "moodValue": 15
+    "energyValue": null
   },
   "crabphones": {
     "name": "CrabPod Headphones",
@@ -3657,8 +3653,7 @@
     "stackLimit": 24,
     "icon": "fruity_juice",
     "baseCost": 24,
-    "energyValue": null,
-    "moodValue": 7
+    "energyValue": null
   },
   "frying_pan": {
     "name": "Frying Pan",
@@ -4837,8 +4832,7 @@
     "stackLimit": 24,
     "icon": "hooch",
     "baseCost": 15,
-    "energyValue": null,
-    "moodValue": 5
+    "energyValue": null
   },
   "hot_n_fizzy_sauce": {
     "name": "Hot 'n' Fizzy Sauce",
@@ -5938,8 +5932,7 @@
     "stackLimit": 80,
     "icon": "milk_butterfly",
     "baseCost": 8,
-    "energyValue": null,
-    "moodValue": 2
+    "energyValue": null
   },
   "million_craant_trophy": {
     "name": "Million Currant Trophy",
@@ -9231,8 +9224,7 @@
     "stackLimit": 10,
     "icon": "pumpkin_ale",
     "baseCost": 83,
-    "energyValue": null,
-    "moodValue": 25
+    "energyValue": null
   },
   "pumpkin_carved_1": {
     "name": "Jack the Pumpkin",
@@ -9821,8 +9813,7 @@
     "stackLimit": 24,
     "icon": "savory_smoothie",
     "baseCost": 96,
-    "energyValue": null,
-    "moodValue": 29
+    "energyValue": null
   },
   "scraper": {
     "name": "Scraper",

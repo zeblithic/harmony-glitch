@@ -228,8 +228,7 @@ mod tests {
     fn to_save_entry_hex_encodes_address() {
         let entry = make_entry(0xAB);
         let save = entry.to_save_entry();
-        assert_eq!(save.address_hash, "abababababababababababababababababab".split_at(32).0);
-        // hex::encode([0xAB; 16]) = 32 hex chars
+        assert_eq!(save.address_hash, hex::encode([0xAB; 16]));
         assert_eq!(save.address_hash.len(), 32);
     }
 

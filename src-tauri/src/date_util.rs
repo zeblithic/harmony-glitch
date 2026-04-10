@@ -1,11 +1,12 @@
-/// Returns today's date as a "YYYY-MM-DD" string using the system clock.
+/// Returns today's date as a "YYYY-MM-DD" string using the system clock (UTC).
 ///
+/// Daily social resets (emote cooldowns, variant rotation) occur at 00:00 UTC.
 /// Uses the Howard Hinnant algorithm for civil date computation.
 pub fn today_date_string() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
+        .expect("system clock is before Unix epoch")
         .as_secs();
     // Days since Unix epoch
     let days = secs / 86400;

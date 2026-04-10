@@ -16,7 +16,7 @@ impl Default for MoodState {
         Self {
             mood: 100.0,
             max_mood: 100.0,
-            mood_grace_until: MOOD_GRACE_DURATION,
+            mood_grace_until: 0.0, // No grace for fresh games; only restore gets grace via new_with_grace()
         }
     }
 }
@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn tick_suppressed_during_grace_period() {
-        let mut s = MoodState::default();
+        let mut s = MoodState::new_with_grace(100.0, 100.0, 0.0);
         // game_time is 0, grace_until is 300 — still in grace
         s.tick(60.0, 0.0, false, false);
         assert_eq!(s.mood, 100.0);
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn tick_resumes_after_grace_period() {
-        let mut s = MoodState::default();
+        let mut s = MoodState::new_with_grace(100.0, 100.0, 0.0);
         let game_time = s.mood_grace_until + 1.0;
         s.tick(60.0, game_time, false, false);
         assert!(s.mood < 100.0, "mood should decay after grace, got {}", s.mood);

@@ -140,6 +140,8 @@ pub struct GameState {
     /// Active dialogue session (if any).
     pub active_dialogue: Option<crate::quest::types::ActiveDialogue>,
     pub social: crate::social::SocialState,
+    /// Cached date string to avoid allocating every tick.
+    cached_date: String,
 }
 
 /// Transition animation data sent to the frontend during a swoop.
@@ -309,6 +311,7 @@ impl GameState {
             quest_progress: crate::quest::types::QuestProgress::default(),
             active_dialogue: None,
             social: crate::social::SocialState::new([0u8; 16], ""),
+            cached_date: String::new(),
         }
     }
 
@@ -465,9 +468,14 @@ impl GameState {
 
         // Passive mood decay
         {
-            let today = crate::date_util::today_date_string();
+            // Cache the date string — only recompute once per game-second
+            let sec_now = self.game_time as u64;
+            let sec_prev = (self.game_time - dt).max(0.0) as u64;
+            if self.cached_date.is_empty() || sec_now != sec_prev {
+                self.cached_date = crate::date_util::today_date_string();
+            }
             let ctx = crate::social::SocialTickContext {
-                current_date: &today,
+                current_date: &self.cached_date,
                 in_dialogue: self.active_dialogue.is_some(),
                 game_time: self.game_time,
             };
