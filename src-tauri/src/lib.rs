@@ -1186,6 +1186,12 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             NetworkAction::TradeMessageReceived { sender, message } => {
                 handle_trade_message(app, sender, message);
             }
+            NetworkAction::EmoteReceived { .. } => {
+                // Handled at the application layer (future integration).
+            }
+            NetworkAction::SocialReceived { .. } => {
+                // Handled at the application layer (future integration).
+            }
         }
     }
 }
