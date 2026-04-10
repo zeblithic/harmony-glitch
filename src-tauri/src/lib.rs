@@ -1302,8 +1302,36 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             NetworkAction::TradeMessageReceived { sender, message } => {
                 handle_trade_message(app, sender, message);
             }
-            NetworkAction::EmoteReceived { .. } => {
-                // Handled at the application layer (future integration).
+            NetworkAction::EmoteReceived { sender, emote } => {
+                let state_wrapper = app.state::<GameStateWrapper>();
+                let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+
+                let blocked = state.social.buddies.is_blocked(&sender);
+                let mood_delta = state.social.emotes.handle_incoming_hi(
+                    sender,
+                    emote.variant,
+                    blocked,
+                );
+                if mood_delta > 0.0 {
+                    state.social.mood.apply_mood_change(mood_delta);
+                }
+
+                // Look up sender name for the frontend event
+                let sender_name = {
+                    let net = app.state::<NetworkWrapper>();
+                    let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                    net_state.peer_display_name(&sender).unwrap_or_default()
+                };
+
+                let _ = app.emit(
+                    "emote_received",
+                    serde_json::json!({
+                        "senderHash": hex::encode(sender),
+                        "senderName": sender_name,
+                        "variant": emote.variant.as_str(),
+                        "moodDelta": mood_delta,
+                    }),
+                );
             }
             NetworkAction::SocialReceived { .. } => {
                 // Handled at the application layer (future integration).
