@@ -1759,6 +1759,27 @@ fn game_loop(app: AppHandle) {
                 frame.remote_players = net_state.remote_frames();
             }
 
+            // 7b. Annotate remote players with social state
+            {
+                let state_wrapper = app.state::<GameStateWrapper>();
+                let game_state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                for rp in &mut frame.remote_players {
+                    if let Ok(bytes) = hex::decode(&rp.address_hash) {
+                        if bytes.len() == 16 {
+                            let mut addr = [0u8; 16];
+                            addr.copy_from_slice(&bytes);
+                            rp.is_buddy = game_state.social.buddies.is_buddy(&addr);
+                            if let Some(ref party) = game_state.social.party.party {
+                                rp.party_role = party.role_of(&addr).map(|r| match r {
+                                    crate::social::party::PartyRole::Leader => "Leader".to_string(),
+                                    crate::social::party::PartyRole::Member => "Member".to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
             // 8. Publish local player state via NetworkState
             let publish_actions = {
                 let net_state = PlayerNetState {

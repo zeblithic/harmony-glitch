@@ -132,6 +132,12 @@ export interface CameraFrame {
   y: number;
 }
 
+export interface EmoteAnimationFrame {
+  variant: string;
+  targetHash: string | null;
+  startedAt: number;
+}
+
 export interface RemotePlayerFrame {
   addressHash: string;
   displayName: string;
@@ -141,6 +147,10 @@ export interface RemotePlayerFrame {
   onGround: boolean;
   animation: AnimationState;
   avatar: AvatarAppearance | null;
+  epoch: string;
+  isBuddy: boolean;
+  partyRole: string | null;
+  emoteAnimation: EmoteAnimationFrame | null;
 }
 
 export interface TransitionInfo {

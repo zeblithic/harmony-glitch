@@ -143,6 +143,10 @@ impl RemotePlayerRegistry {
                         _ => AnimationState::Idle,
                     },
                     avatar: p.avatar.clone(),
+                    epoch: String::new(),
+                    is_buddy: false,
+                    party_role: None,
+                    emote_animation: None,
                 }
             })
             .collect();

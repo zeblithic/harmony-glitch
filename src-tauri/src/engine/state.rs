@@ -200,6 +200,15 @@ pub struct CameraFrame {
     pub y: f64,
 }
 
+/// An in-progress emote animation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmoteAnimationFrame {
+    pub variant: String,
+    pub target_hash: Option<String>,
+    pub started_at: f64,
+}
+
 /// A remote player's state for rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -212,6 +221,14 @@ pub struct RemotePlayerFrame {
     pub on_ground: bool,
     pub animation: AnimationState,
     pub avatar: Option<AvatarAppearance>,
+    #[serde(default)]
+    pub epoch: String,
+    #[serde(default)]
+    pub is_buddy: bool,
+    #[serde(default)]
+    pub party_role: Option<String>,
+    #[serde(default)]
+    pub emote_animation: Option<EmoteAnimationFrame>,
 }
 
 impl GameState {
