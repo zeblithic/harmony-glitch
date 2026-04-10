@@ -824,7 +824,11 @@ fn buddy_request(peer_hash: String, app: AppHandle) -> Result<(), String> {
     if state.social.buddies.is_blocked(&peer_bytes) {
         return Err("Player is blocked".to_string());
     }
-    state.social.buddies.record_outgoing_request(peer_bytes);
+    if state.social.buddies.has_outgoing_request(&peer_bytes) {
+        return Err("Buddy request already pending".to_string());
+    }
+    let now = now_secs(&app);
+    state.social.buddies.record_outgoing_request(peer_bytes, now);
     drop(state);
 
     let net = app.state::<NetworkWrapper>();
@@ -1047,7 +1051,7 @@ fn party_invite(peer_hash: String, app: AppHandle) -> Result<(), String> {
     }
 
     let member_hashes = party.member_hashes();
-    state.social.party.record_outgoing_invite(peer_bytes);
+    state.social.party.record_outgoing_invite(peer_bytes, now);
     drop(state);
 
     // Broadcast the invite
@@ -1151,6 +1155,7 @@ fn party_leave(app: AppHandle) -> Result<(), String> {
         .party
         .leave_party(&our_address)
         .map_err(|e| e.to_string())?;
+    state.social.party.clear_outgoing_invites();
     drop(state);
 
     let actions = {
@@ -1528,8 +1533,8 @@ fn handle_social_message(
             );
         }
         SocialMessage::PartyAccept { from, .. } => {
-            // Only accept if we actually invited them.
-            if !state.social.party.consume_outgoing_invite(&from) {
+            // Check invite exists without consuming — only consume after successful add.
+            if !state.social.party.has_outgoing_invite(&from) {
                 return; // unsolicited accept — ignore
             }
             let now = now_secs(app);
@@ -1539,6 +1544,8 @@ fn handle_social_message(
                     display_name: sender_name.clone(),
                     joined_at: now,
                 }).is_ok() {
+                    // Only consume the invite after successful add.
+                    state.social.party.consume_outgoing_invite(&from);
                     let _ = app.emit(
                         "party_member_joined",
                         serde_json::json!({
