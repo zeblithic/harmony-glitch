@@ -785,6 +785,351 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
     }))
 }
 
+// ── Social: Buddies ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn buddy_request(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    if state.social.buddies.is_buddy(&peer_bytes) {
+        return Err("Already a buddy".to_string());
+    }
+    if state.social.buddies.is_blocked(&peer_bytes) {
+        return Err("Player is blocked".to_string());
+    }
+
+    // Network send is a placeholder — will be wired in a later task.
+    Ok(())
+}
+
+#[tauri::command]
+fn buddy_accept(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let now = now_secs(&app);
+    let today = today_date_string();
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let from_name = state
+        .social
+        .buddies
+        .get_pending_request(&peer_bytes, now)
+        .map(|r| r.from_name.clone())
+        .ok_or_else(|| "No pending buddy request from this player".to_string())?;
+
+    state.social.buddies.add_buddy(social::buddy::BuddyEntry {
+        address_hash: peer_bytes,
+        display_name: from_name,
+        added_date: today,
+        co_presence_total: 0.0,
+        last_seen_date: None,
+    });
+    state
+        .social
+        .buddies
+        .pending_requests
+        .retain(|r| r.from != peer_bytes);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn buddy_decline(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state
+        .social
+        .buddies
+        .pending_requests
+        .retain(|r| r.from != peer_bytes);
+    Ok(())
+}
+
+#[tauri::command]
+fn buddy_remove(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    if !state.social.buddies.remove_buddy(&peer_bytes) {
+        return Err("Not a buddy".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn block_player(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.social.buddies.block_player(&peer_bytes);
+    Ok(())
+}
+
+#[tauri::command]
+fn unblock_player(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.social.buddies.unblock_player(&peer_bytes);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_buddy_list(app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let buddies: Vec<serde_json::Value> = state
+        .social
+        .buddies
+        .buddies
+        .iter()
+        .map(|b| {
+            serde_json::json!({
+                "addressHash": hex::encode(b.address_hash),
+                "displayName": b.display_name,
+                "addedDate": b.added_date,
+                "coPresenceTotal": b.co_presence_total,
+                "lastSeenDate": b.last_seen_date,
+            })
+        })
+        .collect();
+
+    Ok(serde_json::json!({ "buddies": buddies }))
+}
+
+#[tauri::command]
+fn get_blocked_list(app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let blocked: Vec<String> = state
+        .social
+        .buddies
+        .blocked
+        .iter()
+        .map(|a| hex::encode(a))
+        .collect();
+
+    Ok(serde_json::json!({ "blocked": blocked }))
+}
+
+// ── Social: Parties ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn party_invite(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let now = now_secs(&app);
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let pi = app.state::<PlayerIdentityWrapper>();
+    let our_name = pi.display_name.lock().map_err(|e| e.to_string())?.clone();
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    if state.social.buddies.is_blocked(&peer_bytes) {
+        return Err("Player is blocked".to_string());
+    }
+
+    // Create party if not already in one.
+    if !state.social.party.in_party() {
+        state.social.party.create_party(our_address, our_name, now);
+    }
+
+    let party = state
+        .social
+        .party
+        .party
+        .as_ref()
+        .ok_or("Not in a party")?;
+
+    if party.members.len() >= social::party::MAX_PARTY_SIZE {
+        return Err("Party is full".to_string());
+    }
+    if party.is_member(&peer_bytes) {
+        return Err("Player is already in the party".to_string());
+    }
+
+    // Network send is a placeholder — will be wired in a later task.
+    Ok(())
+}
+
+#[tauri::command]
+fn party_accept(app: AppHandle) -> Result<(), String> {
+    let now = now_secs(&app);
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let pi = app.state::<PlayerIdentityWrapper>();
+    let our_name = pi.display_name.lock().map_err(|e| e.to_string())?.clone();
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    state
+        .social
+        .party
+        .accept_invite(our_address, our_name, now)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn party_decline(app: AppHandle) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.social.party.decline_invite();
+    Ok(())
+}
+
+#[tauri::command]
+fn party_leave(app: AppHandle) -> Result<(), String> {
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    state
+        .social
+        .party
+        .leave_party(&our_address)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn party_kick(peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    let party = state
+        .social
+        .party
+        .party
+        .as_mut()
+        .ok_or("Not in a party")?;
+
+    party
+        .kick_member(&our_address, &peer_bytes)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_party_state(app: AppHandle) -> Result<serde_json::Value, String> {
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+    match &state.social.party.party {
+        None => Ok(serde_json::json!({
+            "inParty": false,
+            "leader": null,
+            "members": [],
+        })),
+        Some(party) => {
+            let members: Vec<serde_json::Value> = party
+                .members
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "addressHash": hex::encode(m.address_hash),
+                        "displayName": m.display_name,
+                        "isLeader": m.address_hash == party.leader,
+                    })
+                })
+                .collect();
+            Ok(serde_json::json!({
+                "inParty": true,
+                "leader": hex::encode(party.leader),
+                "members": members,
+            }))
+        }
+    }
+}
+
+/// Returns today's date as a "YYYY-MM-DD" string using the system clock.
+fn today_date_string() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Days since Unix epoch
+    let days = secs / 86400;
+    // Compute year, month, day from days using proleptic Gregorian calendar.
+    // Algorithm from http://howardhinnant.github.io/date_algorithms.html
+    let z = days as i64 + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
 #[tauri::command]
 fn craft_recipe(recipe_id: String, app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
@@ -2340,6 +2685,20 @@ pub fn run() {
             get_quest_log,
             get_mood,
             emote_hi,
+            buddy_request,
+            buddy_accept,
+            buddy_decline,
+            buddy_remove,
+            block_player,
+            unblock_player,
+            get_buddy_list,
+            get_blocked_list,
+            party_invite,
+            party_accept,
+            party_decline,
+            party_leave,
+            party_kick,
+            get_party_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");
