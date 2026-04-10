@@ -3838,4 +3838,43 @@ mod tests {
 
         assert_eq!(emote_count, 0, "Sandbox peers should not pass emote epoch gate");
     }
+
+    #[test]
+    fn social_message_fits_in_mtu() {
+        const MAX_PAYLOAD: usize = 500 - 35 - 33; // Reticulum MTU - header - Zenoh overhead
+        let msg = NetMessage::Social(crate::social::SocialMessage::PartyInvite {
+            leader: [0xFF; 16],
+            members: vec![[0xFF; 16]; 4],
+        });
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        assert!(
+            bytes.len() <= MAX_PAYLOAD,
+            "PartyInvite with 5 members is {} bytes, max is {}",
+            bytes.len(),
+            MAX_PAYLOAD
+        );
+    }
+
+    #[test]
+    fn social_round_trip_blocked_at_sandbox() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // No copresence set — A stays at Sandbox epoch on B.
+        let msg = crate::social::SocialMessage::BuddyRequest { from: [0x01; 16] };
+        let publish_actions = state_a.publish_social(msg, &mut rng);
+        let a_packets = extract_packets(&publish_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let social_count = b_actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::SocialReceived { .. }))
+            .count();
+        assert_eq!(social_count, 0, "Sandbox peers should not pass social epoch gate");
+    }
 }
