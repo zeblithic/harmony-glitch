@@ -1491,6 +1491,7 @@ fn handle_social_message(
             );
         }
         SocialMessage::BuddyDecline { .. } => {
+            state.social.buddies.consume_outgoing_request(&authenticated_sender);
             let _ = app.emit(
                 "buddy_declined",
                 serde_json::json!({ "fromHash": sender_hex }),
@@ -1568,6 +1569,7 @@ fn handle_social_message(
             }
         }
         SocialMessage::PartyDecline { .. } => {
+            state.social.party.consume_outgoing_invite(&authenticated_sender);
             let _ = app.emit(
                 "party_invite_declined",
                 serde_json::json!({ "fromHash": sender_hex }),
@@ -1653,9 +1655,14 @@ fn handle_social_message(
                 if !party.is_member(&member) {
                     return;
                 }
-                party.remove_member(&member);
+                let (_remaining, new_leader) = party.remove_member(&member);
                 if party.members.len() <= 1 {
                     state.social.party.party = None;
+                } else if let Some(leader) = new_leader {
+                    let _ = app.emit(
+                        "party_leader_changed",
+                        serde_json::json!({ "newLeaderHash": hex::encode(leader) }),
+                    );
                 }
                 let _ = app.emit(
                     "party_member_left",
