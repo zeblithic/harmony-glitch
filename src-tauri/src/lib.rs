@@ -9,6 +9,7 @@ pub mod persistence;
 pub mod physics;
 pub mod quest;
 pub mod skill;
+pub mod social;
 pub mod street;
 pub mod trade;
 pub mod trust;
