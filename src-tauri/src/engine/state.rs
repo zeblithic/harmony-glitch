@@ -764,6 +764,7 @@ impl GameState {
                 &self.world_entities,
                 &self.entity_defs,
                 &self.world_items,
+                &[],
             );
 
             // Build prompt
