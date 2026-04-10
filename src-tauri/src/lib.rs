@@ -830,7 +830,7 @@ fn buddy_request(peer_hash: String, app: AppHandle) -> Result<(), String> {
     let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
     let our_hash = net_state.our_address_hash();
     let actions = net_state.publish_social(
-        social::SocialMessage::BuddyRequest { from: our_hash },
+        social::SocialMessage::BuddyRequest { from: our_hash, to: peer_bytes },
         &mut rand::rngs::OsRng,
     );
     drop(net_state);
@@ -871,7 +871,7 @@ fn buddy_accept(peer_hash: String, app: AppHandle) -> Result<(), String> {
     let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
     let our_hash = net_state.our_address_hash();
     let actions = net_state.publish_social(
-        social::SocialMessage::BuddyAccept { from: our_hash },
+        social::SocialMessage::BuddyAccept { from: our_hash, to: peer_bytes },
         &mut rand::rngs::OsRng,
     );
     drop(net_state);
@@ -899,7 +899,7 @@ fn buddy_decline(peer_hash: String, app: AppHandle) -> Result<(), String> {
     let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
     let our_hash = net_state.our_address_hash();
     let actions = net_state.publish_social(
-        social::SocialMessage::BuddyDecline { from: our_hash },
+        social::SocialMessage::BuddyDecline { from: our_hash, to: peer_bytes },
         &mut rand::rngs::OsRng,
     );
     drop(net_state);
@@ -926,7 +926,7 @@ fn buddy_remove(peer_hash: String, app: AppHandle) -> Result<(), String> {
     let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
     let our_hash = net_state.our_address_hash();
     let actions = net_state.publish_social(
-        social::SocialMessage::BuddyRemove { from: our_hash },
+        social::SocialMessage::BuddyRemove { from: our_hash, to: peer_bytes },
         &mut rand::rngs::OsRng,
     );
     drop(net_state);
@@ -1055,6 +1055,7 @@ fn party_invite(peer_hash: String, app: AppHandle) -> Result<(), String> {
         net_state.publish_social(
             social::SocialMessage::PartyInvite {
                 leader: our_address,
+                to: peer_bytes,
                 members: member_hashes,
             },
             &mut rand::rngs::OsRng,
@@ -1079,6 +1080,15 @@ fn party_accept(app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
+    // Capture the leader hash before accept_invite consumes the pending invite.
+    let invite_leader = state
+        .social
+        .party
+        .pending_invite
+        .as_ref()
+        .map(|i| i.leader)
+        .ok_or_else(|| "No pending invite".to_string())?;
+
     state
         .social
         .party
@@ -1090,7 +1100,7 @@ fn party_accept(app: AppHandle) -> Result<(), String> {
         let net = app.state::<NetworkWrapper>();
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
         net_state.publish_social(
-            social::SocialMessage::PartyAccept { from: our_address },
+            social::SocialMessage::PartyAccept { from: our_address, to: invite_leader },
             &mut rand::rngs::OsRng,
         )
     };
@@ -1102,6 +1112,13 @@ fn party_accept(app: AppHandle) -> Result<(), String> {
 fn party_decline(app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    let invite_leader = state
+        .social
+        .party
+        .pending_invite
+        .as_ref()
+        .map(|i| i.leader)
+        .ok_or_else(|| "No pending invite".to_string())?;
     state.social.party.decline_invite();
     drop(state);
 
@@ -1109,7 +1126,7 @@ fn party_decline(app: AppHandle) -> Result<(), String> {
     let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
     let our_address = net_state.our_address_hash();
     let actions = net_state.publish_social(
-        social::SocialMessage::PartyDecline { from: our_address },
+        social::SocialMessage::PartyDecline { from: our_address, to: invite_leader },
         &mut rand::rngs::OsRng,
     );
     drop(net_state);
@@ -1177,7 +1194,7 @@ fn party_kick(peer_hash: String, app: AppHandle) -> Result<(), String> {
         let net = app.state::<NetworkWrapper>();
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
         net_state.publish_social(
-            social::SocialMessage::PartyKick { target: peer_bytes },
+            social::SocialMessage::PartyKick { from: our_address, target: peer_bytes },
             &mut rand::rngs::OsRng,
         )
     };
@@ -1303,25 +1320,39 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                 handle_trade_message(app, sender, message);
             }
             NetworkAction::EmoteReceived { sender, emote } => {
+                // Look up our address and sender name (Net lock first, then drop).
+                let (our_address, sender_name) = {
+                    let net = app.state::<NetworkWrapper>();
+                    let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
+                    (
+                        net_state.our_address_hash(),
+                        net_state.peer_display_name(&sender).unwrap_or_default(),
+                    )
+                };
+
+                // Skip targeted emotes not aimed at us.
+                if let Some(target) = emote.target {
+                    if target != our_address {
+                        continue;
+                    }
+                }
+
                 let state_wrapper = app.state::<GameStateWrapper>();
                 let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
 
                 let blocked = state.social.buddies.is_blocked(&sender);
+                if blocked {
+                    continue; // don't process or emit for blocked senders
+                }
+
                 let mood_delta = state.social.emotes.handle_incoming_hi(
                     sender,
                     emote.variant,
-                    blocked,
+                    false, // already checked — not blocked
                 );
                 if mood_delta > 0.0 {
                     state.social.mood.apply_mood_change(mood_delta);
                 }
-
-                // Look up sender name for the frontend event
-                let sender_name = {
-                    let net = app.state::<NetworkWrapper>();
-                    let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
-                    net_state.peer_display_name(&sender).unwrap_or_default()
-                };
 
                 let _ = app.emit(
                     "emote_received",
@@ -1341,6 +1372,14 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
 }
 
 /// Process an inbound social message from an authenticated peer.
+///
+/// Three layers of validation before any state mutation:
+/// 1. **Sender check:** Every variant's `from`/`leader` must match the
+///    authenticated Zenoh session address — prevents identity spoofing.
+/// 2. **Recipient check:** Directed variants carry a `to` field; if it
+///    doesn't match our address the message isn't for us — drop silently.
+/// 3. **Authorisation:** Party-control messages are only accepted from
+///    the current party leader (or the member themselves for self-leave).
 fn handle_social_message(
     app: &AppHandle,
     authenticated_sender: [u8; 16],
@@ -1348,28 +1387,29 @@ fn handle_social_message(
 ) {
     use social::SocialMessage;
 
-    // Validate: the message's claimed `from` must match the authenticated sender.
+    // ── 1. Sender validation ────────────────────────────────────────────
+    // Every variant now carries a `from` (or `leader`) field.
     let claimed_sender = match &msg {
-        SocialMessage::BuddyRequest { from }
-        | SocialMessage::BuddyAccept { from }
-        | SocialMessage::BuddyDecline { from }
-        | SocialMessage::BuddyRemove { from }
-        | SocialMessage::PartyAccept { from }
-        | SocialMessage::PartyDecline { from }
-        | SocialMessage::PartyLeave { from } => Some(*from),
-        SocialMessage::PartyInvite { leader, .. } => Some(*leader),
-        SocialMessage::PartyKick { .. }
-        | SocialMessage::PartyMemberJoined { .. }
-        | SocialMessage::PartyMemberLeft { .. }
-        | SocialMessage::PartyDissolved
-        | SocialMessage::PartyLeaderChanged { .. } => None, // broadcast notifications — no `from`
+        SocialMessage::BuddyRequest { from, .. }
+        | SocialMessage::BuddyAccept { from, .. }
+        | SocialMessage::BuddyDecline { from, .. }
+        | SocialMessage::BuddyRemove { from, .. }
+        | SocialMessage::PartyAccept { from, .. }
+        | SocialMessage::PartyDecline { from, .. }
+        | SocialMessage::PartyLeave { from }
+        | SocialMessage::PartyKick { from, .. }
+        | SocialMessage::PartyMemberJoined { from, .. }
+        | SocialMessage::PartyMemberLeft { from, .. }
+        | SocialMessage::PartyDissolved { from }
+        | SocialMessage::PartyLeaderChanged { from, .. } => *from,
+        SocialMessage::PartyInvite { leader, .. } => *leader,
     };
-    if let Some(claimed) = claimed_sender {
-        if claimed != authenticated_sender {
-            return; // spoofed — drop silently
-        }
+    if claimed_sender != authenticated_sender {
+        return; // spoofed — drop silently
     }
 
+    // ── 2. Recipient filtering ──────────────────────────────────────────
+    // Directed messages carry a `to` — ignore if not addressed to us.
     let (sender_name, our_address) = {
         let net = app.state::<NetworkWrapper>();
         let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -1380,6 +1420,22 @@ fn handle_social_message(
             net_state.our_address_hash(),
         )
     };
+
+    let intended_recipient = match &msg {
+        SocialMessage::BuddyRequest { to, .. }
+        | SocialMessage::BuddyAccept { to, .. }
+        | SocialMessage::BuddyDecline { to, .. }
+        | SocialMessage::BuddyRemove { to, .. }
+        | SocialMessage::PartyInvite { to, .. }
+        | SocialMessage::PartyAccept { to, .. }
+        | SocialMessage::PartyDecline { to, .. } => Some(*to),
+        _ => None, // broadcast party messages — handled by party-state checks
+    };
+    if let Some(to) = intended_recipient {
+        if to != our_address {
+            return; // not for us
+        }
+    }
 
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -1392,7 +1448,8 @@ fn handle_social_message(
     let sender_hex = hex::encode(authenticated_sender);
 
     match msg {
-        SocialMessage::BuddyRequest { from } => {
+        // ── Buddy operations ────────────────────────────────────────────
+        SocialMessage::BuddyRequest { from, .. } => {
             let now = now_secs(app);
             state
                 .social
@@ -1410,8 +1467,7 @@ fn handle_social_message(
                 }),
             );
         }
-        SocialMessage::BuddyAccept { from } => {
-            // They accepted our request — add them as a buddy
+        SocialMessage::BuddyAccept { from, .. } => {
             let today = today_date_string();
             state.social.buddies.add_buddy(social::buddy::BuddyEntry {
                 address_hash: from,
@@ -1434,14 +1490,16 @@ fn handle_social_message(
                 serde_json::json!({ "fromHash": sender_hex }),
             );
         }
-        SocialMessage::BuddyRemove { from } => {
+        SocialMessage::BuddyRemove { from, .. } => {
             state.social.buddies.remove_buddy(&from);
             let _ = app.emit(
                 "buddy_removed",
                 serde_json::json!({ "fromHash": sender_hex }),
             );
         }
-        SocialMessage::PartyInvite { leader, members } => {
+
+        // ── Party invite / accept / decline ─────────────────────────────
+        SocialMessage::PartyInvite { leader, members, .. } => {
             let now = now_secs(app);
             state
                 .social
@@ -1449,40 +1507,36 @@ fn handle_social_message(
                 .set_pending_invite(social::party::PendingPartyInvite {
                     leader,
                     leader_name: sender_name.clone(),
-                    members,
+                    members: members.clone(),
                     received_at: now,
                 });
-            let member_count = state
-                .social
-                .party
-                .pending_invite
-                .as_ref()
-                .map_or(0, |i| i.members.len() + 1); // +1 for leader
+            // members already includes the leader (from member_hashes())
             let _ = app.emit(
                 "party_invite_received",
                 serde_json::json!({
                     "leaderHash": sender_hex,
                     "leaderName": sender_name,
-                    "memberCount": member_count,
+                    "memberCount": members.len(),
                 }),
             );
         }
-        SocialMessage::PartyAccept { from } => {
+        SocialMessage::PartyAccept { from, .. } => {
             let now = now_secs(app);
             if let Some(ref mut party) = state.social.party.party {
-                let _ = party.add_member(social::party::PartyMember {
+                if party.add_member(social::party::PartyMember {
                     address_hash: from,
                     display_name: sender_name.clone(),
                     joined_at: now,
-                });
+                }).is_ok() {
+                    let _ = app.emit(
+                        "party_member_joined",
+                        serde_json::json!({
+                            "memberHash": sender_hex,
+                            "memberName": sender_name,
+                        }),
+                    );
+                }
             }
-            let _ = app.emit(
-                "party_member_joined",
-                serde_json::json!({
-                    "memberHash": sender_hex,
-                    "memberName": sender_name,
-                }),
-            );
         }
         SocialMessage::PartyDecline { .. } => {
             let _ = app.emit(
@@ -1490,8 +1544,13 @@ fn handle_social_message(
                 serde_json::json!({ "fromHash": sender_hex }),
             );
         }
+
+        // ── Self-authenticating: leave ──────────────────────────────────
         SocialMessage::PartyLeave { from } => {
             if let Some(ref mut party) = state.social.party.party {
+                if !party.is_member(&from) {
+                    return;
+                }
                 let (_remaining, new_leader) = party.remove_member(&from);
                 let dissolving = party.members.len() <= 1;
                 if dissolving {
@@ -1502,21 +1561,31 @@ fn handle_social_message(
                         serde_json::json!({ "newLeaderHash": hex::encode(leader) }),
                     );
                 }
+                let _ = app.emit(
+                    "party_member_left",
+                    serde_json::json!({ "memberHash": sender_hex }),
+                );
             }
-            let _ = app.emit(
-                "party_member_left",
-                serde_json::json!({ "memberHash": sender_hex }),
-            );
         }
-        SocialMessage::PartyKick { target } => {
+
+        // ── 3. Leader-authorised party control ──────────────────────────
+        SocialMessage::PartyKick { target, .. } => {
+            let party = match state.social.party.party.as_mut() {
+                Some(p) => p,
+                None => return, // not in a party — ignore
+            };
+            if !party.is_leader(&authenticated_sender) {
+                return; // only the leader can kick
+            }
             if target == our_address {
-                // We got kicked
                 state.social.party.party = None;
-            } else if let Some(ref mut party) = state.social.party.party {
+            } else if party.is_member(&target) {
                 party.remove_member(&target);
                 if party.members.len() <= 1 {
                     state.social.party.party = None;
                 }
+            } else {
+                return; // target not in our party
             }
             let _ = app.emit(
                 "party_kick",
@@ -1526,47 +1595,70 @@ fn handle_social_message(
         SocialMessage::PartyMemberJoined {
             member,
             display_name,
+            ..
         } => {
-            let now = now_secs(app);
             if let Some(ref mut party) = state.social.party.party {
-                let _ = party.add_member(social::party::PartyMember {
+                if !party.is_leader(&authenticated_sender) {
+                    return; // only leader broadcasts join notifications
+                }
+                if party.add_member(social::party::PartyMember {
                     address_hash: member,
                     display_name: display_name.clone(),
-                    joined_at: now,
-                });
+                    joined_at: now_secs(app),
+                }).is_ok() {
+                    let _ = app.emit(
+                        "party_member_joined",
+                        serde_json::json!({
+                            "memberHash": hex::encode(member),
+                            "memberName": display_name,
+                        }),
+                    );
+                }
             }
-            let _ = app.emit(
-                "party_member_joined",
-                serde_json::json!({
-                    "memberHash": hex::encode(member),
-                    "memberName": display_name,
-                }),
-            );
         }
-        SocialMessage::PartyMemberLeft { member } => {
+        SocialMessage::PartyMemberLeft { member, .. } => {
             if let Some(ref mut party) = state.social.party.party {
+                if !party.is_leader(&authenticated_sender) && authenticated_sender != member {
+                    return; // only leader or the departing member can notify
+                }
+                if !party.is_member(&member) {
+                    return;
+                }
                 party.remove_member(&member);
                 if party.members.len() <= 1 {
                     state.social.party.party = None;
                 }
+                let _ = app.emit(
+                    "party_member_left",
+                    serde_json::json!({ "memberHash": hex::encode(member) }),
+                );
             }
-            let _ = app.emit(
-                "party_member_left",
-                serde_json::json!({ "memberHash": hex::encode(member) }),
-            );
         }
-        SocialMessage::PartyDissolved => {
+        SocialMessage::PartyDissolved { .. } => {
+            if let Some(ref party) = state.social.party.party {
+                if !party.is_leader(&authenticated_sender) {
+                    return; // only leader can dissolve
+                }
+            } else {
+                return; // not in a party
+            }
             state.social.party.party = None;
             let _ = app.emit("party_dissolved", serde_json::json!({}));
         }
-        SocialMessage::PartyLeaderChanged { new_leader } => {
+        SocialMessage::PartyLeaderChanged { new_leader, .. } => {
             if let Some(ref mut party) = state.social.party.party {
+                if !party.is_leader(&authenticated_sender) {
+                    return; // only current leader can transfer
+                }
+                if !party.is_member(&new_leader) {
+                    return; // new leader must be a member
+                }
                 party.leader = new_leader;
+                let _ = app.emit(
+                    "party_leader_changed",
+                    serde_json::json!({ "newLeaderHash": hex::encode(new_leader) }),
+                );
             }
-            let _ = app.emit(
-                "party_leader_changed",
-                serde_json::json!({ "newLeaderHash": hex::encode(new_leader) }),
-            );
         }
     }
 }
