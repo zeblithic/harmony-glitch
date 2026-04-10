@@ -128,8 +128,11 @@ impl BuddyState {
     // ── Outgoing requests ─────────────────────────────────────────────────
 
     /// Record that we sent a buddy request to `addr` at time `now`.
+    /// If a request already exists, refreshes its `sent_at` timestamp.
     pub fn record_outgoing_request(&mut self, addr: [u8; 16], now: f64) {
-        if !self.has_outgoing_request(&addr) {
+        if let Some(req) = self.outgoing_requests.iter_mut().find(|r| r.to == addr) {
+            req.sent_at = now;
+        } else {
             self.outgoing_requests.push(OutgoingBuddyRequest { to: addr, sent_at: now });
         }
     }
@@ -155,13 +158,15 @@ impl BuddyState {
     // ── Pending requests ─────────────────────────────────────────────────
 
     /// Enqueue an incoming buddy request (ignored if sender is blocked or already a buddy).
-    pub fn add_pending_request(&mut self, request: PendingBuddyRequest) {
+    /// Returns `true` if the request was stored, `false` if it was dropped.
+    pub fn add_pending_request(&mut self, request: PendingBuddyRequest) -> bool {
         if self.is_blocked(&request.from) || self.is_buddy(&request.from) {
-            return;
+            return false;
         }
         // Replace any existing request from the same sender.
         self.pending_requests.retain(|r| r.from != request.from);
         self.pending_requests.push(request);
+        true
     }
 
     /// Return the pending request from `addr` if it is still within the 90-second window.

@@ -1458,7 +1458,7 @@ fn handle_social_message(
         // ── Buddy operations ────────────────────────────────────────────
         SocialMessage::BuddyRequest { from, .. } => {
             let now = now_secs(app);
-            state
+            let stored = state
                 .social
                 .buddies
                 .add_pending_request(social::buddy::PendingBuddyRequest {
@@ -1466,13 +1466,15 @@ fn handle_social_message(
                     from_name: sender_name.clone(),
                     received_at: now,
                 });
-            let _ = app.emit(
-                "buddy_request_received",
-                serde_json::json!({
-                    "fromHash": sender_hex,
-                    "fromName": sender_name,
-                }),
-            );
+            if stored {
+                let _ = app.emit(
+                    "buddy_request_received",
+                    serde_json::json!({
+                        "fromHash": sender_hex,
+                        "fromName": sender_name,
+                    }),
+                );
+            }
         }
         SocialMessage::BuddyAccept { from, .. } => {
             // Only accept if we actually sent them a request.
@@ -1593,6 +1595,7 @@ fn handle_social_message(
                 let dissolving = party.members.len() <= 1;
                 if dissolving {
                     state.social.party.party = None;
+                    state.social.party.clear_outgoing_invites();
                 } else if let Some(leader) = new_leader {
                     let _ = app.emit(
                         "party_leader_changed",
@@ -1617,10 +1620,12 @@ fn handle_social_message(
             }
             if target == our_address {
                 state.social.party.party = None;
+                state.social.party.clear_outgoing_invites();
             } else if party.is_member(&target) {
                 party.remove_member(&target);
                 if party.members.len() <= 1 {
                     state.social.party.party = None;
+                    state.social.party.clear_outgoing_invites();
                 }
             } else {
                 return; // target not in our party
@@ -1665,6 +1670,7 @@ fn handle_social_message(
                 let (_remaining, new_leader) = party.remove_member(&member);
                 if party.members.len() <= 1 {
                     state.social.party.party = None;
+                    state.social.party.clear_outgoing_invites();
                 } else if let Some(leader) = new_leader {
                     let _ = app.emit(
                         "party_leader_changed",
@@ -1686,6 +1692,7 @@ fn handle_social_message(
                 return; // not in a party
             }
             state.social.party.party = None;
+            state.social.party.clear_outgoing_invites();
             let _ = app.emit("party_dissolved", serde_json::json!({}));
         }
         SocialMessage::PartyLeaderChanged { new_leader, .. } => {

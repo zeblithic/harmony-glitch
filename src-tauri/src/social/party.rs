@@ -284,8 +284,11 @@ impl PartyState {
     // ── Outgoing invites ──────────────────────────────────────────────────
 
     /// Record that we sent a party invite to `addr` at time `now`.
+    /// If an invite already exists, refreshes its `sent_at` timestamp.
     pub fn record_outgoing_invite(&mut self, addr: [u8; 16], now: f64) {
-        if !self.has_outgoing_invite(&addr) {
+        if let Some(invite) = self.outgoing_invites.iter_mut().find(|i| i.to == addr) {
+            invite.sent_at = now;
+        } else {
             self.outgoing_invites.push(OutgoingPartyInvite { to: addr, sent_at: now });
         }
     }
