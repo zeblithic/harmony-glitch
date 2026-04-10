@@ -197,6 +197,8 @@ export interface RenderFrame {
   skillProgress: SkillProgressFrame;
   upgrades: PlayerUpgrades;
   questProgress: QuestProgressFrame;
+  mood: number;
+  maxMood: number;
 }
 
 export interface NetworkStatus {
@@ -235,6 +237,7 @@ export interface ItemStackFrame {
   count: number;
   stackLimit: number;
   energyValue: number | null;
+  moodValue: number | null;
 }
 
 export interface WorldEntityFrame {
