@@ -2531,9 +2531,10 @@ fn game_loop(app: AppHandle) {
             // 7b. Annotate remote players with social state + compute nearest social target
             {
                 let state_wrapper = app.state::<GameStateWrapper>();
-                let game_state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                let mut game_state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
 
                 let mut nearest_target: Option<(f64, engine::state::NearestSocialTarget)> = None;
+                let mut buddy_addrs: Vec<[u8; 16]> = Vec::new();
 
                 for rp in &mut frame.remote_players {
                     if let Ok(bytes) = hex::decode(&rp.address_hash) {
@@ -2541,6 +2542,9 @@ fn game_loop(app: AppHandle) {
                             let mut addr = [0u8; 16];
                             addr.copy_from_slice(&bytes);
                             rp.is_buddy = game_state.social.buddies.is_buddy(&addr);
+                            if rp.is_buddy {
+                                buddy_addrs.push(addr);
+                            }
                             let mut in_party = false;
                             if let Some(ref party) = game_state.social.party.party {
                                 rp.party_role = party.role_of(&addr).map(|r| {
@@ -2569,6 +2573,14 @@ fn game_loop(app: AppHandle) {
                                 }
                             }
                         }
+                    }
+                }
+
+                // Feed copresence for online buddies
+                if !buddy_addrs.is_empty() {
+                    let today = crate::date_util::today_date_string();
+                    for addr in &buddy_addrs {
+                        game_state.social.buddies.record_copresence(addr, dt, &today);
                     }
                 }
 
