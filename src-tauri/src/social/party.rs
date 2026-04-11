@@ -154,11 +154,20 @@ pub struct PendingPartyInvite {
     pub received_at: f64,
 }
 
+/// An outgoing party invite we've sent (awaiting accept/decline/timeout).
+#[derive(Debug, Clone, PartialEq)]
+struct OutgoingPartyInvite {
+    to: [u8; 16],
+    sent_at: f64,
+}
+
 /// Runtime party state for one player.
 #[derive(Debug, Default, Clone)]
 pub struct PartyState {
     pub party: Option<ActiveParty>,
     pub pending_invite: Option<PendingPartyInvite>,
+    /// Outgoing party invites we've sent (not yet accepted/declined/expired).
+    outgoing_invites: Vec<OutgoingPartyInvite>,
 }
 
 impl PartyState {
@@ -270,6 +279,41 @@ impl PartyState {
                 self.pending_invite = None;
             }
         }
+    }
+
+    // ── Outgoing invites ──────────────────────────────────────────────────
+
+    /// Record that we sent a party invite to `addr` at time `now`.
+    /// If an invite already exists, refreshes its `sent_at` timestamp.
+    pub fn record_outgoing_invite(&mut self, addr: [u8; 16], now: f64) {
+        if let Some(invite) = self.outgoing_invites.iter_mut().find(|i| i.to == addr) {
+            invite.sent_at = now;
+        } else {
+            self.outgoing_invites.push(OutgoingPartyInvite { to: addr, sent_at: now });
+        }
+    }
+
+    /// Returns true if we have an outstanding outgoing invite to `addr`.
+    pub fn has_outgoing_invite(&self, addr: &[u8; 16]) -> bool {
+        self.outgoing_invites.iter().any(|i| &i.to == addr)
+    }
+
+    /// Remove and return true if we had an outgoing invite to `addr`.
+    pub fn consume_outgoing_invite(&mut self, addr: &[u8; 16]) -> bool {
+        let before = self.outgoing_invites.len();
+        self.outgoing_invites.retain(|i| &i.to != addr);
+        self.outgoing_invites.len() < before
+    }
+
+    /// Remove outgoing invites older than 90 seconds.
+    pub fn expire_outgoing_invites(&mut self, now: f64) {
+        self.outgoing_invites
+            .retain(|i| (now - i.sent_at) <= PARTY_INVITE_TIMEOUT);
+    }
+
+    /// Clear all outgoing invites (called on party dissolution/leave).
+    pub fn clear_outgoing_invites(&mut self) {
+        self.outgoing_invites.clear();
     }
 }
 
@@ -550,5 +594,56 @@ mod tests {
         });
         s.expire_invite(50.0);
         assert!(s.pending_invite.is_some());
+    }
+
+    // ── Outgoing invites ──────────────────────────────────────────────────
+
+    #[test]
+    fn record_outgoing_invite_tracks_address() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10), 100.0);
+        assert!(s.has_outgoing_invite(&addr(0x10)));
+        assert!(!s.has_outgoing_invite(&addr(0x11)));
+    }
+
+    #[test]
+    fn record_outgoing_invite_ignores_duplicates() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10), 100.0);
+        s.record_outgoing_invite(addr(0x10), 200.0);
+        assert_eq!(s.outgoing_invites.len(), 1);
+    }
+
+    #[test]
+    fn consume_outgoing_invite_returns_true_and_removes() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10), 100.0);
+        assert!(s.consume_outgoing_invite(&addr(0x10)));
+        assert!(s.outgoing_invites.is_empty());
+    }
+
+    #[test]
+    fn consume_outgoing_invite_returns_false_if_absent() {
+        let mut s = PartyState::new();
+        assert!(!s.consume_outgoing_invite(&addr(0x99)));
+    }
+
+    #[test]
+    fn expire_outgoing_invites_removes_old() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10), 0.0);
+        s.record_outgoing_invite(addr(0x11), 80.0);
+        s.expire_outgoing_invites(100.0); // 0x10 is 100s old (expired), 0x11 is 20s (fresh)
+        assert!(!s.has_outgoing_invite(&addr(0x10)));
+        assert!(s.has_outgoing_invite(&addr(0x11)));
+    }
+
+    #[test]
+    fn clear_outgoing_invites_removes_all() {
+        let mut s = PartyState::new();
+        s.record_outgoing_invite(addr(0x10), 100.0);
+        s.record_outgoing_invite(addr(0x11), 100.0);
+        s.clear_outgoing_invites();
+        assert!(s.outgoing_invites.is_empty());
     }
 }

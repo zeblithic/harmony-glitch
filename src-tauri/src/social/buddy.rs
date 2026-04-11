@@ -49,12 +49,21 @@ pub struct PendingBuddyRequest {
     pub received_at: f64,
 }
 
+/// An outgoing buddy request we've sent (awaiting accept/decline/timeout).
+#[derive(Debug, Clone, PartialEq)]
+struct OutgoingBuddyRequest {
+    to: [u8; 16],
+    sent_at: f64,
+}
+
 /// Runtime buddy state for one player.
 #[derive(Debug, Default, Clone)]
 pub struct BuddyState {
     pub buddies: Vec<BuddyEntry>,
     pub blocked: Vec<[u8; 16]>,
     pub pending_requests: Vec<PendingBuddyRequest>,
+    /// Outgoing buddy requests we've sent (not yet accepted/declined/expired).
+    outgoing_requests: Vec<OutgoingBuddyRequest>,
 }
 
 /// Timeout (seconds) before a pending buddy request expires.
@@ -99,10 +108,11 @@ impl BuddyState {
 
     // ── Block list ───────────────────────────────────────────────────────
 
-    /// Block a player: removes them from buddies and pending requests.
+    /// Block a player: removes them from buddies, pending requests, and outgoing requests.
     pub fn block_player(&mut self, addr: &[u8; 16]) {
         self.remove_buddy(addr);
         self.pending_requests.retain(|r| &r.from != addr);
+        self.outgoing_requests.retain(|r| &r.to != addr);
         if !self.is_blocked(addr) {
             self.blocked.push(*addr);
         }
@@ -115,16 +125,48 @@ impl BuddyState {
         self.blocked.len() < before
     }
 
+    // ── Outgoing requests ─────────────────────────────────────────────────
+
+    /// Record that we sent a buddy request to `addr` at time `now`.
+    /// If a request already exists, refreshes its `sent_at` timestamp.
+    pub fn record_outgoing_request(&mut self, addr: [u8; 16], now: f64) {
+        if let Some(req) = self.outgoing_requests.iter_mut().find(|r| r.to == addr) {
+            req.sent_at = now;
+        } else {
+            self.outgoing_requests.push(OutgoingBuddyRequest { to: addr, sent_at: now });
+        }
+    }
+
+    /// Returns true if we have an outstanding outgoing request to `addr`.
+    pub fn has_outgoing_request(&self, addr: &[u8; 16]) -> bool {
+        self.outgoing_requests.iter().any(|r| &r.to == addr)
+    }
+
+    /// Remove and return true if we had an outgoing request to `addr`.
+    pub fn consume_outgoing_request(&mut self, addr: &[u8; 16]) -> bool {
+        let before = self.outgoing_requests.len();
+        self.outgoing_requests.retain(|r| &r.to != addr);
+        self.outgoing_requests.len() < before
+    }
+
+    /// Remove outgoing requests older than 90 seconds.
+    pub fn expire_outgoing_requests(&mut self, now: f64) {
+        self.outgoing_requests
+            .retain(|r| (now - r.sent_at) <= PENDING_TIMEOUT_SECS);
+    }
+
     // ── Pending requests ─────────────────────────────────────────────────
 
     /// Enqueue an incoming buddy request (ignored if sender is blocked or already a buddy).
-    pub fn add_pending_request(&mut self, request: PendingBuddyRequest) {
+    /// Returns `true` if the request was stored, `false` if it was dropped.
+    pub fn add_pending_request(&mut self, request: PendingBuddyRequest) -> bool {
         if self.is_blocked(&request.from) || self.is_buddy(&request.from) {
-            return;
+            return false;
         }
         // Replace any existing request from the same sender.
         self.pending_requests.retain(|r| r.from != request.from);
         self.pending_requests.push(request);
+        true
     }
 
     /// Return the pending request from `addr` if it is still within the 90-second window.
@@ -138,6 +180,11 @@ impl BuddyState {
     pub fn expire_requests(&mut self, now: f64) {
         self.pending_requests
             .retain(|r| (now - r.received_at) <= PENDING_TIMEOUT_SECS);
+    }
+
+    /// Remove the pending request from `addr`, if any.
+    pub fn remove_pending_request(&mut self, addr: &[u8; 16]) {
+        self.pending_requests.retain(|r| &r.from != addr);
     }
 
     // ── Buddy data updates ───────────────────────────────────────────────
@@ -436,6 +483,82 @@ mod tests {
     fn record_copresence_returns_false_if_not_buddy() {
         let mut state = BuddyState::new();
         assert!(!state.record_copresence(&make_addr(0x0E), 100.0, "2026-04-10"));
+    }
+
+    // ── Outgoing requests ──────────────────────────────────────────────────
+
+    #[test]
+    fn record_outgoing_request_tracks_address() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50), 100.0);
+        assert!(state.has_outgoing_request(&make_addr(0x50)));
+        assert!(!state.has_outgoing_request(&make_addr(0x51)));
+    }
+
+    #[test]
+    fn record_outgoing_request_ignores_duplicates() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50), 100.0);
+        state.record_outgoing_request(make_addr(0x50), 200.0);
+        assert_eq!(state.outgoing_requests.len(), 1);
+    }
+
+    #[test]
+    fn consume_outgoing_request_returns_true_and_removes() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50), 100.0);
+        assert!(state.consume_outgoing_request(&make_addr(0x50)));
+        assert!(!state.has_outgoing_request(&make_addr(0x50)));
+    }
+
+    #[test]
+    fn consume_outgoing_request_returns_false_if_absent() {
+        let mut state = BuddyState::new();
+        assert!(!state.consume_outgoing_request(&make_addr(0x99)));
+    }
+
+    #[test]
+    fn expire_outgoing_requests_removes_old() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50), 0.0);
+        state.record_outgoing_request(make_addr(0x51), 80.0);
+        state.expire_outgoing_requests(100.0); // 0x50 is 100s old (expired), 0x51 is 20s (fresh)
+        assert!(!state.has_outgoing_request(&make_addr(0x50)));
+        assert!(state.has_outgoing_request(&make_addr(0x51)));
+    }
+
+    #[test]
+    fn block_clears_outgoing_request() {
+        let mut state = BuddyState::new();
+        state.record_outgoing_request(make_addr(0x50), 100.0);
+        state.block_player(&make_addr(0x50));
+        assert!(!state.has_outgoing_request(&make_addr(0x50)));
+    }
+
+    // ── Remove pending request ────────────────────────────────────────────
+
+    #[test]
+    fn remove_pending_request_clears_matching() {
+        let mut state = BuddyState::new();
+        state.add_pending_request(PendingBuddyRequest {
+            from: make_addr(0x60),
+            from_name: "Foo".into(),
+            received_at: 0.0,
+        });
+        state.remove_pending_request(&make_addr(0x60));
+        assert!(state.pending_requests.is_empty());
+    }
+
+    #[test]
+    fn remove_pending_request_noop_if_absent() {
+        let mut state = BuddyState::new();
+        state.add_pending_request(PendingBuddyRequest {
+            from: make_addr(0x61),
+            from_name: "Bar".into(),
+            received_at: 0.0,
+        });
+        state.remove_pending_request(&make_addr(0x99));
+        assert_eq!(state.pending_requests.len(), 1);
     }
 
     // ── Persistence ───────────────────────────────────────────────────────

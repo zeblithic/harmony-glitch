@@ -91,6 +91,16 @@ pub enum NetworkAction {
         sender: [u8; 16],
         message: TradeMessage,
     },
+    /// An emote message arrived from an authenticated remote player.
+    EmoteReceived {
+        sender: [u8; 16],
+        emote: crate::emote::EmoteMessage,
+    },
+    /// A social message arrived from an authenticated remote player.
+    SocialReceived {
+        sender: [u8; 16],
+        message: crate::social::SocialMessage,
+    },
 }
 
 /// Tracks a single peer's connection lifecycle.
@@ -526,6 +536,32 @@ impl NetworkState {
         let vouch = crate::trust::epoch::VouchMessage { subject };
         let msg = NetMessage::Vouch(vouch);
         match serde_json::to_vec(&msg) {
+            Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// Broadcast an emote message to all peers on the street.
+    pub fn publish_emote(
+        &mut self,
+        emote: crate::emote::EmoteMessage,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let msg = NetMessage::Emote(emote);
+        match serde_json::to_vec(&msg) {
+            Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// Broadcast a social message to all peers on the street.
+    pub fn publish_social(
+        &mut self,
+        msg: crate::social::SocialMessage,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let net_msg = NetMessage::Social(msg);
+        match serde_json::to_vec(&net_msg) {
             Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
             Err(_) => Vec::new(),
         }
@@ -1983,13 +2019,23 @@ impl NetworkState {
                                 }
                                 self.trust_store.record_vouch(&vouch_msg.subject, addr);
                             }
-                            NetMessage::Emote(_) => {
-                                // Emote handling is done at the application layer (lib.rs),
-                                // not in NetworkState. The message is forwarded via actions.
+                            NetMessage::Emote(emote) => {
+                                if !crate::trust::epoch::can_chat(peer_epoch) {
+                                    continue;
+                                }
+                                out.push(NetworkAction::EmoteReceived {
+                                    sender: *addr,
+                                    emote,
+                                });
                             }
-                            NetMessage::Social(_) => {
-                                // Social handling is done at the application layer (lib.rs),
-                                // not in NetworkState. The message is forwarded via actions.
+                            NetMessage::Social(social_msg) => {
+                                if !crate::trust::epoch::can_chat(peer_epoch) {
+                                    continue;
+                                }
+                                out.push(NetworkAction::SocialReceived {
+                                    sender: *addr,
+                                    message: social_msg,
+                                });
                             }
                         }
                     }
@@ -3687,5 +3733,151 @@ mod tests {
             store.vouched_by(&vouchee).is_none(),
             "Vouchee's vouch should be revoked on critical violation"
         );
+    }
+
+    #[test]
+    fn publish_emote_round_trip() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // A must be at least Initiate epoch on B's trust store.
+        state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
+
+        let emote = crate::emote::EmoteMessage {
+            emote_type: crate::emote::EmoteType::Hi,
+            variant: crate::emote::HiVariant::Hearts,
+            target: Some([0x99; 16]),
+        };
+
+        let publish_actions = state_a.publish_emote(emote.clone(), &mut rng);
+
+        let a_packets = extract_packets(&publish_actions);
+        assert!(!a_packets.is_empty(), "publish_emote should emit packets");
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let emote_received: Vec<_> = b_actions
+            .iter()
+            .filter_map(|a| match a {
+                NetworkAction::EmoteReceived { sender, emote } => Some((sender, emote)),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(emote_received.len(), 1, "B should receive exactly one EmoteReceived");
+        assert_eq!(*emote_received[0].0, addr_a, "sender should be A");
+        assert_eq!(emote_received[0].1.variant, crate::emote::HiVariant::Hearts);
+        assert_eq!(emote_received[0].1.target, Some([0x99; 16]));
+    }
+
+    #[test]
+    fn publish_social_round_trip() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, addr_a, addr_b) = drive_to_pubsub_ready("meadow");
+
+        state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
+
+        let msg = crate::social::SocialMessage::BuddyRequest { from: addr_a, to: addr_b };
+
+        let publish_actions = state_a.publish_social(msg.clone(), &mut rng);
+
+        let a_packets = extract_packets(&publish_actions);
+        assert!(!a_packets.is_empty(), "publish_social should emit packets");
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let social_received: Vec<_> = b_actions
+            .iter()
+            .filter_map(|a| match a {
+                NetworkAction::SocialReceived { sender, message } => Some((sender, message)),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(social_received.len(), 1, "B should receive exactly one SocialReceived");
+        assert_eq!(*social_received[0].0, addr_a, "sender should be A");
+        assert_eq!(
+            *social_received[0].1,
+            crate::social::SocialMessage::BuddyRequest { from: addr_a, to: addr_b }
+        );
+    }
+
+    #[test]
+    fn emote_blocked_at_sandbox_epoch() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // Do NOT set copresence — A stays at Sandbox epoch on B.
+        let emote = crate::emote::EmoteMessage {
+            emote_type: crate::emote::EmoteType::Hi,
+            variant: crate::emote::HiVariant::Stars,
+            target: None,
+        };
+
+        let publish_actions = state_a.publish_emote(emote, &mut rng);
+        let a_packets = extract_packets(&publish_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let emote_count = b_actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::EmoteReceived { .. }))
+            .count();
+
+        assert_eq!(emote_count, 0, "Sandbox peers should not pass emote epoch gate");
+    }
+
+    #[test]
+    fn social_message_reasonable_size() {
+        // Reticulum single-packet payload is 432 bytes. Max-party invites (5
+        // members + `to` field) exceed this but are handled by Reticulum's
+        // automatic fragmentation (up to ~8KB). Verify the message stays
+        // well under the fragmentation limit.
+        let msg = NetMessage::Social(crate::social::SocialMessage::PartyInvite {
+            leader: [0xFF; 16],
+            to: [0xEE; 16],
+            members: vec![[0xFF; 16]; 4],
+        });
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        assert!(
+            bytes.len() < 1000,
+            "PartyInvite with 5 members is {} bytes, should be well under fragmentation limit",
+            bytes.len(),
+        );
+    }
+
+    #[test]
+    fn social_round_trip_blocked_at_sandbox() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+
+        // No copresence set — A stays at Sandbox epoch on B.
+        let msg = crate::social::SocialMessage::BuddyRequest { from: [0x01; 16], to: [0x02; 16] };
+        let publish_actions = state_a.publish_social(msg, &mut rng);
+        let a_packets = extract_packets(&publish_actions);
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let social_count = b_actions
+            .iter()
+            .filter(|a| matches!(a, NetworkAction::SocialReceived { .. }))
+            .count();
+        assert_eq!(social_count, 0, "Sandbox peers should not pass social epoch gate");
     }
 }
