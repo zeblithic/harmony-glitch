@@ -1506,11 +1506,12 @@ fn handle_social_message(
             }
         }
         SocialMessage::BuddyRemove { from, .. } => {
-            state.social.buddies.remove_buddy(&from);
-            let _ = app.emit(
-                "buddy_removed",
-                serde_json::json!({ "fromHash": sender_hex }),
-            );
+            if state.social.buddies.remove_buddy(&from) {
+                let _ = app.emit(
+                    "buddy_removed",
+                    serde_json::json!({ "fromHash": sender_hex }),
+                );
+            }
         }
 
         // ── Party invite / accept / decline ─────────────────────────────
@@ -1608,6 +1609,9 @@ fn handle_social_message(
                     "party_member_left",
                     serde_json::json!({ "memberHash": sender_hex }),
                 );
+                if dissolving {
+                    let _ = app.emit("party_dissolved", serde_json::json!({}));
+                }
             }
         }
 
@@ -1620,14 +1624,19 @@ fn handle_social_message(
             if !party.is_leader(&authenticated_sender) {
                 return; // only the leader can kick
             }
+            let dissolved;
             if target == our_address {
                 state.social.party.party = None;
                 state.social.party.clear_outgoing_invites();
+                dissolved = true;
             } else if party.is_member(&target) {
                 party.remove_member(&target);
                 if party.members.len() <= 1 {
                     state.social.party.party = None;
                     state.social.party.clear_outgoing_invites();
+                    dissolved = true;
+                } else {
+                    dissolved = false;
                 }
             } else {
                 return; // target not in our party
@@ -1636,6 +1645,9 @@ fn handle_social_message(
                 "party_kick",
                 serde_json::json!({ "targetHash": hex::encode(target) }),
             );
+            if dissolved {
+                let _ = app.emit("party_dissolved", serde_json::json!({}));
+            }
         }
         SocialMessage::PartyMemberJoined {
             member,
@@ -1670,7 +1682,8 @@ fn handle_social_message(
                     return;
                 }
                 let (_remaining, new_leader) = party.remove_member(&member);
-                if party.members.len() <= 1 {
+                let dissolving = party.members.len() <= 1;
+                if dissolving {
                     state.social.party.party = None;
                     state.social.party.clear_outgoing_invites();
                 } else if let Some(leader) = new_leader {
@@ -1683,6 +1696,9 @@ fn handle_social_message(
                     "party_member_left",
                     serde_json::json!({ "memberHash": hex::encode(member) }),
                 );
+                if dissolving {
+                    let _ = app.emit("party_dissolved", serde_json::json!({}));
+                }
             }
         }
         SocialMessage::PartyDissolved { .. } => {
