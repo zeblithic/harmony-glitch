@@ -89,7 +89,7 @@
   let partyMembers = $state<PartyMemberInfo[]>([]);
   let partyIsLeader = $state(false);
 
-  let ourAddressHash = '';
+  let ourAddressHash = $state('');
   let buddyRequestVisible = $state(false);
   let buddyRequestName = $state('');
   let buddyRequestHash = $state('');
@@ -169,7 +169,7 @@
     }
 
     // Listen for trade events
-    onTradeEvent((event: TradeEvent) => {
+    const unlistenTrade = await onTradeEvent((event: TradeEvent) => {
       switch (event.type) {
         case 'request':
           tradeRequestName = event.initiatorName;
@@ -214,7 +214,7 @@
     });
 
     // Listen for buddy events
-    onBuddyEvent((event) => {
+    const unlistenBuddy = await onBuddyEvent((event) => {
       switch (event.type) {
         case 'request_received':
           buddyRequestName = event.fromName ?? 'Unknown';
@@ -230,7 +230,7 @@
     });
 
     // Listen for party events
-    onPartyEvent((event) => {
+    const unlistenParty = await onPartyEvent((event) => {
       switch (event.type) {
         case 'invite_received':
           partyInviteName = event.leaderName;
@@ -305,6 +305,12 @@
         resuming = false;
       }
     }
+
+    return () => {
+      unlistenTrade();
+      unlistenBuddy();
+      unlistenParty();
+    };
   });
 
   function handleStreetLoaded(street: StreetData) {
@@ -612,6 +618,22 @@
       }).catch(console.error);
     }
   }
+  // Y key: invite nearest player to party
+  if ((e.key === 'y' || e.key === 'Y') && currentStreet && !chatFocused && !tradeOpen && !shopOpen && !dialogueOpen && latestFrame) {
+    const target = latestFrame.nearestSocialTarget;
+    if (target && !target.inParty && (partyIsLeader || !partyInParty)) {
+      e.preventDefault();
+      partyInvite(target.addressHash).then(refreshPartyState).catch(console.error);
+    }
+  }
+  // B key: send buddy request to nearest player
+  if ((e.key === 'b' || e.key === 'B') && currentStreet && !chatFocused && !tradeOpen && !shopOpen && !dialogueOpen && latestFrame) {
+    const target = latestFrame.nearestSocialTarget;
+    if (target && !target.isBuddy) {
+      e.preventDefault();
+      buddyRequest(target.addressHash).catch(console.error);
+    }
+  }
 }} />
 
 <main>
@@ -852,14 +874,14 @@
       inParty={partyInParty}
       members={partyMembers}
       isLeader={partyIsLeader}
-      onLeave={() => partyLeave().catch(console.error)}
-      onKick={(hash) => partyKick(hash).catch(console.error)}
+      onLeave={() => partyLeave().then(refreshPartyState).catch(console.error)}
+      onKick={(hash) => partyKick(hash).then(refreshPartyState).catch(console.error)}
     />
     <BuddyListPanel
       {buddies}
       visible={buddyListOpen}
-      onRemove={(hash) => buddyRemove(hash).catch(console.error)}
-      onBlock={(hash) => blockPlayer(hash).catch(console.error)}
+      onRemove={(hash) => buddyRemove(hash).then(refreshBuddyList).catch(console.error)}
+      onBlock={(hash) => blockPlayer(hash).then(refreshBuddyList).catch(console.error)}
     />
     {#if latestFrame}
       {#each latestFrame.remotePlayers.filter(p => p.emoteAnimation !== null) as rp (rp.addressHash)}
@@ -885,7 +907,7 @@
           inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
           tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
         }).catch(console.error)}
-        onInvite={() => partyInvite(target.addressHash).catch(console.error)}
+        onInvite={() => partyInvite(target.addressHash).then(refreshPartyState).catch(console.error)}
         onBuddy={() => buddyRequest(target.addressHash).catch(console.error)}
       />
     {/if}

@@ -77,7 +77,7 @@ Follows `TradePrompt.svelte` pattern exactly:
 - **Position:** Fixed, top-center (`top: 80px; left: 50%; transform: translateX(-50%)`)
 - **Role:** `role="alertdialog"` with `aria-label="Buddy request from {senderName}"`
 - **Content:** "{senderName} wants to be buddies" with Accept / Decline buttons
-- **Props:** `{ visible: boolean; senderName: string; senderHash: string; onAccept: () => void; onDecline: () => void }`
+- **Props:** `{ visible: boolean; senderName: string; onAccept: () => void; onDecline: () => void }` (sender hash kept in App.svelte state, passed via callbacks)
 - **Styling:** Same dark translucent background as TradePrompt
 
 ### 3. PartyInvitePrompt.svelte (new component)
@@ -117,7 +117,7 @@ onBuddy={() => buddyRequest(target.addressHash).catch(console.error)}
 
 **Pull-on-push pattern:** When a social event arrives, re-fetch the full state via IPC rather than trying to apply incremental updates. This avoids state duplication between frontend and backend.
 
-```
+```text
 buddy event → getBuddyList() → update buddies state
 party event → getPartyState() → update partyInParty/partyMembers/partyIsLeader state
 ```

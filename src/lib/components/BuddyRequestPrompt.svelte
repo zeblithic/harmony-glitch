@@ -1,4 +1,6 @@
 <script lang="ts">
+  let acceptBtn: HTMLButtonElement | undefined = $state();
+
   let {
     senderName = '',
     visible = false,
@@ -10,13 +12,17 @@
     onAccept?: () => void;
     onDecline?: () => void;
   } = $props();
+
+  $effect(() => {
+    if (visible) acceptBtn?.focus();
+  });
 </script>
 
 {#if visible}
-  <div class="buddy-prompt" role="alertdialog" aria-label="Buddy request from {senderName}">
+  <div class="buddy-prompt" role="alertdialog" aria-modal="true" aria-label="Buddy request from {senderName}">
     <p class="buddy-prompt-text"><strong>{senderName}</strong> wants to be buddies</p>
     <div class="buddy-prompt-actions">
-      <button class="buddy-prompt-btn accept" onclick={() => onAccept?.()} aria-label="Accept buddy request from {senderName}">Accept</button>
+      <button bind:this={acceptBtn} class="buddy-prompt-btn accept" onclick={() => onAccept?.()} aria-label="Accept buddy request from {senderName}">Accept</button>
       <button class="buddy-prompt-btn decline" onclick={() => onDecline?.()} aria-label="Decline buddy request from {senderName}">Decline</button>
     </div>
   </div>

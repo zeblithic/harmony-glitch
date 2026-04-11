@@ -1,4 +1,6 @@
 <script lang="ts">
+  let joinBtn: HTMLButtonElement | undefined = $state();
+
   let {
     leaderName = '',
     memberCount = 0,
@@ -12,13 +14,17 @@
     onAccept?: () => void;
     onDecline?: () => void;
   } = $props();
+
+  $effect(() => {
+    if (visible) joinBtn?.focus();
+  });
 </script>
 
 {#if visible}
-  <div class="party-prompt" role="alertdialog" aria-label="Party invite from {leaderName}">
+  <div class="party-prompt" role="alertdialog" aria-modal="true" aria-label="Party invite from {leaderName}">
     <p class="party-prompt-text"><strong>{leaderName}</strong> invited you to a party ({memberCount} {memberCount === 1 ? 'member' : 'members'})</p>
     <div class="party-prompt-actions">
-      <button class="party-prompt-btn accept" onclick={() => onAccept?.()} aria-label="Join {leaderName}'s party">Join</button>
+      <button bind:this={joinBtn} class="party-prompt-btn accept" onclick={() => onAccept?.()} aria-label="Join {leaderName}'s party">Join</button>
       <button class="party-prompt-btn decline" onclick={() => onDecline?.()} aria-label="Decline party invite from {leaderName}">Decline</button>
     </div>
   </div>
