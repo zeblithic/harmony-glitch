@@ -1498,11 +1498,12 @@ fn handle_social_message(
             );
         }
         SocialMessage::BuddyDecline { .. } => {
-            state.social.buddies.consume_outgoing_request(&authenticated_sender);
-            let _ = app.emit(
-                "buddy_declined",
-                serde_json::json!({ "fromHash": sender_hex }),
-            );
+            if state.social.buddies.consume_outgoing_request(&authenticated_sender) {
+                let _ = app.emit(
+                    "buddy_declined",
+                    serde_json::json!({ "fromHash": sender_hex }),
+                );
+            }
         }
         SocialMessage::BuddyRemove { from, .. } => {
             state.social.buddies.remove_buddy(&from);
@@ -1578,11 +1579,12 @@ fn handle_social_message(
             }
         }
         SocialMessage::PartyDecline { .. } => {
-            state.social.party.consume_outgoing_invite(&authenticated_sender);
-            let _ = app.emit(
-                "party_invite_declined",
-                serde_json::json!({ "fromHash": sender_hex }),
-            );
+            if state.social.party.consume_outgoing_invite(&authenticated_sender) {
+                let _ = app.emit(
+                    "party_invite_declined",
+                    serde_json::json!({ "fromHash": sender_hex }),
+                );
+            }
         }
 
         // ── Self-authenticating: leave ──────────────────────────────────
