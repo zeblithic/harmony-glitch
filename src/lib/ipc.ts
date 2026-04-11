@@ -230,3 +230,65 @@ export async function partyDecline(): Promise<void> { return invoke<void>('party
 export async function partyLeave(): Promise<void> { return invoke<void>('party_leave'); }
 export async function partyKick(peerHash: string): Promise<void> { return invoke<void>('party_kick', { peerHash }); }
 export async function getPartyState(): Promise<PartyStateResult> { return invoke<PartyStateResult>('get_party_state'); }
+
+// ── Social event listeners ───────────────────────────────────────────
+
+export interface BuddyEvent {
+  type: 'request_received' | 'accepted' | 'declined' | 'removed';
+  fromHash: string;
+  fromName?: string;
+}
+
+export async function onBuddyEvent(callback: (event: BuddyEvent) => void): Promise<UnlistenFn> {
+  const unlistens = await Promise.all([
+    listen<{ fromHash: string; fromName: string }>('buddy_request_received', (e) =>
+      callback({ type: 'request_received', fromHash: e.payload.fromHash, fromName: e.payload.fromName })),
+    listen<{ fromHash: string; fromName: string }>('buddy_accepted', (e) =>
+      callback({ type: 'accepted', fromHash: e.payload.fromHash, fromName: e.payload.fromName })),
+    listen<{ fromHash: string }>('buddy_declined', (e) =>
+      callback({ type: 'declined', fromHash: e.payload.fromHash })),
+    listen<{ fromHash: string }>('buddy_removed', (e) =>
+      callback({ type: 'removed', fromHash: e.payload.fromHash })),
+  ]);
+  return () => unlistens.forEach(u => u());
+}
+
+export type PartyEvent =
+  | { type: 'invite_received'; leaderHash: string; leaderName: string; memberCount: number }
+  | { type: 'member_joined'; memberHash: string; memberName: string }
+  | { type: 'invite_declined'; fromHash: string }
+  | { type: 'leader_changed'; newLeaderHash: string }
+  | { type: 'member_left'; memberHash: string }
+  | { type: 'kick'; targetHash: string }
+  | { type: 'dissolved' };
+
+export async function onPartyEvent(callback: (event: PartyEvent) => void): Promise<UnlistenFn> {
+  const unlistens = await Promise.all([
+    listen<{ leaderHash: string; leaderName: string; memberCount: number }>('party_invite_received', (e) =>
+      callback({ type: 'invite_received', ...e.payload })),
+    listen<{ memberHash: string; memberName: string }>('party_member_joined', (e) =>
+      callback({ type: 'member_joined', ...e.payload })),
+    listen<{ fromHash: string }>('party_invite_declined', (e) =>
+      callback({ type: 'invite_declined', fromHash: e.payload.fromHash })),
+    listen<{ newLeaderHash: string }>('party_leader_changed', (e) =>
+      callback({ type: 'leader_changed', newLeaderHash: e.payload.newLeaderHash })),
+    listen<{ memberHash: string }>('party_member_left', (e) =>
+      callback({ type: 'member_left', memberHash: e.payload.memberHash })),
+    listen<{ targetHash: string }>('party_kick', (e) =>
+      callback({ type: 'kick', targetHash: e.payload.targetHash })),
+    listen<Record<string, never>>('party_dissolved', () =>
+      callback({ type: 'dissolved' })),
+  ]);
+  return () => unlistens.forEach(u => u());
+}
+
+export interface EmoteEvent {
+  senderHash: string;
+  senderName: string;
+  variant: string;
+  moodDelta: number;
+}
+
+export function onEmoteReceived(callback: (event: EmoteEvent) => void): Promise<UnlistenFn> {
+  return listen<EmoteEvent>('emote_received', (e) => callback(e.payload));
+}
