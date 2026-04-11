@@ -27,7 +27,9 @@
   import PartyPanel from './lib/components/PartyPanel.svelte';
   import BuddyListPanel from './lib/components/BuddyListPanel.svelte';
   import SocialPrompt from './lib/components/SocialPrompt.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, partyLeave, partyKick, buddyRemove, blockPlayer } from './lib/ipc';
+  import BuddyRequestPrompt from './lib/components/BuddyRequestPrompt.svelte';
+  import PartyInvitePrompt from './lib/components/PartyInvitePrompt.svelte';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
   import type { PartyMemberInfo, BuddyEntry } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
@@ -87,10 +89,39 @@
   let partyMembers = $state<PartyMemberInfo[]>([]);
   let partyIsLeader = $state(false);
 
+  let ourAddressHash = '';
+  let buddyRequestVisible = $state(false);
+  let buddyRequestName = $state('');
+  let buddyRequestHash = $state('');
+  let partyInviteVisible = $state(false);
+  let partyInviteName = $state('');
+  let partyInviteCount = $state(0);
+
+  async function refreshBuddyList() {
+    try {
+      const result = await getBuddyList();
+      buddies = result.buddies;
+    } catch (e) {
+      console.error('Failed to refresh buddy list:', e);
+    }
+  }
+
+  async function refreshPartyState() {
+    try {
+      const result = await getPartyState();
+      partyInParty = result.inParty;
+      partyMembers = result.members;
+      partyIsLeader = result.leader === ourAddressHash;
+    } catch (e) {
+      console.error('Failed to refresh party state:', e);
+    }
+  }
+
   onMount(async () => {
     try {
       const identity = await getIdentity();
       identityReady = identity.setupComplete;
+      ourAddressHash = identity.addressHash;
     } catch {
       identityReady = false;
     } finally {
@@ -181,6 +212,45 @@
           break;
       }
     });
+
+    // Listen for buddy events
+    onBuddyEvent((event) => {
+      switch (event.type) {
+        case 'request_received':
+          buddyRequestName = event.fromName ?? 'Unknown';
+          buddyRequestHash = event.fromHash;
+          buddyRequestVisible = true;
+          break;
+        case 'accepted':
+        case 'declined':
+        case 'removed':
+          refreshBuddyList();
+          break;
+      }
+    });
+
+    // Listen for party events
+    onPartyEvent((event) => {
+      switch (event.type) {
+        case 'invite_received':
+          partyInviteName = event.leaderName;
+          partyInviteCount = event.memberCount;
+          partyInviteVisible = true;
+          break;
+        case 'dissolved':
+          partyInParty = false;
+          partyMembers = [];
+          partyIsLeader = false;
+          break;
+        default:
+          refreshPartyState();
+          break;
+      }
+    });
+
+    // Initial social state fetch
+    refreshBuddyList();
+    refreshPartyState();
 
     // Restore saved kit selection
     try {
@@ -638,6 +708,49 @@
         tradeRequestVisible = false;
       }}
     />
+    <BuddyRequestPrompt
+      senderName={buddyRequestName}
+      visible={buddyRequestVisible}
+      onAccept={async () => {
+        try {
+          await buddyAccept(buddyRequestHash);
+          await refreshBuddyList();
+        } catch (e) {
+          console.error('Buddy accept failed:', e);
+        }
+        buddyRequestVisible = false;
+      }}
+      onDecline={async () => {
+        try {
+          await buddyDecline(buddyRequestHash);
+        } catch (e) {
+          console.error('Buddy decline failed:', e);
+        }
+        buddyRequestVisible = false;
+      }}
+    />
+    <PartyInvitePrompt
+      leaderName={partyInviteName}
+      memberCount={partyInviteCount}
+      visible={partyInviteVisible}
+      onAccept={async () => {
+        try {
+          await partyAccept();
+          await refreshPartyState();
+        } catch (e) {
+          console.error('Party accept failed:', e);
+        }
+        partyInviteVisible = false;
+      }}
+      onDecline={async () => {
+        try {
+          await partyDecline();
+        } catch (e) {
+          console.error('Party decline failed:', e);
+        }
+        partyInviteVisible = false;
+      }}
+    />
     <TradePanel
       {tradeFrame}
       inventory={latestFrame?.inventory ?? null}
@@ -764,16 +877,16 @@
         targetName={target.displayName}
         canHi={true}
         canTrade={true}
-        canInvite={false}
-        canBuddy={false}
+        canInvite={!target.inParty && (partyIsLeader || !partyInParty)}
+        canBuddy={!target.isBuddy}
         onHi={() => emoteHi().catch(console.error)}
         onTrade={() => tradeInitiate(target.addressHash).then(() => {
           tradeOpen = true;
           inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;
           tradeGetState().then(f => { tradeFrame = f; }).catch(console.error);
         }).catch(console.error)}
-        onInvite={() => {}}
-        onBuddy={() => {}}
+        onInvite={() => partyInvite(target.addressHash).catch(console.error)}
+        onBuddy={() => buddyRequest(target.addressHash).catch(console.error)}
       />
     {/if}
     <AvatarEditor
