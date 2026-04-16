@@ -800,4 +800,63 @@ mod tests {
         s.expire_pending_join(150.0);
         assert!(s.pending_join.is_some(), "fresh pending_join should survive");
     }
+
+    // ── Race condition tests ───────────────────────────────────────────────
+
+    #[test]
+    fn pending_join_timeout_does_not_create_phantom_party() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "Leader".into(),
+            members: vec![],
+            received_at: 0.0,
+        });
+        s.begin_join(0.5).unwrap();
+        assert!(s.pending_join.is_some());
+        assert!(!s.in_party());
+
+        // Simulate 91 seconds passing with no confirmation
+        s.expire_pending_join(91.0);
+        assert!(s.pending_join.is_none(), "pending_join should expire");
+        assert!(!s.in_party(), "must NOT be in a phantom party");
+    }
+
+    #[test]
+    fn begin_join_fails_without_invite() {
+        let mut s = PartyState::new();
+        let result = s.begin_join(0.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn confirm_join_after_expiry_returns_err() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "L".into(),
+            members: vec![],
+            received_at: 0.0,
+        });
+        s.begin_join(0.5).unwrap();
+        s.expire_pending_join(91.0); // expired
+        let result = s.confirm_join(addr(0x02), "Me".into(), 92.0);
+        assert!(result.is_err(), "confirm after expiry should fail");
+        assert!(!s.in_party());
+    }
+
+    #[test]
+    fn begin_join_with_expired_invite_returns_err() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "L".into(),
+            members: vec![],
+            received_at: 0.0,
+        });
+        let result = s.begin_join(91.0);
+        assert!(result.is_err());
+        assert!(s.pending_invite.is_none(), "expired invite should be cleared");
+        assert!(s.pending_join.is_none(), "should not create pending_join from expired invite");
+    }
 }
