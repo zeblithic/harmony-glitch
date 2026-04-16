@@ -260,7 +260,8 @@ export type PartyEvent =
   | { type: 'leader_changed'; newLeaderHash: string }
   | { type: 'member_left'; memberHash: string }
   | { type: 'kick'; targetHash: string }
-  | { type: 'dissolved' };
+  | { type: 'dissolved' }
+  | { type: 'joined'; leaderHash: string };
 
 export async function onPartyEvent(callback: (event: PartyEvent) => void): Promise<UnlistenFn> {
   const unlistens = await Promise.all([
@@ -278,6 +279,8 @@ export async function onPartyEvent(callback: (event: PartyEvent) => void): Promi
       callback({ type: 'kick', targetHash: e.payload.targetHash })),
     listen<Record<string, never>>('party_dissolved', () =>
       callback({ type: 'dissolved' })),
+    listen<{ leaderHash: string }>('party_joined', (e) =>
+      callback({ type: 'joined', leaderHash: e.payload.leaderHash })),
   ]);
   return () => unlistens.forEach(u => u());
 }

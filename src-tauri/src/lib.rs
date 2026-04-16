@@ -1086,19 +1086,10 @@ fn party_accept(app: AppHandle) -> Result<(), String> {
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
-    // Capture the leader hash before accept_invite consumes the pending invite.
     let invite_leader = state
         .social
         .party
-        .pending_invite
-        .as_ref()
-        .map(|i| i.leader)
-        .ok_or_else(|| "No pending invite".to_string())?;
-
-    state
-        .social
-        .party
-        .accept_invite(our_address, our_name.clone(), now)
+        .begin_join(our_name, now)
         .map_err(|e| e.to_string())?;
     drop(state);
 
@@ -1654,14 +1645,36 @@ fn handle_social_message(
             display_name,
             ..
         } => {
+            let now = now_secs(app);
+            // Self-confirmation: leader confirmed our join request.
+            // Verify the sender is the leader we expect from our pending join.
+            let is_our_join = member == our_address
+                && state
+                    .social
+                    .party
+                    .pending_join
+                    .as_ref()
+                    .is_some_and(|pj| pj.leader == authenticated_sender);
+            if is_our_join {
+                if state.social.party.confirm_join(our_address, now).is_ok() {
+                    let _ = app.emit(
+                        "party_joined",
+                        serde_json::json!({
+                            "leaderHash": hex::encode(authenticated_sender),
+                        }),
+                    );
+                }
+                return;
+            }
+            // Normal path: another member joined our existing party.
             if let Some(ref mut party) = state.social.party.party {
                 if !party.is_leader(&authenticated_sender) {
-                    return; // only leader broadcasts join notifications
+                    return;
                 }
                 if party.add_member(social::party::PartyMember {
                     address_hash: member,
                     display_name: display_name.clone(),
-                    joined_at: now_secs(app),
+                    joined_at: now,
                 }).is_ok() {
                     let _ = app.emit(
                         "party_member_joined",
