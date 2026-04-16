@@ -237,6 +237,10 @@
           partyInviteCount = event.memberCount;
           partyInviteVisible = true;
           break;
+        case 'joined':
+          partyInviteVisible = false;
+          refreshPartyState();
+          break;
         case 'dissolved':
           partyInParty = false;
           partyMembers = [];
@@ -758,7 +762,6 @@
       onAccept={async () => {
         try {
           await partyAccept();
-          await refreshPartyState();
         } catch (e) {
           console.error('Party accept failed:', e);
         }
