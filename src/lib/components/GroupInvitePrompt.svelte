@@ -3,17 +3,32 @@
 
   let {
     inviterName = '',
+    inviterHash = '',
     groupName = '',
     visible = false,
     onAccept = undefined,
     onDecline = undefined,
   }: {
     inviterName: string;
+    inviterHash?: string;
     groupName: string;
     visible: boolean;
     onAccept?: () => void;
     onDecline?: () => void;
   } = $props();
+
+  // The backend cannot always resolve a display name — it's blank after
+  // restart (no network state at rebuild time) and when the inviter isn't
+  // currently on our street. Fall back to a short hash prefix so the
+  // prompt never renders an empty "<strong></strong> invited you…".
+  const displayInviter = $derived(
+    inviterName && inviterName.trim().length > 0
+      ? inviterName
+      : inviterHash
+        ? `player ${inviterHash.slice(0, 8)}`
+        : 'Someone'
+  );
+  const displayGroup = $derived(groupName && groupName.trim().length > 0 ? groupName : 'a group');
 
   $effect(() => {
     if (visible) joinBtn?.focus();
@@ -21,21 +36,21 @@
 </script>
 
 {#if visible}
-  <div class="group-prompt" role="alert" aria-label="Group invite from {inviterName}">
-    <p class="group-prompt-text"><strong>{inviterName}</strong> invited you to <strong>{groupName}</strong></p>
+  <div class="group-prompt" role="alert" aria-label="Group invite from {displayInviter}">
+    <p class="group-prompt-text"><strong>{displayInviter}</strong> invited you to <strong>{displayGroup}</strong></p>
     <div class="group-prompt-actions">
       <button
         type="button"
         bind:this={joinBtn}
         class="group-prompt-btn accept"
         onclick={() => onAccept?.()}
-        aria-label="Join {groupName}"
+        aria-label="Join {displayGroup}"
       >Join</button>
       <button
         type="button"
         class="group-prompt-btn decline"
         onclick={() => onDecline?.()}
-        aria-label="Decline invite to {groupName}"
+        aria-label="Decline invite to {displayGroup}"
       >Decline</button>
     </div>
   </div>

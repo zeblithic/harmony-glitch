@@ -2124,27 +2124,42 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                         Ok(g) => g,
                         Err(_) => continue,
                     };
-                    groups.pending_invites.insert(
-                        group_id,
-                        crate::social::groups::PendingGroupInvite {
+                    // Re-check membership under the re-acquired lock. If
+                    // another thread made us a member (e.g. group_accept ran
+                    // while we were looking up the display name),
+                    // `prune_pending_invite_if_member` clears any stale entry
+                    // and we skip the insert — otherwise we'd write a ghost
+                    // invite for a group we're already in.
+                    let inserted = if groups
+                        .prune_pending_invite_if_member(group_id, our_addr)
+                    {
+                        false
+                    } else {
+                        groups.pending_invites.insert(
                             group_id,
-                            inviter,
-                            inviter_name: inviter_name.clone(),
-                            group_name: gname,
-                            invite_op: inv_op,
-                            received_at: now_secs(app),
-                        },
-                    );
+                            crate::social::groups::PendingGroupInvite {
+                                group_id,
+                                inviter,
+                                inviter_name: inviter_name.clone(),
+                                group_name: gname,
+                                invite_op: inv_op,
+                                received_at: now_secs(app),
+                            },
+                        );
+                        true
+                    };
                     drop(groups);
 
-                    let _ = app.emit(
-                        "group_invite_received",
-                        serde_json::json!({
-                            "groupId": group_id_hex,
-                            "inviterHash": hex::encode(inviter),
-                            "opId": hex::encode(oid),
-                        }),
-                    );
+                    if inserted {
+                        let _ = app.emit(
+                            "group_invite_received",
+                            serde_json::json!({
+                                "groupId": group_id_hex,
+                                "inviterHash": hex::encode(inviter),
+                                "opId": hex::encode(oid),
+                            }),
+                        );
+                    }
                 }
             }
         }
