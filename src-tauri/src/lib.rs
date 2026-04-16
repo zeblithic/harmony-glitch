@@ -1994,8 +1994,11 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             }
             NetworkAction::GroupOpReceived { sender, group_id, op } => {
                 let net = app.state::<NetworkWrapper>();
-                let our_addr = match net.0.lock() {
-                    Ok(ns) => ns.our_address_hash(),
+                let (our_addr, sender_name) = match net.0.lock() {
+                    Ok(ns) => (
+                        ns.our_address_hash(),
+                        ns.peer_display_name(&sender).unwrap_or_default(),
+                    ),
                     Err(_) => continue,
                 };
 
@@ -2019,7 +2022,7 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                             crate::social::groups::PendingGroupInvite {
                                 group_id,
                                 inviter: sender,
-                                inviter_name: String::new(),
+                                inviter_name: sender_name.clone(),
                                 group_name: gname,
                                 invite_op: op.clone(),
                                 received_at: now_secs(app),

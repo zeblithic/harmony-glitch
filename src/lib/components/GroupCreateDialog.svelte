@@ -19,10 +19,14 @@
     if (visible) {
       name = '';
       mode = 'invite_only';
-      dialogEl?.showModal();
+      if (dialogEl && !dialogEl.open) {
+        dialogEl.showModal();
+      }
       nameInput?.focus();
     } else {
-      dialogEl?.close();
+      if (dialogEl?.open) {
+        dialogEl.close();
+      }
     }
   });
 
@@ -37,7 +41,6 @@
       e.preventDefault();
       submit();
     }
-    if (e.key === 'Escape') onCancel();
   }
 </script>
 
@@ -47,6 +50,7 @@
     class="dialog-backdrop"
     aria-label="Create group"
     onkeydown={onKeydown}
+    oncancel={(e) => { e.preventDefault(); onCancel(); }}
   >
     <div class="dialog-box">
       <h2 class="dialog-title">Create Group</h2>

@@ -72,20 +72,28 @@ impl GroupManager {
 
             let data = match std::fs::read(&path) {
                 Ok(d) => d,
-                Err(_) => continue,
+                Err(e) => {
+                    eprintln!("[groups] failed to read {}: {e}", path.display());
+                    continue;
+                }
             };
             let ops: Vec<GroupOp> = match serde_json::from_slice(&data) {
                 Ok(v) => v,
-                Err(_) => continue,
+                Err(e) => {
+                    eprintln!("[groups] failed to parse {}: {e}", path.display());
+                    continue;
+                }
             };
             if ops.is_empty() {
                 continue;
             }
 
-            // Resolve the ops into a GroupState.
             let state = match harmony_groups::resolve(&ops) {
                 Ok(s) => s,
-                Err(_) => continue,
+                Err(e) => {
+                    eprintln!("[groups] failed to resolve {}: {e}", path.display());
+                    continue;
+                }
             };
             let group_id = state.group_id;
             self.op_logs.insert(group_id, ops);
@@ -106,14 +114,18 @@ impl GroupManager {
         let ops = self.op_logs.get(&group_id).map(Vec::as_slice).unwrap_or(&[]);
         let data =
             serde_json::to_vec(ops).map_err(|e| format!("Failed to serialize ops: {e}"))?;
-        crate::persistence::atomic_write(&ops_path, &data, None)?;
+        #[cfg(unix)]
+        let mode = Some(0o600);
+        #[cfg(not(unix))]
+        let mode = None;
 
-        // Update index.json with the list of all known group IDs.
+        crate::persistence::atomic_write(&ops_path, &data, mode)?;
+
         let index_path = groups_dir.join("index.json");
         let all_ids: Vec<String> = self.op_logs.keys().map(hex::encode).collect();
         let index_data = serde_json::to_vec(&all_ids)
             .map_err(|e| format!("Failed to serialize index: {e}"))?;
-        crate::persistence::atomic_write(&index_path, &index_data, None)?;
+        crate::persistence::atomic_write(&index_path, &index_data, mode)?;
 
         Ok(())
     }
@@ -145,9 +157,12 @@ impl GroupManager {
                 return Err(format!("resolve failed: {e:?}"));
             }
         };
-        self.states.insert(group_id, state);
 
-        self.persist_group(group_id)?;
+        if let Err(e) = self.persist_group(group_id) {
+            self.op_logs.get_mut(&group_id).and_then(|v| v.pop());
+            return Err(e);
+        }
+        self.states.insert(group_id, state);
 
         Ok(self.states.get(&group_id).unwrap())
     }
@@ -188,9 +203,14 @@ impl GroupManager {
                 return Err(format!("resolve failed: {e:?}"));
             }
         };
-        self.states.insert(group_id, state);
 
-        self.persist_group(group_id)?;
+        if let Err(e) = self.persist_group(group_id) {
+            if let Some(log) = self.op_logs.get_mut(&group_id) {
+                log.truncate(original_len);
+            }
+            return Err(e);
+        }
+        self.states.insert(group_id, state);
 
         Ok(self.states.get(&group_id).unwrap())
     }
