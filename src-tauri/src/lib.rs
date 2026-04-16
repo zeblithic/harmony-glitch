@@ -1080,25 +1080,13 @@ fn party_accept(app: AppHandle) -> Result<(), String> {
     let our_address = net_state.our_address_hash();
     drop(net_state);
 
-    let pi = app.state::<PlayerIdentityWrapper>();
-    let our_name = pi.display_name.lock().map_err(|e| e.to_string())?.clone();
-
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
-    // Capture the leader hash before accept_invite consumes the pending invite.
     let invite_leader = state
         .social
         .party
-        .pending_invite
-        .as_ref()
-        .map(|i| i.leader)
-        .ok_or_else(|| "No pending invite".to_string())?;
-
-    state
-        .social
-        .party
-        .accept_invite(our_address, our_name.clone(), now)
+        .begin_join(now)
         .map_err(|e| e.to_string())?;
     drop(state);
 
