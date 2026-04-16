@@ -373,6 +373,15 @@ impl PartyState {
         self.outgoing_invites.len() < before
     }
 
+    /// Clear a pending join that has been waiting too long for leader confirmation.
+    pub fn expire_pending_join(&mut self, now: f64) {
+        if let Some(pj) = &self.pending_join {
+            if now - pj.accepted_at > PARTY_INVITE_TIMEOUT {
+                self.pending_join = None;
+            }
+        }
+    }
+
     /// Remove outgoing invites older than 90 seconds.
     pub fn expire_outgoing_invites(&mut self, now: f64) {
         self.outgoing_invites
@@ -762,5 +771,33 @@ mod tests {
         assert_eq!(pj.leader, addr(0x01));
         assert_eq!(pj.leader_name, "Leader");
         assert_eq!(pj.members, vec![addr(0x02)]);
+    }
+
+    #[test]
+    fn expire_pending_join_clears_old() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "L".into(),
+            members: vec![],
+            received_at: 0.0,
+        });
+        s.begin_join(0.5).unwrap();
+        s.expire_pending_join(91.0);
+        assert!(s.pending_join.is_none(), "stale pending_join should be cleared");
+    }
+
+    #[test]
+    fn expire_pending_join_keeps_fresh() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "L".into(),
+            members: vec![],
+            received_at: 100.0,
+        });
+        s.begin_join(100.5).unwrap();
+        s.expire_pending_join(150.0);
+        assert!(s.pending_join.is_some(), "fresh pending_join should survive");
     }
 }

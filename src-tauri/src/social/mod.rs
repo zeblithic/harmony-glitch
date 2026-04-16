@@ -46,6 +46,7 @@ impl SocialState {
         self.buddies.expire_outgoing_requests(ctx.game_time);
         self.party.expire_invite(ctx.game_time);
         self.party.expire_outgoing_invites(ctx.game_time);
+        self.party.expire_pending_join(ctx.game_time);
     }
 }
 
