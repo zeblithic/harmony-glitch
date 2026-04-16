@@ -536,6 +536,26 @@ impl GroupManager {
             .collect()
     }
 
+    /// Invariant enforcer: `pending_invites` should never hold an entry for
+    /// a group the local user is already a member of. Callers should invoke
+    /// this after any merge that can change membership (accepts, orphan
+    /// resolves). Returns `true` if we are a current member.
+    pub fn prune_pending_invite_if_member(
+        &mut self,
+        group_id: GroupId,
+        our_addr: MemberAddr,
+    ) -> bool {
+        let is_member = self
+            .states
+            .get(&group_id)
+            .map(|s| s.is_member(&our_addr))
+            .unwrap_or(false);
+        if is_member {
+            self.pending_invites.remove(&group_id);
+        }
+        is_member
+    }
+
     /// Return the current DAG head op IDs (ops that are not a parent of any other op).
     pub fn head_ops(&self, group_id: GroupId) -> Vec<OpId> {
         let ops = match self.op_logs.get(&group_id) {
@@ -751,6 +771,55 @@ mod tests {
                 "oldest entries must be evicted first"
             );
         }
+    }
+
+    #[test]
+    fn prune_pending_invite_when_membership_acquired() {
+        // When an Accept op resolves (e.g. an orphaned one unblocking after
+        // its ancestors arrive), a previously-stored pending_invites entry
+        // for that group must be cleared — otherwise the frontend shows a
+        // stale invite prompt for a group we already belong to.
+        let dir = TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let create = genesis(FOUNDER, GROUP_ID_A, "Prune");
+        let (invite, _) = GroupOp::new_unsigned(
+            vec![create.id],
+            FOUNDER,
+            1_700_000_001,
+            GroupAction::Invite { invitee: ALICE },
+        );
+        mgr.merge_op(GROUP_ID_A, create.clone()).unwrap();
+        mgr.merge_op(GROUP_ID_A, invite.clone()).unwrap();
+
+        // Simulate the prompt-stored pending entry that the handler would
+        // have created for Alice.
+        mgr.pending_invites.insert(
+            GROUP_ID_A,
+            PendingGroupInvite {
+                group_id: GROUP_ID_A,
+                inviter: FOUNDER,
+                inviter_name: String::new(),
+                group_name: "Prune".into(),
+                invite_op: invite.clone(),
+                received_at: 0.0,
+            },
+        );
+
+        // Before Alice accepts, she's not a member → no pruning.
+        assert!(!mgr.prune_pending_invite_if_member(GROUP_ID_A, ALICE));
+        assert!(mgr.pending_invites.contains_key(&GROUP_ID_A));
+
+        // Alice accepts → she becomes a member → pruning drops the entry.
+        let (accept, _) = GroupOp::new_unsigned(
+            vec![invite.id],
+            ALICE,
+            1_700_000_002,
+            GroupAction::Accept { invite_op: invite.id },
+        );
+        mgr.merge_op(GROUP_ID_A, accept).unwrap();
+        assert!(mgr.prune_pending_invite_if_member(GROUP_ID_A, ALICE));
+        assert!(!mgr.pending_invites.contains_key(&GROUP_ID_A));
     }
 
     #[test]
