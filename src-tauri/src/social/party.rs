@@ -273,12 +273,50 @@ impl PartyState {
         }
         let leader = invite.leader;
         self.pending_join = Some(PendingJoin {
-            leader: invite.leader,
+            leader,
             leader_name: invite.leader_name,
             members: invite.members,
             accepted_at: now,
         });
         Ok(leader)
+    }
+
+    /// Commit the deferred join after receiving the leader's confirmation.
+    ///
+    /// Builds the `ActiveParty` from the saved `PendingJoin` data
+    /// (same logic as `accept_invite` but sourced from `pending_join`).
+    pub fn confirm_join(
+        &mut self,
+        self_hash: [u8; 16],
+        self_name: String,
+        now: f64,
+    ) -> Result<(), &'static str> {
+        let pj = self.pending_join.take().ok_or("no pending join")?;
+        let mut party = ActiveParty {
+            leader: pj.leader,
+            members: vec![PartyMember {
+                address_hash: pj.leader,
+                display_name: pj.leader_name,
+                joined_at: pj.accepted_at,
+            }],
+            created_at: pj.accepted_at,
+        };
+        for &addr in &pj.members {
+            if addr != pj.leader && addr != self_hash {
+                let _ = party.add_member(PartyMember {
+                    address_hash: addr,
+                    display_name: String::new(),
+                    joined_at: pj.accepted_at,
+                });
+            }
+        }
+        party.add_member(PartyMember {
+            address_hash: self_hash,
+            display_name: self_name,
+            joined_at: now,
+        })?;
+        self.party = Some(party);
+        Ok(())
     }
 
     /// Leave the current party.
@@ -675,6 +713,35 @@ mod tests {
         s.record_outgoing_invite(addr(0x11), 100.0);
         s.clear_outgoing_invites();
         assert!(s.outgoing_invites.is_empty());
+    }
+
+    #[test]
+    fn confirm_join_builds_party_from_pending_join() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "Leader".into(),
+            members: vec![addr(0x02)],
+            received_at: 100.0,
+        });
+        s.begin_join(100.5).unwrap();
+
+        let result = s.confirm_join(addr(0x03), "Me".into(), 101.0);
+        assert!(result.is_ok());
+        assert!(s.in_party(), "should be in party after confirm");
+        assert!(s.pending_join.is_none(), "pending_join should be cleared");
+        let party = s.party.as_ref().unwrap();
+        assert!(party.is_leader(&addr(0x01)));
+        assert!(party.is_member(&addr(0x01)));
+        assert!(party.is_member(&addr(0x02)));
+        assert!(party.is_member(&addr(0x03)));
+    }
+
+    #[test]
+    fn confirm_join_without_pending_join_returns_err() {
+        let mut s = PartyState::new();
+        let result = s.confirm_join(addr(0x01), "Me".into(), 100.0);
+        assert!(result.is_err());
     }
 
     #[test]
