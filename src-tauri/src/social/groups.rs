@@ -8,12 +8,70 @@ use harmony_groups::{GroupId, GroupOp, GroupState, MemberAddr, OpId};
 /// Classifies the outcome of a `try_merge` so callers can distinguish
 /// "genuinely new op" from "we already have it" and from "couldn't resolve
 /// yet (missing ancestors)" and from "hard error that should not be retried".
+///
+/// `TransientFailure` covers local I/O errors (persist failures, disk full,
+/// permission denied) that may succeed on a later retry. These ops are
+/// buffered in the orphan pool so they aren't silently lost.
 #[derive(Debug)]
 enum MergeOutcome {
     Applied,
     Duplicate,
     MissingAncestor,
+    TransientFailure(String),
     Rejected(String),
+}
+
+/// Classify the string-based error returned by `GroupManager::merge_op`
+/// into the typed outcome the orphan machinery can act on. Resolve errors
+/// that indicate a structurally-incomplete DAG are retryable
+/// (`MissingAncestor`); persist/I/O errors are also retryable
+/// (`TransientFailure`); hard resolver rejections are dropped (`Rejected`).
+fn classify_merge_error(e: String) -> MergeOutcome {
+    // `merge_op` prefixes resolve errors with "resolve failed: " and formats
+    // them via Debug so variant names appear literally. Non-resolve errors
+    // come from persist_group (I/O).
+    if e.starts_with("resolve failed:") {
+        if e.contains("NoGenesis")
+            || e.contains("MissingParent")
+            || e.contains("InvalidGenesis")
+            || e.contains("EmptyDag")
+        {
+            MergeOutcome::MissingAncestor
+        } else {
+            // MultipleGenesis, CycleDetected, InvalidOpId — structural errors
+            // that will fail the same way on every retry. Drop.
+            MergeOutcome::Rejected(e)
+        }
+    } else {
+        // Persist/serialize/IO errors — may succeed on a later retry.
+        MergeOutcome::TransientFailure(e)
+    }
+}
+
+/// Find the OpId of the most recent `Invite` op in `ops` that targets
+/// `our_addr` and has not been referenced by an `Accept` op authored by us.
+/// Does not filter the declined-invites set — that filtering is applied by
+/// the caller (`GroupManager::find_outstanding_invite`).
+fn outstanding_invite_op(ops: &[GroupOp], our_addr: MemberAddr) -> Option<OpId> {
+    let accepted: std::collections::HashSet<OpId> = ops
+        .iter()
+        .filter_map(|o| match &o.action {
+            harmony_groups::GroupAction::Accept { invite_op } if o.author == our_addr => {
+                Some(*invite_op)
+            }
+            _ => None,
+        })
+        .collect();
+    ops.iter()
+        .filter(|o| {
+            matches!(
+                &o.action,
+                harmony_groups::GroupAction::Invite { invitee } if *invitee == our_addr
+            )
+        })
+        .filter(|o| !accepted.contains(&o.id))
+        .max_by_key(|o| o.timestamp)
+        .map(|o| o.id)
 }
 
 /// A pending invite that has been received but not yet accepted or declined.
@@ -40,6 +98,12 @@ pub struct GroupManager {
     states: BTreeMap<GroupId, GroupState>,
     /// Pending invites we have received but not yet acted on.
     pub pending_invites: BTreeMap<GroupId, PendingGroupInvite>,
+    /// OpIds of invite ops the user explicitly declined. Persisted so that
+    /// `rebuild_pending_invites` skips them on restart — otherwise the
+    /// declined prompt would resurface every session. Purely local state;
+    /// peers don't need to know the user declined (no Decline action in
+    /// the group protocol).
+    declined_invite_ops: std::collections::BTreeSet<OpId>,
     /// Ops that failed to merge (missing ancestors) — retried on each
     /// successful merge. In-memory only; lost on restart, which is fine
     /// since the sender will eventually re-broadcast or sync will catch up.
@@ -54,9 +118,11 @@ impl GroupManager {
             op_logs: BTreeMap::new(),
             states: BTreeMap::new(),
             pending_invites: BTreeMap::new(),
+            declined_invite_ops: std::collections::BTreeSet::new(),
             orphan_ops: BTreeMap::new(),
         };
         mgr.load_all();
+        mgr.load_declined_invites();
         mgr
     }
 
@@ -83,7 +149,10 @@ impl GroupManager {
                 Some(s) => s.to_owned(),
                 None => continue,
             };
-            if stem == "index" {
+            // A group's file stem is the hex encoding of its 16-byte ID.
+            // Non-matching files (index.json, declined_invites.json, etc.)
+            // are metadata and skipped here.
+            if stem.len() != 32 || !stem.chars().all(|c| c.is_ascii_hexdigit()) {
                 continue;
             }
 
@@ -116,6 +185,78 @@ impl GroupManager {
             self.op_logs.insert(group_id, ops);
             self.states.insert(group_id, state);
         }
+    }
+
+    /// Load the set of declined invite OpIds from
+    /// `{data_dir}/groups/declined_invites.json`. Missing or malformed files
+    /// leave the set empty.
+    fn load_declined_invites(&mut self) {
+        let path = self.data_dir.join("groups").join("declined_invites.json");
+        let data = match std::fs::read(&path) {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let hexes: Vec<String> = match serde_json::from_slice(&data) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[groups] failed to parse declined_invites.json: {e}");
+                return;
+            }
+        };
+        for h in hexes {
+            if let Ok(bytes) = hex::decode(&h) {
+                if let Ok(op_id) = <[u8; 32]>::try_from(bytes.as_slice()) {
+                    self.declined_invite_ops.insert(op_id);
+                }
+            }
+        }
+    }
+
+    /// Persist the declined invite set to
+    /// `{data_dir}/groups/declined_invites.json` atomically.
+    fn persist_declined_invites(&self) -> Result<(), String> {
+        let groups_dir = self.data_dir.join("groups");
+        std::fs::create_dir_all(&groups_dir)
+            .map_err(|e| format!("Failed to create groups dir: {e}"))?;
+        let path = groups_dir.join("declined_invites.json");
+        let hexes: Vec<String> = self.declined_invite_ops.iter().map(hex::encode).collect();
+        let data = serde_json::to_vec(&hexes)
+            .map_err(|e| format!("Failed to serialize declined invites: {e}"))?;
+        #[cfg(unix)]
+        let mode = Some(0o600);
+        #[cfg(not(unix))]
+        let mode = None;
+        crate::persistence::atomic_write(&path, &data, mode)
+    }
+
+    /// Mark the current outstanding invite targeting `our_addr` in `group_id`
+    /// as declined, persist that decision, and remove any in-memory pending
+    /// entry.
+    ///
+    /// Returns `true` if there was either a pending invite or an unaccepted
+    /// invite op in the persisted log to decline. Returns `false` if neither
+    /// exists (caller may want to surface that as a user-visible error).
+    pub fn decline_invite(
+        &mut self,
+        group_id: GroupId,
+        our_addr: MemberAddr,
+    ) -> Result<bool, String> {
+        let had_pending = self.pending_invites.remove(&group_id).is_some();
+        // `find_outstanding_invite` filters by declined_invite_ops, so
+        // re-declining a previously-declined invite finds nothing. For the
+        // decline path we need the raw lookup.
+        let outstanding = self
+            .op_logs
+            .get(&group_id)
+            .and_then(|ops| outstanding_invite_op(ops, our_addr));
+        let declined_any = if let Some(op_id) = outstanding {
+            self.declined_invite_ops.insert(op_id);
+            self.persist_declined_invites()?;
+            true
+        } else {
+            false
+        };
+        Ok(had_pending || declined_any)
     }
 
     /// Persist a group's op log to `{data_dir}/groups/{hex_group_id}.json`.
@@ -251,15 +392,22 @@ impl GroupManager {
                 // Already have it — no state change, no event.
             }
             MergeOutcome::MissingAncestor => {
-                // Buffer for later retry. Dedup by id.
+                let pool = self.orphan_ops.entry(group_id).or_default();
+                if !pool.iter().any(|o| o.id == op_id) {
+                    pool.push(op);
+                }
+            }
+            MergeOutcome::TransientFailure(e) => {
+                // Local I/O error (e.g. disk full). Buffer for retry so
+                // the op is not lost when conditions improve.
+                eprintln!("[groups] merge_op transient failure (will retry): {e}");
                 let pool = self.orphan_ops.entry(group_id).or_default();
                 if !pool.iter().any(|o| o.id == op_id) {
                     pool.push(op);
                 }
             }
             MergeOutcome::Rejected(e) => {
-                // Hard failure (e.g. persist error) — do NOT buffer. Drop
-                // the op; retrying the same op will fail the same way.
+                // Structural rejection — will fail the same way on retry.
                 eprintln!("[groups] merge_op rejected: {e}");
             }
         }
@@ -273,9 +421,11 @@ impl GroupManager {
     }
 
     /// Attempt to merge `op` and classify the outcome. The classification
-    /// depends on the pre-merge state: whether the op is already present
-    /// (Duplicate), whether resolve fails because an ancestor is missing
-    /// (MissingAncestor), or whether a hard error occurred (Rejected).
+    /// depends on the pre-merge state and the error (if any): whether the op
+    /// is already present (Duplicate), whether resolve failed because an
+    /// ancestor is missing (MissingAncestor), whether a local I/O error
+    /// occurred (TransientFailure — retryable), or whether the resolver
+    /// rejected the op structurally (Rejected — not retryable).
     fn try_merge(&mut self, group_id: GroupId, op: GroupOp) -> MergeOutcome {
         if let Some(ops) = self.op_logs.get(&group_id) {
             if ops.iter().any(|o| o.id == op.id) {
@@ -284,20 +434,7 @@ impl GroupManager {
         }
         match self.merge_op(group_id, op) {
             Ok(_) => MergeOutcome::Applied,
-            Err(e) => {
-                // Distinguish "needs ancestors" from "real error". The
-                // harmony-groups resolver returns these error messages when
-                // the DAG is incomplete — anything else is a hard failure.
-                if e.contains("NoGenesis")
-                    || e.contains("MissingParent")
-                    || e.contains("InvalidGenesis")
-                    || e.contains("EmptyDag")
-                {
-                    MergeOutcome::MissingAncestor
-                } else {
-                    MergeOutcome::Rejected(e)
-                }
-            }
+            Err(e) => classify_merge_error(e),
         }
     }
 
@@ -329,9 +466,13 @@ impl GroupManager {
                     MergeOutcome::MissingAncestor => {
                         still_orphaned.push(op);
                     }
+                    MergeOutcome::TransientFailure(e) => {
+                        eprintln!("[groups] orphan retry transient failure: {e}");
+                        // Keep in the pool for future retries.
+                        still_orphaned.push(op);
+                    }
                     MergeOutcome::Rejected(e) => {
                         eprintln!("[groups] orphan retry rejected: {e}");
-                        // Drop — hard failures don't go back in the pool.
                         progress = true;
                     }
                 }
@@ -347,9 +488,9 @@ impl GroupManager {
     }
 
     /// Find any outstanding invite op targeting `our_addr` in the op log of
-    /// `group_id`. An invite is outstanding if it exists in the log but
-    /// `our_addr` has not yet authored an `Accept` referencing it and is
-    /// not currently a member of the group.
+    /// `group_id`, excluding any invite the user previously declined. An
+    /// invite is outstanding if it exists in the log but `our_addr` has not
+    /// yet authored an `Accept` referencing it and is not currently a member.
     ///
     /// Used by `group_accept` to recover after restart, when the ephemeral
     /// `pending_invites` map is empty but the persisted op log still carries
@@ -359,33 +500,18 @@ impl GroupManager {
         group_id: GroupId,
         our_addr: MemberAddr,
     ) -> Option<GroupOp> {
-        let ops = self.op_logs.get(&group_id)?;
         // Already a member — nothing outstanding.
         if let Some(state) = self.states.get(&group_id) {
             if state.is_member(&our_addr) {
                 return None;
             }
         }
-        // Find the most recent invite targeting us that we haven't accepted.
-        let accepted: std::collections::HashSet<harmony_groups::OpId> = ops
-            .iter()
-            .filter_map(|o| match &o.action {
-                harmony_groups::GroupAction::Accept { invite_op }
-                    if o.author == our_addr =>
-                {
-                    Some(*invite_op)
-                }
-                _ => None,
-            })
-            .collect();
-        ops.iter()
-            .filter(|o| matches!(
-                &o.action,
-                harmony_groups::GroupAction::Invite { invitee } if *invitee == our_addr
-            ))
-            .filter(|o| !accepted.contains(&o.id))
-            .max_by_key(|o| o.timestamp)
-            .cloned()
+        let ops = self.op_logs.get(&group_id)?;
+        let op_id = outstanding_invite_op(ops, our_addr)?;
+        if self.declined_invite_ops.contains(&op_id) {
+            return None;
+        }
+        ops.iter().find(|o| o.id == op_id).cloned()
     }
 
     /// Rebuild `pending_invites` from persisted op logs after restart.
@@ -719,5 +845,67 @@ mod tests {
         assert_eq!(pending.inviter, FOUNDER);
         assert_eq!(pending.group_name, "Persists");
         assert_eq!(pending.received_at, 42.0);
+    }
+
+    #[test]
+    fn declined_invite_does_not_resurface_after_restart() {
+        let dir = TempDir::new().unwrap();
+
+        // Session 1: create group, FOUNDER invites ALICE, ALICE declines.
+        let invite_id = {
+            let mut mgr = GroupManager::new(dir.path().to_path_buf());
+            let create = genesis(FOUNDER, GROUP_ID_A, "Decline");
+            let (invite, _) = GroupOp::new_unsigned(
+                vec![create.id],
+                FOUNDER,
+                1_700_000_001,
+                GroupAction::Invite { invitee: ALICE },
+            );
+            mgr.merge_op(GROUP_ID_A, create).unwrap();
+            mgr.merge_op(GROUP_ID_A, invite.clone()).unwrap();
+            // Rebuild populates pending_invites, then decline clears & persists.
+            mgr.rebuild_pending_invites(ALICE, 0.0);
+            assert!(mgr.decline_invite(GROUP_ID_A, ALICE).unwrap());
+            invite.id
+        };
+
+        // Session 2: rebuild_pending_invites should skip the declined invite.
+        let mut mgr2 = GroupManager::new(dir.path().to_path_buf());
+        assert!(mgr2.declined_invite_ops.contains(&invite_id));
+        let rebuilt = mgr2.rebuild_pending_invites(ALICE, 1.0);
+        assert!(rebuilt.is_empty(), "declined invite must not resurface");
+        assert!(mgr2.pending_invites.is_empty());
+        assert!(mgr2.find_outstanding_invite(GROUP_ID_A, ALICE).is_none());
+    }
+
+    #[test]
+    fn transient_persist_failure_buffers_op_for_retry() {
+        // Classify a simulated persist error — it should produce
+        // TransientFailure, not Rejected.
+        let err = "Failed to create groups dir: read-only file system".to_string();
+        assert!(matches!(
+            classify_merge_error(err),
+            MergeOutcome::TransientFailure(_)
+        ));
+
+        // Resolve errors with missing-ancestor variants → MissingAncestor.
+        assert!(matches!(
+            classify_merge_error("resolve failed: NoGenesis".into()),
+            MergeOutcome::MissingAncestor
+        ));
+        assert!(matches!(
+            classify_merge_error("resolve failed: MissingParent { op: [0xaa, ...], parent: [0xbb, ...] }".into()),
+            MergeOutcome::MissingAncestor
+        ));
+
+        // Hard resolver rejections → Rejected.
+        assert!(matches!(
+            classify_merge_error("resolve failed: CycleDetected".into()),
+            MergeOutcome::Rejected(_)
+        ));
+        assert!(matches!(
+            classify_merge_error("resolve failed: MultipleGenesis".into()),
+            MergeOutcome::Rejected(_)
+        ));
     }
 }

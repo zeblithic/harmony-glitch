@@ -1462,13 +1462,18 @@ fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
 fn group_decline(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     let group_id = parse_group_id(&group_id_hex)?;
 
+    let net = app.state::<NetworkWrapper>();
+    let our_address = {
+        let net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.our_address_hash()
+    };
+
     let gm = app.state::<GroupManagerWrapper>();
     let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    groups
-        .pending_invites
-        .remove(&group_id)
-        .ok_or_else(|| "No pending invite for this group".to_string())?;
+    if !groups.decline_invite(group_id, our_address)? {
+        return Err("No pending invite for this group".to_string());
+    }
 
     Ok(())
 }
@@ -2051,20 +2056,30 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     harmony_groups::GroupOp,
                     String,
                 )> = Vec::new();
-                for aid in &applied_ids {
-                    let applied_op = match groups.get_ops(group_id).and_then(|ops| {
-                        ops.iter().find(|o| o.id == *aid).cloned()
-                    }) {
-                        Some(o) => o,
-                        None => continue,
-                    };
-                    if let harmony_groups::GroupAction::Invite { invitee } = &applied_op.action {
-                        if *invitee == our_addr {
-                            let gname = groups
-                                .get_state(group_id)
-                                .map(|s| s.name.clone())
-                                .unwrap_or_default();
-                            pending_to_add.push((*aid, applied_op.author, applied_op, gname));
+                // If we ended up a member after this merge (e.g. because an
+                // orphaned Accept also applied), don't prompt — the invite
+                // has already been consumed, the prompt would be confusing.
+                let already_member = groups
+                    .get_state(group_id)
+                    .map(|s| s.is_member(&our_addr))
+                    .unwrap_or(false);
+
+                if !already_member {
+                    for aid in &applied_ids {
+                        let applied_op = match groups.get_ops(group_id).and_then(|ops| {
+                            ops.iter().find(|o| o.id == *aid).cloned()
+                        }) {
+                            Some(o) => o,
+                            None => continue,
+                        };
+                        if let harmony_groups::GroupAction::Invite { invitee } = &applied_op.action {
+                            if *invitee == our_addr {
+                                let gname = groups
+                                    .get_state(group_id)
+                                    .map(|s| s.name.clone())
+                                    .unwrap_or_default();
+                                pending_to_add.push((*aid, applied_op.author, applied_op, gname));
+                            }
                         }
                     }
                 }
