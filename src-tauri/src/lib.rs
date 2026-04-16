@@ -2008,7 +2008,15 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     Err(_) => continue,
                 };
 
-                let _ = groups.merge_op(group_id, op.clone());
+                let merge_ok = groups.merge_op(group_id, op.clone()).is_ok();
+
+                if merge_ok {
+                    let group_id_hex = hex::encode(group_id);
+                    let _ = app.emit(
+                        "group_state_changed",
+                        serde_json::json!({ "groupId": group_id_hex }),
+                    );
+                }
 
                 if let harmony_groups::GroupAction::Invite { invitee } = &op.action {
                     if *invitee == our_addr {

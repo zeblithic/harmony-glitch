@@ -309,7 +309,7 @@ export interface GroupStateResult {
   groupId: string;
   name: string;
   mode: string;
-  founderHash: string;
+  founderHash: string | null;
   members: GroupMemberInfo[];
   memberCount: number;
   dissolved: boolean;
@@ -340,7 +340,8 @@ export type GroupEvent =
   | { type: 'member_kicked'; groupId: string; targetHash: string }
   | { type: 'member_promoted'; groupId: string; targetHash: string }
   | { type: 'member_demoted'; groupId: string; targetHash: string }
-  | { type: 'info_updated'; groupId: string };
+  | { type: 'info_updated'; groupId: string }
+  | { type: 'state_changed'; groupId: string };
 
 export async function onGroupEvent(callback: (event: GroupEvent) => void): Promise<UnlistenFn> {
   const unlistens = await Promise.all([
@@ -362,6 +363,8 @@ export async function onGroupEvent(callback: (event: GroupEvent) => void): Promi
       callback({ type: 'member_demoted', groupId: e.payload.groupId, targetHash: e.payload.targetHash })),
     listen<{ groupId: string }>('group_info_updated', (e) =>
       callback({ type: 'info_updated', groupId: e.payload.groupId })),
+    listen<{ groupId: string }>('group_state_changed', (e) =>
+      callback({ type: 'state_changed', groupId: e.payload.groupId })),
   ]);
   return () => unlistens.forEach(u => u());
 }
