@@ -79,17 +79,18 @@
   </ul>
 
   <div class="group-detail-footer">
-    <button
-      type="button"
-      class="leave-btn"
-      onclick={onLeave}
-    >Leave Group</button>
     {#if isFounder}
       <button
         type="button"
         class="dissolve-btn"
         onclick={onDissolve}
       >Dissolve</button>
+    {:else}
+      <button
+        type="button"
+        class="leave-btn"
+        onclick={onLeave}
+      >Leave Group</button>
     {/if}
   </div>
 </div>

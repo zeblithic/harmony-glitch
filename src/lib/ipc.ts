@@ -353,6 +353,7 @@ export type GroupEvent =
   | { type: 'left'; groupId: string }
   | { type: 'dissolved'; groupId: string }
   | { type: 'invite_received'; groupId: string; inviterHash: string; opId: string }
+  | { type: 'invite_sent'; groupId: string; inviteeHash: string }
   | { type: 'member_kicked'; groupId: string; targetHash: string }
   | { type: 'member_promoted'; groupId: string; targetHash: string }
   | { type: 'member_demoted'; groupId: string; targetHash: string }
@@ -371,6 +372,8 @@ export async function onGroupEvent(callback: (event: GroupEvent) => void): Promi
       callback({ type: 'dissolved', groupId: e.payload.groupId })),
     listen<{ groupId: string; inviterHash: string; opId: string }>('group_invite_received', (e) =>
       callback({ type: 'invite_received', groupId: e.payload.groupId, inviterHash: e.payload.inviterHash, opId: e.payload.opId })),
+    listen<{ groupId: string; inviteeHash: string }>('group_invite_sent', (e) =>
+      callback({ type: 'invite_sent', groupId: e.payload.groupId, inviteeHash: e.payload.inviteeHash })),
     listen<{ groupId: string; targetHash: string }>('group_member_kicked', (e) =>
       callback({ type: 'member_kicked', groupId: e.payload.groupId, targetHash: e.payload.targetHash })),
     listen<{ groupId: string; targetHash: string }>('group_member_promoted', (e) =>

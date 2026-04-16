@@ -378,4 +378,52 @@ mod tests {
             _ => panic!("wrong variant"),
         }
     }
+
+    /// Regression canary on serialized `NetMessage::GroupOp` size.
+    ///
+    /// Unlike other NetMessage variants, `GroupOp` does **not** fit the
+    /// 432-byte Reticulum payload limit: OpIds and signatures are 32- and
+    /// 64-byte arrays that JSON encodes as integer-per-element, and parent
+    /// lists are unbounded. Group ops in Phase A travel over Zenoh pub/sub
+    /// on the LAN (no Reticulum MTU), so this is tolerated for now.
+    ///
+    /// This test locks in the current worst-case ceiling so we notice if
+    /// a change (e.g. action payload or op header) pushes it substantially
+    /// higher. If/when ops ever need to cross Reticulum, switch the wire
+    /// format for this variant to postcard (binary).
+    #[test]
+    fn group_op_serialized_size_is_bounded() {
+        use harmony_groups::{GroupAction, GroupMode, GroupOp};
+
+        // Worst realistic Phase-A op: UpdateInfo with a max-length name and
+        // three parents (concurrent Founder-authored edits).
+        let parents: Vec<[u8; 32]> =
+            (0..3).map(|i| [0x10 + i as u8; 32]).collect();
+        let (op, _) = GroupOp::new_unsigned(
+            parents,
+            [0xAA; 16],
+            1_700_000_000,
+            GroupAction::UpdateInfo {
+                name: Some("X".repeat(40)),
+                mode: Some(GroupMode::InviteOnly),
+            },
+        );
+        let msg = NetMessage::GroupOp { group_id: [0xBB; 16], op };
+        let bytes = serde_json::to_vec(&msg).unwrap();
+
+        // Generous ceiling chosen to allow for future minor additions
+        // without tripping; substantially over today's ~700B worst case
+        // would indicate an unexpected regression.
+        // Today's worst case is ~725 bytes. 1024 gives headroom for minor
+        // future growth without flaking.
+        const MAX_GROUP_OP_SIZE: usize = 1024;
+        assert!(
+            bytes.len() <= MAX_GROUP_OP_SIZE,
+            "GroupOp is {} bytes, ceiling is {} (exceeds Reticulum MTU of {} — \
+             expected for this variant; see test doc)",
+            bytes.len(),
+            MAX_GROUP_OP_SIZE,
+            MAX_PAYLOAD
+        );
+    }
 }

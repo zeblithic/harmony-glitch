@@ -31,15 +31,12 @@ fn classify_merge_error(e: String) -> MergeOutcome {
     // them via Debug so variant names appear literally. Non-resolve errors
     // come from persist_group (I/O).
     if e.starts_with("resolve failed:") {
-        if e.contains("NoGenesis")
-            || e.contains("MissingParent")
-            || e.contains("InvalidGenesis")
-            || e.contains("EmptyDag")
-        {
+        if e.contains("NoGenesis") || e.contains("MissingParent") || e.contains("EmptyDag") {
             MergeOutcome::MissingAncestor
         } else {
-            // MultipleGenesis, CycleDetected, InvalidOpId — structural errors
-            // that will fail the same way on every retry. Drop.
+            // InvalidGenesis, MultipleGenesis, CycleDetected, InvalidOpId —
+            // structural defects of the ops we already hold. Retrying with the
+            // same or newer ops cannot repair them, so drop rather than buffer.
             MergeOutcome::Rejected(e)
         }
     } else {
@@ -107,8 +104,15 @@ pub struct GroupManager {
     /// Ops that failed to merge (missing ancestors) — retried on each
     /// successful merge. In-memory only; lost on restart, which is fine
     /// since the sender will eventually re-broadcast or sync will catch up.
+    /// Capped at `ORPHAN_POOL_CAP` per group; oldest entries are evicted
+    /// first to bound memory use under a hostile gossip flood.
     orphan_ops: BTreeMap<GroupId, Vec<GroupOp>>,
 }
+
+/// Per-group orphan pool cap. Protects against memory exhaustion from a
+/// peer gossiping large numbers of ops that reference ancestors we will
+/// never receive (e.g. wrong group, spoofed ancestors, or a malicious flood).
+const ORPHAN_POOL_CAP: usize = 64;
 
 impl GroupManager {
     /// Create a new `GroupManager`, restoring persisted groups from `data_dir`.
@@ -344,19 +348,13 @@ impl GroupManager {
                 // Already have it — no state change, no event.
             }
             MergeOutcome::MissingAncestor => {
-                let pool = self.orphan_ops.entry(group_id).or_default();
-                if !pool.iter().any(|o| o.id == op_id) {
-                    pool.push(op);
-                }
+                self.push_orphan(group_id, op);
             }
             MergeOutcome::TransientFailure(e) => {
                 // Local I/O error (e.g. disk full). Buffer for retry so
                 // the op is not lost when conditions improve.
                 eprintln!("[groups] merge_op transient failure (will retry): {e}");
-                let pool = self.orphan_ops.entry(group_id).or_default();
-                if !pool.iter().any(|o| o.id == op_id) {
-                    pool.push(op);
-                }
+                self.push_orphan(group_id, op);
             }
             MergeOutcome::Rejected(e) => {
                 // Structural rejection — will fail the same way on retry.
@@ -370,6 +368,21 @@ impl GroupManager {
         applied.extend(newly_applied);
 
         (!applied.is_empty(), applied)
+    }
+
+    /// Buffer `op` in the orphan pool for `group_id`, deduping by id and
+    /// enforcing `ORPHAN_POOL_CAP`. When full, the oldest op is evicted —
+    /// newer ops are more likely to reference recently-seen ancestors and
+    /// therefore more likely to eventually resolve.
+    fn push_orphan(&mut self, group_id: GroupId, op: GroupOp) {
+        let pool = self.orphan_ops.entry(group_id).or_default();
+        if pool.iter().any(|o| o.id == op.id) {
+            return;
+        }
+        if pool.len() >= ORPHAN_POOL_CAP {
+            pool.remove(0);
+        }
+        pool.push(op);
     }
 
     /// Attempt to merge `op` and classify the outcome. The classification
@@ -703,6 +716,44 @@ mod tests {
     }
 
     #[test]
+    fn orphan_pool_caps_at_limit_and_evicts_oldest() {
+        // Hostile-flood safety: a peer that gossips many ops referencing a
+        // never-seen ancestor cannot grow our memory without bound. When the
+        // pool is full, the oldest op is evicted (newer ops are more likely
+        // to resolve once ancestors arrive).
+        let dir = TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        // Push CAP+3 distinct orphans all referencing a parent not in the DAG.
+        let mut first_ids: Vec<OpId> = Vec::new();
+        for i in 0..(ORPHAN_POOL_CAP + 3) {
+            let (orphan, _) = GroupOp::new_unsigned(
+                vec![[0xFF; 32]],
+                FOUNDER,
+                1_700_000_000 + i as u64,
+                GroupAction::Leave,
+            );
+            if i < 3 {
+                first_ids.push(orphan.id);
+            }
+            let (_p, _a) = mgr.merge_op_with_orphans(GROUP_ID_A, orphan);
+        }
+
+        let pool = mgr.orphan_ops.get(&GROUP_ID_A).unwrap();
+        assert_eq!(
+            pool.len(),
+            ORPHAN_POOL_CAP,
+            "pool must be capped at ORPHAN_POOL_CAP"
+        );
+        for id in first_ids {
+            assert!(
+                !pool.iter().any(|o| o.id == id),
+                "oldest entries must be evicted first"
+            );
+        }
+    }
+
+    #[test]
     fn merge_op_with_orphans_does_not_reapply_duplicates() {
         // A duplicate must not appear in `applied`, so the caller doesn't
         // re-emit group_state_changed / group_invite_received events.
@@ -841,6 +892,12 @@ mod tests {
         ));
         assert!(matches!(
             classify_merge_error("resolve failed: MultipleGenesis".into()),
+            MergeOutcome::Rejected(_)
+        ));
+        // InvalidGenesis is structurally broken — no amount of retrying or
+        // incoming ops can fix it, so it must be dropped, not orphan-buffered.
+        assert!(matches!(
+            classify_merge_error("resolve failed: InvalidGenesis".into()),
             MergeOutcome::Rejected(_)
         ));
     }

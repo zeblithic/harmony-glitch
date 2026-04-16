@@ -1796,6 +1796,12 @@ fn group_update_info(
         None => None,
     };
 
+    // Reject fully empty updates before we persist a no-op op to the log
+    // and broadcast it to every peer.
+    if name.is_none() && group_mode.is_none() {
+        return Err("At least one of name or mode must be provided".to_string());
+    }
+
     let net = app.state::<NetworkWrapper>();
     let net_state = net.0.lock().map_err(|e| e.to_string())?;
     let our_address = net_state.our_address_hash();
