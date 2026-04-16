@@ -1642,14 +1642,30 @@ fn handle_social_message(
             display_name,
             ..
         } => {
+            let now = now_secs(app);
+            // Self-confirmation: leader confirmed our join request.
+            if member == our_address && state.social.party.pending_join.is_some() {
+                let pi = app.state::<PlayerIdentityWrapper>();
+                let our_name = pi.display_name.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                if state.social.party.confirm_join(our_address, our_name, now).is_ok() {
+                    let _ = app.emit(
+                        "party_joined",
+                        serde_json::json!({
+                            "leaderHash": hex::encode(authenticated_sender),
+                        }),
+                    );
+                }
+                return;
+            }
+            // Normal path: another member joined our existing party.
             if let Some(ref mut party) = state.social.party.party {
                 if !party.is_leader(&authenticated_sender) {
-                    return; // only leader broadcasts join notifications
+                    return;
                 }
                 if party.add_member(social::party::PartyMember {
                     address_hash: member,
                     display_name: display_name.clone(),
-                    joined_at: now_secs(app),
+                    joined_at: now,
                 }).is_ok() {
                     let _ = app.emit(
                         "party_member_joined",
