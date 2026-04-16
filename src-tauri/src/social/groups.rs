@@ -320,54 +320,6 @@ impl GroupManager {
         Ok(self.states.get(&group_id).unwrap())
     }
 
-    /// Merge multiple ops at once (e.g. received from a sync peer).
-    ///
-    /// All ops are deduped before appending, then the DAG is re-resolved once.
-    pub fn merge_ops(
-        &mut self,
-        group_id: GroupId,
-        ops: Vec<GroupOp>,
-    ) -> Result<&GroupState, String> {
-        let log = self.op_logs.entry(group_id).or_default();
-        let original_len = log.len();
-        let mut seen: std::collections::HashSet<OpId> =
-            log.iter().map(|o| o.id).collect();
-        let mut added = false;
-        for op in ops {
-            if seen.insert(op.id) {
-                log.push(op);
-                added = true;
-            }
-        }
-
-        if !added {
-            return self
-                .states
-                .get(&group_id)
-                .ok_or_else(|| "no new ops and no cached state".to_string());
-        }
-
-        let state = match harmony_groups::resolve(self.op_logs[&group_id].as_slice()) {
-            Ok(s) => s,
-            Err(e) => {
-                if let Some(log) = self.op_logs.get_mut(&group_id) {
-                    log.truncate(original_len);
-                }
-                return Err(format!("resolve failed: {e:?}"));
-            }
-        };
-
-        if let Err(e) = self.persist_group(group_id) {
-            if let Some(log) = self.op_logs.get_mut(&group_id) {
-                log.truncate(original_len);
-            }
-            return Err(e);
-        }
-        self.states.insert(group_id, state);
-
-        Ok(self.states.get(&group_id).unwrap())
-    }
-
     /// Merge a single op, buffering in the orphan pool on failure and retrying
     /// the pool on every successful merge.
     ///
@@ -571,11 +523,6 @@ impl GroupManager {
             .collect()
     }
 
-    /// Return all known group IDs.
-    pub fn known_group_ids(&self) -> Vec<GroupId> {
-        self.op_logs.keys().copied().collect()
-    }
-
     /// Return the current DAG head op IDs (ops that are not a parent of any other op).
     pub fn head_ops(&self, group_id: GroupId) -> Vec<OpId> {
         let ops = match self.op_logs.get(&group_id) {
@@ -594,17 +541,6 @@ impl GroupManager {
             .filter(|o| !referenced.contains(&o.id))
             .map(|o| o.id)
             .collect()
-    }
-
-    /// Return op IDs that the remote peer is missing, based on their reported tips.
-    pub fn ops_to_send(&self, group_id: GroupId, remote_tips: &[OpId]) -> Vec<GroupOp> {
-        let ops = match self.op_logs.get(&group_id) {
-            Some(v) => v,
-            None => return vec![],
-        };
-        let ids_to_send = harmony_groups::ops_to_send(ops, remote_tips);
-        let id_set: std::collections::HashSet<OpId> = ids_to_send.into_iter().collect();
-        ops.iter().filter(|o| id_set.contains(&o.id)).cloned().collect()
     }
 }
 

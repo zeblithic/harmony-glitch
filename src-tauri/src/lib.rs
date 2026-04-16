@@ -1357,36 +1357,34 @@ fn group_invite(group_id_hex: String, peer_hash: String, app: AppHandle) -> Resu
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    // Validate author is Officer or Founder.
-    match state.role_of(&our_address) {
-        Some(harmony_groups::Role::Founder) | Some(harmony_groups::Role::Officer) => {}
-        _ => return Err("Only Officers and Founders can invite".to_string()),
-    }
+        // Validate author is Officer or Founder.
+        match state.role_of(&our_address) {
+            Some(harmony_groups::Role::Founder) | Some(harmony_groups::Role::Officer) => {}
+            _ => return Err("Only Officers and Founders can invite".to_string()),
+        }
 
-    // Target must not already be a member.
-    if state.is_member(&peer_bytes) {
-        return Err("Player is already a member".to_string());
-    }
+        // Target must not already be a member.
+        if state.is_member(&peer_bytes) {
+            return Err("Player is already a member".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Invite { invitee: peer_bytes },
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Invite { invitee: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
@@ -1410,41 +1408,39 @@ fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let (op, group_name) = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    // Prefer the ephemeral pending_invites map (fast path with cached
-    // display name), but fall back to the persisted op log after restart.
-    let (invite_op, group_name) = match groups.pending_invites.get(&group_id).cloned() {
-        Some(p) => (p.invite_op, p.group_name),
-        None => {
-            let invite_op = groups
-                .find_outstanding_invite(group_id, our_address)
-                .ok_or_else(|| "No pending invite for this group".to_string())?;
-            let gname = groups
-                .get_state(group_id)
-                .map(|s| s.name.clone())
-                .unwrap_or_default();
-            (invite_op, gname)
-        }
+        // Prefer the ephemeral pending_invites map (fast path with cached
+        // display name), but fall back to the persisted op log after restart.
+        let (invite_op, group_name) = match groups.pending_invites.get(&group_id).cloned() {
+            Some(p) => (p.invite_op, p.group_name),
+            None => {
+                let invite_op = groups
+                    .find_outstanding_invite(group_id, our_address)
+                    .ok_or_else(|| "No pending invite for this group".to_string())?;
+                let gname = groups
+                    .get_state(group_id)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default();
+                (invite_op, gname)
+            }
+        };
+
+        groups.merge_op(group_id, invite_op.clone())?;
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Accept {
+                invite_op: invite_op.id,
+            },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        groups.pending_invites.remove(&group_id);
+        (op, group_name)
     };
-
-    groups.merge_op(group_id, invite_op.clone())?;
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Accept {
-            invite_op: invite_op.id,
-        },
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    groups.pending_invites.remove(&group_id);
-    drop(groups);
 
     publish_group_op(&app, group_id, op);
 
@@ -1488,32 +1484,30 @@ fn group_join(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    if state.mode != harmony_groups::GroupMode::Open {
-        return Err("Group is invite-only".to_string());
-    }
-    if state.is_member(&our_address) {
-        return Err("Already a member".to_string());
-    }
+        if state.mode != harmony_groups::GroupMode::Open {
+            return Err("Group is invite-only".to_string());
+        }
+        if state.is_member(&our_address) {
+            return Err("Already a member".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Join,
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Join,
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
@@ -1536,29 +1530,27 @@ fn group_leave(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    if !state.is_member(&our_address) {
-        return Err("Not a member of this group".to_string());
-    }
+        if !state.is_member(&our_address) {
+            return Err("Not a member of this group".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Leave,
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Leave,
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
@@ -1589,36 +1581,34 @@ fn group_kick(
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    let our_role = state
-        .role_of(&our_address)
-        .ok_or_else(|| "Not a member of this group".to_string())?;
-    let target_role = state
-        .role_of(&peer_bytes)
-        .ok_or_else(|| "Target is not a member".to_string())?;
+        let our_role = state
+            .role_of(&our_address)
+            .ok_or_else(|| "Not a member of this group".to_string())?;
+        let target_role = state
+            .role_of(&peer_bytes)
+            .ok_or_else(|| "Target is not a member".to_string())?;
 
-    if !our_role.outranks(target_role) {
-        return Err("Insufficient rank to kick this member".to_string());
-    }
+        if !our_role.outranks(target_role) {
+            return Err("Insufficient rank to kick this member".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Kick { target: peer_bytes },
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Kick { target: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
@@ -1650,32 +1640,30 @@ fn group_promote(
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
-        return Err("Only the Founder can promote members".to_string());
-    }
-    if !state.is_member(&peer_bytes) {
-        return Err("Target is not a member".to_string());
-    }
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can promote members".to_string());
+        }
+        if !state.is_member(&peer_bytes) {
+            return Err("Target is not a member".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Promote { target: peer_bytes },
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Promote { target: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
@@ -1707,32 +1695,30 @@ fn group_demote(
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
-        return Err("Only the Founder can demote members".to_string());
-    }
-    if state.role_of(&peer_bytes) != Some(harmony_groups::Role::Officer) {
-        return Err("Can only demote Officers".to_string());
-    }
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can demote members".to_string());
+        }
+        if state.role_of(&peer_bytes) != Some(harmony_groups::Role::Officer) {
+            return Err("Can only demote Officers".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Demote { target: peer_bytes },
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Demote { target: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
@@ -1756,29 +1742,27 @@ fn group_dissolve(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
-        return Err("Only the Founder can dissolve the group".to_string());
-    }
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can dissolve the group".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::Dissolve,
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Dissolve,
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
@@ -1818,32 +1802,30 @@ fn group_update_info(
     drop(net_state);
 
     let gm = app.state::<GroupManagerWrapper>();
-    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let state = groups
-        .get_state(group_id)
-        .ok_or_else(|| "Group not found".to_string())?;
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
 
-    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
-        return Err("Only the Founder can update group info".to_string());
-    }
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can update group info".to_string());
+        }
 
-    let parents = groups.head_ops(group_id);
-    drop(groups);
-
-    let (op, _) = harmony_groups::GroupOp::new_unsigned(
-        parents,
-        our_address,
-        group_op_timestamp(),
-        harmony_groups::GroupAction::UpdateInfo {
-            name: name.clone(),
-            mode: group_mode,
-        },
-    );
-
-    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
-    groups.merge_op(group_id, op.clone())?;
-    drop(groups);
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::UpdateInfo {
+                name: name.clone(),
+                mode: group_mode,
+            },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
 
     publish_group_op(&app, group_id, op);
 
