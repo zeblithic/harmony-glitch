@@ -44,6 +44,7 @@ harmony-crypto = { path = "../../harmony/crates/harmony-crypto" }
 harmony-identity = { path = "../../harmony/crates/harmony-identity" }
 harmony-reticulum = { path = "../../harmony/crates/harmony-reticulum" }
 harmony-zenoh = { path = "../../harmony/crates/harmony-zenoh" }
+harmony-groups = { path = "../../harmony/crates/harmony-groups" }
 harmony-content = { path = "../../harmony/crates/harmony-content", optional = true }
 socket2 = { version = "0.5", features = ["all"] }
 blake3 = "1"

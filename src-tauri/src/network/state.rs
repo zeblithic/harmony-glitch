@@ -101,6 +101,11 @@ pub enum NetworkAction {
         sender: [u8; 16],
         message: crate::social::SocialMessage,
     },
+    /// A group op arrived from a remote peer.
+    GroupOpReceived {
+        sender: [u8; 16],
+        op: harmony_groups::GroupOp,
+    },
 }
 
 /// Tracks a single peer's connection lifecycle.
@@ -2035,6 +2040,12 @@ impl NetworkState {
                                 out.push(NetworkAction::SocialReceived {
                                     sender: *addr,
                                     message: social_msg,
+                                });
+                            }
+                            NetMessage::GroupOp(group_op) => {
+                                out.push(NetworkAction::GroupOpReceived {
+                                    sender: *addr,
+                                    op: group_op,
                                 });
                             }
                         }

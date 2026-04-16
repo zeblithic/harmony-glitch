@@ -1,4 +1,5 @@
 pub mod buddy;
+pub mod groups;
 pub mod party;
 pub mod types;
 

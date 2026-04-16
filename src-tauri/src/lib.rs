@@ -1365,6 +1365,9 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             NetworkAction::SocialReceived { sender, message } => {
                 handle_social_message(app, sender, message);
             }
+            NetworkAction::GroupOpReceived { .. } => {
+                // Handled by GroupManager in Task 8.
+            }
         }
     }
 }

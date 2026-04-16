@@ -64,6 +64,7 @@ pub enum NetMessage {
     Vouch(crate::trust::epoch::VouchMessage),
     Emote(crate::emote::EmoteMessage),
     Social(crate::social::SocialMessage),
+    GroupOp(harmony_groups::GroupOp),
 }
 
 #[cfg(test)]
@@ -349,5 +350,31 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let restored: ChatMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.channel, ChatChannel::Party);
+    }
+
+    #[test]
+    fn group_op_round_trip() {
+        use harmony_groups::{GroupAction, GroupMode, GroupOp};
+        let (op, _) = GroupOp::new_unsigned(
+            vec![],
+            [0x01; 16],
+            1_700_000_000,
+            GroupAction::Create {
+                group_id: [0xAA; 16],
+                name: "Test Group".into(),
+                mode: GroupMode::InviteOnly,
+            },
+        );
+        let msg = NetMessage::GroupOp(op.clone());
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
+        match decoded {
+            NetMessage::GroupOp(decoded_op) => {
+                assert_eq!(decoded_op.id, op.id);
+                assert_eq!(decoded_op.author, op.author);
+                assert_eq!(decoded_op.timestamp, op.timestamp);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 }
