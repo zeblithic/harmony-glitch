@@ -204,59 +204,6 @@ impl PartyState {
         self.party = Some(ActiveParty::new(leader_hash, leader_name, now));
     }
 
-    /// Accept the pending invite (if it is still within the 90-second window).
-    ///
-    /// On success the player joins the party and the pending invite is cleared.
-    /// Returns `Err` if there is no pending invite, it has expired, or it is
-    /// already accepted.
-    pub fn accept_invite(
-        &mut self,
-        self_hash: [u8; 16],
-        self_name: String,
-        now: f64,
-    ) -> Result<(), &'static str> {
-        let invite = self.pending_invite.as_ref().ok_or("no pending invite")?;
-        if now - invite.received_at > PARTY_INVITE_TIMEOUT {
-            self.pending_invite = None;
-            return Err("invite expired");
-        }
-        let leader_hash = invite.leader;
-        let leader_name = invite.leader_name.clone();
-        let members = invite.members.clone();
-
-        // Build the party from the invite data.
-        let created_at = invite.received_at;
-        self.pending_invite = None;
-
-        let mut party = ActiveParty {
-            leader: leader_hash,
-            members: vec![PartyMember {
-                address_hash: leader_hash,
-                display_name: leader_name,
-                joined_at: created_at,
-            }],
-            created_at,
-        };
-        // Add existing members (best-effort — no joined_at info, use created_at).
-        for &addr in &members {
-            if addr != leader_hash && addr != self_hash {
-                let _ = party.add_member(PartyMember {
-                    address_hash: addr,
-                    display_name: String::new(),
-                    joined_at: created_at,
-                });
-            }
-        }
-        // Add self — propagate error (e.g. party full).
-        party.add_member(PartyMember {
-            address_hash: self_hash,
-            display_name: self_name,
-            joined_at: now,
-        })?;
-        self.party = Some(party);
-        Ok(())
-    }
-
     /// Decline the pending invite and clear it.
     pub fn decline_invite(&mut self) {
         self.pending_invite = None;
@@ -283,8 +230,7 @@ impl PartyState {
 
     /// Commit the deferred join after receiving the leader's confirmation.
     ///
-    /// Builds the `ActiveParty` from the saved `PendingJoin` data
-    /// (same logic as `accept_invite` but sourced from `pending_join`).
+    /// Builds the `ActiveParty` from the saved `PendingJoin` data.
     pub fn confirm_join(
         &mut self,
         self_hash: [u8; 16],
@@ -542,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn accept_invite_within_timeout() {
+    fn two_phase_join_within_timeout() {
         let mut s = PartyState::new();
         s.set_pending_invite(PendingPartyInvite {
             leader: addr(0x01),
@@ -550,50 +496,19 @@ mod tests {
             members: vec![],
             received_at: 100.0,
         });
-        let result = s.accept_invite(addr(0x02), "Me".into(), 150.0);
+        s.begin_join(150.0).unwrap();
+        let result = s.confirm_join(addr(0x02), "Me".into(), 151.0);
         assert!(result.is_ok());
         assert!(s.in_party());
         assert!(s.pending_invite.is_none());
+        assert!(s.pending_join.is_none());
     }
 
     #[test]
-    fn accept_invite_expired_returns_err() {
+    fn two_phase_join_no_invite_returns_err() {
         let mut s = PartyState::new();
-        s.set_pending_invite(PendingPartyInvite {
-            leader: addr(0x01),
-            leader_name: "Leader".into(),
-            members: vec![],
-            received_at: 0.0,
-        });
-        let result = s.accept_invite(addr(0x02), "Me".into(), 91.0);
+        let result = s.begin_join(0.0);
         assert!(result.is_err());
-        assert!(!s.in_party());
-    }
-
-    #[test]
-    fn accept_invite_no_invite_returns_err() {
-        let mut s = PartyState::new();
-        let result = s.accept_invite(addr(0x01), "Me".into(), 0.0);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn accept_invite_returns_err_when_party_full() {
-        let mut s = PartyState::new();
-        // Invite from leader with 4 existing members (leader + 3 others = 4).
-        // Adding self would make 5, but if there are already 4 others + leader = 5,
-        // self would be the 6th → party full.
-        let existing_members: Vec<[u8; 16]> = (2u8..=5).map(|i| addr(i)).collect();
-        s.set_pending_invite(PendingPartyInvite {
-            leader: addr(0x01),
-            leader_name: "Leader".into(),
-            members: existing_members,
-            received_at: 100.0,
-        });
-        // leader (0x01) + members 0x02..0x05 = 5 members, adding self (0x06) should fail
-        let result = s.accept_invite(addr(0x06), "Me".into(), 150.0);
-        assert!(result.is_err(), "should fail when party is full");
-        assert!(!s.in_party(), "should not join party when add_member fails");
     }
 
     #[test]
