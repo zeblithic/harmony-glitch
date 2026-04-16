@@ -1867,6 +1867,33 @@ fn get_my_groups(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     Ok(result)
 }
 
+/// Return all currently-pending group invites for the local user.
+///
+/// The frontend calls this on mount to recover invites that were rebuilt
+/// from the persisted op log during `setup()` — those can't be delivered
+/// via `group_invite_received` events because no listener is registered
+/// at setup time.
+#[tauri::command]
+fn get_pending_invites(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let result: Vec<serde_json::Value> = groups
+        .pending_invites
+        .iter()
+        .map(|(gid, p)| {
+            serde_json::json!({
+                "groupId": hex::encode(gid),
+                "inviterHash": hex::encode(p.inviter),
+                "opId": hex::encode(p.invite_op.id),
+                "groupName": p.group_name,
+                "inviterName": p.inviter_name,
+            })
+        })
+        .collect();
+    Ok(result)
+}
+
 /// Returns today's date as a "YYYY-MM-DD" string using the system clock.
 fn today_date_string() -> String {
     crate::date_util::today_date_string()
@@ -3990,29 +4017,13 @@ pub fn run() {
             let mut group_mgr = crate::social::groups::GroupManager::new(data_dir.clone());
 
             // Rebuild pending invites from persisted op logs so invites that
-            // arrived in a previous session survive restart.
-            let restored_invites = group_mgr.rebuild_pending_invites(our_hash, 0.0);
+            // arrived in a previous session survive restart. We do NOT emit
+            // `group_invite_received` events here — the frontend has not yet
+            // registered listeners at setup time, so events would be lost.
+            // Instead, the frontend calls `get_pending_invites` on mount to
+            // drain the rebuilt state.
+            let _ = group_mgr.rebuild_pending_invites(our_hash, 0.0);
             app.manage(GroupManagerWrapper(Mutex::new(group_mgr)));
-
-            for gid in restored_invites {
-                // Look up the just-rebuilt invite to emit the event payload.
-                let gm = app.state::<GroupManagerWrapper>();
-                let (inviter_hex, op_id_hex) = match gm.0.lock() {
-                    Ok(g) => match g.pending_invites.get(&gid) {
-                        Some(p) => (hex::encode(p.inviter), hex::encode(p.invite_op.id)),
-                        None => continue,
-                    },
-                    Err(_) => continue,
-                };
-                let _ = app.emit(
-                    "group_invite_received",
-                    serde_json::json!({
-                        "groupId": hex::encode(gid),
-                        "inviterHash": inviter_hex,
-                        "opId": op_id_hex,
-                    }),
-                );
-            }
 
             Ok(())
         })
@@ -4094,6 +4105,7 @@ pub fn run() {
             group_update_info,
             get_group_state,
             get_my_groups,
+            get_pending_invites,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

@@ -329,6 +329,22 @@ export async function groupUpdateInfo(groupIdHex: string, name?: string, mode?: 
 export async function getGroupState(groupIdHex: string): Promise<GroupStateResult> { return invoke<GroupStateResult>('get_group_state', { groupIdHex }); }
 export async function getMyGroups(): Promise<GroupStateResult[]> { return invoke<GroupStateResult[]>('get_my_groups'); }
 
+export interface PendingGroupInvite {
+  groupId: string;
+  inviterHash: string;
+  opId: string;
+  groupName: string;
+  inviterName: string;
+}
+
+/** Returns invites rebuilt from the persisted op log on startup.
+ *  The frontend should call this on mount (after registering the
+ *  `group_invite_received` listener via `onGroupEvent`) because
+ *  events emitted during backend `setup()` predate any listener. */
+export async function getPendingInvites(): Promise<PendingGroupInvite[]> {
+  return invoke<PendingGroupInvite[]>('get_pending_invites');
+}
+
 // ── Group event listeners ─────────────────────────────────────────────
 
 export type GroupEvent =
