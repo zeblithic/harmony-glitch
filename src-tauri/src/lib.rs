@@ -1992,13 +1992,13 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             NetworkAction::SocialReceived { sender, message } => {
                 handle_social_message(app, sender, message);
             }
-            NetworkAction::GroupOpReceived { sender, group_id, op } => {
+            NetworkAction::GroupOpReceived { sender: _, group_id, op } => {
+                // sender is validated against op.author at the network layer;
+                // the inviter's identity is carried by op.author, so we use
+                // that below for invite-received events.
                 let net = app.state::<NetworkWrapper>();
-                let (our_addr, sender_name) = match net.0.lock() {
-                    Ok(ns) => (
-                        ns.our_address_hash(),
-                        ns.peer_display_name(&sender).unwrap_or_default(),
-                    ),
+                let our_addr = match net.0.lock() {
+                    Ok(ns) => ns.our_address_hash(),
                     Err(_) => continue,
                 };
 
@@ -2008,44 +2008,100 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     Err(_) => continue,
                 };
 
-                if groups.merge_op(group_id, op.clone()).is_ok() {
-                    let group_id_hex = hex::encode(group_id);
+                let (_progressed, applied_ids) =
+                    groups.merge_op_with_orphans(group_id, op.clone());
+
+                let group_id_hex = hex::encode(group_id);
+
+                if !applied_ids.is_empty() {
                     let _ = app.emit(
                         "group_state_changed",
                         serde_json::json!({ "groupId": group_id_hex }),
                     );
+                }
 
-                    if let harmony_groups::GroupAction::Invite { invitee } = &op.action {
+                // Surface invite prompts for every invite-targeting-us that
+                // became applied during this call — covers both the fast
+                // path (the incoming op was an invite for us) and the
+                // orphan path (an earlier invite for us was buffered and
+                // just unblocked by new ancestors).
+                let mut pending_to_add: Vec<(
+                    harmony_groups::OpId,
+                    harmony_groups::MemberAddr,
+                    harmony_groups::GroupOp,
+                    String,
+                )> = Vec::new();
+                for aid in &applied_ids {
+                    let applied_op = match groups.get_ops(group_id).and_then(|ops| {
+                        ops.iter().find(|o| o.id == *aid).cloned()
+                    }) {
+                        Some(o) => o,
+                        None => continue,
+                    };
+                    if let harmony_groups::GroupAction::Invite { invitee } = &applied_op.action {
                         if *invitee == our_addr {
                             let gname = groups
                                 .get_state(group_id)
                                 .map(|s| s.name.clone())
                                 .unwrap_or_default();
-
-                            groups.pending_invites.insert(
-                                group_id,
-                                crate::social::groups::PendingGroupInvite {
-                                    group_id,
-                                    inviter: sender,
-                                    inviter_name: sender_name.clone(),
-                                    group_name: gname,
-                                    invite_op: op.clone(),
-                                    received_at: now_secs(app),
-                                },
-                            );
-
-                            let _ = app.emit(
-                                "group_invite_received",
-                                serde_json::json!({
-                                    "groupId": group_id_hex,
-                                    "inviterHash": hex::encode(sender),
-                                    "opId": hex::encode(op.id),
-                                }),
-                            );
+                            pending_to_add.push((*aid, applied_op.author, applied_op, gname));
                         }
                     }
                 }
+
                 drop(groups);
+
+                if !pending_to_add.is_empty() {
+                    // Need the network lock again to look up display names.
+                    let name_lookups: Vec<(
+                        harmony_groups::OpId,
+                        harmony_groups::MemberAddr,
+                        harmony_groups::GroupOp,
+                        String,
+                        String,
+                    )> = {
+                        let ns = match net.0.lock() {
+                            Ok(ns) => ns,
+                            Err(_) => continue,
+                        };
+                        pending_to_add
+                            .into_iter()
+                            .map(|(oid, inviter, inv_op, gname)| {
+                                let inviter_name =
+                                    ns.peer_display_name(&inviter).unwrap_or_default();
+                                (oid, inviter, inv_op, gname, inviter_name)
+                            })
+                            .collect()
+                    };
+
+                    let mut groups = match gm.0.lock() {
+                        Ok(g) => g,
+                        Err(_) => continue,
+                    };
+                    for (oid, inviter, inv_op, gname, inviter_name) in name_lookups {
+                        groups.pending_invites.insert(
+                            group_id,
+                            crate::social::groups::PendingGroupInvite {
+                                group_id,
+                                inviter,
+                                inviter_name: inviter_name.clone(),
+                                group_name: gname,
+                                invite_op: inv_op,
+                                received_at: now_secs(app),
+                            },
+                        );
+
+                        let _ = app.emit(
+                            "group_invite_received",
+                            serde_json::json!({
+                                "groupId": group_id_hex,
+                                "inviterHash": hex::encode(inviter),
+                                "opId": hex::encode(oid),
+                            }),
+                        );
+                    }
+                    drop(groups);
+                }
             }
         }
     }

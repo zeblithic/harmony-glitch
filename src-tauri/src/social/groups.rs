@@ -29,6 +29,10 @@ pub struct GroupManager {
     states: BTreeMap<GroupId, GroupState>,
     /// Pending invites we have received but not yet acted on.
     pub pending_invites: BTreeMap<GroupId, PendingGroupInvite>,
+    /// Ops that failed to merge (missing ancestors) — retried on each
+    /// successful merge. In-memory only; lost on restart, which is fine
+    /// since the sender will eventually re-broadcast or sync will catch up.
+    orphan_ops: BTreeMap<GroupId, Vec<GroupOp>>,
 }
 
 impl GroupManager {
@@ -39,6 +43,7 @@ impl GroupManager {
             op_logs: BTreeMap::new(),
             states: BTreeMap::new(),
             pending_invites: BTreeMap::new(),
+            orphan_ops: BTreeMap::new(),
         };
         mgr.load_all();
         mgr
@@ -215,6 +220,74 @@ impl GroupManager {
         Ok(self.states.get(&group_id).unwrap())
     }
 
+    /// Merge a single op, buffering in the orphan pool on failure and retrying
+    /// the pool on every successful merge.
+    ///
+    /// Returns a tuple `(merged, just_applied_ids)`:
+    /// - `merged` is `true` if `op` (or a previously-orphaned op) became part
+    ///   of the resolved DAG during this call.
+    /// - `just_applied_ids` lists the `OpId`s that transitioned from orphan
+    ///   to applied during this call (so the caller can decide whether the
+    ///   supplied op itself made it in — important for invite handling).
+    pub fn merge_op_with_orphans(
+        &mut self,
+        group_id: GroupId,
+        op: GroupOp,
+    ) -> (bool, Vec<OpId>) {
+        let op_id = op.id;
+        let initial_ok = self.merge_op(group_id, op.clone()).is_ok();
+        let mut applied: Vec<OpId> = Vec::new();
+
+        if !initial_ok {
+            // Buffer for later retry. Dedup by id.
+            let pool = self.orphan_ops.entry(group_id).or_default();
+            if !pool.iter().any(|o| o.id == op_id) {
+                pool.push(op);
+            }
+        } else {
+            applied.push(op_id);
+        }
+
+        // Always retry the orphan pool — a prior orphan may now resolve thanks
+        // to ops that arrived in between, or thanks to the op we just merged.
+        let newly_applied = self.retry_orphans(group_id);
+        applied.extend(newly_applied);
+
+        (initial_ok || !applied.is_empty(), applied)
+    }
+
+    /// Retry the orphan pool for `group_id`, applying every op that now resolves.
+    /// Returns the `OpId`s that moved from orphan → applied.
+    fn retry_orphans(&mut self, group_id: GroupId) -> Vec<OpId> {
+        let mut applied: Vec<OpId> = Vec::new();
+        // Loop until a full pass makes no progress — a single orphan may
+        // unblock another.
+        loop {
+            let pool = match self.orphan_ops.get_mut(&group_id) {
+                Some(p) if !p.is_empty() => std::mem::take(p),
+                _ => break,
+            };
+            let mut still_orphaned: Vec<GroupOp> = Vec::new();
+            let mut progress = false;
+            for op in pool {
+                let oid = op.id;
+                if self.merge_op(group_id, op.clone()).is_ok() {
+                    applied.push(oid);
+                    progress = true;
+                } else {
+                    still_orphaned.push(op);
+                }
+            }
+            if !still_orphaned.is_empty() {
+                self.orphan_ops.insert(group_id, still_orphaned);
+            }
+            if !progress {
+                break;
+            }
+        }
+        applied
+    }
+
     /// Return the cached resolved state for `group_id`, if known.
     pub fn get_state(&self, group_id: GroupId) -> Option<&GroupState> {
         self.states.get(&group_id)
@@ -374,5 +447,57 @@ mod tests {
         // State should still be valid.
         let state = mgr.get_state(GROUP_ID_A).unwrap();
         assert_eq!(state.members.len(), 1);
+    }
+
+    #[test]
+    fn orphan_invite_resolves_when_create_arrives() {
+        // Simulates a late joiner: the Invite op arrives before the Create.
+        let dir = TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let create = genesis(FOUNDER, GROUP_ID_A, "LateJoin");
+        let (invite, _) = GroupOp::new_unsigned(
+            vec![create.id],
+            FOUNDER,
+            1_700_000_001,
+            GroupAction::Invite { invitee: ALICE },
+        );
+
+        // Invite arrives first — can't resolve without its parent.
+        let (progressed, applied) = mgr.merge_op_with_orphans(GROUP_ID_A, invite.clone());
+        assert!(!progressed, "invite alone should not progress");
+        assert!(applied.is_empty());
+        assert!(mgr.get_state(GROUP_ID_A).is_none());
+
+        // Create arrives — both should now apply (create directly, invite via retry).
+        let (progressed, applied) = mgr.merge_op_with_orphans(GROUP_ID_A, create.clone());
+        assert!(progressed);
+        assert!(applied.contains(&create.id));
+        assert!(applied.contains(&invite.id), "invite orphan should have been retried");
+
+        let state = mgr.get_state(GROUP_ID_A).unwrap();
+        assert!(state.is_member(&FOUNDER));
+        // Alice is invited but hasn't accepted — still not a member.
+        assert!(!state.is_member(&ALICE));
+    }
+
+    #[test]
+    fn orphan_pool_dedups_repeated_ops() {
+        let dir = TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let (orphan, _) = GroupOp::new_unsigned(
+            vec![[0xFF; 32]], // parent not in the DAG
+            FOUNDER,
+            1_700_000_001,
+            GroupAction::Leave,
+        );
+
+        // Add the same orphan twice — pool should not grow.
+        let (p1, a1) = mgr.merge_op_with_orphans(GROUP_ID_A, orphan.clone());
+        let (p2, a2) = mgr.merge_op_with_orphans(GROUP_ID_A, orphan.clone());
+        assert!(!p1 && !p2);
+        assert!(a1.is_empty() && a2.is_empty());
+        assert_eq!(mgr.orphan_ops.get(&GROUP_ID_A).map(|v| v.len()), Some(1));
     }
 }
