@@ -161,6 +161,7 @@ impl GroupManager {
         ops: Vec<GroupOp>,
     ) -> Result<&GroupState, String> {
         let log = self.op_logs.entry(group_id).or_default();
+        let original_len = log.len();
         let mut seen: std::collections::HashSet<OpId> =
             log.iter().map(|o| o.id).collect();
         let mut added = false;
@@ -178,8 +179,15 @@ impl GroupManager {
                 .ok_or_else(|| "no new ops and no cached state".to_string());
         }
 
-        let state = harmony_groups::resolve(self.op_logs[&group_id].as_slice())
-            .map_err(|e| format!("resolve failed: {e:?}"))?;
+        let state = match harmony_groups::resolve(self.op_logs[&group_id].as_slice()) {
+            Ok(s) => s,
+            Err(e) => {
+                if let Some(log) = self.op_logs.get_mut(&group_id) {
+                    log.truncate(original_len);
+                }
+                return Err(format!("resolve failed: {e:?}"));
+            }
+        };
         self.states.insert(group_id, state);
 
         self.persist_group(group_id)?;

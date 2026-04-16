@@ -1,5 +1,6 @@
 <script lang="ts">
   let nameInput: HTMLInputElement | undefined = $state();
+  let dialogEl: HTMLDialogElement | undefined = $state();
 
   let {
     visible = false,
@@ -18,7 +19,10 @@
     if (visible) {
       name = '';
       mode = 'invite_only';
+      dialogEl?.showModal();
       nameInput?.focus();
+    } else {
+      dialogEl?.close();
     }
   });
 
@@ -39,8 +43,8 @@
 
 {#if visible}
   <dialog
+    bind:this={dialogEl}
     class="dialog-backdrop"
-    open
     aria-label="Create group"
     onkeydown={onKeydown}
   >
@@ -90,19 +94,20 @@
 
 <style>
   .dialog-backdrop {
-    position: fixed;
-    inset: 0;
     border: none;
     padding: 0;
     max-width: none;
     max-height: none;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.55);
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 300;
+  }
+
+  .dialog-backdrop::backdrop {
+    background: rgba(0, 0, 0, 0.55);
   }
 
   .dialog-box {
