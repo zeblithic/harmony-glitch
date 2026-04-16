@@ -81,6 +81,9 @@ struct NetworkWrapper(Mutex<NetworkState>);
 /// Shared UDP transport — owned by the game loop, used for sends.
 struct TransportWrapper(Mutex<UdpTransport>);
 
+/// Shared group state — manages persistent group DAGs.
+struct GroupManagerWrapper(Mutex<crate::social::groups::GroupManager>);
+
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct StreetListEntry {
@@ -1237,6 +1240,625 @@ fn get_party_state(app: AppHandle) -> Result<serde_json::Value, String> {
     }
 }
 
+// ── Group helpers ────────────────────────────────────────────────────────
+
+fn parse_group_id(hex_str: &str) -> Result<[u8; 16], String> {
+    let bytes = hex::decode(hex_str).map_err(|_| "Invalid group ID hex".to_string())?;
+    let arr: [u8; 16] = bytes
+        .try_into()
+        .map_err(|_| "Group ID must be 16 bytes".to_string())?;
+    Ok(arr)
+}
+
+fn publish_group_op(app: &AppHandle, op: harmony_groups::GroupOp) {
+    let net = app.state::<NetworkWrapper>();
+    let actions = {
+        let mut net_state = match net.0.lock() {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        net_state.publish_group_op(op, &mut rand::rngs::OsRng)
+    };
+    execute_network_actions(app, actions);
+}
+
+fn serialize_group_state(state: &harmony_groups::GroupState) -> serde_json::Value {
+    let founder_addr = state
+        .members
+        .iter()
+        .find(|(_, e)| e.role == harmony_groups::Role::Founder)
+        .map(|(a, _)| *a);
+    let members: Vec<serde_json::Value> = state
+        .members
+        .iter()
+        .map(|(addr, entry)| {
+            serde_json::json!({
+                "addressHash": hex::encode(addr),
+                "role": format!("{:?}", entry.role),
+                "joinedAt": entry.joined_at,
+                "isFounder": Some(*addr) == founder_addr,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "groupId": hex::encode(state.group_id),
+        "name": state.name,
+        "mode": if state.mode == harmony_groups::GroupMode::Open { "open" } else { "invite_only" },
+        "founderHash": founder_addr.map(|a| hex::encode(a)),
+        "members": members,
+        "memberCount": state.members.len(),
+        "dissolved": state.dissolved,
+    })
+}
+
+// ── Group IPC commands ──────────────────────────────────────────────────
+
+#[tauri::command]
+fn group_create(name: String, mode: String, app: AppHandle) -> Result<String, String> {
+    let group_mode = match mode.as_str() {
+        "open" => harmony_groups::GroupMode::Open,
+        "invite_only" => harmony_groups::GroupMode::InviteOnly,
+        _ => return Err("Invalid mode: must be 'open' or 'invite_only'".to_string()),
+    };
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let mut group_id = [0u8; 16];
+    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut group_id);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        vec![],
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Create {
+            group_id,
+            name: name.clone(),
+            mode: group_mode,
+        },
+    );
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let hex_id = hex::encode(group_id);
+    let _ = app.emit(
+        "group_created",
+        serde_json::json!({
+            "groupId": hex_id,
+            "name": name,
+        }),
+    );
+    Ok(hex_id)
+}
+
+#[tauri::command]
+fn group_invite(group_id_hex: String, peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    // Validate author is Officer or Founder.
+    match state.role_of(&our_address) {
+        Some(harmony_groups::Role::Founder) | Some(harmony_groups::Role::Officer) => {}
+        _ => return Err("Only Officers and Founders can invite".to_string()),
+    }
+
+    // Target must not already be a member.
+    if state.is_member(&peer_bytes) {
+        return Err("Player is already a member".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Invite { invitee: peer_bytes },
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_invite_sent",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "inviteeHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let pending = groups
+        .pending_invites
+        .remove(&group_id)
+        .ok_or_else(|| "No pending invite for this group".to_string())?;
+
+    // Merge the invite op first so the Accept can reference it.
+    groups.merge_op(group_id, pending.invite_op.clone())?;
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Accept {
+            invite_op: pending.invite_op.id,
+        },
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_joined",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "groupName": pending.group_name,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_decline(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    groups
+        .pending_invites
+        .remove(&group_id)
+        .ok_or_else(|| "No pending invite for this group".to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn group_join(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    if state.mode != harmony_groups::GroupMode::Open {
+        return Err("Group is invite-only".to_string());
+    }
+    if state.is_member(&our_address) {
+        return Err("Already a member".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Join,
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_joined",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_leave(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    if !state.is_member(&our_address) {
+        return Err("Not a member of this group".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Leave,
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_left",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_kick(
+    group_id_hex: String,
+    peer_hash: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    let our_role = state
+        .role_of(&our_address)
+        .ok_or_else(|| "Not a member of this group".to_string())?;
+    let target_role = state
+        .role_of(&peer_bytes)
+        .ok_or_else(|| "Target is not a member".to_string())?;
+
+    if !our_role.outranks(target_role) {
+        return Err("Insufficient rank to kick this member".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Kick { target: peer_bytes },
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_member_kicked",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "kickedHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_promote(
+    group_id_hex: String,
+    peer_hash: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+        return Err("Only the Founder can promote members".to_string());
+    }
+    if !state.is_member(&peer_bytes) {
+        return Err("Target is not a member".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Promote { target: peer_bytes },
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_member_promoted",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "promotedHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_demote(
+    group_id_hex: String,
+    peer_hash: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+        return Err("Only the Founder can demote members".to_string());
+    }
+    if state.role_of(&peer_bytes) != Some(harmony_groups::Role::Officer) {
+        return Err("Can only demote Officers".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Demote { target: peer_bytes },
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_member_demoted",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "demotedHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_dissolve(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+        return Err("Only the Founder can dissolve the group".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::Dissolve,
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_dissolved",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_update_info(
+    group_id_hex: String,
+    name: Option<String>,
+    mode: Option<String>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let group_mode = match mode.as_deref() {
+        Some("open") => Some(harmony_groups::GroupMode::Open),
+        Some("invite_only") => Some(harmony_groups::GroupMode::InviteOnly),
+        Some(_) => return Err("Invalid mode: must be 'open' or 'invite_only'".to_string()),
+        None => None,
+    };
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+        return Err("Only the Founder can update group info".to_string());
+    }
+
+    let parents = groups.head_ops(group_id);
+    drop(groups);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        parents,
+        our_address,
+        now_secs(&app) as u64,
+        harmony_groups::GroupAction::UpdateInfo {
+            name: name.clone(),
+            mode: group_mode,
+        },
+    );
+
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, op);
+
+    let _ = app.emit(
+        "group_info_updated",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn get_group_state(group_id_hex: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    Ok(serialize_group_state(state))
+}
+
+#[tauri::command]
+fn get_my_groups(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let my = groups.my_groups(our_address);
+    let result: Vec<serde_json::Value> = my.iter().map(|s| serialize_group_state(s)).collect();
+    Ok(result)
+}
+
 /// Returns today's date as a "YYYY-MM-DD" string using the system clock.
 fn today_date_string() -> String {
     crate::date_util::today_date_string()
@@ -1365,8 +1987,72 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             NetworkAction::SocialReceived { sender, message } => {
                 handle_social_message(app, sender, message);
             }
-            NetworkAction::GroupOpReceived { .. } => {
-                // Handled by GroupManager in Task 8.
+            NetworkAction::GroupOpReceived { sender, op } => {
+                // Get our address first so we can check invite targeting.
+                let net = app.state::<NetworkWrapper>();
+                let our_addr = match net.0.lock() {
+                    Ok(ns) => ns.our_address_hash(),
+                    Err(_) => continue,
+                };
+
+                let gm = app.state::<GroupManagerWrapper>();
+                let mut groups = match gm.0.lock() {
+                    Ok(g) => g,
+                    Err(_) => continue,
+                };
+
+                // Try to merge the op into every known group (we don't
+                // know which group it belongs to from the network layer).
+                for gid in groups.known_group_ids() {
+                    let _ = groups.merge_op(gid, op.clone());
+                }
+
+                // Handle invite targeting us.
+                if let harmony_groups::GroupAction::Invite { invitee } = &op.action {
+                    if *invitee == our_addr {
+                        // Determine group name from resolved state
+                        // by checking which group contains this op.
+                        let group_name = groups
+                            .known_group_ids()
+                            .iter()
+                            .find_map(|gid| {
+                                groups.get_state(*gid).and_then(|s| {
+                                    if groups
+                                        .get_ops(*gid)
+                                        .map(|ops| ops.iter().any(|o| o.id == op.id))
+                                        .unwrap_or(false)
+                                    {
+                                        Some((s.group_id, s.name.clone()))
+                                    } else {
+                                        None
+                                    }
+                                })
+                            });
+
+                        if let Some((group_id, gname)) = group_name {
+                            groups.pending_invites.insert(
+                                group_id,
+                                crate::social::groups::PendingGroupInvite {
+                                    group_id,
+                                    inviter: sender,
+                                    inviter_name: String::new(),
+                                    group_name: gname,
+                                    invite_op: op.clone(),
+                                    received_at: now_secs(app),
+                                },
+                            );
+                        }
+
+                        let _ = app.emit(
+                            "group_invite_received",
+                            serde_json::json!({
+                                "inviterHash": hex::encode(sender),
+                                "opId": hex::encode(op.id),
+                            }),
+                        );
+                    }
+                }
+                drop(groups);
             }
         }
     }
@@ -3208,6 +3894,11 @@ pub fn run() {
                 .map_err(|e| std::io::Error::other(format!("UDP bind failed: {e}")))?;
             app.manage(TransportWrapper(Mutex::new(transport)));
 
+            let _ = std::fs::create_dir_all(data_dir.join("groups"));
+            app.manage(GroupManagerWrapper(Mutex::new(
+                crate::social::groups::GroupManager::new(data_dir.clone()),
+            )));
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -3275,6 +3966,19 @@ pub fn run() {
             party_leave,
             party_kick,
             get_party_state,
+            group_create,
+            group_invite,
+            group_accept,
+            group_decline,
+            group_join,
+            group_leave,
+            group_kick,
+            group_promote,
+            group_demote,
+            group_dissolve,
+            group_update_info,
+            get_group_state,
+            get_my_groups,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

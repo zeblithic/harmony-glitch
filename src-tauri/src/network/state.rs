@@ -572,6 +572,19 @@ impl NetworkState {
         }
     }
 
+    /// Broadcast a group op to all peers on the street.
+    pub fn publish_group_op(
+        &mut self,
+        op: harmony_groups::GroupOp,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let net_msg = NetMessage::GroupOp(op);
+        match serde_json::to_vec(&net_msg) {
+            Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
+            Err(_) => Vec::new(),
+        }
+    }
+
     /// Change the street we're on.
     ///
     /// Clears the remote player registry, tears down existing peer
