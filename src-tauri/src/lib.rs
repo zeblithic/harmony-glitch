@@ -1993,9 +1993,13 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                 handle_social_message(app, sender, message);
             }
             NetworkAction::GroupOpReceived { sender: _, group_id, op } => {
-                // sender is validated against op.author at the network layer;
-                // the inviter's identity is carried by op.author, so we use
-                // that below for invite-received events.
+                // `sender` is whoever relayed this op's packet — which may be
+                // the author or any peer that's gossiping it. We don't use it
+                // here because the author's identity lives in `op.author`, and
+                // that's what downstream consumers need (e.g. the inviter for
+                // a PendingGroupInvite). Authenticity of `op.author` depends on
+                // signature verification — see the `resolve()` doc in
+                // harmony-groups.
                 let net = app.state::<NetworkWrapper>();
                 let our_addr = match net.0.lock() {
                     Ok(ns) => ns.our_address_hash(),

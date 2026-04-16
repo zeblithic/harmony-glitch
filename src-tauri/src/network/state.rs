@@ -2058,9 +2058,17 @@ impl NetworkState {
                                 });
                             }
                             NetMessage::GroupOp { group_id, op: group_op } => {
-                                if group_op.author != *addr {
-                                    continue;
-                                }
+                                // Group ops are gossip artifacts: peers relay
+                                // ops authored by others so late joiners can
+                                // reconstruct the DAG. Unlike directed social
+                                // messages, we therefore accept ops regardless
+                                // of whether `op.author == sender`.
+                                //
+                                // Authenticity rests on cryptographic signature
+                                // verification of the op itself — see the
+                                // `resolve()` doc in the harmony-groups crate.
+                                // Signatures are not yet wired end-to-end; until
+                                // they are, forgery is possible at this layer.
                                 out.push(NetworkAction::GroupOpReceived {
                                     sender: *addr,
                                     group_id,
