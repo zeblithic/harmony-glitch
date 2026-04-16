@@ -64,7 +64,7 @@ pub enum NetMessage {
     Vouch(crate::trust::epoch::VouchMessage),
     Emote(crate::emote::EmoteMessage),
     Social(crate::social::SocialMessage),
-    GroupOp(harmony_groups::GroupOp),
+    GroupOp { group_id: [u8; 16], op: harmony_groups::GroupOp },
 }
 
 #[cfg(test)]
@@ -365,11 +365,12 @@ mod tests {
                 mode: GroupMode::InviteOnly,
             },
         );
-        let msg = NetMessage::GroupOp(op.clone());
+        let msg = NetMessage::GroupOp { group_id: [0xAA; 16], op: op.clone() };
         let bytes = serde_json::to_vec(&msg).unwrap();
         let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
         match decoded {
-            NetMessage::GroupOp(decoded_op) => {
+            NetMessage::GroupOp { group_id, op: decoded_op } => {
+                assert_eq!(group_id, [0xAA; 16]);
                 assert_eq!(decoded_op.id, op.id);
                 assert_eq!(decoded_op.author, op.author);
                 assert_eq!(decoded_op.timestamp, op.timestamp);

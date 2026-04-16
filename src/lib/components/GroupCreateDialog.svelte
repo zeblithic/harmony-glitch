@@ -29,18 +29,19 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') submit();
+    if (e.key === 'Enter' && (e.target as HTMLElement)?.tagName === 'INPUT') {
+      e.preventDefault();
+      submit();
+    }
     if (e.key === 'Escape') onCancel();
   }
 </script>
 
 {#if visible}
-  <div
+  <dialog
     class="dialog-backdrop"
-    role="dialog"
-    aria-modal="true"
+    open
     aria-label="Create group"
-    tabindex="-1"
     onkeydown={onKeydown}
   >
     <div class="dialog-box">
@@ -84,13 +85,19 @@
         >Cancel</button>
       </div>
     </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
   .dialog-backdrop {
     position: fixed;
     inset: 0;
+    border: none;
+    padding: 0;
+    max-width: none;
+    max-height: none;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.55);
     display: flex;
     align-items: center;

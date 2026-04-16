@@ -138,9 +138,13 @@ impl GroupManager {
         }
         ops.push(op);
 
-        let ops_snapshot: Vec<GroupOp> = self.op_logs[&group_id].clone();
-        let state = harmony_groups::resolve(&ops_snapshot)
-            .map_err(|e| format!("resolve failed: {e:?}"))?;
+        let state = match harmony_groups::resolve(self.op_logs[&group_id].as_slice()) {
+            Ok(s) => s,
+            Err(e) => {
+                self.op_logs.get_mut(&group_id).and_then(|v| v.pop());
+                return Err(format!("resolve failed: {e:?}"));
+            }
+        };
         self.states.insert(group_id, state);
 
         self.persist_group(group_id)?;
@@ -157,11 +161,11 @@ impl GroupManager {
         ops: Vec<GroupOp>,
     ) -> Result<&GroupState, String> {
         let log = self.op_logs.entry(group_id).or_default();
-        let existing_ids: std::collections::HashSet<OpId> =
+        let mut seen: std::collections::HashSet<OpId> =
             log.iter().map(|o| o.id).collect();
         let mut added = false;
         for op in ops {
-            if !existing_ids.contains(&op.id) {
+            if seen.insert(op.id) {
                 log.push(op);
                 added = true;
             }
@@ -174,8 +178,7 @@ impl GroupManager {
                 .ok_or_else(|| "no new ops and no cached state".to_string());
         }
 
-        let ops_snapshot: Vec<GroupOp> = self.op_logs[&group_id].clone();
-        let state = harmony_groups::resolve(&ops_snapshot)
+        let state = harmony_groups::resolve(self.op_logs[&group_id].as_slice())
             .map_err(|e| format!("resolve failed: {e:?}"))?;
         self.states.insert(group_id, state);
 

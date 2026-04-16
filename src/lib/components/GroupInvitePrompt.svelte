@@ -21,16 +21,18 @@
 </script>
 
 {#if visible}
-  <div class="group-prompt" role="alertdialog" aria-modal="true" aria-label="Group invite from {inviterName}">
+  <div class="group-prompt" role="alert" aria-label="Group invite from {inviterName}">
     <p class="group-prompt-text"><strong>{inviterName}</strong> invited you to <strong>{groupName}</strong></p>
     <div class="group-prompt-actions">
       <button
+        type="button"
         bind:this={joinBtn}
         class="group-prompt-btn accept"
         onclick={() => onAccept?.()}
         aria-label="Join {groupName}"
       >Join</button>
       <button
+        type="button"
         class="group-prompt-btn decline"
         onclick={() => onDecline?.()}
         aria-label="Decline invite to {groupName}"

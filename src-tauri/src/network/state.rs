@@ -104,6 +104,7 @@ pub enum NetworkAction {
     /// A group op arrived from a remote peer.
     GroupOpReceived {
         sender: [u8; 16],
+        group_id: [u8; 16],
         op: harmony_groups::GroupOp,
     },
 }
@@ -575,10 +576,11 @@ impl NetworkState {
     /// Broadcast a group op to all peers on the street.
     pub fn publish_group_op(
         &mut self,
+        group_id: [u8; 16],
         op: harmony_groups::GroupOp,
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
-        let net_msg = NetMessage::GroupOp(op);
+        let net_msg = NetMessage::GroupOp { group_id, op };
         match serde_json::to_vec(&net_msg) {
             Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
             Err(_) => Vec::new(),
@@ -2055,9 +2057,13 @@ impl NetworkState {
                                     message: social_msg,
                                 });
                             }
-                            NetMessage::GroupOp(group_op) => {
+                            NetMessage::GroupOp { group_id, op: group_op } => {
+                                if group_op.author != *addr {
+                                    continue;
+                                }
                                 out.push(NetworkAction::GroupOpReceived {
                                     sender: *addr,
+                                    group_id,
                                     op: group_op,
                                 });
                             }

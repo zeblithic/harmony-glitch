@@ -1250,14 +1250,14 @@ fn parse_group_id(hex_str: &str) -> Result<[u8; 16], String> {
     Ok(arr)
 }
 
-fn publish_group_op(app: &AppHandle, op: harmony_groups::GroupOp) {
+fn publish_group_op(app: &AppHandle, group_id: [u8; 16], op: harmony_groups::GroupOp) {
     let net = app.state::<NetworkWrapper>();
     let actions = {
         let mut net_state = match net.0.lock() {
             Ok(s) => s,
             Err(_) => return,
         };
-        net_state.publish_group_op(op, &mut rand::rngs::OsRng)
+        net_state.publish_group_op(group_id, op, &mut rand::rngs::OsRng)
     };
     execute_network_actions(app, actions);
 }
@@ -1274,7 +1274,11 @@ fn serialize_group_state(state: &harmony_groups::GroupState) -> serde_json::Valu
         .map(|(addr, entry)| {
             serde_json::json!({
                 "addressHash": hex::encode(addr),
-                "role": format!("{:?}", entry.role),
+                "role": match entry.role {
+                    harmony_groups::Role::Founder => "founder",
+                    harmony_groups::Role::Officer => "officer",
+                    harmony_groups::Role::Member => "member",
+                },
                 "joinedAt": entry.joined_at,
                 "isFounder": Some(*addr) == founder_addr,
             })
@@ -1325,7 +1329,7 @@ fn group_create(name: String, mode: String, app: AppHandle) -> Result<String, St
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let hex_id = hex::encode(group_id);
     let _ = app.emit(
@@ -1383,7 +1387,7 @@ fn group_invite(group_id_hex: String, peer_hash: String, app: AppHandle) -> Resu
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_invite_sent",
@@ -1409,10 +1413,10 @@ fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
 
     let pending = groups
         .pending_invites
-        .remove(&group_id)
+        .get(&group_id)
+        .cloned()
         .ok_or_else(|| "No pending invite for this group".to_string())?;
 
-    // Merge the invite op first so the Accept can reference it.
     groups.merge_op(group_id, pending.invite_op.clone())?;
     let parents = groups.head_ops(group_id);
     drop(groups);
@@ -1428,9 +1432,10 @@ fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
 
     let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
     groups.merge_op(group_id, op.clone())?;
+    groups.pending_invites.remove(&group_id);
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_joined",
@@ -1494,7 +1499,7 @@ fn group_join(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_joined",
@@ -1539,7 +1544,7 @@ fn group_leave(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_left",
@@ -1599,13 +1604,13 @@ fn group_kick(
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_member_kicked",
         serde_json::json!({
             "groupId": group_id_hex,
-            "kickedHash": peer_hash,
+            "targetHash": peer_hash,
         }),
     );
     Ok(())
@@ -1656,13 +1661,13 @@ fn group_promote(
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_member_promoted",
         serde_json::json!({
             "groupId": group_id_hex,
-            "promotedHash": peer_hash,
+            "targetHash": peer_hash,
         }),
     );
     Ok(())
@@ -1713,13 +1718,13 @@ fn group_demote(
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_member_demoted",
         serde_json::json!({
             "groupId": group_id_hex,
-            "demotedHash": peer_hash,
+            "targetHash": peer_hash,
         }),
     );
     Ok(())
@@ -1759,7 +1764,7 @@ fn group_dissolve(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_dissolved",
@@ -1819,7 +1824,7 @@ fn group_update_info(
     groups.merge_op(group_id, op.clone())?;
     drop(groups);
 
-    publish_group_op(&app, op);
+    publish_group_op(&app, group_id, op);
 
     let _ = app.emit(
         "group_info_updated",
@@ -1987,8 +1992,7 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             NetworkAction::SocialReceived { sender, message } => {
                 handle_social_message(app, sender, message);
             }
-            NetworkAction::GroupOpReceived { sender, op } => {
-                // Get our address first so we can check invite targeting.
+            NetworkAction::GroupOpReceived { sender, group_id, op } => {
                 let net = app.state::<NetworkWrapper>();
                 let our_addr = match net.0.lock() {
                     Ok(ns) => ns.our_address_hash(),
@@ -2001,51 +2005,31 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     Err(_) => continue,
                 };
 
-                // Try to merge the op into every known group (we don't
-                // know which group it belongs to from the network layer).
-                for gid in groups.known_group_ids() {
-                    let _ = groups.merge_op(gid, op.clone());
-                }
+                let _ = groups.merge_op(group_id, op.clone());
 
-                // Handle invite targeting us.
                 if let harmony_groups::GroupAction::Invite { invitee } = &op.action {
                     if *invitee == our_addr {
-                        // Determine group name from resolved state
-                        // by checking which group contains this op.
-                        let group_name = groups
-                            .known_group_ids()
-                            .iter()
-                            .find_map(|gid| {
-                                groups.get_state(*gid).and_then(|s| {
-                                    if groups
-                                        .get_ops(*gid)
-                                        .map(|ops| ops.iter().any(|o| o.id == op.id))
-                                        .unwrap_or(false)
-                                    {
-                                        Some((s.group_id, s.name.clone()))
-                                    } else {
-                                        None
-                                    }
-                                })
-                            });
+                        let gname = groups
+                            .get_state(group_id)
+                            .map(|s| s.name.clone())
+                            .unwrap_or_default();
 
-                        if let Some((group_id, gname)) = group_name {
-                            groups.pending_invites.insert(
+                        groups.pending_invites.insert(
+                            group_id,
+                            crate::social::groups::PendingGroupInvite {
                                 group_id,
-                                crate::social::groups::PendingGroupInvite {
-                                    group_id,
-                                    inviter: sender,
-                                    inviter_name: String::new(),
-                                    group_name: gname,
-                                    invite_op: op.clone(),
-                                    received_at: now_secs(app),
-                                },
-                            );
-                        }
+                                inviter: sender,
+                                inviter_name: String::new(),
+                                group_name: gname,
+                                invite_op: op.clone(),
+                                received_at: now_secs(app),
+                            },
+                        );
 
                         let _ = app.emit(
                             "group_invite_received",
                             serde_json::json!({
+                                "groupId": hex::encode(group_id),
                                 "inviterHash": hex::encode(sender),
                                 "opId": hex::encode(op.id),
                             }),
