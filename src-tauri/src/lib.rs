@@ -1250,6 +1250,19 @@ fn parse_group_id(hex_str: &str) -> Result<[u8; 16], String> {
     Ok(arr)
 }
 
+// Dissolve is terminal: once a group is dissolved, no new member/role/info ops
+// should append to its log, and `get_my_groups` already filters dissolved
+// groups out of the UI. Mutating handlers must reject dissolved state here so
+// callers can't quietly build invisible inconsistent state (e.g. joining an
+// open group that no longer shows up in their list).
+fn validate_group_active(state: &harmony_groups::GroupState) -> Result<(), String> {
+    if state.dissolved {
+        Err("Group is dissolved".to_string())
+    } else {
+        Ok(())
+    }
+}
+
 fn publish_group_op(app: &AppHandle, group_id: [u8; 16], op: harmony_groups::GroupOp) {
     let net = app.state::<NetworkWrapper>();
     let actions = {
@@ -1363,6 +1376,7 @@ fn group_invite(group_id_hex: String, peer_hash: String, app: AppHandle) -> Resu
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         // Validate author is Officer or Founder.
         match state.role_of(&our_address) {
@@ -1410,6 +1424,13 @@ fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     let gm = app.state::<GroupManagerWrapper>();
     let (op, group_name) = {
         let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        // If we already have state for this group and it's dissolved, accepting
+        // would re-add us to a tombstoned log. Reject before touching the log.
+        // (First-time accepts won't have state yet — that path is fine.)
+        if let Some(state) = groups.get_state(group_id) {
+            validate_group_active(state)?;
+        }
 
         // Prefer the ephemeral pending_invites map (fast path with cached
         // display name), but fall back to the persisted op log after restart.
@@ -1490,6 +1511,7 @@ fn group_join(group_id_hex: String, app: AppHandle) -> Result<(), String> {
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         if state.mode != harmony_groups::GroupMode::Open {
             return Err("Group is invite-only".to_string());
@@ -1536,6 +1558,7 @@ fn group_leave(group_id_hex: String, app: AppHandle) -> Result<(), String> {
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         if !state.is_member(&our_address) {
             return Err("Not a member of this group".to_string());
@@ -1587,6 +1610,7 @@ fn group_kick(
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         let our_role = state
             .role_of(&our_address)
@@ -1646,6 +1670,7 @@ fn group_promote(
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
             return Err("Only the Founder can promote members".to_string());
@@ -1701,6 +1726,7 @@ fn group_demote(
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
             return Err("Only the Founder can demote members".to_string());
@@ -1748,6 +1774,7 @@ fn group_dissolve(group_id_hex: String, app: AppHandle) -> Result<(), String> {
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
             return Err("Only the Founder can dissolve the group".to_string());
@@ -1814,6 +1841,7 @@ fn group_update_info(
         let state = groups
             .get_state(group_id)
             .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
 
         if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
             return Err("Only the Founder can update group info".to_string());
@@ -3717,6 +3745,50 @@ mod tests {
                 .expect("bundled default-kit.json must be valid JSON");
         assert_eq!(json["name"], "Default");
         assert!(json["events"]["jump"]["default"].is_string());
+    }
+
+    #[test]
+    fn validate_group_active_rejects_dissolved() {
+        use crate::social::groups::GroupManager;
+        use harmony_groups::{GroupAction, GroupMode, GroupOp};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let founder: [u8; 16] = [0x11; 16];
+        let group_id: [u8; 16] = [0xCD; 16];
+
+        // Create the group — active state passes the guard.
+        let (create_op, _) = GroupOp::new_unsigned(
+            vec![],
+            founder,
+            1_700_000_000,
+            GroupAction::Create {
+                group_id,
+                name: "Doomed".to_string(),
+                mode: GroupMode::InviteOnly,
+            },
+        );
+        mgr.merge_op(group_id, create_op).unwrap();
+        let active = mgr.get_state(group_id).unwrap();
+        assert!(validate_group_active(active).is_ok());
+
+        // Dissolve the group — guard must reject subsequent mutations.
+        let parents = mgr.head_ops(group_id);
+        let (dissolve_op, _) = GroupOp::new_unsigned(
+            parents,
+            founder,
+            1_700_000_001,
+            GroupAction::Dissolve,
+        );
+        mgr.merge_op(group_id, dissolve_op).unwrap();
+        let dissolved = mgr.get_state(group_id).unwrap();
+        assert!(dissolved.dissolved, "sanity: state should be dissolved");
+        let err = validate_group_active(dissolved).expect_err("dissolved must error");
+        assert!(
+            err.contains("dissolved"),
+            "error message should mention dissolved, got: {err}"
+        );
     }
 }
 
