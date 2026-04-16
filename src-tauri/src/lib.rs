@@ -2008,43 +2008,41 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     Err(_) => continue,
                 };
 
-                let merge_ok = groups.merge_op(group_id, op.clone()).is_ok();
-
-                if merge_ok {
+                if groups.merge_op(group_id, op.clone()).is_ok() {
                     let group_id_hex = hex::encode(group_id);
                     let _ = app.emit(
                         "group_state_changed",
                         serde_json::json!({ "groupId": group_id_hex }),
                     );
-                }
 
-                if let harmony_groups::GroupAction::Invite { invitee } = &op.action {
-                    if *invitee == our_addr {
-                        let gname = groups
-                            .get_state(group_id)
-                            .map(|s| s.name.clone())
-                            .unwrap_or_default();
+                    if let harmony_groups::GroupAction::Invite { invitee } = &op.action {
+                        if *invitee == our_addr {
+                            let gname = groups
+                                .get_state(group_id)
+                                .map(|s| s.name.clone())
+                                .unwrap_or_default();
 
-                        groups.pending_invites.insert(
-                            group_id,
-                            crate::social::groups::PendingGroupInvite {
+                            groups.pending_invites.insert(
                                 group_id,
-                                inviter: sender,
-                                inviter_name: sender_name.clone(),
-                                group_name: gname,
-                                invite_op: op.clone(),
-                                received_at: now_secs(app),
-                            },
-                        );
+                                crate::social::groups::PendingGroupInvite {
+                                    group_id,
+                                    inviter: sender,
+                                    inviter_name: sender_name.clone(),
+                                    group_name: gname,
+                                    invite_op: op.clone(),
+                                    received_at: now_secs(app),
+                                },
+                            );
 
-                        let _ = app.emit(
-                            "group_invite_received",
-                            serde_json::json!({
-                                "groupId": hex::encode(group_id),
-                                "inviterHash": hex::encode(sender),
-                                "opId": hex::encode(op.id),
-                            }),
-                        );
+                            let _ = app.emit(
+                                "group_invite_received",
+                                serde_json::json!({
+                                    "groupId": group_id_hex,
+                                    "inviterHash": hex::encode(sender),
+                                    "opId": hex::encode(op.id),
+                                }),
+                            );
+                        }
                     }
                 }
                 drop(groups);
