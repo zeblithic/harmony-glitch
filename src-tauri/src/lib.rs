@@ -1080,13 +1080,16 @@ fn party_accept(app: AppHandle) -> Result<(), String> {
     let our_address = net_state.our_address_hash();
     drop(net_state);
 
+    let pi = app.state::<PlayerIdentityWrapper>();
+    let our_name = pi.display_name.lock().map_err(|e| e.to_string())?.clone();
+
     let state_wrapper = app.state::<GameStateWrapper>();
     let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
     let invite_leader = state
         .social
         .party
-        .begin_join(now)
+        .begin_join(our_name, now)
         .map_err(|e| e.to_string())?;
     drop(state);
 
@@ -1644,10 +1647,16 @@ fn handle_social_message(
         } => {
             let now = now_secs(app);
             // Self-confirmation: leader confirmed our join request.
-            if member == our_address && state.social.party.pending_join.is_some() {
-                let pi = app.state::<PlayerIdentityWrapper>();
-                let our_name = pi.display_name.lock().unwrap_or_else(|e| e.into_inner()).clone();
-                if state.social.party.confirm_join(our_address, our_name, now).is_ok() {
+            // Verify the sender is the leader we expect from our pending join.
+            let is_our_join = member == our_address
+                && state
+                    .social
+                    .party
+                    .pending_join
+                    .as_ref()
+                    .is_some_and(|pj| pj.leader == authenticated_sender);
+            if is_our_join {
+                if state.social.party.confirm_join(our_address, now).is_ok() {
                     let _ = app.emit(
                         "party_joined",
                         serde_json::json!({

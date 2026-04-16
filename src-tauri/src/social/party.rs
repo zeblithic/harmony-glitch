@@ -168,6 +168,7 @@ pub struct PendingJoin {
     pub leader: [u8; 16],
     pub leader_name: String,
     pub members: Vec<[u8; 16]>,
+    pub self_name: String,
     pub accepted_at: f64,
 }
 
@@ -213,7 +214,13 @@ impl PartyState {
     ///
     /// The invite is consumed but the player does NOT join the party yet.
     /// Call `confirm_join()` when the leader's `PartyMemberJoined` arrives.
-    pub fn begin_join(&mut self, now: f64) -> Result<[u8; 16], &'static str> {
+    pub fn begin_join(&mut self, self_name: String, now: f64) -> Result<[u8; 16], &'static str> {
+        if self.party.is_some() {
+            return Err("already in a party");
+        }
+        if self.pending_join.is_some() {
+            return Err("join already in progress");
+        }
         let invite = self.pending_invite.take().ok_or("no pending invite")?;
         if now - invite.received_at > PARTY_INVITE_TIMEOUT {
             return Err("invite expired");
@@ -223,6 +230,7 @@ impl PartyState {
             leader,
             leader_name: invite.leader_name,
             members: invite.members,
+            self_name,
             accepted_at: now,
         });
         Ok(leader)
@@ -234,9 +242,11 @@ impl PartyState {
     pub fn confirm_join(
         &mut self,
         self_hash: [u8; 16],
-        self_name: String,
         now: f64,
     ) -> Result<(), &'static str> {
+        if self.party.is_some() {
+            return Err("already in a party");
+        }
         let pj = self.pending_join.take().ok_or("no pending join")?;
         let mut party = ActiveParty {
             leader: pj.leader,
@@ -258,7 +268,7 @@ impl PartyState {
         }
         party.add_member(PartyMember {
             address_hash: self_hash,
-            display_name: self_name,
+            display_name: pj.self_name,
             joined_at: now,
         })?;
         self.party = Some(party);
@@ -496,8 +506,8 @@ mod tests {
             members: vec![],
             received_at: 100.0,
         });
-        s.begin_join(150.0).unwrap();
-        let result = s.confirm_join(addr(0x02), "Me".into(), 151.0);
+        s.begin_join("Me".into(), 150.0).unwrap();
+        let result = s.confirm_join(addr(0x02), 151.0);
         assert!(result.is_ok());
         assert!(s.in_party());
         assert!(s.pending_invite.is_none());
@@ -507,7 +517,7 @@ mod tests {
     #[test]
     fn two_phase_join_no_invite_returns_err() {
         let mut s = PartyState::new();
-        let result = s.begin_join(0.0);
+        let result = s.begin_join("Me".into(), 0.0);
         assert!(result.is_err());
     }
 
@@ -648,9 +658,9 @@ mod tests {
             members: vec![addr(0x02)],
             received_at: 100.0,
         });
-        s.begin_join(100.5).unwrap();
+        s.begin_join("Me".into(), 100.5).unwrap();
 
-        let result = s.confirm_join(addr(0x03), "Me".into(), 101.0);
+        let result = s.confirm_join(addr(0x03), 101.0);
         assert!(result.is_ok());
         assert!(s.in_party(), "should be in party after confirm");
         assert!(s.pending_join.is_none(), "pending_join should be cleared");
@@ -664,7 +674,7 @@ mod tests {
     #[test]
     fn confirm_join_without_pending_join_returns_err() {
         let mut s = PartyState::new();
-        let result = s.confirm_join(addr(0x01), "Me".into(), 100.0);
+        let result = s.confirm_join(addr(0x01), 100.0);
         assert!(result.is_err());
     }
 
@@ -677,7 +687,7 @@ mod tests {
             members: vec![addr(0x02)],
             received_at: 100.0,
         });
-        let result = s.begin_join(100.5);
+        let result = s.begin_join("Me".into(), 100.5);
         assert!(result.is_ok());
         assert!(s.pending_invite.is_none(), "invite should be consumed");
         assert!(s.pending_join.is_some(), "pending_join should be set");
@@ -697,7 +707,7 @@ mod tests {
             members: vec![],
             received_at: 0.0,
         });
-        s.begin_join(0.5).unwrap();
+        s.begin_join("Me".into(), 0.5).unwrap();
         s.expire_pending_join(91.0);
         assert!(s.pending_join.is_none(), "stale pending_join should be cleared");
     }
@@ -711,7 +721,7 @@ mod tests {
             members: vec![],
             received_at: 100.0,
         });
-        s.begin_join(100.5).unwrap();
+        s.begin_join("Me".into(), 100.5).unwrap();
         s.expire_pending_join(150.0);
         assert!(s.pending_join.is_some(), "fresh pending_join should survive");
     }
@@ -727,7 +737,7 @@ mod tests {
             members: vec![],
             received_at: 0.0,
         });
-        s.begin_join(0.5).unwrap();
+        s.begin_join("Me".into(), 0.5).unwrap();
         assert!(s.pending_join.is_some());
         assert!(!s.in_party());
 
@@ -740,7 +750,7 @@ mod tests {
     #[test]
     fn begin_join_fails_without_invite() {
         let mut s = PartyState::new();
-        let result = s.begin_join(0.0);
+        let result = s.begin_join("Me".into(), 0.0);
         assert!(result.is_err());
     }
 
@@ -753,9 +763,9 @@ mod tests {
             members: vec![],
             received_at: 0.0,
         });
-        s.begin_join(0.5).unwrap();
+        s.begin_join("Me".into(), 0.5).unwrap();
         s.expire_pending_join(91.0); // expired
-        let result = s.confirm_join(addr(0x02), "Me".into(), 92.0);
+        let result = s.confirm_join(addr(0x02), 92.0);
         assert!(result.is_err(), "confirm after expiry should fail");
         assert!(!s.in_party());
     }
@@ -769,9 +779,62 @@ mod tests {
             members: vec![],
             received_at: 0.0,
         });
-        let result = s.begin_join(91.0);
+        let result = s.begin_join("Me".into(), 91.0);
         assert!(result.is_err());
         assert!(s.pending_invite.is_none(), "expired invite should be cleared");
         assert!(s.pending_join.is_none(), "should not create pending_join from expired invite");
+    }
+
+    #[test]
+    fn begin_join_rejects_when_already_in_party() {
+        let mut s = PartyState::new();
+        s.create_party(addr(0x01), "Alice".into(), 0.0);
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x02),
+            leader_name: "Bob".into(),
+            members: vec![],
+            received_at: 100.0,
+        });
+        let result = s.begin_join("Me".into(), 100.5);
+        assert!(result.is_err());
+        assert!(s.in_party(), "existing party should be preserved");
+    }
+
+    #[test]
+    fn begin_join_rejects_when_join_already_pending() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "L1".into(),
+            members: vec![],
+            received_at: 100.0,
+        });
+        s.begin_join("Me".into(), 100.5).unwrap();
+        // Set another invite and try to begin_join again
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x02),
+            leader_name: "L2".into(),
+            members: vec![],
+            received_at: 101.0,
+        });
+        let result = s.begin_join("Me".into(), 101.5);
+        assert!(result.is_err());
+        assert_eq!(s.pending_join.as_ref().unwrap().leader, addr(0x01), "original pending_join preserved");
+    }
+
+    #[test]
+    fn confirm_join_rejects_when_already_in_party() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "L".into(),
+            members: vec![],
+            received_at: 100.0,
+        });
+        s.begin_join("Me".into(), 100.5).unwrap();
+        // Simulate getting into a party through another path
+        s.create_party(addr(0x09), "Other".into(), 101.0);
+        let result = s.confirm_join(addr(0x02), 102.0);
+        assert!(result.is_err());
     }
 }
