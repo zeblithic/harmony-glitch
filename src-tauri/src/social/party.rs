@@ -161,11 +161,22 @@ struct OutgoingPartyInvite {
     sent_at: f64,
 }
 
+/// Transient state: we've sent PartyAccept but haven't received
+/// the leader's PartyMemberJoined confirmation yet.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PendingJoin {
+    pub leader: [u8; 16],
+    pub leader_name: String,
+    pub members: Vec<[u8; 16]>,
+    pub accepted_at: f64,
+}
+
 /// Runtime party state for one player.
 #[derive(Debug, Default, Clone)]
 pub struct PartyState {
     pub party: Option<ActiveParty>,
     pub pending_invite: Option<PendingPartyInvite>,
+    pub pending_join: Option<PendingJoin>,
     /// Outgoing party invites we've sent (not yet accepted/declined/expired).
     outgoing_invites: Vec<OutgoingPartyInvite>,
 }
@@ -249,6 +260,25 @@ impl PartyState {
     /// Decline the pending invite and clear it.
     pub fn decline_invite(&mut self) {
         self.pending_invite = None;
+    }
+
+    /// Move the pending invite into a deferred-join state.
+    ///
+    /// The invite is consumed but the player does NOT join the party yet.
+    /// Call `confirm_join()` when the leader's `PartyMemberJoined` arrives.
+    pub fn begin_join(&mut self, now: f64) -> Result<[u8; 16], &'static str> {
+        let invite = self.pending_invite.take().ok_or("no pending invite")?;
+        if now - invite.received_at > PARTY_INVITE_TIMEOUT {
+            return Err("invite expired");
+        }
+        let leader = invite.leader;
+        self.pending_join = Some(PendingJoin {
+            leader: invite.leader,
+            leader_name: invite.leader_name,
+            members: invite.members,
+            accepted_at: now,
+        });
+        Ok(leader)
     }
 
     /// Leave the current party.
@@ -645,5 +675,25 @@ mod tests {
         s.record_outgoing_invite(addr(0x11), 100.0);
         s.clear_outgoing_invites();
         assert!(s.outgoing_invites.is_empty());
+    }
+
+    #[test]
+    fn begin_join_moves_invite_to_pending_join() {
+        let mut s = PartyState::new();
+        s.set_pending_invite(PendingPartyInvite {
+            leader: addr(0x01),
+            leader_name: "Leader".into(),
+            members: vec![addr(0x02)],
+            received_at: 100.0,
+        });
+        let result = s.begin_join(100.5);
+        assert!(result.is_ok());
+        assert!(s.pending_invite.is_none(), "invite should be consumed");
+        assert!(s.pending_join.is_some(), "pending_join should be set");
+        assert!(!s.in_party(), "should NOT be in party yet");
+        let pj = s.pending_join.as_ref().unwrap();
+        assert_eq!(pj.leader, addr(0x01));
+        assert_eq!(pj.leader_name, "Leader");
+        assert_eq!(pj.members, vec![addr(0x02)]);
     }
 }
