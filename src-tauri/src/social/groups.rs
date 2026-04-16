@@ -5,6 +5,17 @@ use serde::{Deserialize, Serialize};
 
 use harmony_groups::{GroupId, GroupOp, GroupState, MemberAddr, OpId};
 
+/// Classifies the outcome of a `try_merge` so callers can distinguish
+/// "genuinely new op" from "we already have it" and from "couldn't resolve
+/// yet (missing ancestors)" and from "hard error that should not be retried".
+#[derive(Debug)]
+enum MergeOutcome {
+    Applied,
+    Duplicate,
+    MissingAncestor,
+    Rejected(String),
+}
+
 /// A pending invite that has been received but not yet accepted or declined.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingGroupInvite {
@@ -20,7 +31,7 @@ pub struct PendingGroupInvite {
 ///
 /// Persistence is per-group: each group's ops are stored as
 /// `{data_dir}/groups/{hex_group_id}.json` (a JSON array of `GroupOp`).
-/// An `index.json` in the same directory tracks which group IDs are known.
+/// `load_all` discovers groups by scanning the directory.
 pub struct GroupManager {
     data_dir: PathBuf,
     /// Raw op logs, keyed by group ID.
@@ -62,7 +73,8 @@ impl GroupManager {
 
         for entry in read_dir.flatten() {
             let path = entry.path();
-            // Only process *.json files, skip index.json and *.tmp files.
+            // Only process *.json files. Skip *.tmp files, and tolerate a
+            // legacy index.json left over from an earlier implementation.
             match path.extension().and_then(|e| e.to_str()) {
                 Some("json") => {}
                 _ => continue,
@@ -106,8 +118,11 @@ impl GroupManager {
         }
     }
 
-    /// Persist a group's op log to `{data_dir}/groups/{hex_group_id}.json`
-    /// and update `index.json`.
+    /// Persist a group's op log to `{data_dir}/groups/{hex_group_id}.json`.
+    ///
+    /// Each file is self-contained: `load_all` discovers groups by scanning
+    /// the directory, so there's no separate index to keep in sync (which
+    /// previously created a two-phase-commit hazard).
     fn persist_group(&self, group_id: GroupId) -> Result<(), String> {
         let groups_dir = self.data_dir.join("groups");
         std::fs::create_dir_all(&groups_dir)
@@ -124,15 +139,7 @@ impl GroupManager {
         #[cfg(not(unix))]
         let mode = None;
 
-        crate::persistence::atomic_write(&ops_path, &data, mode)?;
-
-        let index_path = groups_dir.join("index.json");
-        let all_ids: Vec<String> = self.op_logs.keys().map(hex::encode).collect();
-        let index_data = serde_json::to_vec(&all_ids)
-            .map_err(|e| format!("Failed to serialize index: {e}"))?;
-        crate::persistence::atomic_write(&index_path, &index_data, mode)?;
-
-        Ok(())
+        crate::persistence::atomic_write(&ops_path, &data, mode)
     }
 
     /// Merge a single op into a group's DAG.
@@ -227,25 +234,34 @@ impl GroupManager {
     /// - `merged` is `true` if `op` (or a previously-orphaned op) became part
     ///   of the resolved DAG during this call.
     /// - `just_applied_ids` lists the `OpId`s that transitioned from orphan
-    ///   to applied during this call (so the caller can decide whether the
-    ///   supplied op itself made it in — important for invite handling).
+    ///   to applied during this call. Duplicates and hard failures are NOT
+    ///   included, so callers can safely emit events only for genuinely new
+    ///   ops.
     pub fn merge_op_with_orphans(
         &mut self,
         group_id: GroupId,
         op: GroupOp,
     ) -> (bool, Vec<OpId>) {
         let op_id = op.id;
-        let initial_ok = self.merge_op(group_id, op.clone()).is_ok();
         let mut applied: Vec<OpId> = Vec::new();
 
-        if !initial_ok {
-            // Buffer for later retry. Dedup by id.
-            let pool = self.orphan_ops.entry(group_id).or_default();
-            if !pool.iter().any(|o| o.id == op_id) {
-                pool.push(op);
+        match self.try_merge(group_id, op.clone()) {
+            MergeOutcome::Applied => applied.push(op_id),
+            MergeOutcome::Duplicate => {
+                // Already have it — no state change, no event.
             }
-        } else {
-            applied.push(op_id);
+            MergeOutcome::MissingAncestor => {
+                // Buffer for later retry. Dedup by id.
+                let pool = self.orphan_ops.entry(group_id).or_default();
+                if !pool.iter().any(|o| o.id == op_id) {
+                    pool.push(op);
+                }
+            }
+            MergeOutcome::Rejected(e) => {
+                // Hard failure (e.g. persist error) — do NOT buffer. Drop
+                // the op; retrying the same op will fail the same way.
+                eprintln!("[groups] merge_op rejected: {e}");
+            }
         }
 
         // Always retry the orphan pool — a prior orphan may now resolve thanks
@@ -253,7 +269,36 @@ impl GroupManager {
         let newly_applied = self.retry_orphans(group_id);
         applied.extend(newly_applied);
 
-        (initial_ok || !applied.is_empty(), applied)
+        (!applied.is_empty(), applied)
+    }
+
+    /// Attempt to merge `op` and classify the outcome. The classification
+    /// depends on the pre-merge state: whether the op is already present
+    /// (Duplicate), whether resolve fails because an ancestor is missing
+    /// (MissingAncestor), or whether a hard error occurred (Rejected).
+    fn try_merge(&mut self, group_id: GroupId, op: GroupOp) -> MergeOutcome {
+        if let Some(ops) = self.op_logs.get(&group_id) {
+            if ops.iter().any(|o| o.id == op.id) {
+                return MergeOutcome::Duplicate;
+            }
+        }
+        match self.merge_op(group_id, op) {
+            Ok(_) => MergeOutcome::Applied,
+            Err(e) => {
+                // Distinguish "needs ancestors" from "real error". The
+                // harmony-groups resolver returns these error messages when
+                // the DAG is incomplete — anything else is a hard failure.
+                if e.contains("NoGenesis")
+                    || e.contains("MissingParent")
+                    || e.contains("InvalidGenesis")
+                    || e.contains("EmptyDag")
+                {
+                    MergeOutcome::MissingAncestor
+                } else {
+                    MergeOutcome::Rejected(e)
+                }
+            }
+        }
     }
 
     /// Retry the orphan pool for `group_id`, applying every op that now resolves.
@@ -271,11 +316,24 @@ impl GroupManager {
             let mut progress = false;
             for op in pool {
                 let oid = op.id;
-                if self.merge_op(group_id, op.clone()).is_ok() {
-                    applied.push(oid);
-                    progress = true;
-                } else {
-                    still_orphaned.push(op);
+                match self.try_merge(group_id, op.clone()) {
+                    MergeOutcome::Applied => {
+                        applied.push(oid);
+                        progress = true;
+                    }
+                    MergeOutcome::Duplicate => {
+                        // Shouldn't happen (we just took from the orphan
+                        // pool), but if it does, drop silently.
+                        progress = true;
+                    }
+                    MergeOutcome::MissingAncestor => {
+                        still_orphaned.push(op);
+                    }
+                    MergeOutcome::Rejected(e) => {
+                        eprintln!("[groups] orphan retry rejected: {e}");
+                        // Drop — hard failures don't go back in the pool.
+                        progress = true;
+                    }
                 }
             }
             if !still_orphaned.is_empty() {
@@ -286,6 +344,87 @@ impl GroupManager {
             }
         }
         applied
+    }
+
+    /// Find any outstanding invite op targeting `our_addr` in the op log of
+    /// `group_id`. An invite is outstanding if it exists in the log but
+    /// `our_addr` has not yet authored an `Accept` referencing it and is
+    /// not currently a member of the group.
+    ///
+    /// Used by `group_accept` to recover after restart, when the ephemeral
+    /// `pending_invites` map is empty but the persisted op log still carries
+    /// the invite.
+    pub fn find_outstanding_invite(
+        &self,
+        group_id: GroupId,
+        our_addr: MemberAddr,
+    ) -> Option<GroupOp> {
+        let ops = self.op_logs.get(&group_id)?;
+        // Already a member — nothing outstanding.
+        if let Some(state) = self.states.get(&group_id) {
+            if state.is_member(&our_addr) {
+                return None;
+            }
+        }
+        // Find the most recent invite targeting us that we haven't accepted.
+        let accepted: std::collections::HashSet<harmony_groups::OpId> = ops
+            .iter()
+            .filter_map(|o| match &o.action {
+                harmony_groups::GroupAction::Accept { invite_op }
+                    if o.author == our_addr =>
+                {
+                    Some(*invite_op)
+                }
+                _ => None,
+            })
+            .collect();
+        ops.iter()
+            .filter(|o| matches!(
+                &o.action,
+                harmony_groups::GroupAction::Invite { invitee } if *invitee == our_addr
+            ))
+            .filter(|o| !accepted.contains(&o.id))
+            .max_by_key(|o| o.timestamp)
+            .cloned()
+    }
+
+    /// Rebuild `pending_invites` from persisted op logs after restart.
+    /// Called once `our_addr` is known (during Tauri setup).
+    ///
+    /// Returns the list of `GroupId`s that got a newly-populated pending
+    /// invite, so the caller can emit `group_invite_received` events.
+    pub fn rebuild_pending_invites(
+        &mut self,
+        our_addr: MemberAddr,
+        now_secs: f64,
+    ) -> Vec<GroupId> {
+        let mut rebuilt: Vec<GroupId> = Vec::new();
+        let group_ids: Vec<GroupId> = self.op_logs.keys().copied().collect();
+        for gid in group_ids {
+            if self.pending_invites.contains_key(&gid) {
+                continue;
+            }
+            if let Some(invite_op) = self.find_outstanding_invite(gid, our_addr) {
+                let group_name = self
+                    .states
+                    .get(&gid)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default();
+                self.pending_invites.insert(
+                    gid,
+                    PendingGroupInvite {
+                        group_id: gid,
+                        inviter: invite_op.author,
+                        inviter_name: String::new(),
+                        group_name,
+                        invite_op,
+                        received_at: now_secs,
+                    },
+                );
+                rebuilt.push(gid);
+            }
+        }
+        rebuilt
     }
 
     /// Return the cached resolved state for `group_id`, if known.
@@ -499,5 +638,86 @@ mod tests {
         assert!(!p1 && !p2);
         assert!(a1.is_empty() && a2.is_empty());
         assert_eq!(mgr.orphan_ops.get(&GROUP_ID_A).map(|v| v.len()), Some(1));
+    }
+
+    #[test]
+    fn merge_op_with_orphans_does_not_reapply_duplicates() {
+        // A duplicate must not appear in `applied`, so the caller doesn't
+        // re-emit group_state_changed / group_invite_received events.
+        let dir = TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let create = genesis(FOUNDER, GROUP_ID_A, "Dup");
+        let (_progressed1, applied1) = mgr.merge_op_with_orphans(GROUP_ID_A, create.clone());
+        assert_eq!(applied1, vec![create.id]);
+
+        let (progressed2, applied2) = mgr.merge_op_with_orphans(GROUP_ID_A, create.clone());
+        assert!(!progressed2, "duplicate must not be reported as progress");
+        assert!(applied2.is_empty(), "duplicate must not appear in applied");
+    }
+
+    #[test]
+    fn find_outstanding_invite_returns_unaccepted_invite() {
+        let dir = TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let create = genesis(FOUNDER, GROUP_ID_A, "Restart");
+        let (invite, _) = GroupOp::new_unsigned(
+            vec![create.id],
+            FOUNDER,
+            1_700_000_001,
+            GroupAction::Invite { invitee: ALICE },
+        );
+        mgr.merge_op(GROUP_ID_A, create).unwrap();
+        mgr.merge_op(GROUP_ID_A, invite.clone()).unwrap();
+
+        // Alice hasn't accepted yet — invite is outstanding.
+        assert_eq!(
+            mgr.find_outstanding_invite(GROUP_ID_A, ALICE).map(|o| o.id),
+            Some(invite.id)
+        );
+
+        // Once Alice accepts, the invite is no longer outstanding.
+        let (accept, _) = GroupOp::new_unsigned(
+            vec![invite.id],
+            ALICE,
+            1_700_000_002,
+            GroupAction::Accept { invite_op: invite.id },
+        );
+        mgr.merge_op(GROUP_ID_A, accept).unwrap();
+        assert!(mgr.find_outstanding_invite(GROUP_ID_A, ALICE).is_none());
+    }
+
+    #[test]
+    fn rebuild_pending_invites_after_restart() {
+        let dir = TempDir::new().unwrap();
+
+        // Session 1: FOUNDER invites ALICE, then the app restarts before
+        // ALICE accepts.
+        let invite_id = {
+            let mut mgr = GroupManager::new(dir.path().to_path_buf());
+            let create = genesis(FOUNDER, GROUP_ID_A, "Persists");
+            let (invite, _) = GroupOp::new_unsigned(
+                vec![create.id],
+                FOUNDER,
+                1_700_000_001,
+                GroupAction::Invite { invitee: ALICE },
+            );
+            mgr.merge_op(GROUP_ID_A, create).unwrap();
+            mgr.merge_op(GROUP_ID_A, invite.clone()).unwrap();
+            invite.id
+        };
+
+        // Session 2: fresh manager loads persisted ops. pending_invites
+        // starts empty; rebuild populates it.
+        let mut mgr2 = GroupManager::new(dir.path().to_path_buf());
+        assert!(mgr2.pending_invites.is_empty());
+        let rebuilt = mgr2.rebuild_pending_invites(ALICE, 42.0);
+        assert_eq!(rebuilt, vec![GROUP_ID_A]);
+        let pending = mgr2.pending_invites.get(&GROUP_ID_A).unwrap();
+        assert_eq!(pending.invite_op.id, invite_id);
+        assert_eq!(pending.inviter, FOUNDER);
+        assert_eq!(pending.group_name, "Persists");
+        assert_eq!(pending.received_at, 42.0);
     }
 }

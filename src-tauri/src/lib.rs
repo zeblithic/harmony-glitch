@@ -1299,6 +1299,7 @@ fn serialize_group_state(state: &harmony_groups::GroupState) -> serde_json::Valu
 
 #[tauri::command]
 fn group_create(name: String, mode: String, app: AppHandle) -> Result<String, String> {
+    let name = normalize_group_name(&name)?;
     let group_mode = match mode.as_str() {
         "open" => harmony_groups::GroupMode::Open,
         "invite_only" => harmony_groups::GroupMode::InviteOnly,
@@ -1316,7 +1317,7 @@ fn group_create(name: String, mode: String, app: AppHandle) -> Result<String, St
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         vec![],
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Create {
             group_id,
             name: name.clone(),
@@ -1379,7 +1380,7 @@ fn group_invite(group_id_hex: String, peer_hash: String, app: AppHandle) -> Resu
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Invite { invitee: peer_bytes },
     );
 
@@ -1411,22 +1412,32 @@ fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     let gm = app.state::<GroupManagerWrapper>();
     let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
 
-    let pending = groups
-        .pending_invites
-        .get(&group_id)
-        .cloned()
-        .ok_or_else(|| "No pending invite for this group".to_string())?;
+    // Prefer the ephemeral pending_invites map (fast path with cached
+    // display name), but fall back to the persisted op log after restart.
+    let (invite_op, group_name) = match groups.pending_invites.get(&group_id).cloned() {
+        Some(p) => (p.invite_op, p.group_name),
+        None => {
+            let invite_op = groups
+                .find_outstanding_invite(group_id, our_address)
+                .ok_or_else(|| "No pending invite for this group".to_string())?;
+            let gname = groups
+                .get_state(group_id)
+                .map(|s| s.name.clone())
+                .unwrap_or_default();
+            (invite_op, gname)
+        }
+    };
 
-    groups.merge_op(group_id, pending.invite_op.clone())?;
+    groups.merge_op(group_id, invite_op.clone())?;
     let parents = groups.head_ops(group_id);
     drop(groups);
 
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Accept {
-            invite_op: pending.invite_op.id,
+            invite_op: invite_op.id,
         },
     );
 
@@ -1441,7 +1452,7 @@ fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
         "group_joined",
         serde_json::json!({
             "groupId": group_id_hex,
-            "groupName": pending.group_name,
+            "groupName": group_name,
         }),
     );
     Ok(())
@@ -1491,7 +1502,7 @@ fn group_join(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Join,
     );
 
@@ -1536,7 +1547,7 @@ fn group_leave(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Leave,
     );
 
@@ -1596,7 +1607,7 @@ fn group_kick(
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Kick { target: peer_bytes },
     );
 
@@ -1653,7 +1664,7 @@ fn group_promote(
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Promote { target: peer_bytes },
     );
 
@@ -1710,7 +1721,7 @@ fn group_demote(
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Demote { target: peer_bytes },
     );
 
@@ -1756,7 +1767,7 @@ fn group_dissolve(group_id_hex: String, app: AppHandle) -> Result<(), String> {
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::Dissolve,
     );
 
@@ -1783,6 +1794,11 @@ fn group_update_info(
     app: AppHandle,
 ) -> Result<(), String> {
     let group_id = parse_group_id(&group_id_hex)?;
+
+    let name = match name {
+        Some(raw) => Some(normalize_group_name(&raw)?),
+        None => None,
+    };
 
     let group_mode = match mode.as_deref() {
         Some("open") => Some(harmony_groups::GroupMode::Open),
@@ -1813,7 +1829,7 @@ fn group_update_info(
     let (op, _) = harmony_groups::GroupOp::new_unsigned(
         parents,
         our_address,
-        now_secs(&app) as u64,
+        group_op_timestamp(),
         harmony_groups::GroupAction::UpdateInfo {
             name: name.clone(),
             mode: group_mode,
@@ -2712,6 +2728,32 @@ fn handle_trade_message(
 fn now_secs(app: &AppHandle) -> f64 {
     let epoch = app.state::<MonotonicEpoch>();
     Instant::now().duration_since(epoch.0).as_secs_f64()
+}
+
+/// Unix epoch seconds for timestamping persisted group ops. Unlike `now_secs`
+/// (process-uptime), this survives restart and is comparable across peers —
+/// necessary for `joined_at` tenure tracking and for DAG tie-breakers.
+fn group_op_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Validate and normalize a group name on the backend. The UI enforces these
+/// rules too, but the IPC layer must not trust client input.
+fn normalize_group_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Group name must not be empty".to_string());
+    }
+    const MAX_GROUP_NAME_CHARS: usize = 40;
+    if trimmed.chars().count() > MAX_GROUP_NAME_CHARS {
+        return Err(format!(
+            "Group name must be {MAX_GROUP_NAME_CHARS} characters or fewer"
+        ));
+    }
+    Ok(trimmed.to_string())
 }
 
 /// Validate that the player is within interact_radius of the given entity.
@@ -3948,9 +3990,32 @@ pub fn run() {
             app.manage(TransportWrapper(Mutex::new(transport)));
 
             let _ = std::fs::create_dir_all(data_dir.join("groups"));
-            app.manage(GroupManagerWrapper(Mutex::new(
-                crate::social::groups::GroupManager::new(data_dir.clone()),
-            )));
+            let mut group_mgr = crate::social::groups::GroupManager::new(data_dir.clone());
+
+            // Rebuild pending invites from persisted op logs so invites that
+            // arrived in a previous session survive restart.
+            let restored_invites = group_mgr.rebuild_pending_invites(our_hash, 0.0);
+            app.manage(GroupManagerWrapper(Mutex::new(group_mgr)));
+
+            for gid in restored_invites {
+                // Look up the just-rebuilt invite to emit the event payload.
+                let gm = app.state::<GroupManagerWrapper>();
+                let (inviter_hex, op_id_hex) = match gm.0.lock() {
+                    Ok(g) => match g.pending_invites.get(&gid) {
+                        Some(p) => (hex::encode(p.inviter), hex::encode(p.invite_op.id)),
+                        None => continue,
+                    },
+                    Err(_) => continue,
+                };
+                let _ = app.emit(
+                    "group_invite_received",
+                    serde_json::json!({
+                        "groupId": hex::encode(gid),
+                        "inviterHash": inviter_hex,
+                        "opId": op_id_hex,
+                    }),
+                );
+            }
 
             Ok(())
         })
