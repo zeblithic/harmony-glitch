@@ -1217,6 +1217,15 @@
     <div role="status" aria-live="polite" class="sr-only">
       {#if transitionPending && transitionTarget}Travelling to {transitionTarget}…{/if}
     </div>
+    <button
+      type="button"
+      class="volume-btn"
+      aria-label="Sound settings"
+      title="Sound settings (P)"
+      onclick={() => { volumeOpen = !volumeOpen; if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; } }}
+    >
+      <span aria-hidden="true">🔊</span>
+    </button>
     <button type="button" class="back-btn" onclick={async () => {
       try {
         await stopGame();
@@ -1269,6 +1278,33 @@
   }
 
   .back-btn:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
+  }
+
+  .volume-btn {
+    position: fixed;
+    bottom: 8px;
+    right: 72px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    border: 1px solid #444;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #e0e0e0;
+    cursor: pointer;
+    z-index: 50;
+  }
+
+  .volume-btn:hover {
+    background: rgba(88, 101, 242, 0.8);
+  }
+
+  .volume-btn:focus-visible {
     outline: 2px solid #5865f2;
     outline-offset: 2px;
   }
