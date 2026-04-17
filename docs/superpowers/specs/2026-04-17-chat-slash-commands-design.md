@@ -21,12 +21,13 @@ The current behavior — typing `/dance` broadcasts the literal string `"/dance"
 
 **Frontend-only.** Zero Rust or network-schema changes. The slash-command layer is a sender-side affordance on top of the already-shipped chat and emote IPCs.
 
-**Three new TypeScript files:**
+**Four new TypeScript files:**
 
 ```
 src/lib/chat/commands.ts       — parser, executor, types (no handlers, no IPC)
-src/lib/chat/handlers.ts       — default command handlers + registerDefaultCommands()
-src/lib/chat/commands.test.ts  — parser, executor, handler unit tests
+src/lib/chat/handlers.ts       — default command handlers + createDefaultHandlers()
+src/lib/chat/commands.test.ts  — parser + executor unit tests
+src/lib/chat/handlers.test.ts  — handler unit tests
 ```
 
 **Touched:**
