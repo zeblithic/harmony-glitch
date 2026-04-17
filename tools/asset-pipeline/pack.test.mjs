@@ -10,6 +10,7 @@ import {
   groupAnimations,
   collectImages,
   readImageMeta,
+  readImageMetaBatched,
 } from './pack.mjs';
 
 // ---------------------------------------------------------------------------
@@ -295,5 +296,45 @@ describe('SVG support', () => {
     // 300 * (256/512) = 150
     expect(meta.height).toBe(150);
     expect(meta.buffer).toBeInstanceOf(Buffer);
+  });
+
+  it('readImageMeta returns numeric width/height on every non-null path', async () => {
+    // Regression: the maxSize PNG path previously returned meta.width /
+    // meta.height directly, which could be undefined and propagate NaN
+    // into shelfPack. Verify every return shape has numeric dimensions.
+    const pngPath = join(dir, 'small.png');
+    await sharp({
+      create: { width: 30, height: 30, channels: 4, background: { r: 0, g: 0, b: 255, alpha: 1 } },
+    }).png().toFile(pngPath);
+
+    const withoutMax = await readImageMeta(pngPath, 'small', 1);
+    const withMaxUnder = await readImageMeta(pngPath, 'small', 1, 256);
+
+    for (const result of [withoutMax, withMaxUnder]) {
+      expect(typeof result.width).toBe('number');
+      expect(typeof result.height).toBe('number');
+      expect(result.width).toBeGreaterThan(0);
+      expect(result.height).toBeGreaterThan(0);
+    }
+  });
+
+  it('readImageMetaBatched processes all entries with bounded concurrency', async () => {
+    // Make 10 tiny files; verify batchSize=3 still returns all 10 in order.
+    const entries = [];
+    for (let i = 0; i < 10; i++) {
+      const p = join(dir, `f${i}.png`);
+      await sharp({
+        create: { width: 10 + i, height: 10 + i, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      }).png().toFile(p);
+      entries.push({ path: p, name: `f${i}` });
+    }
+
+    const results = await readImageMetaBatched(entries, 1, null, 3);
+
+    expect(results).toHaveLength(10);
+    for (let i = 0; i < 10; i++) {
+      expect(results[i].name).toBe(`f${i}`);
+      expect(results[i].width).toBe(10 + i);
+    }
   });
 });

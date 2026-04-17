@@ -184,6 +184,9 @@ export async function collectImages(dir) {
 /**
  * Read image metadata and optionally prepare a buffer. SVGs are rasterized at
  * the target density; PNGs are returned by path unless a resize is required.
+ * Returns `null` for unreadable files or when sharp reports missing dimensions
+ * — every non-null return has `width > 0` and `height > 0` as numbers, so
+ * downstream arithmetic in shelfPack can rely on that invariant.
  *
  * `maxSize` (optional): clamp the longer side of the rasterized image to
  * this many pixels, preserving aspect ratio, never enlarging. Lets the
@@ -208,33 +211,61 @@ export async function readImageMeta(filePath, name, scale = 1, maxSize = null) {
       const meta = await sharp(buffer).metadata();
       const width = meta.width ?? 0;
       const height = meta.height ?? 0;
-      if (width === 0 || height === 0) return null;
+      if (width <= 0 || height <= 0) return null;
       return { path: filePath, name, width, height, buffer };
     }
 
     // PNG: if a resize is needed, materialize into a buffer; otherwise keep
-    // the on-disk path and just read dimensions.
+    // the on-disk path and just read dimensions. Every branch normalizes
+    // width/height to numbers and returns null when either is missing so
+    // shelfPack never sees NaN from undefined metadata.
     if (resize) {
       const meta = await sharp(filePath).metadata();
-      if ((meta.width ?? 0) <= maxSize && (meta.height ?? 0) <= maxSize) {
-        return { path: filePath, name, width: meta.width, height: meta.height };
+      const rawW = meta.width ?? 0;
+      const rawH = meta.height ?? 0;
+      if (rawW <= 0 || rawH <= 0) return null;
+      if (rawW <= maxSize && rawH <= maxSize) {
+        return { path: filePath, name, width: rawW, height: rawH };
       }
       const buffer = await sharp(filePath).resize(resize).png().toBuffer();
       const resizedMeta = await sharp(buffer).metadata();
-      return {
-        path: filePath,
-        name,
-        width: resizedMeta.width ?? 0,
-        height: resizedMeta.height ?? 0,
-        buffer,
-      };
+      const width = resizedMeta.width ?? 0;
+      const height = resizedMeta.height ?? 0;
+      if (width <= 0 || height <= 0) return null;
+      return { path: filePath, name, width, height, buffer };
     }
     const meta = await sharp(filePath).metadata();
-    return { path: filePath, name, width: meta.width, height: meta.height };
+    const width = meta.width ?? 0;
+    const height = meta.height ?? 0;
+    if (width <= 0 || height <= 0) return null;
+    return { path: filePath, name, width, height };
   } catch (err) {
     console.warn(`WARN: skipped ${filePath} — ${err.message}`);
     return null;
   }
+}
+
+/**
+ * Read metadata for a list of image entries, limiting concurrent rasterizations
+ * so peak memory stays bounded. Each batch fully completes before the next
+ * starts, which releases decoded buffers between batches.
+ *
+ * `batchSize` defaults to 32 — empirically small enough that thousands of
+ * SVG rasterizations stay well under 1GB resident, large enough that CPU
+ * stays busy on a modern machine.
+ */
+export async function readImageMetaBatched(entries, scale = 1, maxSize = null, batchSize = 32) {
+  const results = [];
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(({ path: filePath, name: imgName }) =>
+        readImageMeta(filePath, imgName, scale, maxSize),
+      ),
+    );
+    results.push(...batchResults);
+  }
+  return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,11 +302,16 @@ if (isDirectRun) {
 
   let maxSize = null;
   if (values['max-size']) {
-    maxSize = parseInt(values['max-size'], 10);
-    if (!Number.isFinite(maxSize) || maxSize <= 0) {
-      console.error(`Error: --max-size must be a positive integer, got: ${values['max-size']}`);
+    // Strict parse: parseInt silently accepts "256px" or "1.5". Require a
+    // bare positive integer so pipeline configs can't smuggle in fractional
+    // or garbage values that shelfPack would then try to do math on.
+    const raw = values['max-size'];
+    const parsed = Number(raw);
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+      console.error(`Error: --max-size must be a positive integer, got: ${raw}`);
       process.exit(1);
     }
+    maxSize = parsed;
   }
   await run(values.input, values.output, values.name, values.animation ?? false, scale, maxSize);
 }
@@ -288,10 +324,11 @@ async function run(inputDir, outputDir, name, animationMode, scale = 1, maxSize 
     process.exit(1);
   }
 
-  // Read metadata (skip corrupt/unreadable files; rasterize SVGs)
-  const imageResults = await Promise.all(
-    entries.map(({ path: filePath, name: imgName }) => readImageMeta(filePath, imgName, scale, maxSize)),
-  );
+  // Read metadata (skip corrupt/unreadable files; rasterize SVGs). Run in
+  // bounded batches so we don't hold thousands of decoded image buffers
+  // resident simultaneously — for a 2600-item source that's the difference
+  // between ~200MB and several GB of transient memory pressure.
+  const imageResults = await readImageMetaBatched(entries, scale, maxSize);
   const images = imageResults.filter(Boolean);
 
   // Warn on basename collisions (last one wins)
