@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
-import { resolvePlayerName, hiHandler, danceHandler, applaudHandler, waveHandler, hugHandler, high5Handler, blockHandler, unblockHandler, meHandler } from './handlers';
+import { describe, it, expect, vi } from 'vitest';
+import { resolvePlayerName, hiHandler, danceHandler, applaudHandler, waveHandler, hugHandler, high5Handler, blockHandler, unblockHandler, meHandler, helpHandler, HELP_LINES } from './handlers';
 import type { RemotePlayerFrame, NearestSocialTarget } from '$lib/types';
 import type { BuddyEntry } from '$lib/ipc';
 import type { CommandContext } from './commands';
@@ -473,5 +473,34 @@ describe('meHandler', () => {
       }),
     );
     expect(sends).toEqual(['* Me waves  hello  world *']);
+  });
+});
+
+describe('helpHandler', () => {
+  it('emits HELP_LINES as local bubbles in order', async () => {
+    const bubbles: string[] = [];
+    // Use fake timers so the sequenced 80ms dispatch completes synchronously.
+    vi.useFakeTimers();
+    try {
+      const promise = helpHandler('', makeContext({ pushLocalBubble: (t) => bubbles.push(t) }));
+      await vi.runAllTimersAsync();
+      await promise;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(bubbles).toEqual(HELP_LINES);
+    expect(HELP_LINES.length).toBe(4);
+  });
+
+  it('first bubble is the header', () => {
+    expect(HELP_LINES[0]).toBe('* Commands:');
+  });
+
+  it('includes every v1 command somewhere in the list', () => {
+    const joined = HELP_LINES.join(' ');
+    for (const cmd of ['/hi', '/dance', '/wave', '/hug', '/high5', '/applaud',
+                       '/block', '/unblock', '/me', '/help']) {
+      expect(joined).toContain(cmd);
+    }
   });
 });

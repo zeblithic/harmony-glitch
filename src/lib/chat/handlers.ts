@@ -168,3 +168,20 @@ export const meHandler: CommandHandler = async (args, ctx) => {
   const formatted = `* ${ctx.localIdentity.displayName} ${args} *`;
   await ctx.sendChat(formatted);
 };
+
+export const HELP_LINES: readonly string[] = [
+  '* Commands:',
+  '* /hi /dance /wave /hug /high5 /applaud',
+  '* /block <name> /unblock <name>',
+  '* /me <action>      /help',
+];
+
+/** Emits help lines ~80ms apart so they stack legibly and age together. */
+export const helpHandler: CommandHandler = async (_args, ctx) => {
+  for (let i = 0; i < HELP_LINES.length; i++) {
+    if (i > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    }
+    ctx.pushLocalBubble(HELP_LINES[i]);
+  }
+};
