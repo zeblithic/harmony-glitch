@@ -611,25 +611,29 @@
     debugMode = !debugMode;
   }
 
+  // Shared Hi firing helper — used by H-key, palette Hi, and SocialPrompt.
+  // Waits for the backend result so the local animation uses the
+  // daily-chosen variant and only plays on success (not on rejection for
+  // already-greeted, blocked, or cooldown).
+  async function fireHiWithAnimation() {
+    try {
+      const result = await emoteHi();
+      spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
+    } catch (err) {
+      console.error('emoteHi rejected:', err);
+    }
+  }
+
   async function handleEmoteSelect(kind: EmoteKind) {
-    // Hi has its own IPC (daily-variant + target selection semantics live in
-    // Rust). Wait for the result so the local animation uses the backend's
-    // chosen variant and only plays on success.
     if (typeof kind === 'object' && 'hi' in kind) {
-      try {
-        const result = await emoteHi();
-        spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
-      } catch (err) {
-        console.error('emoteHi rejected:', err);
-      }
+      await fireHiWithAnimation();
       return;
     }
 
-    // Only targeted-only kinds get the nearest peer as a target. Dance and
-    // Applaud are broadcast-by-design — sending them with a target would
-    // collapse them into a single-recipient message and suppress both
-    // bystander rendering and witness-mood credit. Rust also strips the
-    // target for broadcast-only kinds as a defense-in-depth layer.
+    // Only targeted-only kinds get the nearest peer as a target. Dance is
+    // broadcast-only (Rust also strips any target for Dance as defense-in-
+    // depth). Applaud is dual-nature — default to broadcast for the palette's
+    // fire-and-forget UX; a future chat command can express targeted intent.
     const nearest = latestFrame?.nearestSocialTarget?.addressHash ?? null;
     const target = (kind === 'hug' || kind === 'high_five' || kind === 'wave')
       ? nearest
@@ -711,7 +715,7 @@
   // H key: send Hi emote
   if ((e.key === 'h' || e.key === 'H') && currentStreet && !chatFocused && latestFrame) {
     e.preventDefault();
-    emoteHi().catch(console.error);
+    fireHiWithAnimation();
   }
   // E key: toggle emote palette
   if ((e.key === 'e' || e.key === 'E') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen && !tradeOpen && latestFrame) {
@@ -1034,7 +1038,7 @@
         canTrade={true}
         canInvite={!target.inParty && (partyIsLeader || !partyInParty)}
         canBuddy={!target.isBuddy}
-        onHi={() => emoteHi().catch(console.error)}
+        onHi={() => fireHiWithAnimation()}
         onTrade={() => tradeInitiate(target.addressHash).then(() => {
           tradeOpen = true;
           inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;

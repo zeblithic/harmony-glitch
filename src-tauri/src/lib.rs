@@ -966,13 +966,11 @@ fn emote(
         None => None,
     };
 
-    // Hardening: Dance and Applaud are broadcast-only kinds. Strip any target
-    // supplied by a misbehaving client — their receive-path semantics rely on
-    // `target.is_none()` to compute witness-mood for nearby bystanders.
-    if matches!(
-        emote::EmoteKindTag::from(&kind),
-        emote::EmoteKindTag::Dance | emote::EmoteKindTag::Applaud
-    ) {
+    // Hardening: Dance is the only pure broadcast-only kind — its receive
+    // logic awards witness mood only when `target.is_none()`. Applaud is
+    // dual-nature (targeted OR witness), so we preserve any target supplied
+    // by the UI; the receive path handles both cases correctly.
+    if matches!(emote::EmoteKindTag::from(&kind), emote::EmoteKindTag::Dance) {
         target_bytes = None;
     }
 
