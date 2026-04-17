@@ -91,7 +91,7 @@ type CommandContext = {
   sendChat: (text: string) => Promise<void>;
   blockPlayer: (peerHash: string) => Promise<void>;
   unblockPlayer: (peerHash: string) => Promise<void>;
-  getBlockedList: () => Promise<BlockedEntry[]>;  // lazy — /unblock only
+  getBlockedList: () => Promise<string[]>;   // lazy — hashes only, /unblock uses this to gate resolution
 };
 
 type CommandHandler = (args: string, ctx: CommandContext) => Promise<void>;
@@ -117,12 +117,13 @@ function resolvePlayerName(
   sources: {
     remotePlayers?: RemotePlayerFrame[];
     buddies?: BuddyEntry[];
-    blocked?: BlockedEntry[];
   },
 ): { hash: string; displayName: string } | null;
 ```
 
-Case-insensitive exact match on `displayName`. Lookup order: `remotePlayers` → `buddies` → `blocked`, depending on which sources the caller passed. First match wins. v1 assumes display names are unique in the player population; name-uniqueness enforcement is a future concern tracked as a separate namespace-registration effort.
+Case-insensitive exact match on `displayName`. Lookup order: `remotePlayers` → `buddies`, depending on which sources the caller passed. First match wins. v1 assumes display names are unique in the player population; name-uniqueness enforcement is a future concern tracked as a separate namespace-registration effort.
+
+**Why the blocked list isn't a resolution source:** the Rust `get_blocked_list` IPC returns only address hashes (`string[]`) — no display names are persisted alongside blocked entries. `/unblock` still supports name input, but it does so by resolving the name through `remotePlayers ∪ buddies` first, then checking membership in the blocked hash set. A player blocked long ago who is now neither on-street nor a buddy cannot be unblocked by name in v1 — their display name is simply not recoverable from client state. That edge case is out of scope; users can re-add them as a buddy (or wait for them on-street) to unblock by name, or a future blocked-list panel can expose hash-based unblock UI.
 
 ### Shared emote firing helper
 
@@ -191,10 +192,13 @@ Resolution rule for target-taking emotes: **explicit name > `nearestSocialTarget
 ### `/unblock <name>`
 
 - Args: required.
-- Resolution: lazy `ctx.getBlockedList()` on each invocation; `resolvePlayerName(name, { blocked })`. No caching — blocklist lookups are local and infrequent.
+- Resolution (two-step):
+  1. `resolvePlayerName(name, { remotePlayers, buddies })` → `{ hash, displayName }`.
+  2. Lazy `ctx.getBlockedList()` → `string[]` of blocked hashes. Check membership.
 - Failure cases:
   - Empty args → bubble `"Usage: /unblock <name>"`.
-  - Name not found in blocked list → bubble `"No blocked player named {name}."`
+  - Name not found in `remotePlayers ∪ buddies` → bubble `"No player named {name}."` (same message as `/block`'s not-found case — consistent because the same resolver failed).
+  - Name resolves but hash not in blocked list → bubble `"{displayName} is not blocked."`
 - Behavior: `await ctx.unblockPlayer(hash)`; on resolve, bubble `"Unblocked {displayName}."`
 
 ### `/me <action>`
@@ -230,7 +234,7 @@ Resolution rule for target-taking emotes: **explicit name > `nearestSocialTarget
 - All user-input errors produce **exactly one local bubble** above the local player. Never a broadcast.
 - All IPC-rejection errors produce **one local bubble** with `"Command failed: {error.message}"`.
 - No GameNotification toasts from command handlers — chat-initiated actions stay in the chat medium. Palette-initiated emotes continue to use toasts (unchanged).
-- Self-target guard (`"Can't hug yourself."` etc.) is applied on every command whose resolver could legitimately return the local player's hash (`/wave`, `/hug`, `/high5`, `/block`). `/unblock` doesn't need it — self can't be in the blocked list, so the not-found bubble covers the case.
+- Self-target guard (`"Can't hug yourself."` etc.) fires on a case-insensitive match of the `name` argument to `ctx.localIdentity.displayName`, **before** resolution. Applied on `/wave`, `/hug`, `/high5`, `/block`, `/unblock` whenever the user explicitly types a name. Checking the name up front (instead of checking the resolved hash) gives a crisper message — the local player is not in `remotePlayers` or `buddies`, so a post-resolution check would fall through to the "No player named {name}" bubble, which would be misleading.
 - 200-byte chat truncation is silent (existing plain-chat behavior).
 
 ## Testing strategy
