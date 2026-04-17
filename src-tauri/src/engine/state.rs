@@ -951,15 +951,25 @@ impl GameState {
             AnimationState::Idle
         };
 
-        // Camera: center on player, clamped to street bounds.
-        // When the street is smaller than the viewport, center the street
-        // instead of panicking (f64::clamp requires min <= max).
+        // Camera: center on player both axes, clamped to street bounds.
+        // Vertical previously used a 0.6 multiplier that pushed the player
+        // into the lower 40% of the viewport, and cam_y_max pinned to the
+        // street bottom exactly — combined effect was that the player stuck
+        // to the bottom edge whenever the viewport was comparable in height
+        // to the street, making it hard to see them fall to a lower platform.
+        //
+        // Now: 0.5 multiplier so vertical matches horizontal centering, and
+        // cam_y_max allows the viewport to extend half a screen below the
+        // street's bottom bound. This trades a strip of empty below-ground
+        // space (when the player is near the ground) for proper vertical
+        // follow during falls. When the street is smaller than the viewport,
+        // clamp min/max to avoid a panic from f64::clamp (min <= max).
         let cam_x = self.player.x - self.viewport_width / 2.0;
-        let cam_y = self.player.y - self.viewport_height * 0.6; // Player in lower 40%
+        let cam_y = self.player.y - self.viewport_height / 2.0;
         let cam_x_min = street.left;
         let cam_x_max = (street.right - self.viewport_width).max(cam_x_min);
         let cam_y_min = street.top;
-        let cam_y_max = (street.bottom - self.viewport_height).max(cam_y_min);
+        let cam_y_max = (street.bottom - self.viewport_height / 2.0).max(cam_y_min);
         let cam_x = cam_x.clamp(cam_x_min, cam_x_max);
         let cam_y = cam_y.clamp(cam_y_min, cam_y_max);
 
