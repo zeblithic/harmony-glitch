@@ -269,6 +269,18 @@ describe('high5Handler', () => {
     expect(calls).toEqual([['high_five', 'dd'.repeat(16)]]);
   });
 
+  it('resolves explicit name from remotePlayers', async () => {
+    const calls: Array<[string, string | null]> = [];
+    await high5Handler(
+      'Alice',
+      makeContext({
+        remotePlayers: [remote('Alice', '11'.repeat(16))],
+        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+      }),
+    );
+    expect(calls).toEqual([['high_five', '11'.repeat(16)]]);
+  });
+
   it('bubbles error with no nearest and no name', async () => {
     const bubbles: string[] = [];
     await high5Handler('', makeContext({ pushLocalBubble: (t) => bubbles.push(t) }));
