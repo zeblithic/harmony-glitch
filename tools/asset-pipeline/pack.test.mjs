@@ -251,4 +251,49 @@ describe('SVG support', () => {
     expect(meta.height).toBe(20);
     expect(meta.buffer).toBeInstanceOf(Buffer);
   });
+
+  it('readImageMeta clamps oversized SVGs to maxSize', async () => {
+    // 800x400 SVG — wider than tall, so width should clamp to 256 and height
+    // should be proportional (128) when maxSize=256 with "inside" fit.
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400"><rect width="800" height="400" fill="red"/></svg>';
+    const svgPath = join(dir, 'huge.svg');
+    await writeFile(svgPath, svgContent);
+
+    const meta = await readImageMeta(svgPath, 'huge', 1, 256);
+
+    expect(meta).not.toBeNull();
+    expect(meta.width).toBe(256);
+    expect(meta.height).toBe(128);
+  });
+
+  it('readImageMeta leaves small PNGs untouched when under maxSize', async () => {
+    const pngPath = join(dir, 'small.png');
+    await sharp({
+      create: { width: 50, height: 50, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+    }).png().toFile(pngPath);
+
+    const meta = await readImageMeta(pngPath, 'small', 1, 256);
+
+    expect(meta).not.toBeNull();
+    expect(meta.width).toBe(50);
+    expect(meta.height).toBe(50);
+    // Small PNGs are read by path, not buffer — buffer should be absent.
+    expect(meta.buffer).toBeUndefined();
+  });
+
+  it('readImageMeta resizes oversized PNGs to maxSize', async () => {
+    const pngPath = join(dir, 'big.png');
+    await sharp({
+      create: { width: 512, height: 300, channels: 4, background: { r: 0, g: 255, b: 0, alpha: 1 } },
+    }).png().toFile(pngPath);
+
+    const meta = await readImageMeta(pngPath, 'big', 1, 256);
+
+    expect(meta).not.toBeNull();
+    expect(meta.width).toBe(256);
+    // 300 * (256/512) = 150
+    expect(meta.height).toBe(150);
+    expect(meta.buffer).toBeInstanceOf(Buffer);
+  });
 });

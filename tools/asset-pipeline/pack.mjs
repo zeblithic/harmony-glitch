@@ -181,19 +181,53 @@ export async function collectImages(dir) {
   return results.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-export async function readImageMeta(filePath, name, scale = 1) {
+/**
+ * Read image metadata and optionally prepare a buffer. SVGs are rasterized at
+ * the target density; PNGs are returned by path unless a resize is required.
+ *
+ * `maxSize` (optional): clamp the longer side of the rasterized image to
+ * this many pixels, preserving aspect ratio, never enlarging. Lets the
+ * packer avoid including huge legacy sprites (e.g. full-size Flash doors at
+ * 663×1159) that'd never render that large in-engine anyway.
+ */
+export async function readImageMeta(filePath, name, scale = 1, maxSize = null) {
+  const resize = maxSize
+    ? { width: maxSize, height: maxSize, fit: 'inside', withoutEnlargement: true }
+    : null;
+
   try {
-    const ext = filePath.toLowerCase().endsWith('.svg') ? 'svg' : 'png';
-    if (ext === 'svg') {
+    const isSvg = filePath.toLowerCase().endsWith('.svg');
+
+    if (isSvg) {
       // Rasterize at scaled density so sharp renders the SVG at target
       // resolution natively, rather than rasterizing at 72 DPI then upscaling.
       const density = Math.round(72 * scale);
-      const buffer = await sharp(filePath, { density }).png().toBuffer();
+      let pipeline = sharp(filePath, { density }).png();
+      if (resize) pipeline = pipeline.resize(resize);
+      const buffer = await pipeline.toBuffer();
       const meta = await sharp(buffer).metadata();
       const width = meta.width ?? 0;
       const height = meta.height ?? 0;
       if (width === 0 || height === 0) return null;
       return { path: filePath, name, width, height, buffer };
+    }
+
+    // PNG: if a resize is needed, materialize into a buffer; otherwise keep
+    // the on-disk path and just read dimensions.
+    if (resize) {
+      const meta = await sharp(filePath).metadata();
+      if ((meta.width ?? 0) <= maxSize && (meta.height ?? 0) <= maxSize) {
+        return { path: filePath, name, width: meta.width, height: meta.height };
+      }
+      const buffer = await sharp(filePath).resize(resize).png().toBuffer();
+      const resizedMeta = await sharp(buffer).metadata();
+      return {
+        path: filePath,
+        name,
+        width: resizedMeta.width ?? 0,
+        height: resizedMeta.height ?? 0,
+        buffer,
+      };
     }
     const meta = await sharp(filePath).metadata();
     return { path: filePath, name, width: meta.width, height: meta.height };
@@ -219,12 +253,13 @@ if (isDirectRun) {
       name: { type: 'string', short: 'n' },
       animation: { type: 'boolean', default: false },
       scale: { type: 'string', short: 's', default: '1' },
+      'max-size': { type: 'string' },
     },
     strict: true,
   });
 
   if (!values.input || !values.output || !values.name) {
-    console.error('Usage: pack.mjs --input <dir> --output <dir> --name <name> [--animation] [--scale <n>]');
+    console.error('Usage: pack.mjs --input <dir> --output <dir> --name <name> [--animation] [--scale <n>] [--max-size <px>]');
     process.exit(1);
   }
 
@@ -233,10 +268,19 @@ if (isDirectRun) {
     console.error(`Error: --scale must be a positive number, got: ${values.scale}`);
     process.exit(1);
   }
-  await run(values.input, values.output, values.name, values.animation ?? false, scale);
+
+  let maxSize = null;
+  if (values['max-size']) {
+    maxSize = parseInt(values['max-size'], 10);
+    if (!Number.isFinite(maxSize) || maxSize <= 0) {
+      console.error(`Error: --max-size must be a positive integer, got: ${values['max-size']}`);
+      process.exit(1);
+    }
+  }
+  await run(values.input, values.output, values.name, values.animation ?? false, scale, maxSize);
 }
 
-async function run(inputDir, outputDir, name, animationMode, scale = 1) {
+async function run(inputDir, outputDir, name, animationMode, scale = 1, maxSize = null) {
   // Collect PNGs and SVGs recursively
   const entries = await collectImages(inputDir);
   if (entries.length === 0) {
@@ -246,7 +290,7 @@ async function run(inputDir, outputDir, name, animationMode, scale = 1) {
 
   // Read metadata (skip corrupt/unreadable files; rasterize SVGs)
   const imageResults = await Promise.all(
-    entries.map(({ path: filePath, name: imgName }) => readImageMeta(filePath, imgName, scale)),
+    entries.map(({ path: filePath, name: imgName }) => readImageMeta(filePath, imgName, scale, maxSize)),
   );
   const images = imageResults.filter(Boolean);
 
