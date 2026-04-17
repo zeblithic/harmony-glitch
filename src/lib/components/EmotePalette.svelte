@@ -36,7 +36,7 @@
     // resolve (alternatively wire emoteHi() directly).
     { tag: 'hi', label: 'Hi', emoji: '👋', kind: { hi: 'hi' }, needsTarget: false },
     { tag: 'dance', label: 'Dance', emoji: '💃', kind: 'dance', needsTarget: false },
-    { tag: 'wave', label: 'Wave', emoji: '👋', kind: 'wave', needsTarget: true },
+    { tag: 'wave', label: 'Wave', emoji: '👋', kind: 'wave', needsTarget: false },
     { tag: 'hug', label: 'Hug', emoji: '🤗', kind: 'hug', needsTarget: true },
     { tag: 'high_five', label: 'High-Five', emoji: '🖐️', kind: 'high_five', needsTarget: true },
     { tag: 'applaud', label: 'Applaud', emoji: '👏', kind: 'applaud', needsTarget: false },

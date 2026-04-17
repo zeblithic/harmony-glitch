@@ -766,16 +766,14 @@ fn fire_emote(
     target: Option<[u8; 16]>,
     now: std::time::Instant,
 ) -> EmoteFireResult {
-    // Wave, Hug, and HighFive all require a target — receive-path mood for
-    // these only credits when we_are_target, so letting a broadcast fire
-    // succeed would hand the sender unearned +mood on the reward cooldown
-    // with no actual recipient.
+    // Hug and HighFive physically require a target (intimate gestures with
+    // a specific recipient). Wave is dual-mode per spec §1 — "Targeted or
+    // broadcast" — so a broadcast wave (casual greeting to the street) is
+    // valid; the 30s reward cooldown is what gates sender-mood farming.
     let tag = emote::EmoteKindTag::from(kind);
     if matches!(
         tag,
-        emote::EmoteKindTag::Wave
-            | emote::EmoteKindTag::Hug
-            | emote::EmoteKindTag::HighFive
+        emote::EmoteKindTag::Hug | emote::EmoteKindTag::HighFive
     ) && target.is_none()
     {
         return EmoteFireResult::NoTarget;
@@ -4359,16 +4357,16 @@ mod emote_fire_tests {
     }
 
     #[test]
-    fn fire_emote_wave_requires_target() {
-        // Wave's receive logic only credits mood when we_are_target, so
-        // letting a broadcast wave succeed would hand the sender +1 mood
-        // (on the 30s reward cooldown) with no real recipient.
+    fn fire_emote_wave_broadcast_succeeds_per_spec() {
+        // Spec §1: Wave is "Targeted or broadcast" — a broadcast wave
+        // (casual greeting to the street) is valid. Sender mood is gated
+        // by the 30s reward cooldown, not by target presence.
         let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
         let mut mood = MoodState::default();
         let result = fire_emote(
             &mut emotes, &mut mood, id(0x01), &EmoteKind::Wave, None, Instant::now(),
         );
-        assert!(matches!(result, EmoteFireResult::NoTarget));
+        assert!(matches!(result, EmoteFireResult::Success { .. }));
     }
 
     #[test]
