@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { resolvePlayerName, hiHandler, danceHandler, applaudHandler, waveHandler, hugHandler, high5Handler } from './handlers';
+import { resolvePlayerName, hiHandler, danceHandler, applaudHandler, waveHandler, hugHandler, high5Handler, blockHandler, unblockHandler } from './handlers';
 import type { RemotePlayerFrame, NearestSocialTarget } from '$lib/types';
 import type { BuddyEntry } from '$lib/ipc';
 import type { CommandContext } from './commands';
@@ -297,5 +297,135 @@ describe('high5Handler', () => {
       }),
     );
     expect(bubbles).toEqual(["Can't high-five yourself."]);
+  });
+});
+
+describe('blockHandler', () => {
+  it('empty args bubbles usage', async () => {
+    const bubbles: string[] = [];
+    await blockHandler('', makeContext({ pushLocalBubble: (t) => bubbles.push(t) }));
+    expect(bubbles).toEqual(['Usage: /block <name>']);
+  });
+
+  it('resolves from remotePlayers, calls blockPlayer, bubbles success', async () => {
+    const blocks: string[] = [];
+    const bubbles: string[] = [];
+    await blockHandler(
+      'Alice',
+      makeContext({
+        remotePlayers: [remote('Alice', '11'.repeat(16))],
+        pushLocalBubble: (t) => bubbles.push(t),
+        blockPlayer: async (h) => { blocks.push(h); },
+      }),
+    );
+    expect(blocks).toEqual(['11'.repeat(16)]);
+    expect(bubbles).toEqual(['Blocked Alice.']);
+  });
+
+  it('falls back to buddies when not in remotePlayers', async () => {
+    const blocks: string[] = [];
+    await blockHandler(
+      'Bob',
+      makeContext({
+        remotePlayers: [],
+        buddies: [buddy('Bob', '22'.repeat(16))],
+        blockPlayer: async (h) => { blocks.push(h); },
+      }),
+    );
+    expect(blocks).toEqual(['22'.repeat(16)]);
+  });
+
+  it('name not found in either source bubbles error', async () => {
+    const blocks: string[] = [];
+    const bubbles: string[] = [];
+    await blockHandler(
+      'ghost',
+      makeContext({
+        pushLocalBubble: (t) => bubbles.push(t),
+        blockPlayer: async (h) => { blocks.push(h); },
+      }),
+    );
+    expect(bubbles).toEqual(['No player named ghost.']);
+    expect(blocks).toEqual([]);
+  });
+
+  it('self-target bubbles error and does NOT call blockPlayer', async () => {
+    const blocks: string[] = [];
+    const bubbles: string[] = [];
+    await blockHandler(
+      'me',
+      makeContext({
+        localIdentity: { displayName: 'Me', addressHash: 'ff'.repeat(16), setupComplete: true },
+        pushLocalBubble: (t) => bubbles.push(t),
+        blockPlayer: async (h) => { blocks.push(h); },
+      }),
+    );
+    expect(bubbles).toEqual(["Can't block yourself."]);
+    expect(blocks).toEqual([]);
+  });
+});
+
+describe('unblockHandler', () => {
+  it('empty args bubbles usage', async () => {
+    const bubbles: string[] = [];
+    await unblockHandler('', makeContext({ pushLocalBubble: (t) => bubbles.push(t) }));
+    expect(bubbles).toEqual(['Usage: /unblock <name>']);
+  });
+
+  it('name resolves, hash is in blocked list, unblocks', async () => {
+    const unblocks: string[] = [];
+    const bubbles: string[] = [];
+    const hash = '22'.repeat(16);
+    await unblockHandler(
+      'Bob',
+      makeContext({
+        buddies: [buddy('Bob', hash)],
+        pushLocalBubble: (t) => bubbles.push(t),
+        unblockPlayer: async (h) => { unblocks.push(h); },
+        getBlockedList: async () => [hash, 'ab'.repeat(16)],
+      }),
+    );
+    expect(unblocks).toEqual([hash]);
+    expect(bubbles).toEqual(['Unblocked Bob.']);
+  });
+
+  it('name resolves but hash not in blocked list bubbles "not blocked"', async () => {
+    const unblocks: string[] = [];
+    const bubbles: string[] = [];
+    await unblockHandler(
+      'Bob',
+      makeContext({
+        buddies: [buddy('Bob', '22'.repeat(16))],
+        pushLocalBubble: (t) => bubbles.push(t),
+        unblockPlayer: async (h) => { unblocks.push(h); },
+        getBlockedList: async () => [],
+      }),
+    );
+    expect(bubbles).toEqual(['Bob is not blocked.']);
+    expect(unblocks).toEqual([]);
+  });
+
+  it('name not found in visible+buddies bubbles "No player named X"', async () => {
+    const bubbles: string[] = [];
+    await unblockHandler(
+      'ghost',
+      makeContext({
+        pushLocalBubble: (t) => bubbles.push(t),
+        getBlockedList: async () => [],
+      }),
+    );
+    expect(bubbles).toEqual(['No player named ghost.']);
+  });
+
+  it('self-target bubbles error', async () => {
+    const bubbles: string[] = [];
+    await unblockHandler(
+      'me',
+      makeContext({
+        localIdentity: { displayName: 'Me', addressHash: 'ff'.repeat(16), setupComplete: true },
+        pushLocalBubble: (t) => bubbles.push(t),
+      }),
+    );
+    expect(bubbles).toEqual(["Can't unblock yourself."]);
   });
 });

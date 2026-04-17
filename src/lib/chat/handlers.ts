@@ -110,3 +110,52 @@ export const high5Handler: CommandHandler = async (args, ctx) => {
   }
   await ctx.fireEmote('high_five', resolved.hash);
 };
+
+export const blockHandler: CommandHandler = async (args, ctx) => {
+  const name = args.trim();
+  if (name === '') {
+    ctx.pushLocalBubble('Usage: /block <name>');
+    return;
+  }
+  if (isSelfName(name, ctx.localIdentity.displayName)) {
+    ctx.pushLocalBubble("Can't block yourself.");
+    return;
+  }
+  const resolved = resolvePlayerName(name, {
+    remotePlayers: ctx.remotePlayers,
+    buddies: ctx.buddies,
+  });
+  if (!resolved) {
+    ctx.pushLocalBubble(`No player named ${name}.`);
+    return;
+  }
+  await ctx.blockPlayer(resolved.hash);
+  ctx.pushLocalBubble(`Blocked ${resolved.displayName}.`);
+};
+
+export const unblockHandler: CommandHandler = async (args, ctx) => {
+  const name = args.trim();
+  if (name === '') {
+    ctx.pushLocalBubble('Usage: /unblock <name>');
+    return;
+  }
+  if (isSelfName(name, ctx.localIdentity.displayName)) {
+    ctx.pushLocalBubble("Can't unblock yourself.");
+    return;
+  }
+  const resolved = resolvePlayerName(name, {
+    remotePlayers: ctx.remotePlayers,
+    buddies: ctx.buddies,
+  });
+  if (!resolved) {
+    ctx.pushLocalBubble(`No player named ${name}.`);
+    return;
+  }
+  const blocked = await ctx.getBlockedList();
+  if (!blocked.includes(resolved.hash)) {
+    ctx.pushLocalBubble(`${resolved.displayName} is not blocked.`);
+    return;
+  }
+  await ctx.unblockPlayer(resolved.hash);
+  ctx.pushLocalBubble(`Unblocked ${resolved.displayName}.`);
+};
