@@ -856,10 +856,13 @@
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
-  // `chatFocused` check guards preventDefault so P can still be typed into
-  // chat. Remaining panel-state guards live inside toggleVolume so the
-  // 🔊 button and the hotkey share one gate.
-  if ((e.key === 'p' || e.key === 'P') && !chatFocused) {
+  // `currentStreet` + `chatFocused` gate preventDefault so P can still be
+  // typed into any text input — chat in-game, display-name in IdentitySetup,
+  // search in StreetPicker. `chatFocused` only covers the in-game ChatInput;
+  // pre-game screens have no currentStreet, so that check handles them.
+  // Remaining panel-state guards live inside toggleVolume so the 🔊
+  // button and the hotkey share one gate.
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused) {
     e.preventDefault();
     toggleVolume();
   }
