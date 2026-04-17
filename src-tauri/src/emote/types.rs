@@ -64,6 +64,32 @@ pub enum EmoteKind {
     Applaud,
 }
 
+/// Discriminant of `EmoteKind` — collapses all Hi variants into a single
+/// `Hi` tag. Used as a hashmap key for cooldown tracking where we care
+/// about "which kind of emote" but not "which cosmetic variant of Hi".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EmoteKindTag {
+    Hi,
+    Dance,
+    Wave,
+    Hug,
+    HighFive,
+    Applaud,
+}
+
+impl From<&EmoteKind> for EmoteKindTag {
+    fn from(kind: &EmoteKind) -> Self {
+        match kind {
+            EmoteKind::Hi(_) => EmoteKindTag::Hi,
+            EmoteKind::Dance => EmoteKindTag::Dance,
+            EmoteKind::Wave => EmoteKindTag::Wave,
+            EmoteKind::Hug => EmoteKindTag::Hug,
+            EmoteKind::HighFive => EmoteKindTag::HighFive,
+            EmoteKind::Applaud => EmoteKindTag::Applaud,
+        }
+    }
+}
+
 /// Wire message for any emote.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmoteMessage {
@@ -414,5 +440,33 @@ mod tests {
         };
         let bytes = serde_json::to_vec(&msg).unwrap();
         assert!(bytes.len() <= MAX_PAYLOAD, "EmoteMessage is {} bytes, max {}", bytes.len(), MAX_PAYLOAD);
+    }
+
+    // ── EmoteKindTag ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn emote_kind_tag_collapses_hi_variants() {
+        let tag_a: EmoteKindTag = (&EmoteKind::Hi(HiVariant::Stars)).into();
+        let tag_b: EmoteKindTag = (&EmoteKind::Hi(HiVariant::Hearts)).into();
+        assert_eq!(tag_a, tag_b);
+        assert_eq!(tag_a, EmoteKindTag::Hi);
+    }
+
+    #[test]
+    fn emote_kind_tag_distinct_per_non_hi_kind() {
+        let tags: HashSet<EmoteKindTag> = [
+            EmoteKind::Dance, EmoteKind::Wave, EmoteKind::Hug,
+            EmoteKind::HighFive, EmoteKind::Applaud,
+        ].iter().map(EmoteKindTag::from).collect();
+        assert_eq!(tags.len(), 5);
+    }
+
+    #[test]
+    fn emote_kind_tag_is_hash_key() {
+        let mut map = std::collections::HashMap::new();
+        map.insert(EmoteKindTag::Hug, 1);
+        map.insert(EmoteKindTag::HighFive, 2);
+        assert_eq!(map.get(&EmoteKindTag::Hug), Some(&1));
+        assert_eq!(map.get(&EmoteKindTag::HighFive), Some(&2));
     }
 }
