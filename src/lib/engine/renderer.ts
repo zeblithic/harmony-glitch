@@ -1,6 +1,6 @@
 import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
 import type { StreetData, RenderFrame, RemotePlayerFrame, AvatarAppearance, Direction } from '../types';
-import { SpriteManager } from './sprites';
+import { SpriteManager, type EntityContainer } from './sprites';
 import { AvatarCompositor } from './avatar';
 
 interface RemoteAvatarEntry {
@@ -33,7 +33,7 @@ export class GameRenderer {
   private layerContainers: Map<string, Container> = new Map();
   private remoteAvatars: Map<string, RemoteAvatarEntry> = new Map();
   private chatBubbles: ChatBubble[] = [];
-  private entitySprites: Map<string, Container> = new Map();
+  private entitySprites: Map<string, EntityContainer> = new Map();
   private groundItemSprites: Map<string, Container> = new Map();
   private signpostContainers: Map<string, Container> = new Map();
   private signpostLabels: Map<string, Text> = new Map();
@@ -447,7 +447,9 @@ export class GameRenderer {
       }
       sprite.x = entity.x - this.street.left;
       sprite.y = entity.y - this.street.top;
-      sprite.scale.x = entity.facing === 'right' ? 1 : -1;
+      // Flip only the inner body/sprite container; the name label lives on
+      // the outer container and stays readable regardless of facing.
+      sprite.flipRoot.scale.x = entity.facing === 'right' ? 1 : -1;
 
       // Opacity based on entity state
       if (entity.cooldownRemaining != null) {

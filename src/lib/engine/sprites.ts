@@ -13,6 +13,16 @@ import type {
   WorldItemFrame,
 } from '../types';
 
+/**
+ * Container returned by createEntity(). The outer container is positioned
+ * in world space and holds the name label; the inner `flipRoot` holds the
+ * visible body/sprite and is the only child the renderer flips horizontally,
+ * so the label stays readable regardless of facing.
+ */
+export interface EntityContainer extends Container {
+  flipRoot: Container;
+}
+
 export class SpriteManager {
   private textureCache: Map<string, Texture> = new Map();
   private warnedMissing: Set<string> = new Set();
@@ -105,40 +115,31 @@ export class SpriteManager {
     return g;
   }
 
-  createEntity(entity: WorldEntityFrame): Container {
+  createEntity(entity: WorldEntityFrame): EntityContainer {
     const texture = this.tryLoadEntityTexture(entity.spriteClass);
-    const container = new Container();
+    const container = new Container() as EntityContainer;
+    const flipRoot = new Container();
+    container.flipRoot = flipRoot;
+    container.addChild(flipRoot);
+
+    const isTree = entity.spriteClass.startsWith('tree');
+    const w = isTree ? 60 : 30;
+    const h = isTree ? 80 : 30;
 
     if (texture) {
-      const isTree = entity.spriteClass.startsWith('tree');
-      const w = isTree ? 60 : 30;
-      const h = isTree ? 80 : 30;
       const sprite = new Sprite(texture);
       sprite.anchor.set(0.5, 1);
       sprite.width = w;
       sprite.height = h;
-      container.addChild(sprite);
-
-      const label = new Text({
-        text: entity.name,
-        style: { fontSize: 10, fill: 0xffffff, align: 'center' },
-      });
-      label.anchor.set(0.5, 1);
-      label.y = -h - 4;
-      container.addChild(label);
-      return container;
+      flipRoot.addChild(sprite);
+    } else {
+      container.label = 'fallback';
+      const color = isTree ? 0x2d8a4e : 0xc4a35a;
+      const body = new Graphics();
+      body.rect(-w / 2, -h, w, h);
+      body.fill({ color, alpha: 1.0 });
+      flipRoot.addChild(body);
     }
-
-    // Fallback: colored rect (label marks it for upgrade once texture loads)
-    container.label = 'fallback';
-    const body = new Graphics();
-    const isTree = entity.spriteClass.startsWith('tree');
-    const color = isTree ? 0x2d8a4e : 0xc4a35a;
-    const w = isTree ? 60 : 30;
-    const h = isTree ? 80 : 30;
-    body.rect(-w / 2, -h, w, h);
-    body.fill({ color, alpha: 1.0 });
-    container.addChild(body);
 
     const label = new Text({
       text: entity.name,
