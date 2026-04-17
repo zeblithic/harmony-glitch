@@ -24,14 +24,15 @@
   import DialoguePanel from './lib/components/DialoguePanel.svelte';
   import QuestLogPanel from './lib/components/QuestLogPanel.svelte';
   import EmoteAnimation from './lib/components/EmoteAnimation.svelte';
+  import EmotePalette from './lib/components/EmotePalette.svelte';
   import PartyPanel from './lib/components/PartyPanel.svelte';
   import BuddyListPanel from './lib/components/BuddyListPanel.svelte';
   import SocialPrompt from './lib/components/SocialPrompt.svelte';
   import BuddyRequestPrompt from './lib/components/BuddyRequestPrompt.svelte';
   import PartyInvitePrompt from './lib/components/PartyInvitePrompt.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
   import type { PartyMemberInfo, BuddyEntry } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame } from './lib/types';
+  import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame, EmoteKind, EmoteFireResult, EmoteAnimationFrame, HiVariant } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
@@ -81,6 +82,36 @@
   let dialogueClosing: Promise<void> | null = null;
   let questLogOpen = $state(false);
   let questLog = $state<QuestLogFrame | null>(null);
+
+  // Emote palette state
+  let emotePaletteOpen = $state(false);
+  let emoteCooldowns = $state<Record<string, number>>({});
+  let emotePrivacy = $state({ hug: true, high_five: true });
+
+  /**
+   * Active emote animations keyed by playerHash ("self" for us).
+   * Each lives for ~2s then expires (matches CSS emote-float duration).
+   */
+  let activeEmotes = $state<Map<string, EmoteAnimationFrame>>(new Map());
+
+  function spawnEmoteAnimation(playerKey: string, kind: EmoteKind, targetHash: string | null) {
+    const kindStr: EmoteAnimationFrame['kind'] =
+      typeof kind === 'object' && 'hi' in kind ? 'hi' : kind;
+    const variant = typeof kind === 'object' && 'hi' in kind ? kind.hi : '';
+    const next = new Map(activeEmotes);
+    next.set(playerKey, {
+      kind: kindStr,
+      variant,
+      targetHash,
+      startedAt: performance.now(),
+    });
+    activeEmotes = next;
+    setTimeout(() => {
+      const pruned = new Map(activeEmotes);
+      pruned.delete(playerKey);
+      activeEmotes = pruned;
+    }, 2000);
+  }
 
   // Social state
   let buddyListOpen = $state(false);
@@ -567,6 +598,47 @@
   function toggleDebug() {
     debugMode = !debugMode;
   }
+
+  async function handleEmoteSelect(kind: EmoteKind) {
+    if (typeof kind === 'object' && 'hi' in kind) {
+      emoteHi().catch(console.error);
+      spawnEmoteAnimation('self', kind, null);
+      return;
+    }
+    const target = latestFrame?.nearestSocialTarget?.addressHash ?? null;
+    const result: EmoteFireResult = await emoteFire(kind, target);
+    if (result.type === 'success') {
+      spawnEmoteAnimation('self', kind, target);
+    } else if (result.type === 'cooldown') {
+      emoteCooldowns = { ...emoteCooldowns, [kind as string]: result.remaining_ms };
+    }
+  }
+
+  // Countdown tick — decrements cooldowns every 250ms while palette is open
+  $effect(() => {
+    if (!emotePaletteOpen) return;
+    const interval = setInterval(() => {
+      const next: Record<string, number> = {};
+      for (const [k, v] of Object.entries(emoteCooldowns)) {
+        const remaining = v - 250;
+        if (remaining > 0) next[k] = remaining;
+      }
+      emoteCooldowns = next;
+    }, 250);
+    return () => clearInterval(interval);
+  });
+
+  // Subscribe to emote_received events and spawn animations above the sender's avatar
+  $effect(() => {
+    let unlisten: (() => void) | undefined;
+    onEmoteReceived((evt) => {
+      const kind: EmoteKind = evt.kind === 'hi'
+        ? { hi: (evt.variant ?? 'hi') as HiVariant }
+        : evt.kind;
+      spawnEmoteAnimation(evt.senderHash, kind, null);
+    }).then(fn => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  });
 </script>
 
 <svelte:window onkeydown={(e) => {
@@ -609,6 +681,14 @@
   if ((e.key === 'h' || e.key === 'H') && currentStreet && !chatFocused && latestFrame) {
     e.preventDefault();
     emoteHi().catch(console.error);
+  }
+  // E key: toggle emote palette
+  if ((e.key === 'e' || e.key === 'E') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen && !tradeOpen && latestFrame) {
+    e.preventDefault();
+    emotePaletteOpen = !emotePaletteOpen;
+    if (emotePaletteOpen) {
+      inventoryOpen = false; volumeOpen = false; avatarEditorOpen = false; skillsOpen = false; questLogOpen = false;
+    }
   }
   // T key: initiate trade with nearest remote player (computed by Rust)
   if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !tradeRequestVisible && !shopOpen && latestFrame) {
@@ -873,6 +953,14 @@
       visible={questLogOpen}
       onClose={() => { questLogOpen = false; }}
     />
+    <EmotePalette
+      visible={emotePaletteOpen}
+      onClose={() => { emotePaletteOpen = false; }}
+      onSelect={handleEmoteSelect}
+      cooldowns={emoteCooldowns}
+      nearestTarget={latestFrame?.nearestSocialTarget?.addressHash ?? null}
+      privacy={emotePrivacy}
+    />
     <PartyPanel
       inParty={partyInParty}
       members={partyMembers}
@@ -887,13 +975,24 @@
       onBlock={(hash) => blockPlayer(hash).then(refreshBuddyList).catch(console.error)}
     />
     {#if latestFrame}
-      {#each latestFrame.remotePlayers.filter(p => p.emoteAnimation !== null) as rp (rp.addressHash)}
-        <EmoteAnimation
-          animation={rp.emoteAnimation!}
-          x={rp.x - (latestFrame.camera.x)}
-          y={rp.y - (latestFrame.camera.y)}
-        />
+      <!-- Remote player emote animations driven by onEmoteReceived listener -->
+      {#each latestFrame.remotePlayers as rp (rp.addressHash)}
+        {#if activeEmotes.has(rp.addressHash)}
+          <EmoteAnimation
+            animation={activeEmotes.get(rp.addressHash)!}
+            x={rp.x - latestFrame.camera.x}
+            y={rp.y - latestFrame.camera.y}
+          />
+        {/if}
       {/each}
+      <!-- Self emote animation (sender's own fire) -->
+      {#if activeEmotes.has('self')}
+        <EmoteAnimation
+          animation={activeEmotes.get('self')!}
+          x={latestFrame.player.x - latestFrame.camera.x}
+          y={latestFrame.player.y - latestFrame.camera.y}
+        />
+      {/if}
     {/if}
     {#if latestFrame?.nearestSocialTarget}
       {@const target = latestFrame.nearestSocialTarget}
