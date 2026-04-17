@@ -39,13 +39,9 @@
         "stone": "sfx/footstep-stone.mp3",
         "wood": "sfx/footstep-wood.mp3"
       }
-    }
-  },
-  "ambient": {
-    "default": "ambient/meadow.mp3",
-    "variants": {
-      "LADEMO001": "ambient/meadow.mp3",
-      "LADEMO002": "ambient/heights.mp3"
+    },
+    "intro": {
+      "default": "ambient/meadow.mp3"
     }
   }
 }

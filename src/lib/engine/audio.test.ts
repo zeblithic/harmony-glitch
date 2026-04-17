@@ -446,6 +446,34 @@ describe('AudioManager', () => {
       expect(manager.getVolume('sfx')).toBe(1.0);
     });
   });
+
+  describe('playIntro', () => {
+    it('plays the intro event when the kit defines one', () => {
+      const kit = makeKit();
+      kit.events.intro = { default: 'sfx/intro.mp3' };
+      const manager = new AudioManager(kit, '/audio/');
+      manager.playIntro();
+      const introHowl = findHowlBySrc('intro');
+      expect(introHowl).toBeDefined();
+      expect(introHowl!.play).toHaveBeenCalled();
+    });
+
+    it('is a no-op when the kit has no intro event', () => {
+      const manager = new AudioManager(makeKit(), '/audio/');
+      expect(() => manager.playIntro()).not.toThrow();
+    });
+  });
+
+  describe('kit without ambient', () => {
+    it('constructs and handles streetChanged events without error', () => {
+      const kit = makeKit();
+      delete kit.ambient;
+      const manager = new AudioManager(kit, '/audio/');
+      expect(() => {
+        manager.processEvents([{ type: 'streetChanged', streetId: 'LADEMO001' }]);
+      }).not.toThrow();
+    });
+  });
 });
 
 describe('kitBasePath', () => {

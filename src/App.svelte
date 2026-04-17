@@ -441,6 +441,10 @@
           // buildScene then startGame — we don't call startGame here to
           // ensure the scene is built and listeners registered first.
           currentStreet = street;
+          if (!introPlayed && audioManager) {
+            audioManager.playIntro();
+            introPlayed = true;
+          }
           // Re-fetch recipes now that skill_progress is restored from save
           try { recipes = await getRecipes(); } catch { /* ignore */ }
         }
@@ -458,6 +462,10 @@
     };
   });
 
+  // Tracks whether the "client loaded" intro has played this session so
+  // back-and-forth through StreetPicker doesn't replay it.
+  let introPlayed = false;
+
   function handleStreetLoaded(street: StreetData) {
     // Recreate AudioManager if it was disposed (Back button)
     if (!audioManager && cachedKit) {
@@ -466,6 +474,13 @@
       } catch (e) {
         console.error('Failed to recreate audio:', e);
       }
+    }
+    // Play the one-shot intro once per session. Deferred until street-load
+    // rather than AudioManager construction so it runs after user interaction
+    // (picking a street), giving the browser's autoplay policy time to unlock.
+    if (!introPlayed && audioManager) {
+      audioManager.playIntro();
+      introPlayed = true;
     }
     currentStreet = street;
   }

@@ -15,7 +15,12 @@ export interface SoundKit {
   sfxVolume: number;
   ambientVolume: number;
   events: Record<string, SoundEntry>;
-  ambient: SoundEntry;
+  /**
+   * Optional — loops as the street's background bed. Omit to run silent;
+   * callers that track street changes still work (playback is a no-op when
+   * the kit has no ambient configured).
+   */
+  ambient?: SoundEntry;
 }
 
 export interface AudioPreferences {
@@ -84,10 +89,12 @@ export class AudioManager {
         }
       }
     }
-    paths.add(this.kit.ambient.default);
-    if (this.kit.ambient.variants) {
-      for (const path of Object.values(this.kit.ambient.variants)) {
-        paths.add(path);
+    if (this.kit.ambient) {
+      paths.add(this.kit.ambient.default);
+      if (this.kit.ambient.variants) {
+        for (const path of Object.values(this.kit.ambient.variants)) {
+          paths.add(path);
+        }
       }
     }
 
@@ -177,6 +184,15 @@ export class AudioManager {
     return this.musicMuted ? 0 : this.musicVolume;
   }
 
+  /**
+   * Play the one-shot "client loaded" intro sound once. No-op if the kit
+   * doesn't define an `intro` event. Intentionally plays through the SFX
+   * channel so volume controls apply uniformly.
+   */
+  playIntro(): void {
+    this.playSfx('intro');
+  }
+
   private playSfx(eventType: string, variantKey?: string): void {
     const entry = this.kit.events[eventType];
     if (!entry) return;
@@ -190,6 +206,7 @@ export class AudioManager {
   }
 
   private handleStreetChanged(streetId: string): void {
+    if (!this.kit.ambient) return;
     const path =
       this.kit.ambient.variants?.[streetId] || this.kit.ambient.default;
     const howl = this.sounds.get(path);
