@@ -1612,6 +1612,15 @@ fn group_kick(
             .ok_or_else(|| "Group not found".to_string())?;
         validate_group_active(state)?;
 
+        // Explicit self-kick guard: `outranks` is strict (`<`, not `<=`) today,
+        // so a Founder can't kick themselves via the rank check. But that
+        // surfaces as a misleading "Insufficient rank" error, and if the
+        // harmony_groups `outranks` semantics ever relax, a Founder could
+        // unknowingly remove themselves. Check the target explicitly.
+        if peer_bytes == our_address {
+            return Err("Cannot kick yourself — use Leave or Dissolve instead".to_string());
+        }
+
         let our_role = state
             .role_of(&our_address)
             .ok_or_else(|| "Not a member of this group".to_string())?;

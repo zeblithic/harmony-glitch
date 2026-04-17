@@ -500,7 +500,13 @@ impl GroupManager {
                     }
                 }
             }
-            if !still_orphaned.is_empty() {
+            // `std::mem::take` above replaced the pool with an empty Vec.
+            // Either refill it with the ops that couldn't resolve this pass,
+            // or drop the key entirely so we don't accumulate empty entries
+            // for every group that has ever had an orphan.
+            if still_orphaned.is_empty() {
+                self.orphan_ops.remove(&group_id);
+            } else {
                 self.orphan_ops.insert(group_id, still_orphaned);
             }
             if !progress {
@@ -771,6 +777,39 @@ mod tests {
         assert!(state.is_member(&FOUNDER));
         // Alice is invited but hasn't accepted — still not a member.
         assert!(!state.is_member(&ALICE));
+    }
+
+    #[test]
+    fn orphan_pool_entry_removed_when_drained() {
+        // retry_orphans uses std::mem::take to drain the pool into a local
+        // Vec. If every orphan resolves (or gets rejected), the map should
+        // not retain an empty Vec for the group — otherwise every group
+        // that ever had an orphan leaks a tiny entry forever.
+        let dir = TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let create = genesis(FOUNDER, GROUP_ID_A, "Drain");
+        let (invite, _) = GroupOp::new_unsigned(
+            vec![create.id],
+            FOUNDER,
+            1_700_000_001,
+            GroupAction::Invite { invitee: ALICE },
+        );
+
+        // Invite orphans because its parent (create) hasn't arrived.
+        let (_p, _a) = mgr.merge_op_with_orphans(GROUP_ID_A, invite.clone());
+        assert_eq!(
+            mgr.orphan_ops.get(&GROUP_ID_A).map(|v| v.len()),
+            Some(1),
+            "invite should be pooled"
+        );
+
+        // Create arrives — invite is drained from the orphan pool.
+        let (_p, _a) = mgr.merge_op_with_orphans(GROUP_ID_A, create);
+        assert!(
+            !mgr.orphan_ops.contains_key(&GROUP_ID_A),
+            "pool key must be removed once drained, not left as empty Vec"
+        );
     }
 
     #[test]
