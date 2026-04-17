@@ -639,15 +639,27 @@
       ? nearest
       : null;
     const result: EmoteFireResult = await emoteFire(kind, target);
-    if (result.type === 'success') {
-      spawnEmoteAnimation('self', kind, target);
-    } else if (result.type === 'cooldown') {
-      // Store absolute expiry timestamp so display stays correct whether
-      // the palette is open or closed (no drift from a local decrement).
-      emoteCooldownExpiries = {
-        ...emoteCooldownExpiries,
-        [kind as string]: Date.now() + result.remaining_ms,
-      };
+    switch (result.type) {
+      case 'success':
+        spawnEmoteAnimation('self', kind, target);
+        break;
+      case 'cooldown':
+        // Store absolute expiry timestamp so display stays correct whether
+        // the palette is open or closed (no drift from a local decrement).
+        emoteCooldownExpiries = {
+          ...emoteCooldownExpiries,
+          [kind as string]: Date.now() + result.remaining_ms,
+        };
+        break;
+      case 'no_target':
+        // Targeted emote with no one in range, or out of the 400px radius.
+        // Palette already renders needs-target dimming; logging keeps the
+        // failure debuggable without silent-drop.
+        console.info(`emote ${kind}: no target in range`);
+        break;
+      case 'target_blocked':
+        console.info(`emote ${kind}: target is on block list`);
+        break;
     }
   }
 

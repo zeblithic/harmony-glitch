@@ -108,6 +108,9 @@ impl CooldownTracker {
                 self.fire_per_pair.insert((pid, tag), now);
             }
         }
+        // Opportunistic eviction — keeps map bounded by active peers rather
+        // than session-lifetime unique peers.
+        self.evict_expired_fire(now);
     }
 
     /// Receiver-side validation mirror. Enforces ONLY the per-pair cooldown
@@ -146,6 +149,7 @@ impl CooldownTracker {
         if fire_cooldown_for(tag) > Duration::ZERO {
             self.fire_per_pair.insert((sender_identity, tag), now);
         }
+        self.evict_expired_fire(now);
     }
 
     /// Atomically checks the reward cooldown. Returns `true` if the reward
@@ -173,7 +177,23 @@ impl CooldownTracker {
             }
         }
         self.reward_per_pair.insert(key, now);
+        self.evict_expired_reward(now);
         true
+    }
+
+    /// Evict fire-cooldown entries whose per-pair window has elapsed.
+    /// Global state is single-slot and doesn't need sweeping.
+    fn evict_expired_fire(&mut self, now: Instant) {
+        self.fire_per_pair.retain(|(_, tag), last| {
+            now.saturating_duration_since(*last) < fire_cooldown_for(*tag)
+        });
+    }
+
+    /// Evict reward-cooldown entries whose window has elapsed.
+    fn evict_expired_reward(&mut self, now: Instant) {
+        self.reward_per_pair.retain(|(_, tag), last| {
+            now.saturating_duration_since(*last) < reward_cooldown_for(*tag)
+        });
     }
 }
 
@@ -348,6 +368,55 @@ mod tests {
 
         let t1 = t0 + Duration::from_secs(3);
         assert!(tracker.check_receive(t1, &EmoteKind::Hug, id(2)).is_ok());
+    }
+
+    // ── Eviction ───────────────────────────────────────────────────────
+
+    #[test]
+    fn fire_map_evicts_expired_entries() {
+        // After the hug pair cooldown elapses, subsequent mark_fire/mark_receive
+        // should purge the stale entry so long-lived sessions don't accumulate
+        // unbounded state.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+        tracker.mark_fire(t0, &EmoteKind::Hug, Some(id(1)));
+        assert_eq!(tracker.fire_per_pair.len(), 1);
+
+        // Well past the 60s hug window — a new fire for a different pair
+        // should sweep the expired entry for id(1) away.
+        let t1 = t0 + Duration::from_secs(120);
+        tracker.mark_fire(t1, &EmoteKind::Hug, Some(id(2)));
+        assert_eq!(tracker.fire_per_pair.len(), 1);
+        assert!(tracker.fire_per_pair.contains_key(&(id(2), EmoteKindTag::Hug)));
+    }
+
+    #[test]
+    fn reward_map_evicts_expired_entries() {
+        // Dance reward cooldown is 5 minutes — past that, entries should
+        // be evicted on the next try_reward.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+        assert!(tracker.try_reward(t0, &EmoteKind::Dance, id(1)));
+        assert_eq!(tracker.reward_per_pair.len(), 1);
+
+        let t1 = t0 + Duration::from_secs(600);
+        assert!(tracker.try_reward(t1, &EmoteKind::Dance, id(2)));
+        assert_eq!(tracker.reward_per_pair.len(), 1);
+        assert!(tracker.reward_per_pair.contains_key(&(id(2), EmoteKindTag::Dance)));
+    }
+
+    #[test]
+    fn eviction_preserves_active_entries() {
+        // Active (still-in-window) entries must survive eviction sweeps.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+        tracker.mark_fire(t0, &EmoteKind::Hug, Some(id(1)));
+
+        // 30s later (inside the 60s hug window), mark a different pair.
+        // Both should be retained.
+        let t1 = t0 + Duration::from_secs(30);
+        tracker.mark_fire(t1, &EmoteKind::Hug, Some(id(2)));
+        assert_eq!(tracker.fire_per_pair.len(), 2);
     }
 
     #[test]

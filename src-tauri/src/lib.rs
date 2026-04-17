@@ -922,9 +922,16 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
         state.social.emotes.active_variant()
     };
 
-    // Delegate to unified fire path
-    let target_hex = nearest_hash.map(hex::encode);
-    let result = emote(emote::EmoteKind::Hi(our_variant), target_hex, app.clone())?;
+    // Fire + publish via shared helper. emote_hi skips the generic `emote`
+    // Tauri command (which rejects Hi) and calls the helper directly —
+    // range check was already enforced by our own 400px target selection,
+    // and the daily gate pre-check above replaces the generic block check.
+    let result = fire_and_publish_emote(
+        &app,
+        emote::EmoteKind::Hi(our_variant),
+        nearest_hash,
+        our_address,
+    )?;
 
     match result {
         EmoteFireResult::Success => {
@@ -947,12 +954,64 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
     }
 }
 
+/// Shared core: block-check + fire + publish. Used by both the generic
+/// `emote` Tauri command and `emote_hi` (which must keep its Hi-specific
+/// daily-gate semantics outside this helper). Assumes any command-specific
+/// preflight (range check, daily gate, target validation) has already run.
+fn fire_and_publish_emote(
+    app: &AppHandle,
+    kind: emote::EmoteKind,
+    target_bytes: Option<[u8; 16]>,
+    our_address: [u8; 16],
+) -> Result<EmoteFireResult, String> {
+    // Blocked-target check + fire — under a single game-state lock to avoid
+    // a TOCTOU gap with a concurrent buddy_block command.
+    let result = {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+
+        if let Some(t) = target_bytes {
+            if state.social.buddies.is_blocked(&t) {
+                return Ok(EmoteFireResult::TargetBlocked);
+            }
+        }
+
+        let social = &mut state.social;
+        fire_emote(
+            &mut social.emotes,
+            &mut social.mood,
+            our_address,
+            &kind,
+            target_bytes,
+            std::time::Instant::now(),
+        )
+    };
+
+    if matches!(result, EmoteFireResult::Success) {
+        let msg = emote::EmoteMessage { kind, target: target_bytes };
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        let actions = net_state.publish_emote(msg, &mut rand::rngs::OsRng);
+        drop(net_state);
+        execute_network_actions(app, actions);
+    }
+
+    Ok(result)
+}
+
 #[tauri::command]
 fn emote(
     kind: emote::EmoteKind,
     target: Option<String>,
     app: AppHandle,
 ) -> Result<EmoteFireResult, String> {
+    // Hi has its own daily gate + viral variant selection semantics that live
+    // in `emote_hi`. Routing Hi through this generic path would skip those
+    // checks and let a direct IPC call send unlimited custom-variant Hi's.
+    if matches!(kind, emote::EmoteKind::Hi(_)) {
+        return Err("Hi emotes must use the emote_hi endpoint".to_string());
+    }
+
     let mut target_bytes: Option<[u8; 16]> = match target {
         Some(hex_str) => {
             let bytes = hex::decode(&hex_str).map_err(|_| "Invalid target hash".to_string())?;
@@ -988,14 +1047,12 @@ fn emote(
 
     if needs_range_check {
         if let Some(target) = target_bytes {
-            // Get our position from game state
             let (self_x, self_y) = {
                 let state_wrapper = app.state::<GameStateWrapper>();
                 let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
                 (state.player.x, state.player.y)
             };
 
-            // Get target position from net state
             let target_pos = {
                 let net = app.state::<NetworkWrapper>();
                 let net_state = net.0.lock().map_err(|e| e.to_string())?;
@@ -1012,7 +1069,6 @@ fn emote(
                     .map(|rf| (rf.x, rf.y))
             };
 
-            // If target not found or out of range, reject with NoTarget
             match target_pos {
                 None => return Ok(EmoteFireResult::NoTarget),
                 Some((tx, ty)) => {
@@ -1022,47 +1078,11 @@ fn emote(
                 }
             }
         } else {
-            // No target specified for an emote that requires one
             return Ok(EmoteFireResult::NoTarget);
         }
     }
 
-    // Blocked-target check + fire — under a single game-state lock to avoid
-    // a TOCTOU gap with a concurrent buddy_block command.
-    let result = {
-        let state_wrapper = app.state::<GameStateWrapper>();
-        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-
-        // Receiver also re-checks the block list — this is the sender-side
-        // early reject so we don't burn a cooldown or ship a packet.
-        if let Some(t) = target_bytes {
-            if state.social.buddies.is_blocked(&t) {
-                return Ok(EmoteFireResult::TargetBlocked);
-            }
-        }
-
-        let social = &mut state.social;
-        fire_emote(
-            &mut social.emotes,
-            &mut social.mood,
-            our_address,
-            &kind,
-            target_bytes,
-            std::time::Instant::now(),
-        )
-    };
-
-    // Only broadcast on success
-    if matches!(result, EmoteFireResult::Success) {
-        let msg = emote::EmoteMessage { kind, target: target_bytes };
-        let net = app.state::<NetworkWrapper>();
-        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
-        let actions = net_state.publish_emote(msg, &mut rand::rngs::OsRng);
-        drop(net_state);
-        execute_network_actions(&app, actions);
-    }
-
-    Ok(result)
+    fire_and_publish_emote(&app, kind, target_bytes, our_address)
 }
 
 #[tauri::command]
