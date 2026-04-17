@@ -97,7 +97,7 @@
     };
     window.addEventListener('harmony:local-bubble', handleLocalBubble as EventListener);
 
-    cleanupFns.push(unlisten, unlistenChat, () => r.destroy(), () => window.removeEventListener('harmony:local-bubble', handleLocalBubble as EventListener));
+    cleanupFns.push(unlisten, unlistenChat, () => window.removeEventListener('harmony:local-bubble', handleLocalBubble as EventListener), () => r.destroy());
 
     if (street) {
       await r.buildScene(street);

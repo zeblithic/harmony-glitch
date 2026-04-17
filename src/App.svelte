@@ -40,6 +40,15 @@
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
   import { LocalMusicSource, type TrackCatalog } from './lib/engine/music';
 
+  // Local system bubbles (e.g., slash-command feedback) travel as a
+  // window CustomEvent; GameCanvas subscribes alongside its Tauri event
+  // listeners and forwards the payload into renderer.addChatBubble.
+  declare global {
+    interface WindowEventMap {
+      'harmony:local-bubble': CustomEvent<{ addressHash: string; text: string }>;
+    }
+  }
+
   let audioManager = $state<AudioManager | null>(null);
   let cachedKit: SoundKit | null = null;
   let soundKits = $state<SoundKitMeta[]>([]);
@@ -142,7 +151,7 @@
       localIdentity: {
         displayName: ourDisplayName,
         addressHash: ourAddressHash,
-        setupComplete: true,
+        setupComplete: identityReady,
       },
       pushLocalBubble: pushBubble,
       fireEmote: (kind, target) => fireEmoteWithFeedback(kind, target, pushBubble),
@@ -159,16 +168,6 @@
 
   async function handleChatCommand(parsed: Extract<ParsedCommand, { kind: 'command' }>) {
     await executeCommand(parsed, commandRegistry, buildCommandContext());
-  }
-
-  // The `pushBubble` adapter above dispatches a window CustomEvent that
-  // GameCanvas listens for (see Step 4). This mirrors how GameCanvas already
-  // receives Tauri chat_message events and keeps App.svelte decoupled from
-  // the renderer's lifecycle.
-  declare global {
-    interface WindowEventMap {
-      'harmony:local-bubble': CustomEvent<{ addressHash: string; text: string }>;
-    }
   }
 
   /**
