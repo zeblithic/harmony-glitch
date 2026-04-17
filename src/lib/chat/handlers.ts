@@ -40,3 +40,73 @@ export const danceHandler: CommandHandler = async (_args, ctx) => {
 export const applaudHandler: CommandHandler = async (_args, ctx) => {
   await ctx.fireEmote('applaud', null);
 };
+
+/** Returns true iff `name` matches the local player's displayName (case-insensitive, trimmed). */
+function isSelfName(name: string, localDisplayName: string): boolean {
+  return name.trim().toLowerCase() === localDisplayName.toLowerCase();
+}
+
+export const waveHandler: CommandHandler = async (args, ctx) => {
+  const name = args.trim();
+  if (name === '') {
+    const target = ctx.nearestSocialTarget?.addressHash ?? null;
+    await ctx.fireEmote('wave', target);
+    return;
+  }
+  if (isSelfName(name, ctx.localIdentity.displayName)) {
+    ctx.pushLocalBubble("Can't wave at yourself.");
+    return;
+  }
+  const resolved = resolvePlayerName(name, { remotePlayers: ctx.remotePlayers });
+  if (!resolved) {
+    ctx.pushLocalBubble(`No player named ${name} nearby.`);
+    return;
+  }
+  await ctx.fireEmote('wave', resolved.hash);
+};
+
+export const hugHandler: CommandHandler = async (args, ctx) => {
+  const name = args.trim();
+  if (name === '') {
+    const target = ctx.nearestSocialTarget?.addressHash ?? null;
+    if (target === null) {
+      ctx.pushLocalBubble('/hug needs a target nearby.');
+      return;
+    }
+    await ctx.fireEmote('hug', target);
+    return;
+  }
+  if (isSelfName(name, ctx.localIdentity.displayName)) {
+    ctx.pushLocalBubble("Can't hug yourself.");
+    return;
+  }
+  const resolved = resolvePlayerName(name, { remotePlayers: ctx.remotePlayers });
+  if (!resolved) {
+    ctx.pushLocalBubble(`No player named ${name} nearby.`);
+    return;
+  }
+  await ctx.fireEmote('hug', resolved.hash);
+};
+
+export const high5Handler: CommandHandler = async (args, ctx) => {
+  const name = args.trim();
+  if (name === '') {
+    const target = ctx.nearestSocialTarget?.addressHash ?? null;
+    if (target === null) {
+      ctx.pushLocalBubble('/high5 needs a target nearby.');
+      return;
+    }
+    await ctx.fireEmote('high_five', target);
+    return;
+  }
+  if (isSelfName(name, ctx.localIdentity.displayName)) {
+    ctx.pushLocalBubble("Can't high-five yourself.");
+    return;
+  }
+  const resolved = resolvePlayerName(name, { remotePlayers: ctx.remotePlayers });
+  if (!resolved) {
+    ctx.pushLocalBubble(`No player named ${name} nearby.`);
+    return;
+  }
+  await ctx.fireEmote('high_five', resolved.hash);
+};
