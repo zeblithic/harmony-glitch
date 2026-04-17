@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { resolvePlayerName, hiHandler, danceHandler, applaudHandler, waveHandler, hugHandler, high5Handler, blockHandler, unblockHandler } from './handlers';
+import { resolvePlayerName, hiHandler, danceHandler, applaudHandler, waveHandler, hugHandler, high5Handler, blockHandler, unblockHandler, meHandler } from './handlers';
 import type { RemotePlayerFrame, NearestSocialTarget } from '$lib/types';
 import type { BuddyEntry } from '$lib/ipc';
 import type { CommandContext } from './commands';
@@ -427,5 +427,51 @@ describe('unblockHandler', () => {
       }),
     );
     expect(bubbles).toEqual(["Can't unblock yourself."]);
+  });
+});
+
+describe('meHandler', () => {
+  it('empty args bubbles usage', async () => {
+    const bubbles: string[] = [];
+    const sends: string[] = [];
+    await meHandler(
+      '',
+      makeContext({
+        pushLocalBubble: (t) => bubbles.push(t),
+        sendChat: async (t) => { sends.push(t); },
+      }),
+    );
+    expect(bubbles).toEqual(['Usage: /me <action>']);
+    expect(sends).toEqual([]);
+  });
+
+  it('whitespace-only args treated as empty', async () => {
+    const bubbles: string[] = [];
+    await meHandler('   ', makeContext({ pushLocalBubble: (t) => bubbles.push(t) }));
+    expect(bubbles).toEqual(['Usage: /me <action>']);
+  });
+
+  it('formats as "* {name} {action} *" and calls sendChat', async () => {
+    const sends: string[] = [];
+    await meHandler(
+      'waves hello',
+      makeContext({
+        localIdentity: { displayName: 'Alice', addressHash: 'aa'.repeat(16), setupComplete: true },
+        sendChat: async (t) => { sends.push(t); },
+      }),
+    );
+    expect(sends).toEqual(['* Alice waves hello *']);
+  });
+
+  it('preserves intra-arg whitespace', async () => {
+    const sends: string[] = [];
+    await meHandler(
+      'waves  hello  world',
+      makeContext({
+        localIdentity: { displayName: 'Me', addressHash: 'ff'.repeat(16), setupComplete: true },
+        sendChat: async (t) => { sends.push(t); },
+      }),
+    );
+    expect(sends).toEqual(['* Me waves  hello  world *']);
   });
 });

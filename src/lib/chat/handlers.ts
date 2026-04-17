@@ -159,3 +159,13 @@ export const unblockHandler: CommandHandler = async (args, ctx) => {
   await ctx.unblockPlayer(resolved.hash);
   ctx.pushLocalBubble(`Unblocked ${resolved.displayName}.`);
 };
+
+export const meHandler: CommandHandler = async (args, ctx) => {
+  const action = args.trim();
+  if (action === '') {
+    ctx.pushLocalBubble('Usage: /me <action>');
+    return;
+  }
+  const formatted = `* ${ctx.localIdentity.displayName} ${args} *`;
+  await ctx.sendChat(formatted);
+};
