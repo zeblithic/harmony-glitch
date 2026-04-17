@@ -110,6 +110,44 @@ impl CooldownTracker {
         }
     }
 
+    /// Receiver-side validation mirror. Enforces ONLY the per-pair cooldown
+    /// (e.g., hug 60s, high-five 30s) — never the global anti-mash cooldown,
+    /// which is this client's own outbound throttle and must not be consumed
+    /// by inbound traffic from unrelated senders.
+    ///
+    /// `sender_identity` is the peer that sent us this emote.
+    pub fn check_receive(
+        &self,
+        now: Instant,
+        kind: &EmoteKind,
+        sender_identity: [u8; 16],
+    ) -> Result<(), CooldownRemaining> {
+        let tag = EmoteKindTag::from(kind);
+        let pair_cd = fire_cooldown_for(tag);
+        if pair_cd == Duration::ZERO {
+            return Ok(());
+        }
+        if let Some(last) = self.fire_per_pair.get(&(sender_identity, tag)) {
+            let elapsed = now.saturating_duration_since(*last);
+            if elapsed < pair_cd {
+                return Err(CooldownRemaining {
+                    remaining_ms: (pair_cd - elapsed).as_millis() as u64,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Records that we accepted a received emote. Updates only the per-pair
+    /// fire map — never `last_global_fire`, which is reserved for this
+    /// client's own outbound fire rate.
+    pub fn mark_receive(&mut self, now: Instant, kind: &EmoteKind, sender_identity: [u8; 16]) {
+        let tag = EmoteKindTag::from(kind);
+        if fire_cooldown_for(tag) > Duration::ZERO {
+            self.fire_per_pair.insert((sender_identity, tag), now);
+        }
+    }
+
     /// Atomically checks the reward cooldown. Returns `true` if the reward
     /// should be applied (and records this moment). Returns `false` if the
     /// last reward was inside the window.
@@ -248,6 +286,68 @@ mod tests {
         assert!(tracker.try_reward(t0, &EmoteKind::Dance, id(1)));
         // Same kind, different pair — independent
         assert!(tracker.try_reward(t0, &EmoteKind::Dance, id(2)));
+    }
+
+    // ── check_receive / mark_receive ──────────────────────────────────
+
+    #[test]
+    fn receive_ignores_global_fire_cooldown() {
+        // Two different remote senders firing dance within the sender-side
+        // global window should BOTH be accepted — the global cooldown is
+        // this client's own throttle, not the network's.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+
+        // Sender A's dance arrives
+        assert!(tracker.check_receive(t0, &EmoteKind::Dance, id(1)).is_ok());
+        tracker.mark_receive(t0, &EmoteKind::Dance, id(1));
+
+        // 500ms later (well inside 2s global window), sender B's dance arrives
+        let t1 = t0 + Duration::from_millis(500);
+        assert!(
+            tracker.check_receive(t1, &EmoteKind::Dance, id(2)).is_ok(),
+            "receive must not enforce global cooldown"
+        );
+    }
+
+    #[test]
+    fn receive_does_not_mutate_global_fire_state() {
+        // A received emote must not block this client's own next outbound fire.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+
+        // Receive sender A's dance
+        tracker.mark_receive(t0, &EmoteKind::Dance, id(1));
+
+        // Our own outbound dance 500ms later should be unaffected
+        let t1 = t0 + Duration::from_millis(500);
+        assert!(
+            tracker.check_fire(t1, &EmoteKind::Dance, None).is_ok(),
+            "receive must not consume the sender-side global cooldown"
+        );
+    }
+
+    #[test]
+    fn receive_enforces_per_pair_cooldown() {
+        // Same sender hugging us twice within per-pair window should drop
+        // the second hug.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+        tracker.mark_receive(t0, &EmoteKind::Hug, id(1));
+
+        let t1 = t0 + Duration::from_secs(3);
+        assert!(tracker.check_receive(t1, &EmoteKind::Hug, id(1)).is_err());
+    }
+
+    #[test]
+    fn receive_per_pair_is_independent_of_sender_identity() {
+        // Different senders each get their own per-pair window.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+        tracker.mark_receive(t0, &EmoteKind::Hug, id(1));
+
+        let t1 = t0 + Duration::from_secs(3);
+        assert!(tracker.check_receive(t1, &EmoteKind::Hug, id(2)).is_ok());
     }
 
     #[test]

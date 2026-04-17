@@ -901,7 +901,10 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
         (our_hash, nearest)
     };
 
-    // Apply Hi daily-per-target gate (Hi-specific semantics) + compute variant
+    // Pre-check Hi daily-per-target gate and block list, but DO NOT record yet —
+    // recording is deferred until the unified fire path confirms success. This
+    // prevents a cooldown/no-target/blocked rejection from consuming today's
+    // Hi allowance for this target.
     let our_variant = {
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
@@ -914,7 +917,6 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
             if state.social.buddies.is_blocked(&target) {
                 return Err("Player is blocked".to_string());
             }
-            state.social.emotes.record_hi_sent(target);
         }
 
         state.social.emotes.active_variant()
@@ -925,12 +927,18 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
     let result = emote(emote::EmoteKind::Hi(our_variant), target_hex, app.clone())?;
 
     match result {
-        EmoteFireResult::Success => Ok(serde_json::json!({
-            "variant": our_variant.as_str(),
-            "targeted": nearest_hash.is_some(),
-        })),
-        // Hi has its own daily gate, so fire_emote cooldown shouldn't fire
-        // in practice — but surface the reason cleanly if it does.
+        EmoteFireResult::Success => {
+            // Fire succeeded — NOW consume the daily Hi allowance.
+            if let Some(target) = nearest_hash {
+                let state_wrapper = app.state::<GameStateWrapper>();
+                let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+                state.social.emotes.record_hi_sent(target);
+            }
+            Ok(serde_json::json!({
+                "variant": our_variant.as_str(),
+                "targeted": nearest_hash.is_some(),
+            }))
+        }
         EmoteFireResult::Cooldown { remaining_ms } => Err(format!(
             "Emote on cooldown ({remaining_ms}ms remaining)"
         )),
@@ -945,7 +953,7 @@ fn emote(
     target: Option<String>,
     app: AppHandle,
 ) -> Result<EmoteFireResult, String> {
-    let target_bytes: Option<[u8; 16]> = match target {
+    let mut target_bytes: Option<[u8; 16]> = match target {
         Some(hex_str) => {
             let bytes = hex::decode(&hex_str).map_err(|_| "Invalid target hash".to_string())?;
             if bytes.len() != 16 {
@@ -957,6 +965,16 @@ fn emote(
         }
         None => None,
     };
+
+    // Hardening: Dance and Applaud are broadcast-only kinds. Strip any target
+    // supplied by a misbehaving client — their receive-path semantics rely on
+    // `target.is_none()` to compute witness-mood for nearby bystanders.
+    if matches!(
+        emote::EmoteKindTag::from(&kind),
+        emote::EmoteKindTag::Dance | emote::EmoteKindTag::Applaud
+    ) {
+        target_bytes = None;
+    }
 
     let our_address = {
         let net = app.state::<NetworkWrapper>();
@@ -2322,18 +2340,35 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     continue;
                 }
 
-                // Receiver-side fire-cooldown mirror — drop if over-limit.
+                // Range validation for targeted hug/high-five — mirrors the
+                // 400px sender-side check. A modified client could otherwise
+                // deliver a hug from arbitrary range and still affect us.
+                if matches!(tag, emote::EmoteKindTag::Hug | emote::EmoteKindTag::HighFive)
+                    && we_are_target
+                {
+                    let in_range = sender_pos
+                        .map(|(sx, sy)| is_target_in_range(self_pos.0, self_pos.1, sx, sy, 400.0))
+                        .unwrap_or(false);
+                    if !in_range {
+                        continue;
+                    }
+                }
+
+                // Receiver-side fire-cooldown mirror — enforces ONLY the
+                // per-pair cooldown (hug 60s / high-five 30s). Global
+                // anti-mash cooldown is a local outbound throttle and must
+                // not be consumed by inbound traffic from other senders.
                 let now = std::time::Instant::now();
                 if state
                     .social
                     .emotes
                     .cooldowns
-                    .check_fire(now, &emote.kind, Some(sender))
+                    .check_receive(now, &emote.kind, sender)
                     .is_err()
                 {
                     continue;
                 }
-                state.social.emotes.cooldowns.mark_fire(now, &emote.kind, Some(sender));
+                state.social.emotes.cooldowns.mark_receive(now, &emote.kind, sender);
 
                 // Route by kind
                 let (mood_delta, event_kind) = match &emote.kind {

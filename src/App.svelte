@@ -83,9 +83,21 @@
   let questLogOpen = $state(false);
   let questLog = $state<QuestLogFrame | null>(null);
 
-  // Emote palette state
+  // Emote palette state. `emoteCooldownExpiries` stores absolute wall-clock
+  // expiry timestamps (Date.now() + remaining_ms from Rust). Displayed
+  // remaining-ms is derived on every tick so closing/reopening the palette
+  // shows the correct live value — no drift from a local decrement loop.
   let emotePaletteOpen = $state(false);
-  let emoteCooldowns = $state<Record<string, number>>({});
+  let emoteCooldownExpiries = $state<Record<string, number>>({});
+  let emoteCooldownTick = $state(Date.now());
+  let emoteCooldowns = $derived.by(() => {
+    const out: Record<string, number> = {};
+    for (const [k, exp] of Object.entries(emoteCooldownExpiries)) {
+      const rem = exp - emoteCooldownTick;
+      if (rem > 0) out[k] = rem;
+    }
+    return out;
+  });
   let emotePrivacy = $state({ hug: true, high_five: true });
 
   /**
@@ -98,15 +110,15 @@
     const kindStr: EmoteAnimationFrame['kind'] =
       typeof kind === 'object' && 'hi' in kind ? 'hi' : kind;
     const variant = typeof kind === 'object' && 'hi' in kind ? kind.hi : '';
+    const startedAt = performance.now();
     const next = new Map(activeEmotes);
-    next.set(playerKey, {
-      kind: kindStr,
-      variant,
-      targetHash,
-      startedAt: performance.now(),
-    });
+    next.set(playerKey, { kind: kindStr, variant, targetHash, startedAt });
     activeEmotes = next;
+    // Gate cleanup on the exact instance we inserted — a newer animation
+    // from the same playerKey must not be deleted by the older timer.
     setTimeout(() => {
+      const current = activeEmotes.get(playerKey);
+      if (!current || current.startedAt !== startedAt) return;
       const pruned = new Map(activeEmotes);
       pruned.delete(playerKey);
       activeEmotes = pruned;
@@ -600,30 +612,49 @@
   }
 
   async function handleEmoteSelect(kind: EmoteKind) {
+    // Hi has its own IPC (daily-variant + target selection semantics live in
+    // Rust). Wait for the result so the local animation uses the backend's
+    // chosen variant and only plays on success.
     if (typeof kind === 'object' && 'hi' in kind) {
-      emoteHi().catch(console.error);
-      spawnEmoteAnimation('self', kind, null);
+      try {
+        const result = await emoteHi();
+        spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
+      } catch (err) {
+        console.error('emoteHi rejected:', err);
+      }
       return;
     }
-    const target = latestFrame?.nearestSocialTarget?.addressHash ?? null;
+
+    // Only targeted-only kinds get the nearest peer as a target. Dance and
+    // Applaud are broadcast-by-design — sending them with a target would
+    // collapse them into a single-recipient message and suppress both
+    // bystander rendering and witness-mood credit. Rust also strips the
+    // target for broadcast-only kinds as a defense-in-depth layer.
+    const nearest = latestFrame?.nearestSocialTarget?.addressHash ?? null;
+    const target = (kind === 'hug' || kind === 'high_five' || kind === 'wave')
+      ? nearest
+      : null;
     const result: EmoteFireResult = await emoteFire(kind, target);
     if (result.type === 'success') {
       spawnEmoteAnimation('self', kind, target);
     } else if (result.type === 'cooldown') {
-      emoteCooldowns = { ...emoteCooldowns, [kind as string]: result.remaining_ms };
+      // Store absolute expiry timestamp so display stays correct whether
+      // the palette is open or closed (no drift from a local decrement).
+      emoteCooldownExpiries = {
+        ...emoteCooldownExpiries,
+        [kind as string]: Date.now() + result.remaining_ms,
+      };
     }
   }
 
-  // Countdown tick — decrements cooldowns every 250ms while palette is open
+  // Cooldown tick — refreshes the derived display by advancing the wall-clock
+  // reference every 250ms while the palette is open. No game logic here; the
+  // authoritative cooldown timing is in Rust, and expiries are absolute, so
+  // closing/reopening the palette never shows a stale remaining time.
   $effect(() => {
     if (!emotePaletteOpen) return;
     const interval = setInterval(() => {
-      const next: Record<string, number> = {};
-      for (const [k, v] of Object.entries(emoteCooldowns)) {
-        const remaining = v - 250;
-        if (remaining > 0) next[k] = remaining;
-      }
-      emoteCooldowns = next;
+      emoteCooldownTick = Date.now();
     }, 250);
     return () => clearInterval(interval);
   });
