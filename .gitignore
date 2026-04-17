@@ -38,5 +38,6 @@ streets/
 # Asset pipeline intermediate files
 tools/asset-pipeline/extracted/
 
-# Asset pipeline outputs (restored from CAS — only atlas groups with manifests)
-assets/sprites/items/
+# Asset pipeline outputs. Originally designed to be restored from CAS, but
+# current cas-tool doesn't yet chunk large atlases across multiple books —
+# until it does, atlases are committed to git directly. See ZEB-131.
