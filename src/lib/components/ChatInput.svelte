@@ -1,7 +1,14 @@
 <script lang="ts">
   import { sendChat } from '../ipc';
+  import { parseCommand, type ParsedCommand } from '../chat/commands';
 
-  let { onFocusChange }: { onFocusChange: (focused: boolean) => void } = $props();
+  let {
+    onFocusChange,
+    onCommand,
+  }: {
+    onFocusChange: (focused: boolean) => void;
+    onCommand: (parsed: Extract<ParsedCommand, { kind: 'command' }>) => Promise<void>;
+  } = $props();
 
   let inputEl = $state<HTMLInputElement>();
   let text = $state('');
@@ -17,11 +24,20 @@
   }
 
   function handleSubmit() {
-    if (text.trim()) {
-      sendChat(text.trim()).catch(console.error);
-      text = '';
-    }
+    const raw = text.trim();
+    text = '';
+    if (inputEl) inputEl.value = '';
     handleBlur();
+    if (raw === '') return;
+
+    const parsed = parseCommand(raw);
+    if (parsed === null) {
+      sendChat(raw).catch(console.error);
+    } else if (parsed.kind === 'literal') {
+      sendChat(parsed.text).catch(console.error);
+    } else {
+      onCommand(parsed).catch(console.error);
+    }
   }
 
   function handleBlur() {

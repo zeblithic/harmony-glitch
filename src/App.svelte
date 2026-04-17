@@ -849,7 +849,10 @@
   {:else if currentStreet}
     <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen || avatarEditorOpen || tradeOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
-    <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
+    <ChatInput
+      onFocusChange={(focused) => { chatFocused = focused; }}
+      onCommand={async () => {}}
+    />
     <NetworkStatus />
     <GameNotification feedback={[...(latestFrame?.pickupFeedback ?? []), ...emoteFeedback]} />
     <VolumeSettings
