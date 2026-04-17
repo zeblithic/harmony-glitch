@@ -215,7 +215,7 @@
     </div>
 
     <div class="tab-bar" role="tablist" aria-label="Avatar sections"
-      onkeydown={handleGroupTabKey}>
+      tabindex="-1" onkeydown={handleGroupTabKey}>
       {#each Object.keys(TAB_GROUPS) as group}
         <button type="button" role="tab"
           aria-selected={activeTabGroup === group}
@@ -231,7 +231,7 @@
 
     {#if TAB_GROUPS[activeTabGroup].length > 1}
       <div class="sub-tab-bar" role="tablist" aria-label="{displayName(activeTabGroup)} categories"
-        onkeydown={handleSubTabKey}>
+        tabindex="-1" onkeydown={handleSubTabKey}>
         {#each TAB_GROUPS[activeTabGroup] as cat}
           <button type="button" role="tab"
             id="subtab-{cat}"

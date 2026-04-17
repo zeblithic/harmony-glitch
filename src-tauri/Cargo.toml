@@ -2,6 +2,10 @@
 name = "harmony-glitch"
 version = "0.1.0"
 edition = "2021"
+# Without this, `cargo run` (and therefore `npm run tauri dev`) fails with
+# "could not determine which binary to run" because we also ship several
+# feature-gated asset-pipeline bins (extract-swf, cas-tool, etc.).
+default-run = "harmony-glitch"
 
 [[bin]]
 name = "extract-swf"

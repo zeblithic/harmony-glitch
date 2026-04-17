@@ -110,21 +110,26 @@
       if (num <= opts.length) {
         e.preventDefault();
         handleChoose(opts[num - 1].index);
+        return;
       }
     }
-  }
-
-  function handleOptionKeyDown(e: KeyboardEvent) {
-    const options = Array.from(
-      dialogEl?.querySelectorAll<HTMLElement>('.dialogue-option') ?? []
-    );
-    const idx = options.findIndex(el => el === document.activeElement);
-    if (e.key === 'ArrowDown' && idx < options.length - 1) {
-      e.preventDefault();
-      options[idx + 1].focus();
-    } else if (e.key === 'ArrowUp' && idx > 0) {
-      e.preventDefault();
-      options[idx - 1].focus();
+    // Arrow keys to move focus between options. Handled on <dialog> rather
+    // than the options container: a plain <div> with `role="list"` is a
+    // non-interactive element and may not host keyboard handlers per ARIA,
+    // while <dialog> is already the keyboard host for Esc and number keys.
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const options = Array.from(
+        dialogEl?.querySelectorAll<HTMLElement>('.dialogue-option') ?? []
+      );
+      const idx = options.findIndex(el => el === document.activeElement);
+      if (idx === -1) return;
+      if (e.key === 'ArrowDown' && idx < options.length - 1) {
+        e.preventDefault();
+        options[idx + 1].focus();
+      } else if (e.key === 'ArrowUp' && idx > 0) {
+        e.preventDefault();
+        options[idx - 1].focus();
+      }
     }
   }
 </script>
@@ -149,12 +154,11 @@
       <div class="dialogue-text">{dialogueFrame.text}</div>
 
       {#if dialogueFrame.options.length > 0}
-        <div class="options-list" role="list" onkeydown={handleOptionKeyDown}>
+        <div class="options-list">
           {#each dialogueFrame.options as option, i (option.index)}
             <button
               type="button"
               class="dialogue-option"
-              role="listitem"
               onclick={() => handleChoose(option.index)}
             >
               <span class="option-number">{i + 1}.</span>

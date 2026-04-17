@@ -1205,11 +1205,6 @@ fn party_kick(peer_hash: String, app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn get_party_state(app: AppHandle) -> Result<serde_json::Value, String> {
-    let net = app.state::<NetworkWrapper>();
-    let net_state = net.0.lock().map_err(|e| e.to_string())?;
-    let our_address = net_state.our_address_hash();
-    drop(net_state);
-
     let state_wrapper = app.state::<GameStateWrapper>();
     let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
