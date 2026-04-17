@@ -995,6 +995,28 @@ fn emote(
     Ok(result)
 }
 
+#[tauri::command]
+fn set_emote_privacy(
+    kind: emote::EmoteKind,
+    accept: bool,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    state.social.emotes.set_privacy(emote::EmoteKindTag::from(&kind), accept);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_emote_privacy(app: AppHandle) -> Result<serde_json::Value, String> {
+    let state_wrapper = app.state::<GameStateWrapper>();
+    let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "hug": state.social.emotes.accept_hug,
+        "high_five": state.social.emotes.accept_high_five,
+    }))
+}
+
 // ── Social: Buddies ──────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -4066,7 +4088,7 @@ mod tests {
 #[cfg(test)]
 mod emote_fire_tests {
     use super::*;
-    use crate::emote::{EmoteKind, EmoteState};
+    use crate::emote::{EmoteKind, EmoteKindTag, EmoteState};
     use crate::mood::MoodState;
     use std::time::{Duration, Instant};
 
@@ -4287,6 +4309,21 @@ mod emote_fire_tests {
 
         assert!((delta - 3.0).abs() < 0.01);
         assert!((mood.mood - (initial + 3.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn privacy_toggle_round_trip_on_state() {
+        let mut s = EmoteState::new(id(0x01), "2026-04-10");
+        assert_eq!((s.accept_hug, s.accept_high_five), (true, true));
+
+        s.set_privacy(EmoteKindTag::Hug, false);
+        assert_eq!((s.accept_hug, s.accept_high_five), (false, true));
+
+        s.set_privacy(EmoteKindTag::HighFive, false);
+        assert_eq!((s.accept_hug, s.accept_high_five), (false, false));
+
+        s.set_privacy(EmoteKindTag::Hug, true);
+        assert_eq!((s.accept_hug, s.accept_high_five), (true, false));
     }
 }
 
@@ -4664,6 +4701,8 @@ pub fn run() {
             get_mood,
             emote_hi,
             emote,
+            set_emote_privacy,
+            get_emote_privacy,
             buddy_request,
             buddy_accept,
             buddy_decline,
