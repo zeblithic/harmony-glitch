@@ -185,3 +185,19 @@ export const helpHandler: CommandHandler = async (_args, ctx) => {
     ctx.pushLocalBubble(HELP_LINES[i]);
   }
 };
+
+export function createDefaultHandlers(): CommandRegistry {
+  return new Map<string, CommandHandler>([
+    ['hi', hiHandler],
+    ['dance', danceHandler],
+    ['applaud', applaudHandler],
+    ['wave', waveHandler],
+    ['hug', hugHandler],
+    ['high5', high5Handler],
+    ['highfive', high5Handler],
+    ['block', blockHandler],
+    ['unblock', unblockHandler],
+    ['me', meHandler],
+    ['help', helpHandler],
+  ]);
+}

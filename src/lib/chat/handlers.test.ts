@@ -504,3 +504,33 @@ describe('helpHandler', () => {
     }
   });
 });
+
+import { createDefaultHandlers } from './handlers';
+
+describe('createDefaultHandlers', () => {
+  it('registers all 10 v1 commands', () => {
+    const reg = createDefaultHandlers();
+    for (const cmd of ['hi', 'dance', 'wave', 'hug', 'high5', 'applaud',
+                       'block', 'unblock', 'me', 'help']) {
+      expect(reg.has(cmd)).toBe(true);
+    }
+  });
+
+  it('aliases /highfive to the /high5 handler', () => {
+    const reg = createDefaultHandlers();
+    expect(reg.get('highfive')).toBe(reg.get('high5'));
+  });
+
+  it('is integration-wired: /dance fires dance broadcast through the registry lookup', async () => {
+    const calls: Array<[string, string | null]> = [];
+    const reg = createDefaultHandlers();
+    const handler = reg.get('dance')!;
+    await handler(
+      '',
+      makeContext({
+        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+      }),
+    );
+    expect(calls).toEqual([['dance', null]]);
+  });
+});
