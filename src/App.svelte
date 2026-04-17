@@ -170,6 +170,20 @@
   }
 
   async function handleChatCommand(parsed: Extract<ParsedCommand, { kind: 'command' }>) {
+    // Last-chance hydration: buildCommandContext's pushBubble bails when
+    // ourAddressHash is empty, which would only happen if getIdentity()
+    // failed on mount *and* in the IdentitySetup callback. Rust
+    // get_identity is effectively infallible, but this guarantees slash
+    // commands never silently drop feedback even under that double-fault.
+    if (!ourAddressHash) {
+      try {
+        const identity = await getIdentity();
+        ourAddressHash = identity.addressHash;
+        ourDisplayName = identity.displayName;
+      } catch (e) {
+        console.error('Last-chance identity hydration failed:', e);
+      }
+    }
     await executeCommand(parsed, commandRegistry, buildCommandContext());
   }
 
