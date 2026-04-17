@@ -734,8 +734,11 @@ fn get_quest_log(app: AppHandle) -> Result<quest::types::QuestLogFrame, String> 
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EmoteFireResult {
     /// Emote fired and broadcast. Sender mood may or may not have been
-    /// credited (depends on reward cooldown).
-    Success,
+    /// credited (depends on reward cooldown). `cooldown_ms` is the
+    /// longest-applicable post-fire cooldown for this kind — lets the UI
+    /// dim the button immediately instead of waiting for the next
+    /// attempt to be rejected.
+    Success { cooldown_ms: u64 },
     /// Cooldown (global or per-pair) blocked this fire. `remaining_ms`
     /// is the time until the emote can next fire.
     Cooldown { remaining_ms: u64 },
@@ -790,7 +793,13 @@ fn fire_emote(
     // Record the fire
     emotes.cooldowns.mark_fire(now, kind, target);
 
-    EmoteFireResult::Success
+    // Post-fire cooldown — max of global anti-mash and per-pair (if any).
+    // The UI uses this to dim the button immediately after firing.
+    let global_ms = emote::cooldowns::GLOBAL_FIRE_COOLDOWN.as_millis() as u64;
+    let pair_ms = emote::cooldowns::fire_cooldown_for(tag).as_millis() as u64;
+    let cooldown_ms = global_ms.max(pair_ms);
+
+    EmoteFireResult::Success { cooldown_ms }
 }
 
 /// Pure helper — returns true iff target is within `max_dist` of self.
@@ -934,7 +943,7 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
     )?;
 
     match result {
-        EmoteFireResult::Success => {
+        EmoteFireResult::Success { .. } => {
             // Fire succeeded — NOW consume the daily Hi allowance.
             if let Some(target) = nearest_hash {
                 let state_wrapper = app.state::<GameStateWrapper>();
@@ -987,7 +996,7 @@ fn fire_and_publish_emote(
         )
     };
 
-    if matches!(result, EmoteFireResult::Success) {
+    if matches!(result, EmoteFireResult::Success { .. }) {
         let msg = emote::EmoteMessage { kind, target: target_bytes };
         let net = app.state::<NetworkWrapper>();
         let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
@@ -4220,8 +4229,41 @@ mod emote_fire_tests {
             now,
         );
 
-        assert!(matches!(result, EmoteFireResult::Success));
+        assert!(matches!(result, EmoteFireResult::Success { .. }));
         assert!((mood.mood - (initial + 2.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn fire_emote_success_carries_cooldown_ms() {
+        // Dance has no per-pair cooldown — Success should report the
+        // global anti-mash (2s).
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let result = fire_emote(
+            &mut emotes, &mut mood, id(0x01), &EmoteKind::Dance, None, Instant::now(),
+        );
+        match result {
+            EmoteFireResult::Success { cooldown_ms } => {
+                assert_eq!(cooldown_ms, 2000, "dance should return global cooldown");
+            }
+            other => panic!("expected Success, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn fire_emote_hug_success_carries_per_pair_cooldown_ms() {
+        // Hug's per-pair cooldown (60s) dominates the global (2s).
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let result = fire_emote(
+            &mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, Some(id(0x02)), Instant::now(),
+        );
+        match result {
+            EmoteFireResult::Success { cooldown_ms } => {
+                assert_eq!(cooldown_ms, 60_000, "hug should return per-pair 60s");
+            }
+            other => panic!("expected Success, got {:?}", other),
+        }
     }
 
     #[test]
@@ -4236,7 +4278,7 @@ mod emote_fire_tests {
         // Past global fire cooldown but within reward window
         let t1 = t0 + Duration::from_secs(3);
         let result = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Dance, None, t1);
-        assert!(matches!(result, EmoteFireResult::Success));
+        assert!(matches!(result, EmoteFireResult::Success { .. }));
         // Fire succeeded, but mood was NOT credited (reward cooldown)
         assert!((mood.mood - after_first).abs() < 0.01);
     }
@@ -4276,7 +4318,7 @@ mod emote_fire_tests {
         let result = fire_emote(
             &mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, Some(id(0x02)), Instant::now(),
         );
-        assert!(matches!(result, EmoteFireResult::Success));
+        assert!(matches!(result, EmoteFireResult::Success { .. }));
         assert!((mood.mood - (initial + 5.0)).abs() < 0.01);
     }
 

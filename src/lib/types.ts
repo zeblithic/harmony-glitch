@@ -536,7 +536,7 @@ export type HiVariant =
 
 /** Result of firing an emote via the unified IPC. */
 export type EmoteFireResult =
-  | { type: 'success' }
+  | { type: 'success'; cooldown_ms: number }
   | { type: 'cooldown'; remaining_ms: number }
   | { type: 'no_target' }
   | { type: 'target_blocked' };

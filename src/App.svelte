@@ -101,6 +101,26 @@
   let emotePrivacy = $state({ hug: true, high_five: true });
 
   /**
+   * Frontend-local transient feedback for emote IPC failures (no_target,
+   * target_blocked). Merges into the GameNotification stream so failures
+   * are user-visible — without this, clicking a targeted emote whose target
+   * just moved out of range would silently drop.
+   *
+   * Shape matches PickupFeedback; IDs start from 1e9 to stay disjoint from
+   * Rust-authored pickup IDs.
+   */
+  let emoteFeedback = $state<import('$lib/types').PickupFeedback[]>([]);
+  let emoteFeedbackNextId = 1_000_000_000;
+
+  function pushEmoteFeedback(text: string) {
+    const id = emoteFeedbackNextId++;
+    emoteFeedback = [...emoteFeedback, { id, text, success: false, x: 0, y: 0, ageSecs: 0 }];
+    setTimeout(() => {
+      emoteFeedback = emoteFeedback.filter((f) => f.id !== id);
+    }, 1500);
+  }
+
+  /**
    * Active emote animations keyed by playerHash ("self" for us).
    * Each lives for ~2s then expires (matches CSS emote-float duration).
    */
@@ -642,6 +662,13 @@
     switch (result.type) {
       case 'success':
         spawnEmoteAnimation('self', kind, target);
+        // Dim the button immediately using Rust's post-fire cooldown — no
+        // need to wait for the next click to be rejected before the palette
+        // reflects the cooldown.
+        emoteCooldownExpiries = {
+          ...emoteCooldownExpiries,
+          [kind as string]: Date.now() + result.cooldown_ms,
+        };
         break;
       case 'cooldown':
         // Store absolute expiry timestamp so display stays correct whether
@@ -652,13 +679,10 @@
         };
         break;
       case 'no_target':
-        // Targeted emote with no one in range, or out of the 400px radius.
-        // Palette already renders needs-target dimming; logging keeps the
-        // failure debuggable without silent-drop.
-        console.info(`emote ${kind}: no target in range`);
+        pushEmoteFeedback('No target in range');
         break;
       case 'target_blocked':
-        console.info(`emote ${kind}: target is on block list`);
+        pushEmoteFeedback('Player is blocked');
         break;
     }
   }
@@ -790,7 +814,7 @@
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
-    <GameNotification feedback={latestFrame?.pickupFeedback ?? []} />
+    <GameNotification feedback={[...(latestFrame?.pickupFeedback ?? []), ...emoteFeedback]} />
     <VolumeSettings
       {audioManager}
       visible={volumeOpen}
