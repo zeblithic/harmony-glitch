@@ -30,9 +30,11 @@
   import SocialPrompt from './lib/components/SocialPrompt.svelte';
   import BuddyRequestPrompt from './lib/components/BuddyRequestPrompt.svelte';
   import PartyInvitePrompt from './lib/components/PartyInvitePrompt.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, getEmotePrivacy, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, getEmotePrivacy, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline, sendChat, unblockPlayer, getBlockedList } from './lib/ipc';
   import type { PartyMemberInfo, BuddyEntry } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame, EmoteKind, EmoteFireResult, EmoteAnimationFrame, HiVariant } from './lib/types';
+  import { executeCommand, type CommandContext, type ParsedCommand } from './lib/chat/commands';
+  import { createDefaultHandlers } from './lib/chat/handlers';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
@@ -120,6 +122,55 @@
     }, 1500);
   }
 
+  // Chat slash-command registry — constant for the component's lifetime.
+  const commandRegistry = createDefaultHandlers();
+
+  function buildCommandContext(): CommandContext {
+    const pushBubble = (text: string) => {
+      if (!ourAddressHash) return;
+      window.dispatchEvent(
+        new CustomEvent('harmony:local-bubble', {
+          detail: { addressHash: ourAddressHash, text },
+        }),
+      );
+    };
+
+    return {
+      remotePlayers: latestFrame?.remotePlayers ?? [],
+      nearestSocialTarget: latestFrame?.nearestSocialTarget ?? null,
+      buddies,
+      localIdentity: {
+        displayName: ourDisplayName,
+        addressHash: ourAddressHash,
+        setupComplete: true,
+      },
+      pushLocalBubble: pushBubble,
+      fireEmote: (kind, target) => fireEmoteWithFeedback(kind, target, pushBubble),
+      fireEmoteHi: () => fireHiWithAnimation(pushBubble),
+      sendChat: (t) => sendChat(t),
+      blockPlayer: (h) => blockPlayer(h),
+      unblockPlayer: (h) => unblockPlayer(h),
+      getBlockedList: async () => {
+        const result = await getBlockedList();
+        return result.blocked;
+      },
+    };
+  }
+
+  async function handleChatCommand(parsed: Extract<ParsedCommand, { kind: 'command' }>) {
+    await executeCommand(parsed, commandRegistry, buildCommandContext());
+  }
+
+  // The `pushBubble` adapter above dispatches a window CustomEvent that
+  // GameCanvas listens for (see Step 4). This mirrors how GameCanvas already
+  // receives Tauri chat_message events and keeps App.svelte decoupled from
+  // the renderer's lifecycle.
+  declare global {
+    interface WindowEventMap {
+      'harmony:local-bubble': CustomEvent<{ addressHash: string; text: string }>;
+    }
+  }
+
   /**
    * Active emote animations keyed by playerHash ("self" for us).
    * Each lives for ~2s then expires (matches CSS emote-float duration).
@@ -153,6 +204,7 @@
   let partyIsLeader = $state(false);
 
   let ourAddressHash = $state('');
+  let ourDisplayName = $state('');
   let buddyRequestVisible = $state(false);
   let buddyRequestName = $state('');
   let buddyRequestHash = $state('');
@@ -185,6 +237,7 @@
       const identity = await getIdentity();
       identityReady = identity.setupComplete;
       ourAddressHash = identity.addressHash;
+      ourDisplayName = identity.displayName;
     } catch {
       identityReady = false;
     } finally {
@@ -851,7 +904,7 @@
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput
       onFocusChange={(focused) => { chatFocused = focused; }}
-      onCommand={async () => {}}
+      onCommand={handleChatCommand}
     />
     <NetworkStatus />
     <GameNotification feedback={[...(latestFrame?.pickupFeedback ?? []), ...emoteFeedback]} />

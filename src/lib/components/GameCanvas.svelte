@@ -92,7 +92,12 @@
       r.addChatBubble(event.senderHash, event.text);
     });
 
-    cleanupFns.push(unlisten, unlistenChat, () => r.destroy());
+    const handleLocalBubble = (e: CustomEvent<{ addressHash: string; text: string }>) => {
+      r.addChatBubble(e.detail.addressHash, e.detail.text);
+    };
+    window.addEventListener('harmony:local-bubble', handleLocalBubble as EventListener);
+
+    cleanupFns.push(unlisten, unlistenChat, () => r.destroy(), () => window.removeEventListener('harmony:local-bubble', handleLocalBubble as EventListener));
 
     if (street) {
       await r.buildScene(street);
