@@ -57,7 +57,12 @@ export const waveHandler: CommandHandler = async (args, ctx) => {
     ctx.pushLocalBubble("Can't wave at yourself.");
     return;
   }
-  const resolved = resolvePlayerName(name, { remotePlayers: ctx.remotePlayers });
+  // Resolve against visible + buddies to match /block and /unblock; if the
+  // target isn't in range, the emote IPC is the final gate (returns no_target).
+  const resolved = resolvePlayerName(name, {
+    remotePlayers: ctx.remotePlayers,
+    buddies: ctx.buddies,
+  });
   if (!resolved) {
     ctx.pushLocalBubble(`No player named ${name} nearby.`);
     return;
@@ -80,7 +85,10 @@ export const hugHandler: CommandHandler = async (args, ctx) => {
     ctx.pushLocalBubble("Can't hug yourself.");
     return;
   }
-  const resolved = resolvePlayerName(name, { remotePlayers: ctx.remotePlayers });
+  const resolved = resolvePlayerName(name, {
+    remotePlayers: ctx.remotePlayers,
+    buddies: ctx.buddies,
+  });
   if (!resolved) {
     ctx.pushLocalBubble(`No player named ${name} nearby.`);
     return;
@@ -103,7 +111,10 @@ export const high5Handler: CommandHandler = async (args, ctx) => {
     ctx.pushLocalBubble("Can't high-five yourself.");
     return;
   }
-  const resolved = resolvePlayerName(name, { remotePlayers: ctx.remotePlayers });
+  const resolved = resolvePlayerName(name, {
+    remotePlayers: ctx.remotePlayers,
+    buddies: ctx.buddies,
+  });
   if (!resolved) {
     ctx.pushLocalBubble(`No player named ${name} nearby.`);
     return;
@@ -161,12 +172,14 @@ export const unblockHandler: CommandHandler = async (args, ctx) => {
 };
 
 export const meHandler: CommandHandler = async (args, ctx) => {
-  if (args.trim() === '') {
+  // trim() only strips leading/trailing whitespace; internal spacing
+  // (e.g., "waves  hello") is preserved so peers see what was typed.
+  const action = args.trim();
+  if (action === '') {
     ctx.pushLocalBubble('Usage: /me <action>');
     return;
   }
-  const formatted = `* ${ctx.localIdentity.displayName} ${args} *`;
-  await ctx.sendChat(formatted);
+  await ctx.sendChat(`* ${ctx.localIdentity.displayName} ${action} *`);
 };
 
 export const HELP_LINES: readonly string[] = [

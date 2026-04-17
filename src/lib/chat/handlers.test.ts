@@ -165,6 +165,18 @@ describe('waveHandler', () => {
     expect(calls).toEqual([['wave', '11'.repeat(16)]]);
   });
 
+  it('falls back to buddies when not in remotePlayers', async () => {
+    const calls: Array<[string, string | null]> = [];
+    await waveHandler(
+      'Bob',
+      makeContext({
+        buddies: [buddy('Bob', '22'.repeat(16))],
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
+      }),
+    );
+    expect(calls).toEqual([['wave', '22'.repeat(16)]]);
+  });
+
   it('name-not-found bubbles error and does NOT fire', async () => {
     const bubbles: string[] = [];
     const calls: Array<[string, string | null]> = [];
@@ -234,6 +246,18 @@ describe('hugHandler', () => {
     expect(calls).toEqual([['hug', '11'.repeat(16)]]);
   });
 
+  it('falls back to buddies when not in remotePlayers', async () => {
+    const calls: Array<[string, string | null]> = [];
+    await hugHandler(
+      'Bob',
+      makeContext({
+        buddies: [buddy('Bob', '22'.repeat(16))],
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
+      }),
+    );
+    expect(calls).toEqual([['hug', '22'.repeat(16)]]);
+  });
+
   it('name-not-found bubbles error', async () => {
     const bubbles: string[] = [];
     await hugHandler(
@@ -279,6 +303,18 @@ describe('high5Handler', () => {
       }),
     );
     expect(calls).toEqual([['high_five', '11'.repeat(16)]]);
+  });
+
+  it('falls back to buddies when not in remotePlayers', async () => {
+    const calls: Array<[string, string | null]> = [];
+    await high5Handler(
+      'Bob',
+      makeContext({
+        buddies: [buddy('Bob', '22'.repeat(16))],
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
+      }),
+    );
+    expect(calls).toEqual([['high_five', '22'.repeat(16)]]);
   });
 
   it('bubbles error with no nearest and no name', async () => {
