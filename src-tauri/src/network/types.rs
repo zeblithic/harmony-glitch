@@ -64,6 +64,7 @@ pub enum NetMessage {
     Vouch(crate::trust::epoch::VouchMessage),
     Emote(crate::emote::EmoteMessage),
     Social(crate::social::SocialMessage),
+    GroupOp { group_id: [u8; 16], op: harmony_groups::GroupOp },
 }
 
 #[cfg(test)]
@@ -349,5 +350,80 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let restored: ChatMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.channel, ChatChannel::Party);
+    }
+
+    #[test]
+    fn group_op_round_trip() {
+        use harmony_groups::{GroupAction, GroupMode, GroupOp};
+        let (op, _) = GroupOp::new_unsigned(
+            vec![],
+            [0x01; 16],
+            1_700_000_000,
+            GroupAction::Create {
+                group_id: [0xAA; 16],
+                name: "Test Group".into(),
+                mode: GroupMode::InviteOnly,
+            },
+        );
+        let msg = NetMessage::GroupOp { group_id: [0xAA; 16], op: op.clone() };
+        let bytes = serde_json::to_vec(&msg).unwrap();
+        let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
+        match decoded {
+            NetMessage::GroupOp { group_id, op: decoded_op } => {
+                assert_eq!(group_id, [0xAA; 16]);
+                assert_eq!(decoded_op.id, op.id);
+                assert_eq!(decoded_op.author, op.author);
+                assert_eq!(decoded_op.timestamp, op.timestamp);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    /// Regression canary on serialized `NetMessage::GroupOp` size.
+    ///
+    /// Unlike other NetMessage variants, `GroupOp` does **not** fit the
+    /// 432-byte Reticulum payload limit: OpIds and signatures are 32- and
+    /// 64-byte arrays that JSON encodes as integer-per-element, and parent
+    /// lists are unbounded. Group ops in Phase A travel over Zenoh pub/sub
+    /// on the LAN (no Reticulum MTU), so this is tolerated for now.
+    ///
+    /// This test locks in the current worst-case ceiling so we notice if
+    /// a change (e.g. action payload or op header) pushes it substantially
+    /// higher. If/when ops ever need to cross Reticulum, switch the wire
+    /// format for this variant to postcard (binary).
+    #[test]
+    fn group_op_serialized_size_is_bounded() {
+        use harmony_groups::{GroupAction, GroupMode, GroupOp};
+
+        // Worst realistic Phase-A op: UpdateInfo with a max-length name and
+        // three parents (concurrent Founder-authored edits).
+        let parents: Vec<[u8; 32]> =
+            (0..3).map(|i| [0x10 + i as u8; 32]).collect();
+        let (op, _) = GroupOp::new_unsigned(
+            parents,
+            [0xAA; 16],
+            1_700_000_000,
+            GroupAction::UpdateInfo {
+                name: Some("X".repeat(40)),
+                mode: Some(GroupMode::InviteOnly),
+            },
+        );
+        let msg = NetMessage::GroupOp { group_id: [0xBB; 16], op };
+        let bytes = serde_json::to_vec(&msg).unwrap();
+
+        // Generous ceiling chosen to allow for future minor additions
+        // without tripping; substantially over today's ~700B worst case
+        // would indicate an unexpected regression.
+        // Today's worst case is ~725 bytes. 1024 gives headroom for minor
+        // future growth without flaking.
+        const MAX_GROUP_OP_SIZE: usize = 1024;
+        assert!(
+            bytes.len() <= MAX_GROUP_OP_SIZE,
+            "GroupOp is {} bytes, ceiling is {} (exceeds Reticulum MTU of {} — \
+             expected for this variant; see test doc)",
+            bytes.len(),
+            MAX_GROUP_OP_SIZE,
+            MAX_PAYLOAD
+        );
     }
 }

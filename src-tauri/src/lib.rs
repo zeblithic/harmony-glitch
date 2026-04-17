@@ -81,6 +81,9 @@ struct NetworkWrapper(Mutex<NetworkState>);
 /// Shared UDP transport — owned by the game loop, used for sends.
 struct TransportWrapper(Mutex<UdpTransport>);
 
+/// Shared group state — manages persistent group DAGs.
+struct GroupManagerWrapper(Mutex<crate::social::groups::GroupManager>);
+
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct StreetListEntry {
@@ -1237,6 +1240,703 @@ fn get_party_state(app: AppHandle) -> Result<serde_json::Value, String> {
     }
 }
 
+// ── Group helpers ────────────────────────────────────────────────────────
+
+fn parse_group_id(hex_str: &str) -> Result<[u8; 16], String> {
+    let bytes = hex::decode(hex_str).map_err(|_| "Invalid group ID hex".to_string())?;
+    let arr: [u8; 16] = bytes
+        .try_into()
+        .map_err(|_| "Group ID must be 16 bytes".to_string())?;
+    Ok(arr)
+}
+
+// Dissolve is terminal: once a group is dissolved, no new member/role/info ops
+// should append to its log, and `get_my_groups` already filters dissolved
+// groups out of the UI. Mutating handlers must reject dissolved state here so
+// callers can't quietly build invisible inconsistent state (e.g. joining an
+// open group that no longer shows up in their list).
+fn validate_group_active(state: &harmony_groups::GroupState) -> Result<(), String> {
+    if state.dissolved {
+        Err("Group is dissolved".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn publish_group_op(app: &AppHandle, group_id: [u8; 16], op: harmony_groups::GroupOp) {
+    let net = app.state::<NetworkWrapper>();
+    let actions = {
+        let mut net_state = match net.0.lock() {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        net_state.publish_group_op(group_id, op, &mut rand::rngs::OsRng)
+    };
+    execute_network_actions(app, actions);
+}
+
+fn serialize_group_state(state: &harmony_groups::GroupState) -> serde_json::Value {
+    let founder_addr = state
+        .members
+        .iter()
+        .find(|(_, e)| e.role == harmony_groups::Role::Founder)
+        .map(|(a, _)| *a);
+    let members: Vec<serde_json::Value> = state
+        .members
+        .iter()
+        .map(|(addr, entry)| {
+            serde_json::json!({
+                "addressHash": hex::encode(addr),
+                "role": match entry.role {
+                    harmony_groups::Role::Founder => "founder",
+                    harmony_groups::Role::Officer => "officer",
+                    harmony_groups::Role::Member => "member",
+                },
+                "joinedAt": entry.joined_at,
+                "isFounder": Some(*addr) == founder_addr,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "groupId": hex::encode(state.group_id),
+        "name": state.name,
+        "mode": if state.mode == harmony_groups::GroupMode::Open { "open" } else { "invite_only" },
+        "founderHash": founder_addr.map(|a| hex::encode(a)),
+        "members": members,
+        "memberCount": state.members.len(),
+        "dissolved": state.dissolved,
+    })
+}
+
+// ── Group IPC commands ──────────────────────────────────────────────────
+
+#[tauri::command]
+fn group_create(name: String, mode: String, app: AppHandle) -> Result<String, String> {
+    let name = normalize_group_name(&name)?;
+    let group_mode = match mode.as_str() {
+        "open" => harmony_groups::GroupMode::Open,
+        "invite_only" => harmony_groups::GroupMode::InviteOnly,
+        _ => return Err("Invalid mode: must be 'open' or 'invite_only'".to_string()),
+    };
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let mut group_id = [0u8; 16];
+    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut group_id);
+
+    let (op, _) = harmony_groups::GroupOp::new_unsigned(
+        vec![],
+        our_address,
+        group_op_timestamp(),
+        harmony_groups::GroupAction::Create {
+            group_id,
+            name: name.clone(),
+            mode: group_mode,
+        },
+    );
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+    groups.merge_op(group_id, op.clone())?;
+    drop(groups);
+
+    publish_group_op(&app, group_id, op);
+
+    let hex_id = hex::encode(group_id);
+    let _ = app.emit(
+        "group_created",
+        serde_json::json!({
+            "groupId": hex_id,
+            "name": name,
+        }),
+    );
+    Ok(hex_id)
+}
+
+#[tauri::command]
+fn group_invite(group_id_hex: String, peer_hash: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        // Validate author is Officer or Founder.
+        match state.role_of(&our_address) {
+            Some(harmony_groups::Role::Founder) | Some(harmony_groups::Role::Officer) => {}
+            _ => return Err("Only Officers and Founders can invite".to_string()),
+        }
+
+        // Target must not already be a member.
+        if state.is_member(&peer_bytes) {
+            return Err("Player is already a member".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Invite { invitee: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_invite_sent",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "inviteeHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_accept(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let (op, group_name) = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        // If we already have state for this group and it's dissolved, accepting
+        // would re-add us to a tombstoned log. Reject before touching the log.
+        // (First-time accepts won't have state yet — that path is fine.)
+        if let Some(state) = groups.get_state(group_id) {
+            validate_group_active(state)?;
+        }
+
+        // Prefer the ephemeral pending_invites map (fast path with cached
+        // display name), but fall back to the persisted op log after restart.
+        let (invite_op, group_name) = match groups.pending_invites.get(&group_id).cloned() {
+            Some(p) => (p.invite_op, p.group_name),
+            None => {
+                let invite_op = groups
+                    .find_outstanding_invite(group_id, our_address)
+                    .ok_or_else(|| "No pending invite for this group".to_string())?;
+                let gname = groups
+                    .get_state(group_id)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default();
+                (invite_op, gname)
+            }
+        };
+
+        groups.merge_op(group_id, invite_op.clone())?;
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Accept {
+                invite_op: invite_op.id,
+            },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        groups.pending_invites.remove(&group_id);
+        (op, group_name)
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_joined",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "groupName": group_name,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_decline(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let our_address = {
+        let net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.our_address_hash()
+    };
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    if !groups.decline_invite(group_id, our_address)? {
+        return Err("No pending invite for this group".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn group_join(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        if state.mode != harmony_groups::GroupMode::Open {
+            return Err("Group is invite-only".to_string());
+        }
+        if state.is_member(&our_address) {
+            return Err("Already a member".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Join,
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_joined",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_leave(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        if !state.is_member(&our_address) {
+            return Err("Not a member of this group".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Leave,
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_left",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_kick(
+    group_id_hex: String,
+    peer_hash: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        // Explicit self-kick guard: `outranks` is strict (`<`, not `<=`) today,
+        // so a Founder can't kick themselves via the rank check. But that
+        // surfaces as a misleading "Insufficient rank" error, and if the
+        // harmony_groups `outranks` semantics ever relax, a Founder could
+        // unknowingly remove themselves. Check the target explicitly.
+        if peer_bytes == our_address {
+            return Err("Cannot kick yourself — use Leave or Dissolve instead".to_string());
+        }
+
+        let our_role = state
+            .role_of(&our_address)
+            .ok_or_else(|| "Not a member of this group".to_string())?;
+        let target_role = state
+            .role_of(&peer_bytes)
+            .ok_or_else(|| "Target is not a member".to_string())?;
+
+        if !our_role.outranks(target_role) {
+            return Err("Insufficient rank to kick this member".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Kick { target: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_member_kicked",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "targetHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_promote(
+    group_id_hex: String,
+    peer_hash: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can promote members".to_string());
+        }
+        if !state.is_member(&peer_bytes) {
+            return Err("Target is not a member".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Promote { target: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_member_promoted",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "targetHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_demote(
+    group_id_hex: String,
+    peer_hash: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+    let peer_bytes: [u8; 16] = hex::decode(&peer_hash)
+        .map_err(|_| "Invalid peer hash".to_string())?
+        .try_into()
+        .map_err(|_| "Peer hash must be 16 bytes".to_string())?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can demote members".to_string());
+        }
+        if state.role_of(&peer_bytes) != Some(harmony_groups::Role::Officer) {
+            return Err("Can only demote Officers".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Demote { target: peer_bytes },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_member_demoted",
+        serde_json::json!({
+            "groupId": group_id_hex,
+            "targetHash": peer_hash,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_dissolve(group_id_hex: String, app: AppHandle) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can dissolve the group".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::Dissolve,
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_dissolved",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn group_update_info(
+    group_id_hex: String,
+    name: Option<String>,
+    mode: Option<String>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let name = match name {
+        Some(raw) => Some(normalize_group_name(&raw)?),
+        None => None,
+    };
+
+    let group_mode = match mode.as_deref() {
+        Some("open") => Some(harmony_groups::GroupMode::Open),
+        Some("invite_only") => Some(harmony_groups::GroupMode::InviteOnly),
+        Some(_) => return Err("Invalid mode: must be 'open' or 'invite_only'".to_string()),
+        None => None,
+    };
+
+    // Reject fully empty updates before we persist a no-op op to the log
+    // and broadcast it to every peer.
+    if name.is_none() && group_mode.is_none() {
+        return Err("At least one of name or mode must be provided".to_string());
+    }
+
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let op = {
+        let mut groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+        let state = groups
+            .get_state(group_id)
+            .ok_or_else(|| "Group not found".to_string())?;
+        validate_group_active(state)?;
+
+        if state.role_of(&our_address) != Some(harmony_groups::Role::Founder) {
+            return Err("Only the Founder can update group info".to_string());
+        }
+
+        let parents = groups.head_ops(group_id);
+        let (op, _) = harmony_groups::GroupOp::new_unsigned(
+            parents,
+            our_address,
+            group_op_timestamp(),
+            harmony_groups::GroupAction::UpdateInfo {
+                name: name.clone(),
+                mode: group_mode,
+            },
+        );
+        groups.merge_op(group_id, op.clone())?;
+        op
+    };
+
+    publish_group_op(&app, group_id, op);
+
+    let _ = app.emit(
+        "group_info_updated",
+        serde_json::json!({
+            "groupId": group_id_hex,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn get_group_state(group_id_hex: String, app: AppHandle) -> Result<serde_json::Value, String> {
+    let group_id = parse_group_id(&group_id_hex)?;
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let state = groups
+        .get_state(group_id)
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    Ok(serialize_group_state(state))
+}
+
+#[tauri::command]
+fn get_my_groups(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let net = app.state::<NetworkWrapper>();
+    let net_state = net.0.lock().map_err(|e| e.to_string())?;
+    let our_address = net_state.our_address_hash();
+    drop(net_state);
+
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let my = groups.my_groups(our_address);
+    let result: Vec<serde_json::Value> = my.iter().map(|s| serialize_group_state(s)).collect();
+    Ok(result)
+}
+
+/// Return all currently-pending group invites for the local user.
+///
+/// The frontend calls this on mount to recover invites that were rebuilt
+/// from the persisted op log during `setup()` — those can't be delivered
+/// via `group_invite_received` events because no listener is registered
+/// at setup time.
+#[tauri::command]
+fn get_pending_invites(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let gm = app.state::<GroupManagerWrapper>();
+    let groups = gm.0.lock().map_err(|e| e.to_string())?;
+
+    let result: Vec<serde_json::Value> = groups
+        .pending_invites
+        .iter()
+        .map(|(gid, p)| {
+            serde_json::json!({
+                "groupId": hex::encode(gid),
+                "inviterHash": hex::encode(p.inviter),
+                "opId": hex::encode(p.invite_op.id),
+                "groupName": p.group_name,
+                "inviterName": p.inviter_name,
+            })
+        })
+        .collect();
+    Ok(result)
+}
+
 /// Returns today's date as a "YYYY-MM-DD" string using the system clock.
 fn today_date_string() -> String {
     crate::date_util::today_date_string()
@@ -1364,6 +2064,140 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
             }
             NetworkAction::SocialReceived { sender, message } => {
                 handle_social_message(app, sender, message);
+            }
+            NetworkAction::GroupOpReceived { sender: _, group_id, op } => {
+                // `sender` is whoever relayed this op's packet — which may be
+                // the author or any peer that's gossiping it. We don't use it
+                // here because the author's identity lives in `op.author`, and
+                // that's what downstream consumers need (e.g. the inviter for
+                // a PendingGroupInvite). Authenticity of `op.author` depends on
+                // signature verification — see the `resolve()` doc in
+                // harmony-groups.
+                let net = app.state::<NetworkWrapper>();
+                let our_addr = match net.0.lock() {
+                    Ok(ns) => ns.our_address_hash(),
+                    Err(_) => continue,
+                };
+
+                let gm = app.state::<GroupManagerWrapper>();
+                let mut groups = match gm.0.lock() {
+                    Ok(g) => g,
+                    Err(_) => continue,
+                };
+
+                let (_progressed, applied_ids) =
+                    groups.merge_op_with_orphans(group_id, op.clone());
+
+                let group_id_hex = hex::encode(group_id);
+
+                if !applied_ids.is_empty() {
+                    let _ = app.emit(
+                        "group_state_changed",
+                        serde_json::json!({ "groupId": group_id_hex }),
+                    );
+                }
+
+                // Surface invite prompts for every invite-targeting-us that
+                // became applied during this call — covers both the fast
+                // path (the incoming op was an invite for us) and the
+                // orphan path (an earlier invite for us was buffered and
+                // just unblocked by new ancestors).
+                let mut pending_to_add: Option<(
+                    harmony_groups::OpId,
+                    harmony_groups::MemberAddr,
+                    harmony_groups::GroupOp,
+                    String,
+                )> = None;
+                // If we ended up a member after this merge (e.g. because an
+                // orphaned Accept also applied), don't prompt — the invite
+                // has already been consumed. `prune_pending_invite_if_member`
+                // also drops any pre-existing pending entry so the frontend
+                // isn't left with a ghost invite for a group we're in.
+                let already_member =
+                    groups.prune_pending_invite_if_member(group_id, our_addr);
+
+                if !already_member {
+                    // Keep at most one Invite per merge — concurrent invites
+                    // (two Officers inviting us in the same batch) are
+                    // semantically equivalent, so store the latest by
+                    // timestamp. Prevents one invite event per op while
+                    // only the last actually landing in pending_invites.
+                    for aid in &applied_ids {
+                        let applied_op = match groups.get_ops(group_id).and_then(|ops| {
+                            ops.iter().find(|o| o.id == *aid).cloned()
+                        }) {
+                            Some(o) => o,
+                            None => continue,
+                        };
+                        if let harmony_groups::GroupAction::Invite { invitee } = &applied_op.action {
+                            if *invitee == our_addr {
+                                let gname = groups
+                                    .get_state(group_id)
+                                    .map(|s| s.name.clone())
+                                    .unwrap_or_default();
+                                let replace = match &pending_to_add {
+                                    None => true,
+                                    Some((_, _, prev, _)) => applied_op.timestamp > prev.timestamp,
+                                };
+                                if replace {
+                                    pending_to_add =
+                                        Some((*aid, applied_op.author, applied_op, gname));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                drop(groups);
+
+                if let Some((oid, inviter, inv_op, gname)) = pending_to_add {
+                    // Need the network lock again to look up the display name.
+                    let inviter_name = match net.0.lock() {
+                        Ok(ns) => ns.peer_display_name(&inviter).unwrap_or_default(),
+                        Err(_) => continue,
+                    };
+
+                    let mut groups = match gm.0.lock() {
+                        Ok(g) => g,
+                        Err(_) => continue,
+                    };
+                    // Re-check membership under the re-acquired lock. If
+                    // another thread made us a member (e.g. group_accept ran
+                    // while we were looking up the display name),
+                    // `prune_pending_invite_if_member` clears any stale entry
+                    // and we skip the insert — otherwise we'd write a ghost
+                    // invite for a group we're already in.
+                    let inserted = if groups
+                        .prune_pending_invite_if_member(group_id, our_addr)
+                    {
+                        false
+                    } else {
+                        groups.pending_invites.insert(
+                            group_id,
+                            crate::social::groups::PendingGroupInvite {
+                                group_id,
+                                inviter,
+                                inviter_name: inviter_name.clone(),
+                                group_name: gname,
+                                invite_op: inv_op,
+                                received_at: now_secs(app),
+                            },
+                        );
+                        true
+                    };
+                    drop(groups);
+
+                    if inserted {
+                        let _ = app.emit(
+                            "group_invite_received",
+                            serde_json::json!({
+                                "groupId": group_id_hex,
+                                "inviterHash": hex::encode(inviter),
+                                "opId": hex::encode(oid),
+                            }),
+                        );
+                    }
+                }
             }
         }
     }
@@ -1970,6 +2804,32 @@ fn handle_trade_message(
 fn now_secs(app: &AppHandle) -> f64 {
     let epoch = app.state::<MonotonicEpoch>();
     Instant::now().duration_since(epoch.0).as_secs_f64()
+}
+
+/// Unix epoch seconds for timestamping persisted group ops. Unlike `now_secs`
+/// (process-uptime), this survives restart and is comparable across peers —
+/// necessary for `joined_at` tenure tracking and for DAG tie-breakers.
+fn group_op_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Validate and normalize a group name on the backend. The UI enforces these
+/// rules too, but the IPC layer must not trust client input.
+fn normalize_group_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Group name must not be empty".to_string());
+    }
+    const MAX_GROUP_NAME_CHARS: usize = 40;
+    if trimmed.chars().count() > MAX_GROUP_NAME_CHARS {
+        return Err(format!(
+            "Group name must be {MAX_GROUP_NAME_CHARS} characters or fewer"
+        ));
+    }
+    Ok(trimmed.to_string())
 }
 
 /// Validate that the player is within interact_radius of the given entity.
@@ -2895,6 +3755,50 @@ mod tests {
         assert_eq!(json["name"], "Default");
         assert!(json["events"]["jump"]["default"].is_string());
     }
+
+    #[test]
+    fn validate_group_active_rejects_dissolved() {
+        use crate::social::groups::GroupManager;
+        use harmony_groups::{GroupAction, GroupMode, GroupOp};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut mgr = GroupManager::new(dir.path().to_path_buf());
+
+        let founder: [u8; 16] = [0x11; 16];
+        let group_id: [u8; 16] = [0xCD; 16];
+
+        // Create the group — active state passes the guard.
+        let (create_op, _) = GroupOp::new_unsigned(
+            vec![],
+            founder,
+            1_700_000_000,
+            GroupAction::Create {
+                group_id,
+                name: "Doomed".to_string(),
+                mode: GroupMode::InviteOnly,
+            },
+        );
+        mgr.merge_op(group_id, create_op).unwrap();
+        let active = mgr.get_state(group_id).unwrap();
+        assert!(validate_group_active(active).is_ok());
+
+        // Dissolve the group — guard must reject subsequent mutations.
+        let parents = mgr.head_ops(group_id);
+        let (dissolve_op, _) = GroupOp::new_unsigned(
+            parents,
+            founder,
+            1_700_000_001,
+            GroupAction::Dissolve,
+        );
+        mgr.merge_op(group_id, dissolve_op).unwrap();
+        let dissolved = mgr.get_state(group_id).unwrap();
+        assert!(dissolved.dissolved, "sanity: state should be dissolved");
+        let err = validate_group_active(dissolved).expect_err("dissolved must error");
+        assert!(
+            err.contains("dissolved"),
+            "error message should mention dissolved, got: {err}"
+        );
+    }
 }
 
 pub fn run() {
@@ -3205,6 +4109,18 @@ pub fn run() {
                 .map_err(|e| std::io::Error::other(format!("UDP bind failed: {e}")))?;
             app.manage(TransportWrapper(Mutex::new(transport)));
 
+            let _ = std::fs::create_dir_all(data_dir.join("groups"));
+            let mut group_mgr = crate::social::groups::GroupManager::new(data_dir.clone());
+
+            // Rebuild pending invites from persisted op logs so invites that
+            // arrived in a previous session survive restart. We do NOT emit
+            // `group_invite_received` events here — the frontend has not yet
+            // registered listeners at setup time, so events would be lost.
+            // Instead, the frontend calls `get_pending_invites` on mount to
+            // drain the rebuilt state.
+            let _ = group_mgr.rebuild_pending_invites(our_hash, 0.0);
+            app.manage(GroupManagerWrapper(Mutex::new(group_mgr)));
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -3272,6 +4188,20 @@ pub fn run() {
             party_leave,
             party_kick,
             get_party_state,
+            group_create,
+            group_invite,
+            group_accept,
+            group_decline,
+            group_join,
+            group_leave,
+            group_kick,
+            group_promote,
+            group_demote,
+            group_dissolve,
+            group_update_info,
+            get_group_state,
+            get_my_groups,
+            get_pending_invites,
         ])
         .run(tauri::generate_context!())
         .expect("error while running harmony-glitch");

@@ -295,3 +295,95 @@ export interface EmoteEvent {
 export function onEmoteReceived(callback: (event: EmoteEvent) => void): Promise<UnlistenFn> {
   return listen<EmoteEvent>('emote_received', (e) => callback(e.payload));
 }
+
+// ── Groups ────────────────────────────────────────────────────────────
+
+export interface GroupMemberInfo {
+  addressHash: string;
+  role: string;
+  joinedAt: number;
+  isFounder: boolean;
+}
+
+export interface GroupStateResult {
+  groupId: string;
+  name: string;
+  mode: string;
+  founderHash: string | null;
+  members: GroupMemberInfo[];
+  memberCount: number;
+  dissolved: boolean;
+}
+
+export async function groupCreate(name: string, mode: string): Promise<string> { return invoke<string>('group_create', { name, mode }); }
+export async function groupInvite(groupIdHex: string, peerHash: string): Promise<void> { return invoke<void>('group_invite', { groupIdHex, peerHash }); }
+export async function groupAccept(groupIdHex: string): Promise<void> { return invoke<void>('group_accept', { groupIdHex }); }
+export async function groupDecline(groupIdHex: string): Promise<void> { return invoke<void>('group_decline', { groupIdHex }); }
+export async function groupJoin(groupIdHex: string): Promise<void> { return invoke<void>('group_join', { groupIdHex }); }
+export async function groupLeave(groupIdHex: string): Promise<void> { return invoke<void>('group_leave', { groupIdHex }); }
+export async function groupKick(groupIdHex: string, peerHash: string): Promise<void> { return invoke<void>('group_kick', { groupIdHex, peerHash }); }
+export async function groupPromote(groupIdHex: string, peerHash: string): Promise<void> { return invoke<void>('group_promote', { groupIdHex, peerHash }); }
+export async function groupDemote(groupIdHex: string, peerHash: string): Promise<void> { return invoke<void>('group_demote', { groupIdHex, peerHash }); }
+export async function groupDissolve(groupIdHex: string): Promise<void> { return invoke<void>('group_dissolve', { groupIdHex }); }
+export async function groupUpdateInfo(groupIdHex: string, name?: string, mode?: string): Promise<void> { return invoke<void>('group_update_info', { groupIdHex, name: name ?? null, mode: mode ?? null }); }
+export async function getGroupState(groupIdHex: string): Promise<GroupStateResult> { return invoke<GroupStateResult>('get_group_state', { groupIdHex }); }
+export async function getMyGroups(): Promise<GroupStateResult[]> { return invoke<GroupStateResult[]>('get_my_groups'); }
+
+export interface PendingGroupInvite {
+  groupId: string;
+  inviterHash: string;
+  opId: string;
+  groupName: string;
+  inviterName: string;
+}
+
+/** Returns invites rebuilt from the persisted op log on startup.
+ *  The frontend should call this on mount (after registering the
+ *  `group_invite_received` listener via `onGroupEvent`) because
+ *  events emitted during backend `setup()` predate any listener. */
+export async function getPendingInvites(): Promise<PendingGroupInvite[]> {
+  return invoke<PendingGroupInvite[]>('get_pending_invites');
+}
+
+// ── Group event listeners ─────────────────────────────────────────────
+
+export type GroupEvent =
+  | { type: 'created'; groupId: string }
+  | { type: 'joined'; groupId: string }
+  | { type: 'left'; groupId: string }
+  | { type: 'dissolved'; groupId: string }
+  | { type: 'invite_received'; groupId: string; inviterHash: string; opId: string }
+  | { type: 'invite_sent'; groupId: string; inviteeHash: string }
+  | { type: 'member_kicked'; groupId: string; targetHash: string }
+  | { type: 'member_promoted'; groupId: string; targetHash: string }
+  | { type: 'member_demoted'; groupId: string; targetHash: string }
+  | { type: 'info_updated'; groupId: string }
+  | { type: 'state_changed'; groupId: string };
+
+export async function onGroupEvent(callback: (event: GroupEvent) => void): Promise<UnlistenFn> {
+  const unlistens = await Promise.all([
+    listen<{ groupId: string }>('group_created', (e) =>
+      callback({ type: 'created', groupId: e.payload.groupId })),
+    listen<{ groupId: string }>('group_joined', (e) =>
+      callback({ type: 'joined', groupId: e.payload.groupId })),
+    listen<{ groupId: string }>('group_left', (e) =>
+      callback({ type: 'left', groupId: e.payload.groupId })),
+    listen<{ groupId: string }>('group_dissolved', (e) =>
+      callback({ type: 'dissolved', groupId: e.payload.groupId })),
+    listen<{ groupId: string; inviterHash: string; opId: string }>('group_invite_received', (e) =>
+      callback({ type: 'invite_received', groupId: e.payload.groupId, inviterHash: e.payload.inviterHash, opId: e.payload.opId })),
+    listen<{ groupId: string; inviteeHash: string }>('group_invite_sent', (e) =>
+      callback({ type: 'invite_sent', groupId: e.payload.groupId, inviteeHash: e.payload.inviteeHash })),
+    listen<{ groupId: string; targetHash: string }>('group_member_kicked', (e) =>
+      callback({ type: 'member_kicked', groupId: e.payload.groupId, targetHash: e.payload.targetHash })),
+    listen<{ groupId: string; targetHash: string }>('group_member_promoted', (e) =>
+      callback({ type: 'member_promoted', groupId: e.payload.groupId, targetHash: e.payload.targetHash })),
+    listen<{ groupId: string; targetHash: string }>('group_member_demoted', (e) =>
+      callback({ type: 'member_demoted', groupId: e.payload.groupId, targetHash: e.payload.targetHash })),
+    listen<{ groupId: string }>('group_info_updated', (e) =>
+      callback({ type: 'info_updated', groupId: e.payload.groupId })),
+    listen<{ groupId: string }>('group_state_changed', (e) =>
+      callback({ type: 'state_changed', groupId: e.payload.groupId })),
+  ]);
+  return () => unlistens.forEach(u => u());
+}

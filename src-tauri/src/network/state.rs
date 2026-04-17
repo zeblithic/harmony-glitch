@@ -101,6 +101,12 @@ pub enum NetworkAction {
         sender: [u8; 16],
         message: crate::social::SocialMessage,
     },
+    /// A group op arrived from a remote peer.
+    GroupOpReceived {
+        sender: [u8; 16],
+        group_id: [u8; 16],
+        op: harmony_groups::GroupOp,
+    },
 }
 
 /// Tracks a single peer's connection lifecycle.
@@ -561,6 +567,20 @@ impl NetworkState {
         rng: &mut impl CryptoRngCore,
     ) -> Vec<NetworkAction> {
         let net_msg = NetMessage::Social(msg);
+        match serde_json::to_vec(&net_msg) {
+            Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// Broadcast a group op to all peers on the street.
+    pub fn publish_group_op(
+        &mut self,
+        group_id: [u8; 16],
+        op: harmony_groups::GroupOp,
+        rng: &mut impl CryptoRngCore,
+    ) -> Vec<NetworkAction> {
+        let net_msg = NetMessage::GroupOp { group_id, op };
         match serde_json::to_vec(&net_msg) {
             Ok(payload) => self.publish_to_all_peers(&payload, PubTopic::Event, rng),
             Err(_) => Vec::new(),
@@ -2035,6 +2055,24 @@ impl NetworkState {
                                 out.push(NetworkAction::SocialReceived {
                                     sender: *addr,
                                     message: social_msg,
+                                });
+                            }
+                            NetMessage::GroupOp { group_id, op: group_op } => {
+                                // Group ops are gossip artifacts: peers relay
+                                // ops authored by others so late joiners can
+                                // reconstruct the DAG. Unlike directed social
+                                // messages, we therefore accept ops regardless
+                                // of whether `op.author == sender`.
+                                //
+                                // Authenticity rests on cryptographic signature
+                                // verification of the op itself — see the
+                                // `resolve()` doc in the harmony-groups crate.
+                                // Signatures are not yet wired end-to-end; until
+                                // they are, forgery is possible at this layer.
+                                out.push(NetworkAction::GroupOpReceived {
+                                    sender: *addr,
+                                    group_id,
+                                    op: group_op,
                                 });
                             }
                         }

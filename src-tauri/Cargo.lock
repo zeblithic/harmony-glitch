@@ -1717,6 +1717,7 @@ dependencies = [
  "flate2",
  "harmony-content",
  "harmony-crypto",
+ "harmony-groups",
  "harmony-identity",
  "harmony-reticulum",
  "harmony-zenoh",
@@ -1736,6 +1737,16 @@ dependencies = [
  "tempfile",
  "zeroize",
  "zip",
+]
+
+[[package]]
+name = "harmony-groups"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hashbrown 0.15.5",
+ "postcard",
+ "serde",
 ]
 
 [[package]]
@@ -1818,6 +1829,7 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.1.5",
+ "serde",
 ]
 
 [[package]]
