@@ -441,8 +441,7 @@
           // buildScene then startGame — we don't call startGame here to
           // ensure the scene is built and listeners registered first.
           currentStreet = street;
-          if (!introPlayed && audioManager) {
-            audioManager.playIntro();
+          if (!introPlayed && audioManager?.playIntro()) {
             introPlayed = true;
           }
           // Re-fetch recipes now that skill_progress is restored from save
@@ -463,8 +462,26 @@
   });
 
   // Tracks whether the "client loaded" intro has played this session so
-  // back-and-forth through StreetPicker doesn't replay it.
-  let introPlayed = false;
+  // back-and-forth through StreetPicker doesn't replay it. Gated on
+  // AudioManager.playIntro() returning true so a kit without an intro
+  // event doesn't permanently suppress playback if the kit is swapped
+  // later in the session.
+  let introPlayed = $state(false);
+
+  // Single source of truth for opening/closing the volume panel. Both the
+  // P hotkey and the 🔊 button call this so the button can't reach a
+  // panel state that the hotkey explicitly blocks (e.g. opening over an
+  // active shop/jukebox/dialogue). `currentStreet` is always true from
+  // the button path (it's rendered inside the currentStreet block) but
+  // checking it here keeps the gate uniform.
+  function toggleVolume(): void {
+    if (!currentStreet || chatFocused || jukeboxOpen || shopOpen || dialogueOpen) return;
+    volumeOpen = !volumeOpen;
+    if (volumeOpen) {
+      inventoryOpen = false;
+      avatarEditorOpen = false;
+    }
+  }
 
   function handleStreetLoaded(street: StreetData) {
     // Recreate AudioManager if it was disposed (Back button)
@@ -478,8 +495,7 @@
     // Play the one-shot intro once per session. Deferred until street-load
     // rather than AudioManager construction so it runs after user interaction
     // (picking a street), giving the browser's autoplay policy time to unlock.
-    if (!introPlayed && audioManager) {
-      audioManager.playIntro();
+    if (!introPlayed && audioManager?.playIntro()) {
       introPlayed = true;
     }
     currentStreet = street;
@@ -840,10 +856,12 @@
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
+  // `chatFocused` check guards preventDefault so P can still be typed into
+  // chat. Remaining panel-state guards live inside toggleVolume so the
+  // 🔊 button and the hotkey share one gate.
+  if ((e.key === 'p' || e.key === 'P') && !chatFocused) {
     e.preventDefault();
-    volumeOpen = !volumeOpen;
-    if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
+    toggleVolume();
   }
   if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
@@ -1237,7 +1255,7 @@
       class="volume-btn"
       aria-label="Sound settings"
       title="Sound settings (P)"
-      onclick={() => { volumeOpen = !volumeOpen; if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; } }}
+      onclick={toggleVolume}
     >
       <span aria-hidden="true">🔊</span>
     </button>
