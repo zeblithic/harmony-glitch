@@ -135,7 +135,7 @@ describe('waveHandler', () => {
     await waveHandler(
       '',
       makeContext({
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['wave', null]]);
@@ -147,7 +147,7 @@ describe('waveHandler', () => {
       '',
       makeContext({
         nearestSocialTarget: nearestTarget('aa'.repeat(16)),
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['wave', 'aa'.repeat(16)]]);
@@ -159,7 +159,7 @@ describe('waveHandler', () => {
       'Alice',
       makeContext({
         remotePlayers: [remote('Alice', '11'.repeat(16))],
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['wave', '11'.repeat(16)]]);
@@ -172,7 +172,7 @@ describe('waveHandler', () => {
       'ghost',
       makeContext({
         pushLocalBubble: (t) => bubbles.push(t),
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(bubbles).toEqual(['No player named ghost nearby.']);
@@ -187,7 +187,7 @@ describe('waveHandler', () => {
       makeContext({
         localIdentity: { displayName: 'Me', addressHash: 'ff'.repeat(16), setupComplete: true },
         pushLocalBubble: (t) => bubbles.push(t),
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(bubbles).toEqual(["Can't wave at yourself."]);
@@ -203,7 +203,7 @@ describe('hugHandler', () => {
       '',
       makeContext({
         pushLocalBubble: (t) => bubbles.push(t),
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(bubbles).toEqual(['/hug needs a target nearby.']);
@@ -216,7 +216,7 @@ describe('hugHandler', () => {
       '',
       makeContext({
         nearestSocialTarget: nearestTarget('cc'.repeat(16)),
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['hug', 'cc'.repeat(16)]]);
@@ -228,7 +228,7 @@ describe('hugHandler', () => {
       'Alice',
       makeContext({
         remotePlayers: [remote('Alice', '11'.repeat(16))],
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['hug', '11'.repeat(16)]]);
@@ -263,7 +263,7 @@ describe('high5Handler', () => {
       '',
       makeContext({
         nearestSocialTarget: nearestTarget('dd'.repeat(16)),
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['high_five', 'dd'.repeat(16)]]);
@@ -275,7 +275,7 @@ describe('high5Handler', () => {
       'Alice',
       makeContext({
         remotePlayers: [remote('Alice', '11'.repeat(16))],
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['high_five', '11'.repeat(16)]]);
@@ -528,7 +528,7 @@ describe('createDefaultHandlers', () => {
     await handler(
       '',
       makeContext({
-        fireEmote: async (kind, target) => calls.push([kind as string, target]),
+        fireEmote: async (kind, target) => { calls.push([kind as string, target]); },
       }),
     );
     expect(calls).toEqual([['dance', null]]);
