@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { setDisplayName } from '../ipc';
 
-  let { onComplete }: { onComplete: () => void } = $props();
+  let { onComplete }: { onComplete: (displayName: string) => void } = $props();
   let name = $state('');
   let submitting = $state(false);
   let error = $state('');
@@ -17,7 +17,7 @@
     error = '';
     try {
       await setDisplayName(trimmed);
-      onComplete();
+      onComplete(trimmed);
     } catch (e) {
       console.error('Failed to set display name:', e);
       error = 'Could not save your name. Please try again.';

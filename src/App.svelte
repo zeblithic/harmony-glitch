@@ -157,8 +157,11 @@
       fireEmote: (kind, target) => fireEmoteWithFeedback(kind, target, pushBubble),
       fireEmoteHi: () => fireHiWithAnimation(pushBubble),
       sendChat: (t) => sendChat(t),
-      blockPlayer: (h) => blockPlayer(h),
-      unblockPlayer: (h) => unblockPlayer(h),
+      // Match BuddyListPanel's pattern: refresh buddies after block/unblock
+      // so panel state stays consistent with backend regardless of which
+      // path (panel button vs. slash command) drove the change.
+      blockPlayer: async (h) => { await blockPlayer(h); await refreshBuddyList(); },
+      unblockPlayer: async (h) => { await unblockPlayer(h); await refreshBuddyList(); },
       getBlockedList: async () => {
         const result = await getBlockedList();
         return result.blocked;
@@ -887,7 +890,11 @@
   {#if checkingIdentity || resuming}
     <!-- visual placeholder while loading -->
   {:else if !identityReady}
-    <IdentitySetup onComplete={() => { identityReady = true; needsAvatarSetup = true; }} />
+    <IdentitySetup onComplete={(displayName) => {
+      ourDisplayName = displayName;
+      identityReady = true;
+      needsAvatarSetup = true;
+    }} />
   {:else if needsAvatarSetup}
     <div class="first-run-avatar">
       <AvatarEditor
