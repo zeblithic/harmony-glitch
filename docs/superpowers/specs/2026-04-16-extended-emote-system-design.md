@@ -74,31 +74,48 @@ The current `EmoteMessage { emote_type: EmoteType::Hi, variant: HiVariant, targe
 
 ### 5. Rate-limiting — tiered cooldowns with palette grey-out
 
-Two layers:
+Two independent cooldown layers, each serving a different purpose:
 
-- **Global cooldown**: 2s between any two emote fires (anti-mash).
-- **Per-pair-per-emote cooldown** (targeted emotes only):
+**Fire cooldowns** (prevent animation/bandwidth spam — visible in UX):
+
+- **Global fire cooldown**: 2s between any two emote fires (anti-mash).
+- **Per-pair-per-emote fire cooldown** (targeted emotes only):
   - Hug: 60s between two hugs with the same target.
   - High-five: 30s between two high-fives with the same target.
-  - Wave/applaud: no per-pair cooldown (too casual to bother).
+  - Wave/applaud: no per-pair fire cooldown.
 
-When a palette button is cooldown-locked, it greys out and shows a countdown (`"42s"` in a tooltip/badge). Same pattern as the "needs-target" dim.
+When a palette button is fire-cooldown-locked, it greys out and shows a countdown (`"42s"` in a tooltip/badge). Same pattern as the "needs-target" dim.
 
-**Critical — receiver-side mirror:** Every cooldown check on the sender also runs on the receiver. A malicious client that strips the sender grey-out still gets its over-limit messages dropped by the recipient. This is a recurring P2P discipline: every client-side validation also exists on the receive path.
+**Mood-reward cooldowns** (prevent mood-farming — invisible to UX):
+
+A parallel per-pair hashmap `(sender, EmoteKindTag) → last_reward_at` gates whether the mood delta applies on a given fire. Fires still succeed (animations play, messages ship) but mood is only credited once per reward-cooldown window per pair:
+
+- **Dance**: 5 min between rewarded fires per (dancer, witness) pair. Sender self-mood (+2) also 5 min reward cooldown.
+- **Applaud**: 5 min between rewarded fires per (applauder, target-or-witness) pair.
+- **Hug / High-five**: reward cooldown equals fire cooldown (60s / 30s) — fire cooldown already limits pair interactions; no need for a second gate.
+- **Wave**: 30s reward cooldown per pair.
+- **Hi**: unchanged — once-per-day-per-target is already a reward gate.
+
+Result: farm ceilings drop to sane levels (self-dance +24/hour, witness-applaud +36/hour) while preserving the "fires feel responsive, animations always play" UX.
+
+**Critical — receiver-side mirror:** Every cooldown check on the sender also runs on the receiver. A malicious client that strips the sender grey-out still gets its over-limit messages dropped by the recipient. This is a recurring P2P discipline: every client-side validation also exists on the receive path. For mood-reward cooldowns specifically, the receiver is the authoritative side for witness/target mood — the sender does not apply mood for others; the recipient applies mood for itself.
 
 ### 6. Mood pipeline — per-emote deltas
 
-| Emote | Sender | Target | Witness (≤300px) |
-|---|---|---|---|
-| Dance | +2 | — | +1 |
-| Wave | +1 | +1 (if targeted) | — |
-| Hug | +5 | +5 | — |
-| High-five | +3 | +3 | — |
-| Applaud | +1 | +3 (if targeted) | +3 (if broadcast) |
+| Emote | Sender | Target | Witness (≤300px) | Reward-cooldown (per pair) |
+|---|---|---|---|---|
+| Dance | +2 | — | +1 | 5 min |
+| Wave | +1 | +1 (if targeted) | — | 30 s |
+| Hug | +5 | +5 | — | 60 s (= fire cooldown) |
+| High-five | +3 | +3 | — | 30 s (= fire cooldown) |
+| Applaud | +1 | +3 (if targeted) | +3 (if broadcast) | 5 min |
 
-Reuses the social foundation's existing `apply_mood_delta` pipeline — no new mood plumbing. Witness mood for dance/applaud is the one new delivery path: the receive handler scans nearby remote-player frames and applies the witness delta to self if within radius.
+Reuses the social foundation's existing `apply_mood_delta` pipeline — no new mood plumbing. Two new delivery paths:
 
-Ratios matter more than absolutes. Hug (+5) is the "meaningful social act" anchor; wave (+1) is the throwaway greeting; others sit between. Tuning happens in playtest, not design.
+1. **Witness mood for dance/applaud**: receive handler scans nearby remote-player frames, applies witness delta to self if within radius AND reward-cooldown has elapsed for that sender.
+2. **Mood-reward gating**: both sender-self and receiver-self mood applications are gated by the `(sender, EmoteKindTag) → last_reward_at` hashmap (§5). Fires always succeed; mood applies only if outside the reward window.
+
+Ratios matter more than absolutes. Hug (+5) is the "meaningful social act" anchor; wave (+1) is the throwaway greeting; others sit between. Reward-cooldowns prevent repeated-fire exploits without dampening the "satisfying fire" UX.
 
 ### 7. Hi backward compatibility
 
@@ -224,14 +241,12 @@ Two-peer fixture extending existing patterns:
 
 ## Risk notes
 
-- **Mood-economy farm vectors — the tightest concern.** Several scenarios produce mood-rate well above Hi's ~50/day baseline:
-  1. **Self-dance loop**: dance fires at global-cooldown-cap (one per 2s) yield +2 sender mood each → **+60/min self-pump**.
-  2. **Paired-witness loop**: one player dances while another stands within 300px → witness gets +1/2s → **+30/min passive**.
-  3. **Hug loop**: two players hug each other at per-pair cap (one per 60s) → +5 each → **+10/min combined**. Least concerning of the three.
-  4. **Applaud broadcast**: no per-pair cooldown; can target-applaud same player every 2s for +3 each → **+90/min passive to target**.
+- **Mood-economy farm ceilings (post-mitigation).** With reward-cooldowns in §5, farm rates from the previously-concerning scenarios drop to:
+  - Self-dance loop: +2 per 5 min = **+24/hour** (vs. unmitigated +60/min).
+  - Paired-witness dance: +1 per 5 min per dancer = **+12/hour per dancer**.
+  - Applaud-target: +3 per 5 min per (applauder, target) = **+36/hour per applauder**.
+  - Hug/High-five: unchanged (fire cooldown was already the effective limit).
 
-  **Architectural mitigation available but not yet spec'd as required:** the per-pair cooldown hashmap (`(sender, EmoteKindTag) → Instant`) can be reused for a *mood-reward cooldown* distinct from the *fire cooldown*. The fire is always permitted (subject to its own cooldown); the mood delta applies only once per N seconds per pair.
-  
-  Suggested follow-up during implementation: add a `reward_cooldown` parallel to `fire_cooldown`, with longer windows (~5-10 min) for dance/applaud. Alternative is to tune the base mood deltas way down (+0.5 or +0.2) so farm-rate is bounded by mood-cap regen. Which approach to take is a **decision for the plan-writing phase** — noting here so the plan author can choose with eyes open rather than shipping raw numbers.
-- **Receiver-side cooldown divergence:** sender and receiver must use the same clock semantics (both use `Instant::now()` at message handling). Clock skew is bounded by message latency, which is seconds — well below the 60s hug cooldown.
+  Comparable to Hi's ~50/day budget across all emote types combined. If playtest reveals harder-to-reason farm combinations (e.g., N friends all dancing at a single witness who racks up N × reward/window), the fallback is either lengthening reward windows or introducing a global witness-mood-per-minute cap.
+- **Receiver-side cooldown divergence:** sender and receiver must use the same clock semantics (both use `Instant::now()` at message handling). Clock skew is bounded by message latency, which is seconds — well below the 60s hug cooldown. For reward-cooldowns (5 min windows), clock skew is a rounding error.
 - **Palette key collision:** **E** is currently unbound in the global key layer — confirmed by reading `App.svelte`. Flag for implementer: verify no conflict at implementation time, and if found, fall back to **`** (backtick) or **T**.
