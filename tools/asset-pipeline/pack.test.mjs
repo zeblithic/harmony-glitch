@@ -11,6 +11,7 @@ import {
   collectImages,
   readImageMeta,
   readImageMetaBatched,
+  batchPromises,
 } from './pack.mjs';
 
 // ---------------------------------------------------------------------------
@@ -318,8 +319,7 @@ describe('SVG support', () => {
     }
   });
 
-  it('readImageMetaBatched processes all entries with bounded concurrency', async () => {
-    // Make 10 tiny files; verify batchSize=3 still returns all 10 in order.
+  it('readImageMetaBatched returns all entries in order', async () => {
     const entries = [];
     for (let i = 0; i < 10; i++) {
       const p = join(dir, `f${i}.png`);
@@ -336,5 +336,38 @@ describe('SVG support', () => {
       expect(results[i].name).toBe(`f${i}`);
       expect(results[i].width).toBe(10 + i);
     }
+  });
+
+  it('batchPromises caps concurrent in-flight calls at batchSize', async () => {
+    // Instrument the processor so we can observe concurrency directly — this
+    // is the actual invariant the refactor exists to uphold. A regression back
+    // to unbounded Promise.all would drive peak up to items.length.
+    let inFlight = 0;
+    let peak = 0;
+    const processor = async (n) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      // Hold the promise long enough for all queued items to start if they're
+      // going to, so an unbounded implementation would show peak ≈ items.length.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+      return n * 2;
+    };
+
+    const items = Array.from({ length: 20 }, (_, i) => i);
+    const results = await batchPromises(items, processor, 3);
+
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(results).toHaveLength(20);
+    // Order preserved, values transformed.
+    expect(results).toEqual(items.map((n) => n * 2));
+  });
+
+  it('batchPromises rejects invalid batchSize', async () => {
+    const noop = async (x) => x;
+    await expect(batchPromises([1], noop, 0)).rejects.toThrow(RangeError);
+    await expect(batchPromises([1], noop, -1)).rejects.toThrow(RangeError);
+    await expect(batchPromises([1], noop, 1.5)).rejects.toThrow(RangeError);
+    await expect(batchPromises([1], noop, NaN)).rejects.toThrow(RangeError);
   });
 });

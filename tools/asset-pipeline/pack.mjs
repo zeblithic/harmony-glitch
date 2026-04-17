@@ -246,26 +246,39 @@ export async function readImageMeta(filePath, name, scale = 1, maxSize = null) {
 }
 
 /**
- * Read metadata for a list of image entries, limiting concurrent rasterizations
- * so peak memory stays bounded. Each batch fully completes before the next
- * starts, which releases decoded buffers between batches.
+ * Run an async processor over a list of items with a hard cap on concurrent
+ * in-flight calls. Each batch fully resolves before the next starts, bounding
+ * peak resource use. Order in the result array matches order in `items`.
  *
- * `batchSize` defaults to 32 — empirically small enough that thousands of
- * SVG rasterizations stay well under 1GB resident, large enough that CPU
- * stays busy on a modern machine.
+ * Exported (rather than inlined below) so the concurrency invariant can be
+ * exercised with an instrumented processor in tests.
  */
-export async function readImageMetaBatched(entries, scale = 1, maxSize = null, batchSize = 32) {
+export async function batchPromises(items, processor, batchSize = 32) {
+  if (!Number.isSafeInteger(batchSize) || batchSize <= 0) {
+    throw new RangeError(`batchSize must be a positive safe integer, got: ${batchSize}`);
+  }
   const results = [];
-  for (let i = 0; i < entries.length; i += batchSize) {
-    const batch = entries.slice(i, i + batchSize);
-    const batchResults = await Promise.all(
-      batch.map(({ path: filePath, name: imgName }) =>
-        readImageMeta(filePath, imgName, scale, maxSize),
-      ),
-    );
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(processor));
     results.push(...batchResults);
   }
   return results;
+}
+
+/**
+ * Read metadata for a list of image entries with bounded concurrency so peak
+ * memory stays in check. `batchSize` defaults to 32 — empirically small enough
+ * that thousands of SVG rasterizations stay well under 1GB resident, large
+ * enough that CPU stays busy on a modern machine.
+ */
+export async function readImageMetaBatched(entries, scale = 1, maxSize = null, batchSize = 32) {
+  return batchPromises(
+    entries,
+    ({ path: filePath, name: imgName }) =>
+      readImageMeta(filePath, imgName, scale, maxSize),
+    batchSize,
+  );
 }
 
 // ---------------------------------------------------------------------------
