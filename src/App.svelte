@@ -644,7 +644,7 @@
   // Waits for the backend result so the local animation uses the
   // daily-chosen variant and only plays on success (not on rejection for
   // already-greeted, blocked, or cooldown).
-  async function fireHiWithAnimation() {
+  async function fireHiWithAnimation(pushFeedback: (msg: string) => void = pushEmoteFeedback) {
     try {
       const result = await emoteHi();
       spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
@@ -660,24 +660,24 @@
       // range", "Player is blocked", "Emote on cooldown (...)"). Surface
       // them through the same GameNotification path as other emote failures.
       const msg = typeof err === 'string' ? err : 'Hi failed';
-      pushEmoteFeedback(msg);
+      pushFeedback(msg);
     }
   }
 
-  async function handleEmoteSelect(kind: EmoteKind) {
+  /**
+   * Fire an emote with explicit target and route feedback through the caller's
+   * sink. Shared by the palette, hotkeys, and chat command handlers — one place
+   * to maintain the EmoteFireResult switch.
+   */
+  async function fireEmoteWithFeedback(
+    kind: EmoteKind,
+    target: string | null,
+    pushFeedback: (msg: string) => void = pushEmoteFeedback,
+  ) {
     if (typeof kind === 'object' && 'hi' in kind) {
-      await fireHiWithAnimation();
+      await fireHiWithAnimation(pushFeedback);
       return;
     }
-
-    // Only targeted-only kinds get the nearest peer as a target. Dance is
-    // broadcast-only (Rust also strips any target for Dance as defense-in-
-    // depth). Applaud is dual-nature — default to broadcast for the palette's
-    // fire-and-forget UX; a future chat command can express targeted intent.
-    const nearest = latestFrame?.nearestSocialTarget?.addressHash ?? null;
-    const target = (kind === 'hug' || kind === 'high_five' || kind === 'wave')
-      ? nearest
-      : null;
     const result: EmoteFireResult = await emoteFire(kind, target);
     switch (result.type) {
       case 'success':
@@ -699,12 +699,29 @@
         };
         break;
       case 'no_target':
-        pushEmoteFeedback('No target in range');
+        pushFeedback('No target in range');
         break;
       case 'target_blocked':
-        pushEmoteFeedback('Player is blocked');
+        pushFeedback('Player is blocked');
         break;
     }
+  }
+
+  /**
+   * Palette onSelect adapter: computes target from nearestSocialTarget and
+   * delegates. Preserves the palette's existing "auto-pick nearest for
+   * targeted-only kinds, broadcast otherwise" behavior.
+   */
+  async function handleEmoteSelect(kind: EmoteKind) {
+    // Only targeted-only kinds get the nearest peer as a target. Dance is
+    // broadcast-only (Rust also strips any target for Dance as defense-in-
+    // depth). Applaud is dual-nature — default to broadcast for the palette's
+    // fire-and-forget UX; a future chat command can express targeted intent.
+    const nearest = latestFrame?.nearestSocialTarget?.addressHash ?? null;
+    const target = (kind === 'hug' || kind === 'high_five' || kind === 'wave')
+      ? nearest
+      : null;
+    await fireEmoteWithFeedback(kind, target);
   }
 
   // Cooldown tick — refreshes the derived display by advancing the wall-clock
