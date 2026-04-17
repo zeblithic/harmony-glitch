@@ -60,14 +60,16 @@ impl CooldownTracker {
         pair_identity: Option<[u8; 16]>,
     ) -> Result<(), CooldownRemaining> {
         let tag = EmoteKindTag::from(kind);
+        let mut max_remaining = Duration::ZERO;
 
         // Global fire cooldown
         if let Some(last) = self.last_global_fire {
             let elapsed = now.saturating_duration_since(last);
             if elapsed < GLOBAL_FIRE_COOLDOWN {
-                return Err(CooldownRemaining {
-                    remaining_ms: (GLOBAL_FIRE_COOLDOWN - elapsed).as_millis() as u64,
-                });
+                let r = GLOBAL_FIRE_COOLDOWN - elapsed;
+                if r > max_remaining {
+                    max_remaining = r;
+                }
             }
         }
 
@@ -78,15 +80,22 @@ impl CooldownTracker {
                 if let Some(last) = self.fire_per_pair.get(&(pid, tag)) {
                     let elapsed = now.saturating_duration_since(*last);
                     if elapsed < pair_cd {
-                        return Err(CooldownRemaining {
-                            remaining_ms: (pair_cd - elapsed).as_millis() as u64,
-                        });
+                        let r = pair_cd - elapsed;
+                        if r > max_remaining {
+                            max_remaining = r;
+                        }
                     }
                 }
             }
         }
 
-        Ok(())
+        if max_remaining > Duration::ZERO {
+            Err(CooldownRemaining {
+                remaining_ms: max_remaining.as_millis() as u64,
+            })
+        } else {
+            Ok(())
+        }
     }
 
     /// Records that a fire just happened. Caller is expected to have called
@@ -175,6 +184,25 @@ mod tests {
 
         // Same time, different pair — allowed
         assert!(tracker.check_fire(t1, &EmoteKind::Hug, Some(id(2))).is_ok());
+    }
+
+    #[test]
+    fn check_fire_returns_larger_of_both_cooldowns_when_both_active() {
+        // Hug pair cooldown is 60s; global is 2s. Right after a hug, both are
+        // active — check_fire should return the longer (per-pair) remaining
+        // so the UI shows one countdown covering the full wait.
+        let mut tracker = CooldownTracker::default();
+        let t0 = Instant::now();
+        tracker.mark_fire(t0, &EmoteKind::Hug, Some(id(1)));
+
+        // 1 second in: global has ~1s left, per-pair has ~59s left
+        let t1 = t0 + Duration::from_secs(1);
+        let err = tracker.check_fire(t1, &EmoteKind::Hug, Some(id(1))).unwrap_err();
+        assert!(
+            err.remaining_ms > 58_000 && err.remaining_ms <= 59_000,
+            "expected ~59s (per-pair), got {}ms",
+            err.remaining_ms
+        );
     }
 
     #[test]
