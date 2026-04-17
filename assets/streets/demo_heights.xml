@@ -77,11 +77,11 @@
         <object id="platform_lines">
           <object id="plat_main">
             <object id="start">
-              <int id="x">-1800</int>
+              <int id="x">-1900</int>
               <int id="y">0</int>
             </object>
             <object id="end">
-              <int id="x">1800</int>
+              <int id="x">1900</int>
               <int id="y">0</int>
             </object>
             <str id="surface">stone</str>
@@ -132,18 +132,7 @@
             <str id="surface">wood</str>
           </object>
         </object>
-        <object id="walls">
-          <object id="wall_left">
-            <int id="x">-1900</int>
-            <int id="y">-400</int>
-            <int id="h">400</int>
-          </object>
-          <object id="wall_right">
-            <int id="x">1900</int>
-            <int id="y">-400</int>
-            <int id="h">400</int>
-          </object>
-        </object>
+        <object id="walls"></object>
         <object id="ladders"></object>
       </object>
     </object>
