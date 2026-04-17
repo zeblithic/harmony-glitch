@@ -818,70 +818,73 @@ fn get_mood(app: AppHandle) -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
-    let state_wrapper = app.state::<GameStateWrapper>();
-    let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+    // Resolve identity + nearest target under Net lock
+    let (our_address, nearest_hash) = {
+        let net = app.state::<NetworkWrapper>();
+        let net_state = net.0.lock().map_err(|e| e.to_string())?;
+        let our_hash = net_state.our_address_hash();
+        let remote_frames = net_state.remote_frames();
+        drop(net_state);
 
-    // Find nearest remote player and get our identity
-    let net = app.state::<NetworkWrapper>();
-    let net_state = net.0.lock().map_err(|e| e.to_string())?;
-    let our_hash = net_state.our_address_hash();
-    let remote_frames = net_state.remote_frames();
-    drop(net_state);
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
 
-    // Ensure emote state has the real identity
-    state.social.set_identity(our_hash);
-
-    let our_variant = state.social.emotes.active_variant();
-
-    let mut nearest_hash: Option<[u8; 16]> = None;
-    let mut nearest_dist = f64::MAX;
-
-    for rf in &remote_frames {
-        if let Ok(bytes) = hex::decode(&rf.address_hash) {
-            if bytes.len() == 16 {
-                let mut addr = [0u8; 16];
-                addr.copy_from_slice(&bytes);
-                let dx = state.player.x - rf.x;
-                let dy = state.player.y - rf.y;
-                let dist = (dx * dx + dy * dy).sqrt();
-                if dist <= 400.0 && dist < nearest_dist {
-                    nearest_dist = dist;
-                    nearest_hash = Some(addr);
+        let mut nearest: Option<[u8; 16]> = None;
+        let mut nearest_dist = f64::MAX;
+        for rf in &remote_frames {
+            if let Ok(bytes) = hex::decode(&rf.address_hash) {
+                if bytes.len() == 16 {
+                    let mut addr = [0u8; 16];
+                    addr.copy_from_slice(&bytes);
+                    let dx = state.player.x - rf.x;
+                    let dy = state.player.y - rf.y;
+                    let dist = (dx * dx + dy * dy).sqrt();
+                    if dist <= 400.0 && dist < nearest_dist {
+                        nearest_dist = dist;
+                        nearest = Some(addr);
+                    }
                 }
             }
         }
-    }
-
-    // Check cooldown and blocked
-    if let Some(target) = nearest_hash {
-        if !state.social.emotes.can_hi(&target) {
-            return Err("Already greeted today".to_string());
-        }
-        if state.social.buddies.is_blocked(&target) {
-            return Err("Player is blocked".to_string());
-        }
-        state.social.emotes.record_hi_sent(target);
-    }
-
-    // Drop game state lock before network publish
-    drop(state);
-
-    // Broadcast emote to all peers on the street
-    let emote_msg = emote::EmoteMessage {
-        kind: emote::EmoteKind::Hi(our_variant),
-        target: nearest_hash,
+        (our_hash, nearest)
     };
-    let actions = {
-        let net = app.state::<NetworkWrapper>();
-        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
-        net_state.publish_emote(emote_msg, &mut rand::rngs::OsRng)
-    };
-    execute_network_actions(&app, actions);
 
-    Ok(serde_json::json!({
-        "variant": our_variant.as_str(),
-        "targeted": nearest_hash.is_some(),
-    }))
+    // Apply Hi daily-per-target gate (Hi-specific semantics) + compute variant
+    let our_variant = {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        state.social.set_identity(our_address);
+
+        if let Some(target) = nearest_hash {
+            if !state.social.emotes.can_hi(&target) {
+                return Err("Already greeted today".to_string());
+            }
+            if state.social.buddies.is_blocked(&target) {
+                return Err("Player is blocked".to_string());
+            }
+            state.social.emotes.record_hi_sent(target);
+        }
+
+        state.social.emotes.active_variant()
+    };
+
+    // Delegate to unified fire path
+    let target_hex = nearest_hash.map(hex::encode);
+    let result = emote(emote::EmoteKind::Hi(our_variant), target_hex, app.clone())?;
+
+    match result {
+        EmoteFireResult::Success => Ok(serde_json::json!({
+            "variant": our_variant.as_str(),
+            "targeted": nearest_hash.is_some(),
+        })),
+        // Hi has its own daily gate, so fire_emote cooldown shouldn't fire
+        // in practice — but surface the reason cleanly if it does.
+        EmoteFireResult::Cooldown { remaining_ms } => Err(format!(
+            "Emote on cooldown ({remaining_ms}ms remaining)"
+        )),
+        EmoteFireResult::NoTarget => Err("No target in range".to_string()),
+        EmoteFireResult::TargetBlocked => Err("Player is blocked".to_string()),
+    }
 }
 
 #[tauri::command]
@@ -4038,6 +4041,19 @@ mod emote_fire_tests {
         let t1 = t0 + Duration::from_secs(30); // past global, within per-pair
         let result = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, Some(id(0x02)), t1);
         assert!(matches!(result, EmoteFireResult::Cooldown { .. }));
+    }
+
+    #[test]
+    fn hi_daily_cap_prevents_second_hi_to_same_target_same_day() {
+        // Hi has its own per-day gate (can_hi) that should survive the fire_emote
+        // refactor — migrated emote_hi wrapper must still enforce it.
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let target = id(0x02);
+
+        // Simulate emote_hi's own daily-gate check (which lives in the wrapper):
+        assert!(emotes.can_hi(&target));
+        emotes.record_hi_sent(target);
+        assert!(!emotes.can_hi(&target));
     }
 }
 
