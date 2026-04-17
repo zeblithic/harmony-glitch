@@ -24,14 +24,15 @@
   import DialoguePanel from './lib/components/DialoguePanel.svelte';
   import QuestLogPanel from './lib/components/QuestLogPanel.svelte';
   import EmoteAnimation from './lib/components/EmoteAnimation.svelte';
+  import EmotePalette from './lib/components/EmotePalette.svelte';
   import PartyPanel from './lib/components/PartyPanel.svelte';
   import BuddyListPanel from './lib/components/BuddyListPanel.svelte';
   import SocialPrompt from './lib/components/SocialPrompt.svelte';
   import BuddyRequestPrompt from './lib/components/BuddyRequestPrompt.svelte';
   import PartyInvitePrompt from './lib/components/PartyInvitePrompt.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, getEmotePrivacy, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
   import type { PartyMemberInfo, BuddyEntry } from './lib/ipc';
-  import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame } from './lib/types';
+  import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame, EmoteKind, EmoteFireResult, EmoteAnimationFrame, HiVariant } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
@@ -81,6 +82,68 @@
   let dialogueClosing: Promise<void> | null = null;
   let questLogOpen = $state(false);
   let questLog = $state<QuestLogFrame | null>(null);
+
+  // Emote palette state. `emoteCooldownExpiries` stores absolute wall-clock
+  // expiry timestamps (Date.now() + remaining_ms from Rust). Displayed
+  // remaining-ms is derived on every tick so closing/reopening the palette
+  // shows the correct live value — no drift from a local decrement loop.
+  let emotePaletteOpen = $state(false);
+  let emoteCooldownExpiries = $state<Record<string, number>>({});
+  let emoteCooldownTick = $state(Date.now());
+  let emoteCooldowns = $derived.by(() => {
+    const out: Record<string, number> = {};
+    for (const [k, exp] of Object.entries(emoteCooldownExpiries)) {
+      const rem = exp - emoteCooldownTick;
+      if (rem > 0) out[k] = rem;
+    }
+    return out;
+  });
+  let emotePrivacy = $state({ hug: true, high_five: true });
+
+  /**
+   * Frontend-local transient feedback for emote IPC failures (no_target,
+   * target_blocked). Merges into the GameNotification stream so failures
+   * are user-visible — without this, clicking a targeted emote whose target
+   * just moved out of range would silently drop.
+   *
+   * Shape matches PickupFeedback; IDs start from 1e9 to stay disjoint from
+   * Rust-authored pickup IDs.
+   */
+  let emoteFeedback = $state<import('$lib/types').PickupFeedback[]>([]);
+  let emoteFeedbackNextId = 1_000_000_000;
+
+  function pushEmoteFeedback(text: string) {
+    const id = emoteFeedbackNextId++;
+    emoteFeedback = [...emoteFeedback, { id, text, success: false, x: 0, y: 0, ageSecs: 0 }];
+    setTimeout(() => {
+      emoteFeedback = emoteFeedback.filter((f) => f.id !== id);
+    }, 1500);
+  }
+
+  /**
+   * Active emote animations keyed by playerHash ("self" for us).
+   * Each lives for ~2s then expires (matches CSS emote-float duration).
+   */
+  let activeEmotes = $state<Map<string, EmoteAnimationFrame>>(new Map());
+
+  function spawnEmoteAnimation(playerKey: string, kind: EmoteKind, targetHash: string | null) {
+    const kindStr: EmoteAnimationFrame['kind'] =
+      typeof kind === 'object' && 'hi' in kind ? 'hi' : kind;
+    const variant = typeof kind === 'object' && 'hi' in kind ? kind.hi : '';
+    const startedAt = performance.now();
+    const next = new Map(activeEmotes);
+    next.set(playerKey, { kind: kindStr, variant, targetHash, startedAt });
+    activeEmotes = next;
+    // Gate cleanup on the exact instance we inserted — a newer animation
+    // from the same playerKey must not be deleted by the older timer.
+    setTimeout(() => {
+      const current = activeEmotes.get(playerKey);
+      if (!current || current.startedAt !== startedAt) return;
+      const pruned = new Map(activeEmotes);
+      pruned.delete(playerKey);
+      activeEmotes = pruned;
+    }, 2000);
+  }
 
   // Social state
   let buddyListOpen = $state(false);
@@ -138,6 +201,15 @@
       skills = await getSkills();
     } catch (e) {
       console.error('Failed to load skills:', e);
+    }
+
+    // Hydrate emote privacy from Rust so the palette reflects the backend's
+    // receiver-side settings after restart. Falls back to accept-all (matches
+    // the Rust defaults).
+    try {
+      emotePrivacy = await getEmotePrivacy();
+    } catch (e) {
+      console.error('Failed to load emote privacy:', e);
     }
 
     // Load available sound kits
@@ -567,6 +639,97 @@
   function toggleDebug() {
     debugMode = !debugMode;
   }
+
+  // Shared Hi firing helper — used by H-key, palette Hi, and SocialPrompt.
+  // Waits for the backend result so the local animation uses the
+  // daily-chosen variant and only plays on success (not on rejection for
+  // already-greeted, blocked, or cooldown).
+  async function fireHiWithAnimation() {
+    try {
+      const result = await emoteHi();
+      spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
+      // Parity with the generic emote path: seed the Hi button's post-fire
+      // cooldown so a quick second click sees a dimmed state instead of
+      // eating a backend Cooldown rejection.
+      emoteCooldownExpiries = {
+        ...emoteCooldownExpiries,
+        hi: Date.now() + result.cooldown_ms,
+      };
+    } catch (err) {
+      // Backend errors are strings ("Already greeted today", "No target in
+      // range", "Player is blocked", "Emote on cooldown (...)"). Surface
+      // them through the same GameNotification path as other emote failures.
+      const msg = typeof err === 'string' ? err : 'Hi failed';
+      pushEmoteFeedback(msg);
+    }
+  }
+
+  async function handleEmoteSelect(kind: EmoteKind) {
+    if (typeof kind === 'object' && 'hi' in kind) {
+      await fireHiWithAnimation();
+      return;
+    }
+
+    // Only targeted-only kinds get the nearest peer as a target. Dance is
+    // broadcast-only (Rust also strips any target for Dance as defense-in-
+    // depth). Applaud is dual-nature — default to broadcast for the palette's
+    // fire-and-forget UX; a future chat command can express targeted intent.
+    const nearest = latestFrame?.nearestSocialTarget?.addressHash ?? null;
+    const target = (kind === 'hug' || kind === 'high_five' || kind === 'wave')
+      ? nearest
+      : null;
+    const result: EmoteFireResult = await emoteFire(kind, target);
+    switch (result.type) {
+      case 'success':
+        spawnEmoteAnimation('self', kind, target);
+        // Dim the button immediately using Rust's post-fire cooldown — no
+        // need to wait for the next click to be rejected before the palette
+        // reflects the cooldown.
+        emoteCooldownExpiries = {
+          ...emoteCooldownExpiries,
+          [kind as string]: Date.now() + result.cooldown_ms,
+        };
+        break;
+      case 'cooldown':
+        // Store absolute expiry timestamp so display stays correct whether
+        // the palette is open or closed (no drift from a local decrement).
+        emoteCooldownExpiries = {
+          ...emoteCooldownExpiries,
+          [kind as string]: Date.now() + result.remaining_ms,
+        };
+        break;
+      case 'no_target':
+        pushEmoteFeedback('No target in range');
+        break;
+      case 'target_blocked':
+        pushEmoteFeedback('Player is blocked');
+        break;
+    }
+  }
+
+  // Cooldown tick — refreshes the derived display by advancing the wall-clock
+  // reference every 250ms while the palette is open. No game logic here; the
+  // authoritative cooldown timing is in Rust, and expiries are absolute, so
+  // closing/reopening the palette never shows a stale remaining time.
+  $effect(() => {
+    if (!emotePaletteOpen) return;
+    const interval = setInterval(() => {
+      emoteCooldownTick = Date.now();
+    }, 250);
+    return () => clearInterval(interval);
+  });
+
+  // Subscribe to emote_received events and spawn animations above the sender's avatar
+  $effect(() => {
+    let unlisten: (() => void) | undefined;
+    onEmoteReceived((evt) => {
+      const kind: EmoteKind = evt.kind === 'hi'
+        ? { hi: (evt.variant ?? 'hi') as HiVariant }
+        : evt.kind;
+      spawnEmoteAnimation(evt.senderHash, kind, null);
+    }).then(fn => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  });
 </script>
 
 <svelte:window onkeydown={(e) => {
@@ -608,7 +771,15 @@
   // H key: send Hi emote
   if ((e.key === 'h' || e.key === 'H') && currentStreet && !chatFocused && latestFrame) {
     e.preventDefault();
-    emoteHi().catch(console.error);
+    fireHiWithAnimation();
+  }
+  // E key: toggle emote palette
+  if ((e.key === 'e' || e.key === 'E') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen && !tradeOpen && latestFrame) {
+    e.preventDefault();
+    emotePaletteOpen = !emotePaletteOpen;
+    if (emotePaletteOpen) {
+      inventoryOpen = false; volumeOpen = false; avatarEditorOpen = false; skillsOpen = false; questLogOpen = false;
+    }
   }
   // T key: initiate trade with nearest remote player (computed by Rust)
   if ((e.key === 't' || e.key === 'T') && currentStreet && !chatFocused && !tradeOpen && !tradeRequestVisible && !shopOpen && latestFrame) {
@@ -663,7 +834,7 @@
     <DebugOverlay frame={latestFrame} visible={debugMode} />
     <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
     <NetworkStatus />
-    <GameNotification feedback={latestFrame?.pickupFeedback ?? []} />
+    <GameNotification feedback={[...(latestFrame?.pickupFeedback ?? []), ...emoteFeedback]} />
     <VolumeSettings
       {audioManager}
       visible={volumeOpen}
@@ -873,6 +1044,14 @@
       visible={questLogOpen}
       onClose={() => { questLogOpen = false; }}
     />
+    <EmotePalette
+      visible={emotePaletteOpen}
+      onClose={() => { emotePaletteOpen = false; }}
+      onSelect={handleEmoteSelect}
+      cooldowns={emoteCooldowns}
+      nearestTarget={latestFrame?.nearestSocialTarget?.addressHash ?? null}
+      privacy={emotePrivacy}
+    />
     <PartyPanel
       inParty={partyInParty}
       members={partyMembers}
@@ -887,13 +1066,24 @@
       onBlock={(hash) => blockPlayer(hash).then(refreshBuddyList).catch(console.error)}
     />
     {#if latestFrame}
-      {#each latestFrame.remotePlayers.filter(p => p.emoteAnimation !== null) as rp (rp.addressHash)}
-        <EmoteAnimation
-          animation={rp.emoteAnimation!}
-          x={rp.x - (latestFrame.camera.x)}
-          y={rp.y - (latestFrame.camera.y)}
-        />
+      <!-- Remote player emote animations driven by onEmoteReceived listener -->
+      {#each latestFrame.remotePlayers as rp (rp.addressHash)}
+        {#if activeEmotes.has(rp.addressHash)}
+          <EmoteAnimation
+            animation={activeEmotes.get(rp.addressHash)!}
+            x={rp.x - latestFrame.camera.x}
+            y={rp.y - latestFrame.camera.y}
+          />
+        {/if}
       {/each}
+      <!-- Self emote animation (sender's own fire) -->
+      {#if activeEmotes.has('self')}
+        <EmoteAnimation
+          animation={activeEmotes.get('self')!}
+          x={latestFrame.player.x - latestFrame.camera.x}
+          y={latestFrame.player.y - latestFrame.camera.y}
+        />
+      {/if}
     {/if}
     {#if latestFrame?.nearestSocialTarget}
       {@const target = latestFrame.nearestSocialTarget}
@@ -904,7 +1094,7 @@
         canTrade={true}
         canInvite={!target.inParty && (partyIsLeader || !partyInParty)}
         canBuddy={!target.isBuddy}
-        onHi={() => emoteHi().catch(console.error)}
+        onHi={() => fireHiWithAnimation()}
         onTrade={() => tradeInitiate(target.addressHash).then(() => {
           tradeOpen = true;
           inventoryOpen = false; shopOpen = false; volumeOpen = false; avatarEditorOpen = false;

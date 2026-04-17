@@ -133,6 +133,11 @@ export interface CameraFrame {
 }
 
 export interface EmoteAnimationFrame {
+  /**
+   * Emote kind tag. Absent on legacy payloads — treat as 'hi' for
+   * backward compat with the (currently inert) Rust-side emission path.
+   */
+  kind?: 'hi' | 'dance' | 'wave' | 'hug' | 'high_five' | 'applaud';
   variant: string;
   targetHash: string | null;
   startedAt: number;
@@ -510,4 +515,34 @@ export interface QuestCompletedEntry {
 
 export interface QuestProgressFrame {
   activeCount: number;
+}
+
+/**
+ * Discriminated union mirroring Rust's EmoteKind. Hi carries its own
+ * variant payload; other kinds are string-tagged.
+ */
+export type EmoteKind =
+  | { hi: HiVariant }
+  | 'dance'
+  | 'wave'
+  | 'hug'
+  | 'high_five'
+  | 'applaud';
+
+/** Cosmetic variant for Hi emotes. */
+export type HiVariant =
+  | 'bats' | 'birds' | 'butterflies' | 'cubes' | 'flowers'
+  | 'hands' | 'hearts' | 'hi' | 'pigs' | 'rocketships' | 'stars';
+
+/** Result of firing an emote via the unified IPC. */
+export type EmoteFireResult =
+  | { type: 'success'; cooldown_ms: number }
+  | { type: 'cooldown'; remaining_ms: number }
+  | { type: 'no_target' }
+  | { type: 'target_blocked' };
+
+/** Privacy flags per emote kind. */
+export interface EmotePrivacy {
+  hug: boolean;
+  high_five: boolean;
 }

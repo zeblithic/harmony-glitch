@@ -7,16 +7,32 @@
     y: number;
   } = $props();
 
-  const VARIANT_EMOJIS: Record<string, string> = {
+  const HI_VARIANT_EMOJIS: Record<string, string> = {
     bats: '🦇', birds: '🐦', butterflies: '🦋', cubes: '🧊',
     flowers: '🌸', hands: '👋', hearts: '❤️', hi: '👋',
     pigs: '🐷', rocketships: '🚀', stars: '⭐',
   };
 
-  let emoji = $derived(VARIANT_EMOJIS[animation.variant] ?? '👋');
+  const KIND_EMOJIS: Record<string, string> = {
+    dance: '💃',
+    wave: '👋',
+    hug: '🤗',
+    high_five: '🖐️',
+    applaud: '👏',
+  };
+
+  let emoji = $derived.by(() => {
+    const kind = animation.kind ?? 'hi'; // default to 'hi' for legacy payloads
+    if (kind === 'hi') {
+      return HI_VARIANT_EMOJIS[animation.variant] ?? '👋';
+    }
+    return KIND_EMOJIS[kind] ?? '👋';
+  });
+
+  let ariaLabel = $derived(animation.kind ?? 'hi');
 </script>
 
-<div class="emote-animation" style="left: {x}px; top: {y - 60}px;" aria-label="Emote: {animation.variant}">
+<div class="emote-animation" style="left: {x}px; top: {y - 60}px;" aria-label="Emote: {ariaLabel}">
   <span class="emote-sprite">{emoji}</span>
 </div>
 

@@ -3782,8 +3782,7 @@ mod tests {
         state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
 
         let emote = crate::emote::EmoteMessage {
-            emote_type: crate::emote::EmoteType::Hi,
-            variant: crate::emote::HiVariant::Hearts,
+            kind: crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Hearts),
             target: Some([0x99; 16]),
         };
 
@@ -3808,7 +3807,10 @@ mod tests {
 
         assert_eq!(emote_received.len(), 1, "B should receive exactly one EmoteReceived");
         assert_eq!(*emote_received[0].0, addr_a, "sender should be A");
-        assert_eq!(emote_received[0].1.variant, crate::emote::HiVariant::Hearts);
+        assert_eq!(
+            emote_received[0].1.kind,
+            crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Hearts)
+        );
         assert_eq!(emote_received[0].1.target, Some([0x99; 16]));
     }
 
@@ -3849,14 +3851,91 @@ mod tests {
     }
 
     #[test]
+    fn publish_hug_emote_round_trip_delivers_kind_and_target() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, addr_a, addr_b) = drive_to_pubsub_ready("meadow");
+
+        // A must be at least Initiate epoch on B's trust store.
+        state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
+
+        let emote = crate::emote::EmoteMessage {
+            kind: crate::emote::EmoteKind::Hug,
+            target: Some(addr_b),
+        };
+
+        let publish_actions = state_a.publish_emote(emote.clone(), &mut rng);
+
+        let a_packets = extract_packets(&publish_actions);
+        assert!(!a_packets.is_empty(), "publish_emote should emit packets");
+
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let emote_received: Vec<_> = b_actions
+            .iter()
+            .filter_map(|a| match a {
+                NetworkAction::EmoteReceived { sender, emote } => Some((sender, emote)),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(emote_received.len(), 1, "B should receive exactly one EmoteReceived");
+        assert_eq!(*emote_received[0].0, addr_a, "sender should be A");
+        assert_eq!(
+            emote_received[0].1.kind,
+            crate::emote::EmoteKind::Hug,
+            "kind should round-trip as Hug"
+        );
+        assert_eq!(
+            emote_received[0].1.target,
+            Some(addr_b),
+            "target should round-trip as B's address"
+        );
+    }
+
+    #[test]
+    fn publish_dance_broadcast_emote_has_no_target() {
+        let mut rng = OsRng;
+        let (mut state_a, mut state_b, addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
+        state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
+
+        let emote = crate::emote::EmoteMessage {
+            kind: crate::emote::EmoteKind::Dance,
+            target: None,
+        };
+
+        let publish_actions = state_a.publish_emote(emote, &mut rng);
+        let a_packets = extract_packets(&publish_actions);
+        let inbound_for_b: Vec<(String, Vec<u8>)> = a_packets
+            .iter()
+            .map(|p| (INTERFACE_NAME.to_string(), p.clone()))
+            .collect();
+        let b_actions = state_b.tick(&inbound_for_b, 8.0, &mut rng);
+
+        let emote_received: Vec<_> = b_actions
+            .iter()
+            .filter_map(|a| match a {
+                NetworkAction::EmoteReceived { emote, .. } => Some(emote),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(emote_received.len(), 1);
+        assert_eq!(emote_received[0].kind, crate::emote::EmoteKind::Dance);
+        assert_eq!(emote_received[0].target, None);
+    }
+
+    #[test]
     fn emote_blocked_at_sandbox_epoch() {
         let mut rng = OsRng;
         let (mut state_a, mut state_b, _addr_a, _addr_b) = drive_to_pubsub_ready("meadow");
 
         // Do NOT set copresence — A stays at Sandbox epoch on B.
         let emote = crate::emote::EmoteMessage {
-            emote_type: crate::emote::EmoteType::Hi,
-            variant: crate::emote::HiVariant::Stars,
+            kind: crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Stars),
             target: None,
         };
 

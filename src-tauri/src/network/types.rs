@@ -301,15 +301,14 @@ mod tests {
     #[test]
     fn net_message_emote_round_trip() {
         let msg = NetMessage::Emote(crate::emote::EmoteMessage {
-            emote_type: crate::emote::EmoteType::Hi,
-            variant: crate::emote::HiVariant::Hearts,
+            kind: crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Hearts),
             target: Some([1u8; 16]),
         });
         let bytes = serde_json::to_vec(&msg).unwrap();
         let decoded: NetMessage = serde_json::from_slice(&bytes).unwrap();
         match decoded {
             NetMessage::Emote(e) => {
-                assert_eq!(e.variant, crate::emote::HiVariant::Hearts);
+                assert_eq!(e.kind, crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Hearts));
                 assert_eq!(e.target, Some([1u8; 16]));
             }
             _ => panic!("Expected Emote variant"),
@@ -319,8 +318,7 @@ mod tests {
     #[test]
     fn emote_message_fits_in_mtu() {
         let msg = NetMessage::Emote(crate::emote::EmoteMessage {
-            emote_type: crate::emote::EmoteType::Hi,
-            variant: crate::emote::HiVariant::Rocketships,
+            kind: crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Rocketships),
             target: Some([0xFF; 16]),
         });
         let bytes = serde_json::to_vec(&msg).unwrap();

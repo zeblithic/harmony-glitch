@@ -50,18 +50,50 @@ impl HiVariant {
     }
 }
 
-/// Discriminant for which emote family is being sent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Tagged union of all emote kinds. Hi carries its cosmetic variant; others
+/// have no inner data. Wire format is `{"kind":{"hi":"bats"},"target":null}`
+/// for Hi or `{"kind":"hug","target":"..."}` for unit variants.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum EmoteType {
-    Hi,
+pub enum EmoteKind {
+    Hi(HiVariant),
+    Dance,
+    Wave,
+    Hug,
+    HighFive,
+    Applaud,
 }
 
-/// Wire message for an emote.
+/// Discriminant of `EmoteKind` — collapses all Hi variants into a single
+/// `Hi` tag. Used as a hashmap key for cooldown tracking where we care
+/// about "which kind of emote" but not "which cosmetic variant of Hi".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EmoteKindTag {
+    Hi,
+    Dance,
+    Wave,
+    Hug,
+    HighFive,
+    Applaud,
+}
+
+impl From<&EmoteKind> for EmoteKindTag {
+    fn from(kind: &EmoteKind) -> Self {
+        match kind {
+            EmoteKind::Hi(_) => EmoteKindTag::Hi,
+            EmoteKind::Dance => EmoteKindTag::Dance,
+            EmoteKind::Wave => EmoteKindTag::Wave,
+            EmoteKind::Hug => EmoteKindTag::Hug,
+            EmoteKind::HighFive => EmoteKindTag::HighFive,
+            EmoteKind::Applaud => EmoteKindTag::Applaud,
+        }
+    }
+}
+
+/// Wire message for any emote.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmoteMessage {
-    pub emote_type: EmoteType,
-    pub variant: HiVariant,
+    pub kind: EmoteKind,
     /// Targeted player identity (16 bytes), or None for a broadcast.
     pub target: Option<[u8; 16]>,
 }
@@ -80,9 +112,11 @@ pub fn daily_variant(identity: &[u8; 16], date: &str) -> HiVariant {
     HiVariant::ALL[idx]
 }
 
-/// Per-session emote state — tracks who we've greeted and who greeted us.
+/// Per-session emote state — tracks Hi-specific greeting state, shared
+/// cooldowns, and per-emote privacy toggles.
 #[derive(Debug, Clone)]
 pub struct EmoteState {
+    // Hi-specific (unchanged)
     /// Players we've sent a Hi to today (no repeats per day).
     pub hi_today: HashSet<[u8; 16]>,
     /// Players who sent us a Hi today.
@@ -93,6 +127,13 @@ pub struct EmoteState {
     pub identity: [u8; 16],
     /// The date string we were initialised for (YYYY-MM-DD).
     pub current_date: String,
+
+    // Shared cooldowns (NEW)
+    pub cooldowns: super::cooldowns::CooldownTracker,
+
+    // Per-emote privacy toggles (NEW — default true = accept)
+    pub accept_hug: bool,
+    pub accept_high_five: bool,
 }
 
 impl EmoteState {
@@ -103,6 +144,9 @@ impl EmoteState {
             caught_variant: None,
             identity,
             current_date: date.into(),
+            cooldowns: super::cooldowns::CooldownTracker::default(),
+            accept_hug: true,
+            accept_high_five: true,
         }
     }
 
@@ -166,6 +210,25 @@ impl EmoteState {
             10.0 // Natural match bonus
         } else {
             5.0 // Non-matching, but adopted their variant
+        }
+    }
+
+    /// Is this emote kind currently accepted by this player?
+    /// Hug and HighFive have privacy toggles; others always accept.
+    pub fn privacy_accepts(&self, tag: EmoteKindTag) -> bool {
+        match tag {
+            EmoteKindTag::Hug => self.accept_hug,
+            EmoteKindTag::HighFive => self.accept_high_five,
+            _ => true,
+        }
+    }
+
+    /// Toggle a privacy flag. No-op for kinds without a toggle.
+    pub fn set_privacy(&mut self, tag: EmoteKindTag, accept: bool) {
+        match tag {
+            EmoteKindTag::Hug => self.accept_hug = accept,
+            EmoteKindTag::HighFive => self.accept_high_five = accept,
+            _ => {}
         }
     }
 }
@@ -369,19 +432,33 @@ mod tests {
     // ── serialization ─────────────────────────────────────────────────────────
 
     #[test]
-    fn emote_message_serialization_round_trip() {
+    fn emote_kind_serde_round_trip_hi_with_variant() {
         let msg = EmoteMessage {
-            emote_type: EmoteType::Hi,
-            variant: HiVariant::Hearts,
+            kind: EmoteKind::Hi(HiVariant::Hearts),
             target: Some([0xAB; 16]),
         };
         let json = serde_json::to_string(&msg).unwrap();
         let restored: EmoteMessage = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.variant, msg.variant);
+        assert_eq!(restored.kind, EmoteKind::Hi(HiVariant::Hearts));
         assert_eq!(restored.target, msg.target);
-        match restored.emote_type {
-            EmoteType::Hi => {}
+    }
+
+    #[test]
+    fn emote_kind_serde_round_trip_unit_variants() {
+        for kind in [EmoteKind::Dance, EmoteKind::Wave, EmoteKind::Hug, EmoteKind::HighFive, EmoteKind::Applaud] {
+            let msg = EmoteMessage { kind: kind.clone(), target: None };
+            let json = serde_json::to_string(&msg).unwrap();
+            let restored: EmoteMessage = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored.kind, kind);
+            assert!(restored.target.is_none());
         }
+    }
+
+    #[test]
+    fn emote_kind_wire_format_is_snake_case() {
+        let msg = EmoteMessage { kind: EmoteKind::HighFive, target: None };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"high_five\""), "got: {json}");
     }
 
     #[test]
@@ -389,21 +466,72 @@ mod tests {
         // Reticulum MTU 500, minus 35 header + 33 Zenoh overhead = 432 max payload.
         const MAX_PAYLOAD: usize = 500 - 35 - 33;
         let msg = EmoteMessage {
-            emote_type: EmoteType::Hi,
-            variant: HiVariant::Rocketships, // longest variant name
+            kind: EmoteKind::Hi(HiVariant::Rocketships), // longest variant name
             target: Some([0xFF; 16]),
         };
         let bytes = serde_json::to_vec(&msg).unwrap();
-        assert!(
-            bytes.len() < 500,
-            "EmoteMessage is {} bytes, must be < 500",
-            bytes.len()
-        );
-        assert!(
-            bytes.len() <= MAX_PAYLOAD,
-            "EmoteMessage is {} bytes, max payload is {}",
-            bytes.len(),
-            MAX_PAYLOAD
-        );
+        assert!(bytes.len() <= MAX_PAYLOAD, "EmoteMessage is {} bytes, max {}", bytes.len(), MAX_PAYLOAD);
+    }
+
+    // ── EmoteKindTag ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn emote_kind_tag_collapses_hi_variants() {
+        let tag_a: EmoteKindTag = (&EmoteKind::Hi(HiVariant::Stars)).into();
+        let tag_b: EmoteKindTag = (&EmoteKind::Hi(HiVariant::Hearts)).into();
+        assert_eq!(tag_a, tag_b);
+        assert_eq!(tag_a, EmoteKindTag::Hi);
+    }
+
+    #[test]
+    fn emote_kind_tag_distinct_per_non_hi_kind() {
+        let tags: HashSet<EmoteKindTag> = [
+            EmoteKind::Dance, EmoteKind::Wave, EmoteKind::Hug,
+            EmoteKind::HighFive, EmoteKind::Applaud,
+        ].iter().map(EmoteKindTag::from).collect();
+        assert_eq!(tags.len(), 5);
+    }
+
+    #[test]
+    fn emote_kind_tag_is_hash_key() {
+        let mut map = std::collections::HashMap::new();
+        map.insert(EmoteKindTag::Hug, 1);
+        map.insert(EmoteKindTag::HighFive, 2);
+        assert_eq!(map.get(&EmoteKindTag::Hug), Some(&1));
+        assert_eq!(map.get(&EmoteKindTag::HighFive), Some(&2));
+    }
+
+    // ── EmoteState privacy and cooldowns ───────────────────────────────────
+
+    #[test]
+    fn emote_state_new_has_permissive_privacy_defaults() {
+        let s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        assert!(s.accept_hug);
+        assert!(s.accept_high_five);
+    }
+
+    #[test]
+    fn set_emote_privacy_updates_only_named_kind() {
+        let mut s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        s.set_privacy(EmoteKindTag::Hug, false);
+        assert!(!s.accept_hug);
+        assert!(s.accept_high_five);
+    }
+
+    #[test]
+    fn privacy_accepts_returns_true_for_non_privacy_kinds() {
+        let s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        assert!(s.privacy_accepts(EmoteKindTag::Dance));
+        assert!(s.privacy_accepts(EmoteKindTag::Wave));
+        assert!(s.privacy_accepts(EmoteKindTag::Applaud));
+        assert!(s.privacy_accepts(EmoteKindTag::Hi));
+    }
+
+    #[test]
+    fn privacy_accepts_gates_hug_and_high_five() {
+        let mut s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        s.set_privacy(EmoteKindTag::Hug, false);
+        assert!(!s.privacy_accepts(EmoteKindTag::Hug));
+        assert!(s.privacy_accepts(EmoteKindTag::HighFive));
     }
 }
