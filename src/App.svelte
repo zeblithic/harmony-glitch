@@ -890,8 +890,18 @@
   {#if checkingIdentity || resuming}
     <!-- visual placeholder while loading -->
   {:else if !identityReady}
-    <IdentitySetup onComplete={(displayName) => {
+    <IdentitySetup onComplete={async (displayName) => {
       ourDisplayName = displayName;
+      // Refetch identity so the slash-command CommandContext sees the fresh
+      // backend state: catches first-run address-hash availability and any
+      // 30-byte UTF-8 truncation set_display_name applies on the Rust side.
+      try {
+        const identity = await getIdentity();
+        ourAddressHash = identity.addressHash;
+        ourDisplayName = identity.displayName;
+      } catch (e) {
+        console.error('Failed to refresh identity after setup:', e);
+      }
       identityReady = true;
       needsAvatarSetup = true;
     }} />
