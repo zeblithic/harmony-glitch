@@ -161,8 +161,7 @@ export const unblockHandler: CommandHandler = async (args, ctx) => {
 };
 
 export const meHandler: CommandHandler = async (args, ctx) => {
-  const action = args.trim();
-  if (action === '') {
+  if (args.trim() === '') {
     ctx.pushLocalBubble('Usage: /me <action>');
     return;
   }
