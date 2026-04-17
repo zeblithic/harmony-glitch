@@ -54,3 +54,25 @@ export function parseCommand(input: string): ParsedCommand | null {
 
   return { kind: 'command', cmd, args, raw: trimmed };
 }
+
+/**
+ * Dispatch a parsed command to its handler. Unknown commands and handler
+ * errors are reported as local bubbles; nothing propagates to the caller.
+ */
+export async function executeCommand(
+  parsed: Extract<ParsedCommand, { kind: 'command' }>,
+  registry: CommandRegistry,
+  ctx: CommandContext,
+): Promise<void> {
+  const handler = registry.get(parsed.cmd);
+  if (!handler) {
+    ctx.pushLocalBubble(`Unknown command: /${parsed.cmd}. Type /help for the list.`);
+    return;
+  }
+  try {
+    await handler(parsed.args, ctx);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    ctx.pushLocalBubble(`Command failed: ${msg}`);
+  }
+}

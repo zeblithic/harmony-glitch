@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { parseCommand } from './commands';
+import { parseCommand, executeCommand } from './commands';
+import type { CommandContext, CommandRegistry, CommandHandler } from './commands';
 
 describe('parseCommand', () => {
   it('returns null for empty input', () => {
@@ -67,5 +68,87 @@ describe('parseCommand', () => {
       args: '',
       raw: '/dance',
     });
+  });
+});
+
+function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
+  return {
+    remotePlayers: [],
+    nearestSocialTarget: null,
+    buddies: [],
+    localIdentity: { displayName: 'Me', addressHash: 'aa'.repeat(16), setupComplete: true },
+    pushLocalBubble: () => {},
+    fireEmote: async () => {},
+    fireEmoteHi: async () => {},
+    sendChat: async () => {},
+    blockPlayer: async () => {},
+    unblockPlayer: async () => {},
+    getBlockedList: async () => [],
+    ...overrides,
+  };
+}
+
+describe('executeCommand', () => {
+  it('dispatches to the handler for a known command', async () => {
+    let receivedArgs = '';
+    const handler: CommandHandler = async (args) => {
+      receivedArgs = args;
+    };
+    const registry: CommandRegistry = new Map([['dance', handler]]);
+    await executeCommand(
+      { kind: 'command', cmd: 'dance', args: 'extra', raw: '/dance extra' },
+      registry,
+      makeContext(),
+    );
+    expect(receivedArgs).toBe('extra');
+  });
+
+  it('bubbles an unknown-command message for a missing entry', async () => {
+    const bubbles: string[] = [];
+    const registry: CommandRegistry = new Map();
+    await executeCommand(
+      { kind: 'command', cmd: 'xyzzy', args: '', raw: '/xyzzy' },
+      registry,
+      makeContext({ pushLocalBubble: (t) => bubbles.push(t) }),
+    );
+    expect(bubbles).toEqual(['Unknown command: /xyzzy. Type /help for the list.']);
+  });
+
+  it('bubbles a specific message for the bare "/" case', async () => {
+    const bubbles: string[] = [];
+    await executeCommand(
+      { kind: 'command', cmd: '', args: '', raw: '/' },
+      new Map(),
+      makeContext({ pushLocalBubble: (t) => bubbles.push(t) }),
+    );
+    expect(bubbles).toEqual(['Unknown command: /. Type /help for the list.']);
+  });
+
+  it('catches handler errors and bubbles "Command failed: <message>"', async () => {
+    const bubbles: string[] = [];
+    const handler: CommandHandler = async () => {
+      throw new Error('boom');
+    };
+    const registry: CommandRegistry = new Map([['fail', handler]]);
+    await executeCommand(
+      { kind: 'command', cmd: 'fail', args: '', raw: '/fail' },
+      registry,
+      makeContext({ pushLocalBubble: (t) => bubbles.push(t) }),
+    );
+    expect(bubbles).toEqual(['Command failed: boom']);
+  });
+
+  it('catches non-Error throws and bubbles the stringified value', async () => {
+    const bubbles: string[] = [];
+    const handler: CommandHandler = async () => {
+      throw 'raw string error';
+    };
+    const registry: CommandRegistry = new Map([['fail', handler]]);
+    await executeCommand(
+      { kind: 'command', cmd: 'fail', args: '', raw: '/fail' },
+      registry,
+      makeContext({ pushLocalBubble: (t) => bubbles.push(t) }),
+    );
+    expect(bubbles).toEqual(['Command failed: raw string error']);
   });
 });
