@@ -112,9 +112,11 @@ pub fn daily_variant(identity: &[u8; 16], date: &str) -> HiVariant {
     HiVariant::ALL[idx]
 }
 
-/// Per-session emote state — tracks who we've greeted and who greeted us.
+/// Per-session emote state — tracks Hi-specific greeting state, shared
+/// cooldowns, and per-emote privacy toggles.
 #[derive(Debug, Clone)]
 pub struct EmoteState {
+    // Hi-specific (unchanged)
     /// Players we've sent a Hi to today (no repeats per day).
     pub hi_today: HashSet<[u8; 16]>,
     /// Players who sent us a Hi today.
@@ -125,6 +127,13 @@ pub struct EmoteState {
     pub identity: [u8; 16],
     /// The date string we were initialised for (YYYY-MM-DD).
     pub current_date: String,
+
+    // Shared cooldowns (NEW)
+    pub cooldowns: super::cooldowns::CooldownTracker,
+
+    // Per-emote privacy toggles (NEW — default true = accept)
+    pub accept_hug: bool,
+    pub accept_high_five: bool,
 }
 
 impl EmoteState {
@@ -135,6 +144,9 @@ impl EmoteState {
             caught_variant: None,
             identity,
             current_date: date.into(),
+            cooldowns: super::cooldowns::CooldownTracker::default(),
+            accept_hug: true,
+            accept_high_five: true,
         }
     }
 
@@ -198,6 +210,25 @@ impl EmoteState {
             10.0 // Natural match bonus
         } else {
             5.0 // Non-matching, but adopted their variant
+        }
+    }
+
+    /// Is this emote kind currently accepted by this player?
+    /// Hug and HighFive have privacy toggles; others always accept.
+    pub fn privacy_accepts(&self, tag: EmoteKindTag) -> bool {
+        match tag {
+            EmoteKindTag::Hug => self.accept_hug,
+            EmoteKindTag::HighFive => self.accept_high_five,
+            _ => true,
+        }
+    }
+
+    /// Toggle a privacy flag. No-op for kinds without a toggle.
+    pub fn set_privacy(&mut self, tag: EmoteKindTag, accept: bool) {
+        match tag {
+            EmoteKindTag::Hug => self.accept_hug = accept,
+            EmoteKindTag::HighFive => self.accept_high_five = accept,
+            _ => {}
         }
     }
 }
@@ -468,5 +499,39 @@ mod tests {
         map.insert(EmoteKindTag::HighFive, 2);
         assert_eq!(map.get(&EmoteKindTag::Hug), Some(&1));
         assert_eq!(map.get(&EmoteKindTag::HighFive), Some(&2));
+    }
+
+    // ── EmoteState privacy and cooldowns ───────────────────────────────────
+
+    #[test]
+    fn emote_state_new_has_permissive_privacy_defaults() {
+        let s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        assert!(s.accept_hug);
+        assert!(s.accept_high_five);
+    }
+
+    #[test]
+    fn set_emote_privacy_updates_only_named_kind() {
+        let mut s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        s.set_privacy(EmoteKindTag::Hug, false);
+        assert!(!s.accept_hug);
+        assert!(s.accept_high_five);
+    }
+
+    #[test]
+    fn privacy_accepts_returns_true_for_non_privacy_kinds() {
+        let s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        assert!(s.privacy_accepts(EmoteKindTag::Dance));
+        assert!(s.privacy_accepts(EmoteKindTag::Wave));
+        assert!(s.privacy_accepts(EmoteKindTag::Applaud));
+        assert!(s.privacy_accepts(EmoteKindTag::Hi));
+    }
+
+    #[test]
+    fn privacy_accepts_gates_hug_and_high_five() {
+        let mut s = EmoteState::new(test_identity(0x01), "2026-04-10");
+        s.set_privacy(EmoteKindTag::Hug, false);
+        assert!(!s.privacy_accepts(EmoteKindTag::Hug));
+        assert!(s.privacy_accepts(EmoteKindTag::HighFive));
     }
 }
