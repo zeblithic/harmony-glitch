@@ -28,3 +28,15 @@ export function resolvePlayerName(
   }
   return null;
 }
+
+export const hiHandler: CommandHandler = async (_args, ctx) => {
+  await ctx.fireEmoteHi();
+};
+
+export const danceHandler: CommandHandler = async (_args, ctx) => {
+  await ctx.fireEmote('dance', null);
+};
+
+export const applaudHandler: CommandHandler = async (_args, ctx) => {
+  await ctx.fireEmote('applaud', null);
+};

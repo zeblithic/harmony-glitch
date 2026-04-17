@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { resolvePlayerName } from './handlers';
+import { resolvePlayerName, hiHandler, danceHandler, applaudHandler } from './handlers';
 import type { RemotePlayerFrame } from '$lib/types';
 import type { BuddyEntry } from '$lib/ipc';
+import type { CommandContext } from './commands';
 
 function remote(name: string, hash: string): RemotePlayerFrame {
   return {
@@ -64,5 +65,62 @@ describe('resolvePlayerName', () => {
 
   it('handles sources being absent', () => {
     expect(resolvePlayerName('alice', {})).toBeNull();
+  });
+});
+
+function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
+  return {
+    remotePlayers: [],
+    nearestSocialTarget: null,
+    buddies: [],
+    localIdentity: { displayName: 'Me', addressHash: 'ff'.repeat(16), setupComplete: true },
+    pushLocalBubble: () => {},
+    fireEmote: async () => {},
+    fireEmoteHi: async () => {},
+    sendChat: async () => {},
+    blockPlayer: async () => {},
+    unblockPlayer: async () => {},
+    getBlockedList: async () => [],
+    ...overrides,
+  };
+}
+
+describe('hiHandler', () => {
+  it('calls ctx.fireEmoteHi regardless of args', async () => {
+    let called = 0;
+    await hiHandler('', makeContext({ fireEmoteHi: async () => { called++; } }));
+    expect(called).toBe(1);
+    await hiHandler('ignored junk', makeContext({ fireEmoteHi: async () => { called++; } }));
+    expect(called).toBe(2);
+  });
+});
+
+describe('danceHandler', () => {
+  it('fires dance with null target (broadcast)', async () => {
+    const calls: Array<[string, string | null]> = [];
+    await danceHandler(
+      '',
+      makeContext({
+        fireEmote: async (kind, target) => {
+          calls.push([kind as string, target]);
+        },
+      }),
+    );
+    expect(calls).toEqual([['dance', null]]);
+  });
+});
+
+describe('applaudHandler', () => {
+  it('fires applaud with null target (broadcast)', async () => {
+    const calls: Array<[string, string | null]> = [];
+    await applaudHandler(
+      '',
+      makeContext({
+        fireEmote: async (kind, target) => {
+          calls.push([kind as string, target]);
+        },
+      }),
+    );
+    expect(calls).toEqual([['applaud', null]]);
   });
 });
