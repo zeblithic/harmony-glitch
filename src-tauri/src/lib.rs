@@ -809,6 +809,21 @@ fn is_target_in_range(self_x: f64, self_y: f64, target_x: f64, target_y: f64, ma
     (dx * dx + dy * dy).sqrt() <= max_dist
 }
 
+/// Receive-path target coercion. Mirrors the sender-side hardening so a
+/// misbehaving peer can't undermine broadcast-only semantics by wiring a
+/// target on a kind that must be broadcast.
+///
+/// Only Dance is coerced here: its receive-logic awards mood only when
+/// `nearby_witness` is true, which in turn requires `is_broadcast`. A
+/// targeted Dance would otherwise render to no one and credit no mood.
+/// Applaud is dual-nature (targeted OR witness), so its target is preserved.
+fn effective_receive_target(emote: &emote::EmoteMessage) -> Option<[u8; 16]> {
+    match emote.kind {
+        emote::EmoteKind::Dance => None,
+        _ => emote.target,
+    }
+}
+
 /// Sender-side mood delta per emote kind. See spec §6.
 fn sender_mood_delta(kind: &emote::EmoteKind) -> f64 {
     match kind {
@@ -2345,11 +2360,13 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     (our_addr, name, sender_pos, self_pos)
                 };
 
-                // Skip targeted emotes not aimed at us (unless we should see
-                // them as witness for broadcast-style applaud — separate check).
-                let we_are_target = emote.target.map(|t| t == our_address).unwrap_or(false);
-                let is_broadcast = emote.target.is_none();
-                if emote.target.is_some() && !we_are_target {
+                // Defense-in-depth: coerce broadcast-only kinds back to
+                // broadcast regardless of what the sender wired. See
+                // effective_receive_target for the rationale.
+                let effective_target = effective_receive_target(&emote);
+                let we_are_target = effective_target.map(|t| t == our_address).unwrap_or(false);
+                let is_broadcast = effective_target.is_none();
+                if effective_target.is_some() && !we_are_target {
                     continue;
                 }
 
@@ -4489,6 +4506,52 @@ mod emote_fire_tests {
     fn is_target_in_range_at_boundary_accepts_equal_distance() {
         // Exactly at boundary should accept (matches emote_hi's `dist <= 400.0` semantics)
         assert!(is_target_in_range(0.0, 0.0, 400.0, 0.0, 400.0));
+    }
+
+    // ── effective_receive_target ────────────────────────────────────────
+    //
+    // Defense-in-depth: broadcast-only kinds must be coerced to broadcast
+    // on receive regardless of what the sender wired.
+
+    #[test]
+    fn effective_receive_target_strips_dance_target() {
+        let msg = crate::emote::EmoteMessage {
+            kind: crate::emote::EmoteKind::Dance,
+            target: Some(id(0x02)),
+        };
+        assert_eq!(
+            effective_receive_target(&msg),
+            None,
+            "targeted Dance must be coerced to broadcast"
+        );
+    }
+
+    #[test]
+    fn effective_receive_target_preserves_hug_target() {
+        let msg = crate::emote::EmoteMessage {
+            kind: crate::emote::EmoteKind::Hug,
+            target: Some(id(0x02)),
+        };
+        assert_eq!(effective_receive_target(&msg), Some(id(0x02)));
+    }
+
+    #[test]
+    fn effective_receive_target_preserves_applaud_target() {
+        // Applaud is dual-nature (targeted OR witness) — target must survive.
+        let msg = crate::emote::EmoteMessage {
+            kind: crate::emote::EmoteKind::Applaud,
+            target: Some(id(0x02)),
+        };
+        assert_eq!(effective_receive_target(&msg), Some(id(0x02)));
+    }
+
+    #[test]
+    fn effective_receive_target_passes_through_none() {
+        let msg = crate::emote::EmoteMessage {
+            kind: crate::emote::EmoteKind::Dance,
+            target: None,
+        };
+        assert_eq!(effective_receive_target(&msg), None);
     }
 }
 
