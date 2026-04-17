@@ -22,6 +22,12 @@ use crate::street::types::StreetData;
 /// Energy lost per second from passive decay.
 const PASSIVE_ENERGY_DECAY_RATE: f64 = 0.1;
 
+/// Fraction of the viewport height at which the player sprite is framed, measured
+/// from the viewport's TOP edge. 0.5 = exact center, 1.0 = bottom edge.
+/// 0.85 = player sits 15% up from the bottom (Glitch's typical framing),
+/// leaving plenty of upward headroom to see jumps and falls to lower platforms.
+const PLAYER_VERTICAL_FRAMING: f64 = 0.85;
+
 fn default_currants() -> u64 {
     50
 }
@@ -951,25 +957,23 @@ impl GameState {
             AnimationState::Idle
         };
 
-        // Camera: center on player both axes, clamped to street bounds.
-        // Vertical previously used a 0.6 multiplier that pushed the player
-        // into the lower 40% of the viewport, and cam_y_max pinned to the
-        // street bottom exactly — combined effect was that the player stuck
-        // to the bottom edge whenever the viewport was comparable in height
-        // to the street, making it hard to see them fall to a lower platform.
-        //
-        // Now: 0.5 multiplier so vertical matches horizontal centering, and
-        // cam_y_max allows the viewport to extend half a screen below the
-        // street's bottom bound. This trades a strip of empty below-ground
-        // space (when the player is near the ground) for proper vertical
-        // follow during falls. When the street is smaller than the viewport,
-        // clamp min/max to avoid a panic from f64::clamp (min <= max).
+        // Camera: horizontal center on player, vertical frame at
+        // PLAYER_VERTICAL_FRAMING. The renderer draws the player at
+        // `screen_y = player.y - cam_y`, so setting `cam_y = player.y -
+        // vh * 0.85` pins the player 85% down from the top (15% up from
+        // the bottom). cam_y_max is offset by the same factor so the
+        // framing persists when the player is grounded — the viewport
+        // extends a small strip below street.bottom rather than pinning
+        // the player against the bottom edge. When the street is shorter
+        // than that strip, clamp min/max to avoid a panic from f64::clamp
+        // (min <= max).
         let cam_x = self.player.x - self.viewport_width / 2.0;
-        let cam_y = self.player.y - self.viewport_height / 2.0;
+        let cam_y = self.player.y - self.viewport_height * PLAYER_VERTICAL_FRAMING;
         let cam_x_min = street.left;
         let cam_x_max = (street.right - self.viewport_width).max(cam_x_min);
         let cam_y_min = street.top;
-        let cam_y_max = (street.bottom - self.viewport_height / 2.0).max(cam_y_min);
+        let cam_y_max =
+            (street.bottom - self.viewport_height * PLAYER_VERTICAL_FRAMING).max(cam_y_min);
         let cam_x = cam_x.clamp(cam_x_min, cam_x_max);
         let cam_y = cam_y.clamp(cam_y_min, cam_y_max);
 
@@ -1666,6 +1670,74 @@ mod tests {
         let input = InputState::default();
         let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
         assert!(frame.is_some());
+    }
+
+    #[test]
+    fn camera_frames_grounded_player_near_bottom() {
+        // Viewport 1280x720, street 6000x1000. Player on ground (y=0).
+        // PLAYER_VERTICAL_FRAMING = 0.85, so cam_y should clamp to
+        // street.bottom - vh * 0.85 = 0 - 612 = -612. That places the
+        // player's world-y=0 at screen_y = player.y - cam_y = 612,
+        // i.e. 85% down the viewport (15% from the bottom).
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.player.y = 0.0;
+        state.player.vy = 0.0;
+        state.player.on_ground = true;
+
+        let frame = state
+            .tick(1.0 / 60.0, &InputState::default(), &mut rand::thread_rng())
+            .unwrap();
+        let expected_cam_y = -(720.0 * PLAYER_VERTICAL_FRAMING);
+        assert!(
+            (frame.camera.y - expected_cam_y).abs() < 0.001,
+            "cam_y {} vs expected {}",
+            frame.camera.y,
+            expected_cam_y
+        );
+        // Screen-Y check: player lands 85% down the viewport.
+        let player_screen_y = state.player.y - frame.camera.y;
+        assert!((player_screen_y - 720.0 * PLAYER_VERTICAL_FRAMING).abs() < 0.001);
+    }
+
+    #[test]
+    fn camera_clamps_to_street_top_when_player_high() {
+        // Player teleported well above the street top — camera should
+        // clamp to street.top, not follow the player off the map.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.player.y = -5000.0; // far above street.top = -1000
+
+        let frame = state
+            .tick(1.0 / 60.0, &InputState::default(), &mut rand::thread_rng())
+            .unwrap();
+        assert!(
+            (frame.camera.y - (-1000.0)).abs() < 0.001,
+            "cam_y clamped to street.top: got {}",
+            frame.camera.y
+        );
     }
 
     #[test]
