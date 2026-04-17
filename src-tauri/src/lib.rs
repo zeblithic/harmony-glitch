@@ -909,20 +909,20 @@ fn emote(
         net_state.our_address_hash()
     };
 
-    // Blocked-target early reject (sender side). Receiver also re-checks.
-    if let Some(t) = target_bytes {
-        let state_wrapper = app.state::<GameStateWrapper>();
-        let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-        if state.social.buddies.is_blocked(&t) {
-            return Ok(EmoteFireResult::TargetBlocked);
-        }
-    }
-
-    // Fire — under a single game-state lock
+    // Blocked-target check + fire — under a single game-state lock to avoid
+    // a TOCTOU gap with a concurrent buddy_block command.
     let result = {
         let state_wrapper = app.state::<GameStateWrapper>();
         let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
-        state.social.set_identity(our_address);
+
+        // Receiver also re-checks the block list — this is the sender-side
+        // early reject so we don't burn a cooldown or ship a packet.
+        if let Some(t) = target_bytes {
+            if state.social.buddies.is_blocked(&t) {
+                return Ok(EmoteFireResult::TargetBlocked);
+            }
+        }
+
         let social = &mut state.social;
         fire_emote(
             &mut social.emotes,
