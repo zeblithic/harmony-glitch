@@ -15,7 +15,12 @@ export interface SoundKit {
   sfxVolume: number;
   ambientVolume: number;
   events: Record<string, SoundEntry>;
-  ambient: SoundEntry;
+  /**
+   * Optional — loops as the street's background bed. Omit to run silent;
+   * callers that track street changes still work (playback is a no-op when
+   * the kit has no ambient configured).
+   */
+  ambient?: SoundEntry;
 }
 
 export interface AudioPreferences {
@@ -84,10 +89,12 @@ export class AudioManager {
         }
       }
     }
-    paths.add(this.kit.ambient.default);
-    if (this.kit.ambient.variants) {
-      for (const path of Object.values(this.kit.ambient.variants)) {
-        paths.add(path);
+    if (this.kit.ambient) {
+      paths.add(this.kit.ambient.default);
+      if (this.kit.ambient.variants) {
+        for (const path of Object.values(this.kit.ambient.variants)) {
+          paths.add(path);
+        }
       }
     }
 
@@ -104,11 +111,19 @@ export class AudioManager {
     }
   }
 
-  processEvents(events: AudioEvent[]): void {
-    // Resume audio context if suspended (browser autoplay policy, tab switch, etc.)
+  /**
+   * Resume the Howler audio context if the browser has it suspended
+   * (autoplay policy, tab switch, etc.). Every public playback entry
+   * point calls this so no path can silently drop the first sound.
+   */
+  private ensureContext(): void {
     if (Howler.ctx?.state === 'suspended') {
-      Howler.ctx.resume();
+      void Howler.ctx.resume();
     }
+  }
+
+  processEvents(events: AudioEvent[]): void {
+    this.ensureContext();
 
     for (const event of events) {
       switch (event.type) {
@@ -177,6 +192,24 @@ export class AudioManager {
     return this.musicMuted ? 0 : this.musicVolume;
   }
 
+  /**
+   * Play the one-shot "client loaded" intro sound. Returns true if the
+   * kit defines an `intro` event (and playback was attempted), false if
+   * it's a no-op. Callers use the return value to decide whether to set
+   * a "played this session" flag — setting the flag on a no-op would
+   * suppress playback forever if the kit later gains an intro event.
+   *
+   * Intentionally plays through the SFX channel so volume controls
+   * apply uniformly. Resumes the audio context first so a suspended
+   * browser (autoplay policy) doesn't silently drop the intro.
+   */
+  playIntro(): boolean {
+    if (!this.kit.events.intro) return false;
+    this.ensureContext();
+    this.playSfx('intro');
+    return true;
+  }
+
   private playSfx(eventType: string, variantKey?: string): void {
     const entry = this.kit.events[eventType];
     if (!entry) return;
@@ -190,6 +223,7 @@ export class AudioManager {
   }
 
   private handleStreetChanged(streetId: string): void {
+    if (!this.kit.ambient) return;
     const path =
       this.kit.ambient.variants?.[streetId] || this.kit.ambient.default;
     const howl = this.sounds.get(path);

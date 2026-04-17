@@ -441,6 +441,9 @@
           // buildScene then startGame — we don't call startGame here to
           // ensure the scene is built and listeners registered first.
           currentStreet = street;
+          if (!introPlayed && audioManager?.playIntro()) {
+            introPlayed = true;
+          }
           // Re-fetch recipes now that skill_progress is restored from save
           try { recipes = await getRecipes(); } catch { /* ignore */ }
         }
@@ -458,6 +461,28 @@
     };
   });
 
+  // Tracks whether the "client loaded" intro has played this session so
+  // back-and-forth through StreetPicker doesn't replay it. Gated on
+  // AudioManager.playIntro() returning true so a kit without an intro
+  // event doesn't permanently suppress playback if the kit is swapped
+  // later in the session.
+  let introPlayed = $state(false);
+
+  // Single source of truth for opening/closing the volume panel. Both the
+  // P hotkey and the 🔊 button call this so the button can't reach a
+  // panel state that the hotkey explicitly blocks (e.g. opening over an
+  // active shop/jukebox/dialogue). `currentStreet` is always true from
+  // the button path (it's rendered inside the currentStreet block) but
+  // checking it here keeps the gate uniform.
+  function toggleVolume(): void {
+    if (!currentStreet || chatFocused || jukeboxOpen || shopOpen || dialogueOpen) return;
+    volumeOpen = !volumeOpen;
+    if (volumeOpen) {
+      inventoryOpen = false;
+      avatarEditorOpen = false;
+    }
+  }
+
   function handleStreetLoaded(street: StreetData) {
     // Recreate AudioManager if it was disposed (Back button)
     if (!audioManager && cachedKit) {
@@ -466,6 +491,12 @@
       } catch (e) {
         console.error('Failed to recreate audio:', e);
       }
+    }
+    // Play the one-shot intro once per session. Deferred until street-load
+    // rather than AudioManager construction so it runs after user interaction
+    // (picking a street), giving the browser's autoplay policy time to unlock.
+    if (!introPlayed && audioManager?.playIntro()) {
+      introPlayed = true;
     }
     currentStreet = street;
   }
@@ -825,10 +856,15 @@
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) { volumeOpen = false; avatarEditorOpen = false; shopOpen = false; storeState = null; shopCloseFrames = 0; }
   }
-  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
+  // `currentStreet` + `chatFocused` gate preventDefault so P can still be
+  // typed into any text input — chat in-game, display-name in IdentitySetup,
+  // search in StreetPicker. `chatFocused` only covers the in-game ChatInput;
+  // pre-game screens have no currentStreet, so that check handles them.
+  // Remaining panel-state guards live inside toggleVolume so the 🔊
+  // button and the hotkey share one gate.
+  if ((e.key === 'p' || e.key === 'P') && currentStreet && !chatFocused) {
     e.preventDefault();
-    volumeOpen = !volumeOpen;
-    if (volumeOpen) { inventoryOpen = false; avatarEditorOpen = false; }
+    toggleVolume();
   }
   if ((e.key === 'c' || e.key === 'C') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen) {
     e.preventDefault();
@@ -859,8 +895,9 @@
     e.preventDefault();
     fireHiWithAnimation();
   }
-  // E key: toggle emote palette
-  if ((e.key === 'e' || e.key === 'E') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen && !tradeOpen && latestFrame) {
+  // Z key: toggle emote palette. E is reserved for interact (handled in
+  // GameCanvas); binding emote to E here caused both actions to fire at once.
+  if ((e.key === 'z' || e.key === 'Z') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen && !tradeOpen && latestFrame) {
     e.preventDefault();
     emotePaletteOpen = !emotePaletteOpen;
     if (emotePaletteOpen) {
@@ -1216,6 +1253,15 @@
     <div role="status" aria-live="polite" class="sr-only">
       {#if transitionPending && transitionTarget}Travelling to {transitionTarget}…{/if}
     </div>
+    <button
+      type="button"
+      class="volume-btn"
+      aria-label="Sound settings"
+      title="Sound settings (P)"
+      onclick={toggleVolume}
+    >
+      <span aria-hidden="true">🔊</span>
+    </button>
     <button type="button" class="back-btn" onclick={async () => {
       try {
         await stopGame();
@@ -1251,8 +1297,8 @@
 
   .back-btn {
     position: fixed;
-    top: 8px;
-    right: 8px;
+    bottom: 8px;
+    left: 8px;
     padding: 6px 16px;
     border: 1px solid #444;
     border-radius: 4px;
@@ -1268,6 +1314,33 @@
   }
 
   .back-btn:focus-visible {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
+  }
+
+  .volume-btn {
+    position: fixed;
+    bottom: 8px;
+    right: 72px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    border: 1px solid #444;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #e0e0e0;
+    cursor: pointer;
+    z-index: 50;
+  }
+
+  .volume-btn:hover {
+    background: rgba(88, 101, 242, 0.8);
+  }
+
+  .volume-btn:focus-visible {
     outline: 2px solid #5865f2;
     outline-offset: 2px;
   }
