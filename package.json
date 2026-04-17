@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "vitest run",
+    "test": "NODE_OPTIONS='--no-experimental-webstorage' vitest run",
     "extract-items": "cargo run --manifest-path src-tauri/Cargo.toml --features extract-swf --bin extract-swf -- --source ${GLITCH_ART_PATH:-$HOME/work/tinyspeck/glitch-items} --output tools/asset-pipeline/extracted/items",
     "pack-items": "node tools/asset-pipeline/pack.mjs --input tools/asset-pipeline/extracted/items --output assets/sprites/items --name items",
     "ingest-items": "cargo run --manifest-path src-tauri/Cargo.toml --features cas-tool --bin cas-tool -- ingest --input assets/sprites/items --manifest manifests/items.json",

@@ -116,20 +116,26 @@
     if (e.key === 'Escape') {
       e.preventDefault();
       onClose?.();
+      return;
     }
-  }
-
-  function handleListKeyDown(e: KeyboardEvent) {
-    const options = Array.from(
-      dialogEl?.querySelectorAll<HTMLElement>('button[role="option"]') ?? []
-    );
-    const idx = options.findIndex(el => el === document.activeElement);
-    if (e.key === 'ArrowDown' && idx < options.length - 1) {
-      e.preventDefault();
-      options[idx + 1].focus();
-    } else if (e.key === 'ArrowUp' && idx > 0) {
-      e.preventDefault();
-      options[idx - 1].focus();
+    // Arrow navigation between skill rows. Handled on <dialog> rather than
+    // the listbox container: the listbox div isn't a real interactive
+    // element in the DOM, so putting keydown on it trips the svelte a11y
+    // linter — and the dialog is already handling Escape, so this keeps
+    // all keyboard input on one host.
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const options = Array.from(
+        dialogEl?.querySelectorAll<HTMLElement>('button[role="option"]') ?? []
+      );
+      const idx = options.findIndex(el => el === document.activeElement);
+      if (idx === -1) return;
+      if (e.key === 'ArrowDown' && idx < options.length - 1) {
+        e.preventDefault();
+        options[idx + 1].focus();
+      } else if (e.key === 'ArrowUp' && idx > 0) {
+        e.preventDefault();
+        options[idx - 1].focus();
+      }
     }
   }
 </script>
@@ -150,7 +156,7 @@
       </button>
     </div>
 
-    <div class="skill-list" role="listbox" aria-label="Skills" onkeydown={handleListKeyDown}>
+    <div class="skill-list" role="listbox" aria-label="Skills">
       {#each sortedSkills as skill (skill.id)}
         {@const status = skillStatus(skill)}
         <button
