@@ -968,16 +968,21 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
     )?;
 
     match result {
-        EmoteFireResult::Success { .. } => {
+        EmoteFireResult::Success { cooldown_ms } => {
             // Fire succeeded — NOW consume the daily Hi allowance.
             if let Some(target) = nearest_hash {
                 let state_wrapper = app.state::<GameStateWrapper>();
                 let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
                 state.social.emotes.record_hi_sent(target);
             }
+            // Return cooldown_ms so the frontend can seed its expiry map
+            // immediately — parity with the generic emote IPC, so a
+            // follow-up click on the Hi button sees a dimmed state
+            // instead of eating a backend Cooldown rejection.
             Ok(serde_json::json!({
                 "variant": our_variant.as_str(),
                 "targeted": nearest_hash.is_some(),
+                "cooldown_ms": cooldown_ms,
             }))
         }
         EmoteFireResult::Cooldown { remaining_ms } => Err(format!(

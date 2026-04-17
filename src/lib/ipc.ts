@@ -206,7 +206,7 @@ export async function getQuestLog(): Promise<QuestLogFrame> {
 // ── Social ────────────────────────────────────────────────────────────
 
 export interface MoodResult { mood: number; maxMood: number; multiplier: number; }
-export interface EmoteHiResult { variant: string; targeted: boolean; }
+export interface EmoteHiResult { variant: string; targeted: boolean; cooldown_ms: number; }
 
 export async function getMood(): Promise<MoodResult> { return invoke<MoodResult>('get_mood'); }
 export async function emoteHi(): Promise<EmoteHiResult> { return invoke<EmoteHiResult>('emote_hi'); }

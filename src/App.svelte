@@ -648,6 +648,13 @@
     try {
       const result = await emoteHi();
       spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
+      // Parity with the generic emote path: seed the Hi button's post-fire
+      // cooldown so a quick second click sees a dimmed state instead of
+      // eating a backend Cooldown rejection.
+      emoteCooldownExpiries = {
+        ...emoteCooldownExpiries,
+        hi: Date.now() + result.cooldown_ms,
+      };
     } catch (err) {
       // Backend errors are strings ("Already greeted today", "No target in
       // range", "Player is blocked", "Emote on cooldown (...)"). Surface
