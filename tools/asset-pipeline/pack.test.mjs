@@ -319,6 +319,24 @@ describe('SVG support', () => {
     }
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// batching helpers
+// ---------------------------------------------------------------------------
+
+describe('batching helpers', () => {
+  let dir;
+
+  beforeEach(async () => {
+    dir = join(tmpdir(), `pack-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(dir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
   it('readImageMetaBatched returns all entries in order', async () => {
     const entries = [];
     for (let i = 0; i < 10; i++) {
