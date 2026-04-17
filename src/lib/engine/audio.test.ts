@@ -448,19 +448,39 @@ describe('AudioManager', () => {
   });
 
   describe('playIntro', () => {
-    it('plays the intro event when the kit defines one', () => {
+    it('plays the intro event and returns true when the kit defines one', () => {
       const kit = makeKit();
       kit.events.intro = { default: 'sfx/intro.mp3' };
       const manager = new AudioManager(kit, '/audio/');
-      manager.playIntro();
+      const result = manager.playIntro();
+      expect(result).toBe(true);
       const introHowl = findHowlBySrc('intro');
       expect(introHowl).toBeDefined();
       expect(introHowl!.play).toHaveBeenCalled();
     });
 
-    it('is a no-op when the kit has no intro event', () => {
+    it('returns false when the kit has no intro event (without throwing)', () => {
       const manager = new AudioManager(makeKit(), '/audio/');
-      expect(() => manager.playIntro()).not.toThrow();
+      expect(manager.playIntro()).toBe(false);
+    });
+
+    it('resumes a suspended audio context before playing', () => {
+      const kit = makeKit();
+      kit.events.intro = { default: 'sfx/intro.mp3' };
+      // The mock's `state` is typed as the narrow literal `'running'`, so we
+      // reach through a widened view to flip it to 'suspended' for the test.
+      const ctx = vi.mocked(Howler).ctx as unknown as {
+        state: string;
+        resume: ReturnType<typeof vi.fn>;
+      };
+      ctx.state = 'suspended';
+      ctx.resume.mockClear();
+
+      const manager = new AudioManager(kit, '/audio/');
+      manager.playIntro();
+
+      expect(ctx.resume).toHaveBeenCalled();
+      ctx.state = 'running';
     });
   });
 

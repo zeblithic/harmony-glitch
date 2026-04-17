@@ -111,11 +111,19 @@ export class AudioManager {
     }
   }
 
-  processEvents(events: AudioEvent[]): void {
-    // Resume audio context if suspended (browser autoplay policy, tab switch, etc.)
+  /**
+   * Resume the Howler audio context if the browser has it suspended
+   * (autoplay policy, tab switch, etc.). Every public playback entry
+   * point calls this so no path can silently drop the first sound.
+   */
+  private ensureContext(): void {
     if (Howler.ctx?.state === 'suspended') {
-      Howler.ctx.resume();
+      void Howler.ctx.resume();
     }
+  }
+
+  processEvents(events: AudioEvent[]): void {
+    this.ensureContext();
 
     for (const event of events) {
       switch (event.type) {
@@ -185,12 +193,21 @@ export class AudioManager {
   }
 
   /**
-   * Play the one-shot "client loaded" intro sound once. No-op if the kit
-   * doesn't define an `intro` event. Intentionally plays through the SFX
-   * channel so volume controls apply uniformly.
+   * Play the one-shot "client loaded" intro sound. Returns true if the
+   * kit defines an `intro` event (and playback was attempted), false if
+   * it's a no-op. Callers use the return value to decide whether to set
+   * a "played this session" flag — setting the flag on a no-op would
+   * suppress playback forever if the kit later gains an intro event.
+   *
+   * Intentionally plays through the SFX channel so volume controls
+   * apply uniformly. Resumes the audio context first so a suspended
+   * browser (autoplay policy) doesn't silently drop the intro.
    */
-  playIntro(): void {
+  playIntro(): boolean {
+    if (!this.kit.events.intro) return false;
+    this.ensureContext();
     this.playSfx('intro');
+    return true;
   }
 
   private playSfx(eventType: string, variantKey?: string): void {
