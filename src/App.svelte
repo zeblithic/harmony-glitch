@@ -859,8 +859,9 @@
     e.preventDefault();
     fireHiWithAnimation();
   }
-  // E key: toggle emote palette
-  if ((e.key === 'e' || e.key === 'E') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen && !tradeOpen && latestFrame) {
+  // Z key: toggle emote palette. E is reserved for interact (handled in
+  // GameCanvas); binding emote to E here caused both actions to fire at once.
+  if ((e.key === 'z' || e.key === 'Z') && currentStreet && !chatFocused && !jukeboxOpen && !shopOpen && !dialogueOpen && !tradeOpen && latestFrame) {
     e.preventDefault();
     emotePaletteOpen = !emotePaletteOpen;
     if (emotePaletteOpen) {
