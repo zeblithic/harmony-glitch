@@ -729,6 +729,82 @@ fn get_quest_log(app: AppHandle) -> Result<quest::types::QuestLogFrame, String> 
 
 // ── Social: Mood & Emotes ────────────────────────────────────────────────────
 
+/// Result of attempting to fire an emote. Serializable for IPC.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EmoteFireResult {
+    /// Emote fired and broadcast. Sender mood may or may not have been
+    /// credited (depends on reward cooldown).
+    Success,
+    /// Cooldown (global or per-pair) blocked this fire. `remaining_ms`
+    /// is the time until the emote can next fire.
+    Cooldown { remaining_ms: u64 },
+    /// Emote requires a target (hug, high_five) and none was provided
+    /// or none was in range.
+    NoTarget,
+    /// Emote was blocked due to target being blocked by this player.
+    TargetBlocked,
+}
+
+/// Pure inner logic — reusable, no Tauri runtime. Operates on state refs.
+///
+/// - Applies sender-side cooldown checks (`EmoteFireResult::Cooldown` on fail)
+/// - Applies sender mood (gated by reward cooldown)
+/// - Marks fire cooldown
+/// - Returns the result for the caller to broadcast the EmoteMessage.
+///
+/// Does NOT emit events or publish to network — caller does that on
+/// `EmoteFireResult::Success`.
+fn fire_emote(
+    emotes: &mut emote::EmoteState,
+    mood: &mut crate::mood::MoodState,
+    self_identity: [u8; 16],
+    kind: &emote::EmoteKind,
+    target: Option<[u8; 16]>,
+    now: std::time::Instant,
+) -> EmoteFireResult {
+    // Hug and HighFive require a target
+    let tag = emote::EmoteKindTag::from(kind);
+    if matches!(tag, emote::EmoteKindTag::Hug | emote::EmoteKindTag::HighFive) && target.is_none() {
+        return EmoteFireResult::NoTarget;
+    }
+
+    // Fire cooldown check
+    if let Err(remaining) = emotes.cooldowns.check_fire(now, kind, target) {
+        return EmoteFireResult::Cooldown {
+            remaining_ms: remaining.remaining_ms,
+        };
+    }
+
+    // Apply sender mood (gated by reward cooldown).
+    // Pair identity for self-rewarded emotes is our own identity;
+    // for targeted emotes, the target.
+    let sender_delta = sender_mood_delta(kind);
+    if sender_delta > 0.0 {
+        let pair = target.unwrap_or(self_identity);
+        if emotes.cooldowns.try_reward(now, kind, pair) {
+            mood.apply_mood_change(sender_delta);
+        }
+    }
+
+    // Record the fire
+    emotes.cooldowns.mark_fire(now, kind, target);
+
+    EmoteFireResult::Success
+}
+
+/// Sender-side mood delta per emote kind. See spec §6.
+fn sender_mood_delta(kind: &emote::EmoteKind) -> f64 {
+    match kind {
+        emote::EmoteKind::Hi(_) => 0.0, // Hi sender mood is applied on receive (match bonus)
+        emote::EmoteKind::Dance => 2.0,
+        emote::EmoteKind::Wave => 1.0,
+        emote::EmoteKind::Hug => 5.0,
+        emote::EmoteKind::HighFive => 3.0,
+        emote::EmoteKind::Applaud => 1.0,
+    }
+}
+
 #[tauri::command]
 fn get_mood(app: AppHandle) -> Result<serde_json::Value, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
@@ -806,6 +882,69 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
         "variant": our_variant.as_str(),
         "targeted": nearest_hash.is_some(),
     }))
+}
+
+#[tauri::command]
+fn emote(
+    kind: emote::EmoteKind,
+    target: Option<String>,
+    app: AppHandle,
+) -> Result<EmoteFireResult, String> {
+    let target_bytes: Option<[u8; 16]> = match target {
+        Some(hex_str) => {
+            let bytes = hex::decode(&hex_str).map_err(|_| "Invalid target hash".to_string())?;
+            if bytes.len() != 16 {
+                return Err("Target hash must be 16 bytes".to_string());
+            }
+            let mut addr = [0u8; 16];
+            addr.copy_from_slice(&bytes);
+            Some(addr)
+        }
+        None => None,
+    };
+
+    let our_address = {
+        let net = app.state::<NetworkWrapper>();
+        let net_state = net.0.lock().map_err(|e| e.to_string())?;
+        net_state.our_address_hash()
+    };
+
+    // Blocked-target early reject (sender side). Receiver also re-checks.
+    if let Some(t) = target_bytes {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        if state.social.buddies.is_blocked(&t) {
+            return Ok(EmoteFireResult::TargetBlocked);
+        }
+    }
+
+    // Fire — under a single game-state lock
+    let result = {
+        let state_wrapper = app.state::<GameStateWrapper>();
+        let mut state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+        state.social.set_identity(our_address);
+        let social = &mut state.social;
+        fire_emote(
+            &mut social.emotes,
+            &mut social.mood,
+            our_address,
+            &kind,
+            target_bytes,
+            std::time::Instant::now(),
+        )
+    };
+
+    // Only broadcast on success
+    if matches!(result, EmoteFireResult::Success) {
+        let msg = emote::EmoteMessage { kind, target: target_bytes };
+        let net = app.state::<NetworkWrapper>();
+        let mut net_state = net.0.lock().map_err(|e| e.to_string())?;
+        let actions = net_state.publish_emote(msg, &mut rand::rngs::OsRng);
+        drop(net_state);
+        execute_network_actions(&app, actions);
+    }
+
+    Ok(result)
 }
 
 // ── Social: Buddies ──────────────────────────────────────────────────────────
@@ -3802,6 +3941,106 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod emote_fire_tests {
+    use super::*;
+    use crate::emote::{EmoteKind, EmoteState};
+    use crate::mood::MoodState;
+    use std::time::{Duration, Instant};
+
+    fn id(seed: u8) -> [u8; 16] {
+        [seed; 16]
+    }
+
+    #[test]
+    fn fire_emote_success_applies_sender_mood_for_dance() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0; // below max so the +2.0 delta has headroom
+        let initial = mood.mood;
+        let now = Instant::now();
+
+        let result = fire_emote(
+            &mut emotes,
+            &mut mood,
+            id(0x01),
+            &EmoteKind::Dance,
+            None,
+            now,
+        );
+
+        assert!(matches!(result, EmoteFireResult::Success));
+        assert!((mood.mood - (initial + 2.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn fire_emote_reward_cooldown_blocks_second_mood_but_not_fire() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let t0 = Instant::now();
+
+        let _ = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Dance, None, t0);
+        let after_first = mood.mood;
+
+        // Past global fire cooldown but within reward window
+        let t1 = t0 + Duration::from_secs(3);
+        let result = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Dance, None, t1);
+        assert!(matches!(result, EmoteFireResult::Success));
+        // Fire succeeded, but mood was NOT credited (reward cooldown)
+        assert!((mood.mood - after_first).abs() < 0.01);
+    }
+
+    #[test]
+    fn fire_emote_returns_cooldown_when_global_active() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let t0 = Instant::now();
+        let _ = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Dance, None, t0);
+        let t1 = t0 + Duration::from_millis(500);
+        let result = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Dance, None, t1);
+        match result {
+            EmoteFireResult::Cooldown { remaining_ms } => {
+                assert!(remaining_ms > 1400 && remaining_ms <= 1500);
+            }
+            other => panic!("expected Cooldown, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn fire_emote_hug_requires_target() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let result = fire_emote(
+            &mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, None, Instant::now(),
+        );
+        assert!(matches!(result, EmoteFireResult::NoTarget));
+    }
+
+    #[test]
+    fn fire_emote_hug_applies_sender_mood_plus_five() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0; // below max so the +5.0 delta has headroom
+        let initial = mood.mood;
+        let result = fire_emote(
+            &mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, Some(id(0x02)), Instant::now(),
+        );
+        assert!(matches!(result, EmoteFireResult::Success));
+        assert!((mood.mood - (initial + 5.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn fire_emote_hug_per_pair_cooldown_blocks_same_target_within_60s() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let t0 = Instant::now();
+        let _ = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, Some(id(0x02)), t0);
+        let t1 = t0 + Duration::from_secs(30); // past global, within per-pair
+        let result = fire_emote(&mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, Some(id(0x02)), t1);
+        assert!(matches!(result, EmoteFireResult::Cooldown { .. }));
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .register_uri_scheme_protocol("soundkit", |ctx, request| -> http::Response<Vec<u8>> {
@@ -4175,6 +4414,7 @@ pub fn run() {
             get_quest_log,
             get_mood,
             emote_hi,
+            emote,
             buddy_request,
             buddy_accept,
             buddy_decline,
