@@ -3782,8 +3782,7 @@ mod tests {
         state_b.trust_store.get_or_insert(&addr_a).copresence_secs = 300.0;
 
         let emote = crate::emote::EmoteMessage {
-            emote_type: crate::emote::EmoteType::Hi,
-            variant: crate::emote::HiVariant::Hearts,
+            kind: crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Hearts),
             target: Some([0x99; 16]),
         };
 
@@ -3808,7 +3807,10 @@ mod tests {
 
         assert_eq!(emote_received.len(), 1, "B should receive exactly one EmoteReceived");
         assert_eq!(*emote_received[0].0, addr_a, "sender should be A");
-        assert_eq!(emote_received[0].1.variant, crate::emote::HiVariant::Hearts);
+        assert_eq!(
+            emote_received[0].1.kind,
+            crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Hearts)
+        );
         assert_eq!(emote_received[0].1.target, Some([0x99; 16]));
     }
 
@@ -3855,8 +3857,7 @@ mod tests {
 
         // Do NOT set copresence — A stays at Sandbox epoch on B.
         let emote = crate::emote::EmoteMessage {
-            emote_type: crate::emote::EmoteType::Hi,
-            variant: crate::emote::HiVariant::Stars,
+            kind: crate::emote::EmoteKind::Hi(crate::emote::HiVariant::Stars),
             target: None,
         };
 

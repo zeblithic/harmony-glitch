@@ -50,18 +50,24 @@ impl HiVariant {
     }
 }
 
-/// Discriminant for which emote family is being sent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Tagged union of all emote kinds. Hi carries its cosmetic variant; others
+/// have no inner data. Wire format is `{"kind":{"hi":"bats"},"target":null}`
+/// for Hi or `{"kind":"hug","target":"..."}` for unit variants.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum EmoteType {
-    Hi,
+pub enum EmoteKind {
+    Hi(HiVariant),
+    Dance,
+    Wave,
+    Hug,
+    HighFive,
+    Applaud,
 }
 
-/// Wire message for an emote.
+/// Wire message for any emote.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmoteMessage {
-    pub emote_type: EmoteType,
-    pub variant: HiVariant,
+    pub kind: EmoteKind,
     /// Targeted player identity (16 bytes), or None for a broadcast.
     pub target: Option<[u8; 16]>,
 }
@@ -369,19 +375,33 @@ mod tests {
     // ── serialization ─────────────────────────────────────────────────────────
 
     #[test]
-    fn emote_message_serialization_round_trip() {
+    fn emote_kind_serde_round_trip_hi_with_variant() {
         let msg = EmoteMessage {
-            emote_type: EmoteType::Hi,
-            variant: HiVariant::Hearts,
+            kind: EmoteKind::Hi(HiVariant::Hearts),
             target: Some([0xAB; 16]),
         };
         let json = serde_json::to_string(&msg).unwrap();
         let restored: EmoteMessage = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.variant, msg.variant);
+        assert_eq!(restored.kind, EmoteKind::Hi(HiVariant::Hearts));
         assert_eq!(restored.target, msg.target);
-        match restored.emote_type {
-            EmoteType::Hi => {}
+    }
+
+    #[test]
+    fn emote_kind_serde_round_trip_unit_variants() {
+        for kind in [EmoteKind::Dance, EmoteKind::Wave, EmoteKind::Hug, EmoteKind::HighFive, EmoteKind::Applaud] {
+            let msg = EmoteMessage { kind: kind.clone(), target: None };
+            let json = serde_json::to_string(&msg).unwrap();
+            let restored: EmoteMessage = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored.kind, kind);
+            assert!(restored.target.is_none());
         }
+    }
+
+    #[test]
+    fn emote_kind_wire_format_is_snake_case() {
+        let msg = EmoteMessage { kind: EmoteKind::HighFive, target: None };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"high_five\""), "got: {json}");
     }
 
     #[test]
@@ -389,21 +409,10 @@ mod tests {
         // Reticulum MTU 500, minus 35 header + 33 Zenoh overhead = 432 max payload.
         const MAX_PAYLOAD: usize = 500 - 35 - 33;
         let msg = EmoteMessage {
-            emote_type: EmoteType::Hi,
-            variant: HiVariant::Rocketships, // longest variant name
+            kind: EmoteKind::Hi(HiVariant::Rocketships), // longest variant name
             target: Some([0xFF; 16]),
         };
         let bytes = serde_json::to_vec(&msg).unwrap();
-        assert!(
-            bytes.len() < 500,
-            "EmoteMessage is {} bytes, must be < 500",
-            bytes.len()
-        );
-        assert!(
-            bytes.len() <= MAX_PAYLOAD,
-            "EmoteMessage is {} bytes, max payload is {}",
-            bytes.len(),
-            MAX_PAYLOAD
-        );
+        assert!(bytes.len() <= MAX_PAYLOAD, "EmoteMessage is {} bytes, max {}", bytes.len(), MAX_PAYLOAD);
     }
 }

@@ -792,8 +792,7 @@ fn emote_hi(app: AppHandle) -> Result<serde_json::Value, String> {
 
     // Broadcast emote to all peers on the street
     let emote_msg = emote::EmoteMessage {
-        emote_type: emote::EmoteType::Hi,
-        variant: our_variant,
+        kind: emote::EmoteKind::Hi(our_variant),
         target: nearest_hash,
     };
     let actions = {
@@ -2038,9 +2037,15 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     continue; // don't process or emit for blocked senders
                 }
 
+                // Only Hi is handled in Task 1; other kinds return from Task 7.
+                let variant = match &emote.kind {
+                    emote::EmoteKind::Hi(v) => *v,
+                    _ => continue, // non-Hi handled later
+                };
+
                 let mood_delta = state.social.emotes.handle_incoming_hi(
                     sender,
-                    emote.variant,
+                    variant,
                     false, // already checked — not blocked
                 );
                 if mood_delta > 0.0 {
@@ -2052,7 +2057,8 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                     serde_json::json!({
                         "senderHash": hex::encode(sender),
                         "senderName": sender_name,
-                        "variant": emote.variant.as_str(),
+                        "kind": "hi",
+                        "variant": variant.as_str(),
                         "moodDelta": mood_delta,
                     }),
                 );
