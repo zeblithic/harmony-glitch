@@ -133,6 +133,11 @@ export interface CameraFrame {
 }
 
 export interface EmoteAnimationFrame {
+  /**
+   * Emote kind tag. Absent on legacy payloads — treat as 'hi' for
+   * backward compat with the (currently inert) Rust-side emission path.
+   */
+  kind?: 'hi' | 'dance' | 'wave' | 'hug' | 'high_five' | 'applaud';
   variant: string;
   targetHash: string | null;
   startedAt: number;
