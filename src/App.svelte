@@ -30,13 +30,24 @@
   import SocialPrompt from './lib/components/SocialPrompt.svelte';
   import BuddyRequestPrompt from './lib/components/BuddyRequestPrompt.svelte';
   import PartyInvitePrompt from './lib/components/PartyInvitePrompt.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, getEmotePrivacy, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, getEmotePrivacy, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline, sendChat, unblockPlayer, getBlockedList } from './lib/ipc';
   import type { PartyMemberInfo, BuddyEntry } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame, EmoteKind, EmoteFireResult, EmoteAnimationFrame, HiVariant } from './lib/types';
+  import { executeCommand, type CommandContext, type ParsedCommand } from './lib/chat/commands';
+  import { createDefaultHandlers } from './lib/chat/handlers';
   import type { GameRenderer } from './lib/engine/renderer';
   import { onMount } from 'svelte';
   import { AudioManager, loadSoundKit, kitBasePath, type SoundKit } from './lib/engine/audio';
   import { LocalMusicSource, type TrackCatalog } from './lib/engine/music';
+
+  // Local system bubbles (e.g., slash-command feedback) travel as a
+  // window CustomEvent; GameCanvas subscribes alongside its Tauri event
+  // listeners and forwards the payload into renderer.addChatBubble.
+  declare global {
+    interface WindowEventMap {
+      'harmony:local-bubble': CustomEvent<{ addressHash: string; text: string }>;
+    }
+  }
 
   let audioManager = $state<AudioManager | null>(null);
   let cachedKit: SoundKit | null = null;
@@ -120,6 +131,62 @@
     }, 1500);
   }
 
+  // Chat slash-command registry — constant for the component's lifetime.
+  const commandRegistry = createDefaultHandlers();
+
+  function buildCommandContext(): CommandContext {
+    const pushBubble = (text: string) => {
+      if (!ourAddressHash) return;
+      window.dispatchEvent(
+        new CustomEvent('harmony:local-bubble', {
+          detail: { addressHash: ourAddressHash, text },
+        }),
+      );
+    };
+
+    return {
+      remotePlayers: latestFrame?.remotePlayers ?? [],
+      nearestSocialTarget: latestFrame?.nearestSocialTarget ?? null,
+      buddies,
+      localIdentity: {
+        displayName: ourDisplayName,
+        addressHash: ourAddressHash,
+        setupComplete: identityReady,
+      },
+      pushLocalBubble: pushBubble,
+      fireEmote: (kind, target) => fireEmoteWithFeedback(kind, target, pushBubble),
+      fireEmoteHi: () => fireHiWithAnimation(pushBubble),
+      sendChat: (t) => sendChat(t),
+      // Match BuddyListPanel's pattern: refresh buddies after block/unblock
+      // so panel state stays consistent with backend regardless of which
+      // path (panel button vs. slash command) drove the change.
+      blockPlayer: async (h) => { await blockPlayer(h); await refreshBuddyList(); },
+      unblockPlayer: async (h) => { await unblockPlayer(h); await refreshBuddyList(); },
+      getBlockedList: async () => {
+        const result = await getBlockedList();
+        return result.blocked;
+      },
+    };
+  }
+
+  async function handleChatCommand(parsed: Extract<ParsedCommand, { kind: 'command' }>) {
+    // Last-chance hydration: buildCommandContext's pushBubble bails when
+    // ourAddressHash is empty, which would only happen if getIdentity()
+    // failed on mount *and* in the IdentitySetup callback. Rust
+    // get_identity is effectively infallible, but this guarantees slash
+    // commands never silently drop feedback even under that double-fault.
+    if (!ourAddressHash) {
+      try {
+        const identity = await getIdentity();
+        ourAddressHash = identity.addressHash;
+        ourDisplayName = identity.displayName;
+      } catch (e) {
+        console.error('Last-chance identity hydration failed:', e);
+      }
+    }
+    await executeCommand(parsed, commandRegistry, buildCommandContext());
+  }
+
   /**
    * Active emote animations keyed by playerHash ("self" for us).
    * Each lives for ~2s then expires (matches CSS emote-float duration).
@@ -153,6 +220,7 @@
   let partyIsLeader = $state(false);
 
   let ourAddressHash = $state('');
+  let ourDisplayName = $state('');
   let buddyRequestVisible = $state(false);
   let buddyRequestName = $state('');
   let buddyRequestHash = $state('');
@@ -185,6 +253,7 @@
       const identity = await getIdentity();
       identityReady = identity.setupComplete;
       ourAddressHash = identity.addressHash;
+      ourDisplayName = identity.displayName;
     } catch {
       identityReady = false;
     } finally {
@@ -644,7 +713,7 @@
   // Waits for the backend result so the local animation uses the
   // daily-chosen variant and only plays on success (not on rejection for
   // already-greeted, blocked, or cooldown).
-  async function fireHiWithAnimation() {
+  async function fireHiWithAnimation(pushFeedback: (msg: string) => void = pushEmoteFeedback) {
     try {
       const result = await emoteHi();
       spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
@@ -660,24 +729,24 @@
       // range", "Player is blocked", "Emote on cooldown (...)"). Surface
       // them through the same GameNotification path as other emote failures.
       const msg = typeof err === 'string' ? err : 'Hi failed';
-      pushEmoteFeedback(msg);
+      pushFeedback(msg);
     }
   }
 
-  async function handleEmoteSelect(kind: EmoteKind) {
+  /**
+   * Fire an emote with explicit target and route feedback through the caller's
+   * sink. Shared by the palette, hotkeys, and chat command handlers — one place
+   * to maintain the EmoteFireResult switch.
+   */
+  async function fireEmoteWithFeedback(
+    kind: EmoteKind,
+    target: string | null,
+    pushFeedback: (msg: string) => void = pushEmoteFeedback,
+  ) {
     if (typeof kind === 'object' && 'hi' in kind) {
-      await fireHiWithAnimation();
+      await fireHiWithAnimation(pushFeedback);
       return;
     }
-
-    // Only targeted-only kinds get the nearest peer as a target. Dance is
-    // broadcast-only (Rust also strips any target for Dance as defense-in-
-    // depth). Applaud is dual-nature — default to broadcast for the palette's
-    // fire-and-forget UX; a future chat command can express targeted intent.
-    const nearest = latestFrame?.nearestSocialTarget?.addressHash ?? null;
-    const target = (kind === 'hug' || kind === 'high_five' || kind === 'wave')
-      ? nearest
-      : null;
     const result: EmoteFireResult = await emoteFire(kind, target);
     switch (result.type) {
       case 'success':
@@ -699,12 +768,29 @@
         };
         break;
       case 'no_target':
-        pushEmoteFeedback('No target in range');
+        pushFeedback('No target in range');
         break;
       case 'target_blocked':
-        pushEmoteFeedback('Player is blocked');
+        pushFeedback('Player is blocked');
         break;
     }
+  }
+
+  /**
+   * Palette onSelect adapter: computes target from nearestSocialTarget and
+   * delegates. Preserves the palette's existing "auto-pick nearest for
+   * targeted-only kinds, broadcast otherwise" behavior.
+   */
+  async function handleEmoteSelect(kind: EmoteKind) {
+    // Only targeted-only kinds get the nearest peer as a target. Dance is
+    // broadcast-only (Rust also strips any target for Dance as defense-in-
+    // depth). Applaud is dual-nature — default to broadcast for the palette's
+    // fire-and-forget UX; a future chat command can express targeted intent.
+    const nearest = latestFrame?.nearestSocialTarget?.addressHash ?? null;
+    const target = (kind === 'hug' || kind === 'high_five' || kind === 'wave')
+      ? nearest
+      : null;
+    await fireEmoteWithFeedback(kind, target);
   }
 
   // Cooldown tick — refreshes the derived display by advancing the wall-clock
@@ -818,7 +904,21 @@
   {#if checkingIdentity || resuming}
     <!-- visual placeholder while loading -->
   {:else if !identityReady}
-    <IdentitySetup onComplete={() => { identityReady = true; needsAvatarSetup = true; }} />
+    <IdentitySetup onComplete={async (displayName) => {
+      ourDisplayName = displayName;
+      // Refetch identity so the slash-command CommandContext sees the fresh
+      // backend state: catches first-run address-hash availability and any
+      // 30-byte UTF-8 truncation set_display_name applies on the Rust side.
+      try {
+        const identity = await getIdentity();
+        ourAddressHash = identity.addressHash;
+        ourDisplayName = identity.displayName;
+      } catch (e) {
+        console.error('Failed to refresh identity after setup:', e);
+      }
+      identityReady = true;
+      needsAvatarSetup = true;
+    }} />
   {:else if needsAvatarSetup}
     <div class="first-run-avatar">
       <AvatarEditor
@@ -832,7 +932,10 @@
   {:else if currentStreet}
     <GameCanvas street={currentStreet} {debugMode} {chatFocused} {inventoryOpen} uiOpen={volumeOpen || jukeboxOpen || shopOpen || avatarEditorOpen || tradeOpen} onFrame={handleFrame} onRendererReady={(r) => { gameRenderer = r; }} />
     <DebugOverlay frame={latestFrame} visible={debugMode} />
-    <ChatInput onFocusChange={(focused) => { chatFocused = focused; }} />
+    <ChatInput
+      onFocusChange={(focused) => { chatFocused = focused; }}
+      onCommand={handleChatCommand}
+    />
     <NetworkStatus />
     <GameNotification feedback={[...(latestFrame?.pickupFeedback ?? []), ...emoteFeedback]} />
     <VolumeSettings
