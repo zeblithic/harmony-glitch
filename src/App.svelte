@@ -1251,8 +1251,8 @@
 
   .back-btn {
     position: fixed;
-    top: 8px;
-    right: 8px;
+    bottom: 8px;
+    left: 8px;
     padding: 6px 16px;
     border: 1px solid #444;
     border-radius: 4px;
