@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use harmony_groups::{GroupId, GroupOp, GroupState, MemberAddr, OpId};
+use harmony_groups::{GroupId, GroupOp, GroupState, MemberAddr, OpId, ResolveError};
 
 /// Classifies the outcome of a `try_merge` so callers can distinguish
 /// "genuinely new op" from "we already have it" and from "couldn't resolve
@@ -21,27 +21,45 @@ enum MergeOutcome {
     Rejected(String),
 }
 
-/// Classify the string-based error returned by `GroupManager::merge_op`
-/// into the typed outcome the orphan machinery can act on. Resolve errors
-/// that indicate a structurally-incomplete DAG are retryable
-/// (`MissingAncestor`); persist/I/O errors are also retryable
-/// (`TransientFailure`); hard resolver rejections are dropped (`Rejected`).
-fn classify_merge_error(e: String) -> MergeOutcome {
-    // `merge_op` prefixes resolve errors with "resolve failed: " and formats
-    // them via Debug so variant names appear literally. Non-resolve errors
-    // come from persist_group (I/O).
-    if e.starts_with("resolve failed:") {
-        if e.contains("NoGenesis") || e.contains("MissingParent") || e.contains("EmptyDag") {
-            MergeOutcome::MissingAncestor
-        } else {
-            // InvalidGenesis, MultipleGenesis, CycleDetected, InvalidOpId —
-            // structural defects of the ops we already hold. Retrying with the
-            // same or newer ops cannot repair them, so drop rather than buffer.
-            MergeOutcome::Rejected(e)
+/// Typed error for the internal resolve+persist path. Lets the orphan
+/// classifier pattern-match on concrete `ResolveError` variants rather than
+/// substring-matching a Debug-formatted string — if the upstream enum is
+/// renamed, extended, or its Debug output changes, this becomes a compile
+/// error instead of a silent mis-classification.
+#[derive(Debug)]
+enum MergeError {
+    Resolve(ResolveError),
+    Persist(String),
+}
+
+impl std::fmt::Display for MergeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            // Preserve the legacy "resolve failed: {Debug}" surface so
+            // existing IPC error messages don't change shape.
+            Self::Resolve(e) => write!(f, "resolve failed: {e:?}"),
+            Self::Persist(msg) => f.write_str(msg),
         }
-    } else {
-        // Persist/serialize/IO errors — may succeed on a later retry.
-        MergeOutcome::TransientFailure(e)
+    }
+}
+
+/// Map a typed `ResolveError` into the orphan-machinery outcome. Exhaustive
+/// so new variants force an explicit classification decision at compile time.
+fn classify_resolve_error(err: ResolveError) -> MergeOutcome {
+    match err {
+        // Structurally incomplete DAG — a later op may supply the missing
+        // ancestor, so buffer in the orphan pool.
+        ResolveError::NoGenesis
+        | ResolveError::MissingParent { .. }
+        | ResolveError::EmptyDag => MergeOutcome::MissingAncestor,
+        // Structural defects of the ops we already hold. No amount of later
+        // ops repairs them, so drop rather than buffer.
+        ResolveError::MultipleGenesis
+        | ResolveError::CycleDetected
+        | ResolveError::InvalidGenesis
+        | ResolveError::InvalidOpId { .. } => {
+            MergeOutcome::Rejected(format!("resolve failed: {err:?}"))
+        }
     }
 }
 
@@ -296,32 +314,70 @@ impl GroupManager {
         group_id: GroupId,
         op: GroupOp,
     ) -> Result<&GroupState, String> {
-        let ops = self.op_logs.entry(group_id).or_default();
-        // Dedup check.
-        if ops.iter().any(|o| o.id == op.id) {
-            // Already present — return the cached state (or re-resolve if missing).
-            return self
-                .states
-                .get(&group_id)
-                .ok_or_else(|| "state cache miss after dedup".to_string());
+        // Dedup check — duplicates are Ok, not an error.
+        if let Some(ops) = self.op_logs.get(&group_id) {
+            if ops.iter().any(|o| o.id == op.id) {
+                return self
+                    .states
+                    .get(&group_id)
+                    .ok_or_else(|| "state cache miss after dedup".to_string());
+            }
         }
-        ops.push(op);
+
+        self.try_resolve_and_persist(group_id, op)
+            .map_err(|e| e.to_string())?;
+        // `try_resolve_and_persist` populates `states` on success.
+        self.states
+            .get(&group_id)
+            .ok_or_else(|| "state cache miss after merge".to_string())
+    }
+
+    /// Append `op` to the group's log and commit if both the DAG resolve and
+    /// the on-disk persist succeed. On either failure, the push is rolled
+    /// back so the log matches its pre-call state.
+    fn try_resolve_and_persist(
+        &mut self,
+        group_id: GroupId,
+        op: GroupOp,
+    ) -> Result<(), MergeError> {
+        let op_id = op.id;
+        self.op_logs.entry(group_id).or_default().push(op);
 
         let state = match harmony_groups::resolve(self.op_logs[&group_id].as_slice()) {
             Ok(s) => s,
             Err(e) => {
-                self.op_logs.get_mut(&group_id).and_then(|v| v.pop());
-                return Err(format!("resolve failed: {e:?}"));
+                self.rollback_push(group_id, op_id);
+                return Err(MergeError::Resolve(e));
             }
         };
 
         if let Err(e) = self.persist_group(group_id) {
-            self.op_logs.get_mut(&group_id).and_then(|v| v.pop());
-            return Err(e);
+            self.rollback_push(group_id, op_id);
+            return Err(MergeError::Persist(e));
         }
         self.states.insert(group_id, state);
+        Ok(())
+    }
 
-        Ok(self.states.get(&group_id).unwrap())
+    /// Reverse the most recent push into `op_logs[group_id]`, asserting the
+    /// popped op matches the one we pushed. Prevents the "future refactor
+    /// appends between push and rollback" foot-gun: silently popping the
+    /// wrong op would corrupt the log. A mismatch here is a programmer
+    /// error, so we panic loudly rather than drift.
+    fn rollback_push(&mut self, group_id: GroupId, expected_id: OpId) {
+        let log = self
+            .op_logs
+            .get_mut(&group_id)
+            .expect("rollback: op log must exist — we just pushed to it");
+        match log.pop() {
+            Some(popped) if popped.id == expected_id => {}
+            Some(other) => panic!(
+                "merge_op rollback popped wrong op: expected {:02x?}, got {:02x?}",
+                &expected_id[..4],
+                &other.id[..4]
+            ),
+            None => panic!("merge_op rollback: log was empty when rolling back push"),
+        }
     }
 
     /// Merge a single op, buffering in the orphan pool on failure and retrying
@@ -397,9 +453,11 @@ impl GroupManager {
                 return MergeOutcome::Duplicate;
             }
         }
-        match self.merge_op(group_id, op) {
-            Ok(_) => MergeOutcome::Applied,
-            Err(e) => classify_merge_error(e),
+        match self.try_resolve_and_persist(group_id, op) {
+            Ok(()) => MergeOutcome::Applied,
+            Err(MergeError::Resolve(err)) => classify_resolve_error(err),
+            // Persist/serialize/I/O errors — may succeed on a later retry.
+            Err(MergeError::Persist(msg)) => MergeOutcome::TransientFailure(msg),
         }
     }
 
@@ -935,39 +993,52 @@ mod tests {
     }
 
     #[test]
-    fn transient_persist_failure_buffers_op_for_retry() {
-        // Classify a simulated persist error — it should produce
-        // TransientFailure, not Rejected.
-        let err = "Failed to create groups dir: read-only file system".to_string();
+    fn classify_resolve_error_covers_every_variant() {
+        // Missing-ancestor variants → buffer in orphan pool for later retry.
         assert!(matches!(
-            classify_merge_error(err),
-            MergeOutcome::TransientFailure(_)
-        ));
-
-        // Resolve errors with missing-ancestor variants → MissingAncestor.
-        assert!(matches!(
-            classify_merge_error("resolve failed: NoGenesis".into()),
+            classify_resolve_error(ResolveError::NoGenesis),
             MergeOutcome::MissingAncestor
         ));
         assert!(matches!(
-            classify_merge_error("resolve failed: MissingParent { op: [0xaa, ...], parent: [0xbb, ...] }".into()),
+            classify_resolve_error(ResolveError::EmptyDag),
+            MergeOutcome::MissingAncestor
+        ));
+        assert!(matches!(
+            classify_resolve_error(ResolveError::MissingParent {
+                op: [0xAA; 32],
+                parent: [0xBB; 32],
+            }),
             MergeOutcome::MissingAncestor
         ));
 
-        // Hard resolver rejections → Rejected.
+        // Structurally broken DAGs → drop, never resolve even with more ops.
         assert!(matches!(
-            classify_merge_error("resolve failed: CycleDetected".into()),
+            classify_resolve_error(ResolveError::MultipleGenesis),
             MergeOutcome::Rejected(_)
         ));
         assert!(matches!(
-            classify_merge_error("resolve failed: MultipleGenesis".into()),
+            classify_resolve_error(ResolveError::CycleDetected),
             MergeOutcome::Rejected(_)
         ));
-        // InvalidGenesis is structurally broken — no amount of retrying or
-        // incoming ops can fix it, so it must be dropped, not orphan-buffered.
         assert!(matches!(
-            classify_merge_error("resolve failed: InvalidGenesis".into()),
+            classify_resolve_error(ResolveError::InvalidGenesis),
             MergeOutcome::Rejected(_)
         ));
+        assert!(matches!(
+            classify_resolve_error(ResolveError::InvalidOpId { op: [0xCC; 32] }),
+            MergeOutcome::Rejected(_)
+        ));
+    }
+
+    #[test]
+    fn merge_error_display_preserves_ipc_surface() {
+        // IPC error messages are plain strings — make sure our typed error
+        // still stringifies with the historical "resolve failed: …" prefix
+        // and that persist errors pass through verbatim.
+        let resolve = MergeError::Resolve(ResolveError::NoGenesis);
+        assert!(resolve.to_string().starts_with("resolve failed:"));
+
+        let persist = MergeError::Persist("disk full".into());
+        assert_eq!(persist.to_string(), "disk full");
     }
 }

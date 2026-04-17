@@ -89,11 +89,18 @@ Add `begin_join()` method to `impl PartyState` (after `decline_invite`, around l
 ///
 /// The invite is consumed but the player does NOT join the party yet.
 /// Call `confirm_join()` when the leader's `PartyMemberJoined` arrives.
+///
+/// Validates expiry BEFORE taking the invite so an expired Err response
+/// leaves the pending invite intact — the UI can choose to surface a
+/// "this invite expired, ask again?" prompt without the invite having
+/// already been silently consumed.
 pub fn begin_join(&mut self, now: f64) -> Result<[u8; 16], &'static str> {
-    let invite = self.pending_invite.take().ok_or("no pending invite")?;
-    if now - invite.received_at > PARTY_INVITE_TIMEOUT {
+    let invite_ref = self.pending_invite.as_ref().ok_or("no pending invite")?;
+    if now - invite_ref.received_at > PARTY_INVITE_TIMEOUT {
         return Err("invite expired");
     }
+    // Expiry check passed — safe to consume the invite now.
+    let invite = self.pending_invite.take().expect("checked as_ref above");
     let leader = invite.leader;
     self.pending_join = Some(PendingJoin {
         leader: invite.leader,
@@ -560,7 +567,10 @@ fn begin_join_with_expired_invite_returns_err() {
     });
     let result = s.begin_join(91.0);
     assert!(result.is_err());
-    assert!(s.pending_invite.is_none(), "expired invite should be cleared");
+    // `begin_join` validates expiry before consuming — the UI can surface a
+    // "this invite expired" prompt without the invite having been silently
+    // lost. The separate tick-driven `expire_invite` clears it later.
+    assert!(s.pending_invite.is_some(), "expired begin_join must not consume the invite");
     assert!(s.pending_join.is_none(), "should not create pending_join from expired invite");
 }
 ```
