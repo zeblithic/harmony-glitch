@@ -793,6 +793,13 @@ fn fire_emote(
     EmoteFireResult::Success
 }
 
+/// Pure helper — returns true iff target is within `max_dist` of self.
+fn is_target_in_range(self_x: f64, self_y: f64, target_x: f64, target_y: f64, max_dist: f64) -> bool {
+    let dx = self_x - target_x;
+    let dy = self_y - target_y;
+    (dx * dx + dy * dy).sqrt() <= max_dist
+}
+
 /// Sender-side mood delta per emote kind. See spec §6.
 fn sender_mood_delta(kind: &emote::EmoteKind) -> f64 {
     match kind {
@@ -956,6 +963,53 @@ fn emote(
         let net_state = net.0.lock().map_err(|e| e.to_string())?;
         net_state.our_address_hash()
     };
+
+    // Range check for emotes that require physical proximity (hug / high-five).
+    // Must run before the fire lock so we can safely read net_state without
+    // holding both locks simultaneously.
+    let tag = emote::EmoteKindTag::from(&kind);
+    let needs_range_check = matches!(tag, emote::EmoteKindTag::Hug | emote::EmoteKindTag::HighFive);
+
+    if needs_range_check {
+        if let Some(target) = target_bytes {
+            // Get our position from game state
+            let (self_x, self_y) = {
+                let state_wrapper = app.state::<GameStateWrapper>();
+                let state = state_wrapper.0.lock().map_err(|e| e.to_string())?;
+                (state.player.x, state.player.y)
+            };
+
+            // Get target position from net state
+            let target_pos = {
+                let net = app.state::<NetworkWrapper>();
+                let net_state = net.0.lock().map_err(|e| e.to_string())?;
+                net_state
+                    .remote_frames()
+                    .iter()
+                    .find(|rf| {
+                        hex::decode(&rf.address_hash)
+                            .ok()
+                            .and_then(|b| b.try_into().ok())
+                            .map(|a: [u8; 16]| a == target)
+                            .unwrap_or(false)
+                    })
+                    .map(|rf| (rf.x, rf.y))
+            };
+
+            // If target not found or out of range, reject with NoTarget
+            match target_pos {
+                None => return Ok(EmoteFireResult::NoTarget),
+                Some((tx, ty)) => {
+                    if !is_target_in_range(self_x, self_y, tx, ty, 400.0) {
+                        return Ok(EmoteFireResult::NoTarget);
+                    }
+                }
+            }
+        } else {
+            // No target specified for an emote that requires one
+            return Ok(EmoteFireResult::NoTarget);
+        }
+    }
 
     // Blocked-target check + fire — under a single game-state lock to avoid
     // a TOCTOU gap with a concurrent buddy_block command.
@@ -4324,6 +4378,22 @@ mod emote_fire_tests {
 
         s.set_privacy(EmoteKindTag::Hug, true);
         assert_eq!((s.accept_hug, s.accept_high_five), (true, false));
+    }
+
+    #[test]
+    fn is_target_in_range_accepts_close_target() {
+        assert!(is_target_in_range(0.0, 0.0, 100.0, 100.0, 400.0));
+    }
+
+    #[test]
+    fn is_target_in_range_rejects_far_target() {
+        assert!(!is_target_in_range(0.0, 0.0, 500.0, 0.0, 400.0));
+    }
+
+    #[test]
+    fn is_target_in_range_at_boundary_accepts_equal_distance() {
+        // Exactly at boundary should accept (matches emote_hi's `dist <= 400.0` semantics)
+        assert!(is_target_in_range(0.0, 0.0, 400.0, 0.0, 400.0));
     }
 }
 
