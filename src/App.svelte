@@ -30,7 +30,7 @@
   import SocialPrompt from './lib/components/SocialPrompt.svelte';
   import BuddyRequestPrompt from './lib/components/BuddyRequestPrompt.svelte';
   import PartyInvitePrompt from './lib/components/PartyInvitePrompt.svelte';
-  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
+  import { stopGame, loadStreet, getIdentity, streetTransitionReady, getRecipes, getSavedState, listSoundKits, jukeboxPlay, jukeboxPause, jukeboxSelectTrack, getJukeboxState, getStoreState, vendorBuy, vendorSell, tradeInitiate, tradeAccept, tradeDecline, tradeUpdateOffer, tradeLock, tradeUnlock, tradeCancel, tradeGetState, onTradeEvent, getSkills, getDialogueState, closeDialogue, getQuestLog, emoteHi, emote as emoteFire, onEmoteReceived, getEmotePrivacy, partyLeave, partyKick, buddyRemove, blockPlayer, onBuddyEvent, onPartyEvent, getBuddyList, getPartyState, buddyRequest, buddyAccept, buddyDecline, partyInvite, partyAccept, partyDecline } from './lib/ipc';
   import type { PartyMemberInfo, BuddyEntry } from './lib/ipc';
   import type { StreetData, RenderFrame, RecipeDef, SkillDef, SoundKitMeta, JukeboxInfo, StoreState, AvatarManifest, TradeFrame, TradeEvent, SaveItemStack, DialogueFrame, QuestLogFrame, EmoteKind, EmoteFireResult, EmoteAnimationFrame, HiVariant } from './lib/types';
   import type { GameRenderer } from './lib/engine/renderer';
@@ -201,6 +201,15 @@
       skills = await getSkills();
     } catch (e) {
       console.error('Failed to load skills:', e);
+    }
+
+    // Hydrate emote privacy from Rust so the palette reflects the backend's
+    // receiver-side settings after restart. Falls back to accept-all (matches
+    // the Rust defaults).
+    try {
+      emotePrivacy = await getEmotePrivacy();
+    } catch (e) {
+      console.error('Failed to load emote privacy:', e);
     }
 
     // Load available sound kits
@@ -640,7 +649,11 @@
       const result = await emoteHi();
       spawnEmoteAnimation('self', { hi: result.variant as HiVariant }, null);
     } catch (err) {
-      console.error('emoteHi rejected:', err);
+      // Backend errors are strings ("Already greeted today", "No target in
+      // range", "Player is blocked", "Emote on cooldown (...)"). Surface
+      // them through the same GameNotification path as other emote failures.
+      const msg = typeof err === 'string' ? err : 'Hi failed';
+      pushEmoteFeedback(msg);
     }
   }
 

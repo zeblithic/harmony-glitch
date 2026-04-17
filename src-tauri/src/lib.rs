@@ -766,9 +766,18 @@ fn fire_emote(
     target: Option<[u8; 16]>,
     now: std::time::Instant,
 ) -> EmoteFireResult {
-    // Hug and HighFive require a target
+    // Wave, Hug, and HighFive all require a target — receive-path mood for
+    // these only credits when we_are_target, so letting a broadcast fire
+    // succeed would hand the sender unearned +mood on the reward cooldown
+    // with no actual recipient.
     let tag = emote::EmoteKindTag::from(kind);
-    if matches!(tag, emote::EmoteKindTag::Hug | emote::EmoteKindTag::HighFive) && target.is_none() {
+    if matches!(
+        tag,
+        emote::EmoteKindTag::Wave
+            | emote::EmoteKindTag::Hug
+            | emote::EmoteKindTag::HighFive
+    ) && target.is_none()
+    {
         return EmoteFireResult::NoTarget;
     }
 
@@ -814,9 +823,10 @@ fn is_target_in_range(self_x: f64, self_y: f64, target_x: f64, target_y: f64, ma
 /// target on a kind that must be broadcast.
 ///
 /// Only Dance is coerced here: its receive-logic awards mood only when
-/// `nearby_witness` is true, which in turn requires `is_broadcast`. A
-/// targeted Dance would otherwise render to no one and credit no mood.
-/// Applaud is dual-nature (targeted OR witness), so its target is preserved.
+/// `nearby_witness` is true, so a targeted Dance would otherwise be dropped
+/// as "not aimed at me" by bystanders. Applaud is dual-nature (targeted
+/// OR witness), so its target is preserved — bystanders process it via the
+/// Applaud-specific drop-guard exemption below.
 fn effective_receive_target(emote: &emote::EmoteMessage) -> Option<[u8; 16]> {
     match emote.kind {
         emote::EmoteKind::Dance => None,
@@ -2365,8 +2375,23 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                 // effective_receive_target for the rationale.
                 let effective_target = effective_receive_target(&emote);
                 let we_are_target = effective_target.map(|t| t == our_address).unwrap_or(false);
-                let is_broadcast = effective_target.is_none();
-                if effective_target.is_some() && !we_are_target {
+
+                // Drop malformed hug/high-five packets with no target. Sender-
+                // side rejects these, but a modified peer could still wire
+                // target=None; a missing-target hug is nonsense regardless.
+                let tag_pre = emote::EmoteKindTag::from(&emote.kind);
+                if matches!(tag_pre, emote::EmoteKindTag::Hug | emote::EmoteKindTag::HighFive)
+                    && effective_target.is_none()
+                {
+                    continue;
+                }
+
+                // Drop targeted emotes aimed at someone else — EXCEPT Applaud,
+                // which is dual-nature. For Applaud a non-target is still a
+                // potential witness; we fall through to the witness-radius
+                // check in the mood routing below.
+                let is_applaud = matches!(emote.kind, emote::EmoteKind::Applaud);
+                if effective_target.is_some() && !we_are_target && !is_applaud {
                     continue;
                 }
 
@@ -2428,17 +2453,19 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                         (delta, "hi")
                     }
                     other => {
-                        let nearby = if is_broadcast {
-                            sender_pos
-                                .map(|(sx, sy)| {
-                                    let dx = self_pos.0 - sx;
-                                    let dy = self_pos.1 - sy;
-                                    (dx * dx + dy * dy).sqrt() <= 300.0
-                                })
-                                .unwrap_or(false)
-                        } else {
-                            false
-                        };
+                        // Witness-radius check. Always computed — each kind's
+                        // mood routing in apply_receive_mood decides whether
+                        // to use it. Dance uses it when broadcast; Applaud
+                        // uses it for both targeted-bystander and broadcast
+                        // cases; targeted-only kinds (Wave/Hug/HighFive)
+                        // ignore it (they already gate on we_are_target).
+                        let nearby = sender_pos
+                            .map(|(sx, sy)| {
+                                let dx = self_pos.0 - sx;
+                                let dy = self_pos.1 - sy;
+                                (dx * dx + dy * dy).sqrt() <= 300.0
+                            })
+                            .unwrap_or(false);
                         let social = &mut state.social;
                         let delta = apply_receive_mood(
                             &mut social.emotes,
@@ -4322,6 +4349,29 @@ mod emote_fire_tests {
         let mut mood = MoodState::default();
         let result = fire_emote(
             &mut emotes, &mut mood, id(0x01), &EmoteKind::Hug, None, Instant::now(),
+        );
+        assert!(matches!(result, EmoteFireResult::NoTarget));
+    }
+
+    #[test]
+    fn fire_emote_wave_requires_target() {
+        // Wave's receive logic only credits mood when we_are_target, so
+        // letting a broadcast wave succeed would hand the sender +1 mood
+        // (on the 30s reward cooldown) with no real recipient.
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let result = fire_emote(
+            &mut emotes, &mut mood, id(0x01), &EmoteKind::Wave, None, Instant::now(),
+        );
+        assert!(matches!(result, EmoteFireResult::NoTarget));
+    }
+
+    #[test]
+    fn fire_emote_high_five_requires_target() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        let result = fire_emote(
+            &mut emotes, &mut mood, id(0x01), &EmoteKind::HighFive, None, Instant::now(),
         );
         assert!(matches!(result, EmoteFireResult::NoTarget));
     }
