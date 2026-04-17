@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack, SkillDef, DialogueFrame, DialogueChoiceResult, QuestLogFrame } from './types';
+import type { StreetData, InputState, RenderFrame, NetworkStatus, PlayerIdentity, ChatEvent, RecipeDef, SavedState, SoundKitMeta, JukeboxInfo, AvatarAppearance, StoreState, EatResult, BuyUpgradeResult, UpgradePathDef, TradeFrame, TradeEvent, SaveItemStack, SkillDef, DialogueFrame, DialogueChoiceResult, QuestLogFrame, EmoteKind, EmoteFireResult, EmotePrivacy } from './types';
 import type { SoundKit } from './engine/audio';
 
 export interface StreetListEntry {
@@ -210,6 +210,32 @@ export interface EmoteHiResult { variant: string; targeted: boolean; }
 
 export async function getMood(): Promise<MoodResult> { return invoke<MoodResult>('get_mood'); }
 export async function emoteHi(): Promise<EmoteHiResult> { return invoke<EmoteHiResult>('emote_hi'); }
+
+/**
+ * Fire an emote via the unified IPC. For Hi, prefer emoteHi() — it
+ * handles daily variant + target selection semantics specific to Hi.
+ *
+ * @param kind The EmoteKind to fire.
+ * @param target Hex-encoded peer hash (16 bytes). Null = broadcast.
+ */
+export async function emote(
+  kind: EmoteKind,
+  target: string | null = null,
+): Promise<EmoteFireResult> {
+  return invoke<EmoteFireResult>('emote', { kind, target });
+}
+
+export async function setEmotePrivacy(
+  kind: EmoteKind,
+  accept: boolean,
+): Promise<void> {
+  return invoke<void>('set_emote_privacy', { kind, accept });
+}
+
+export async function getEmotePrivacy(): Promise<EmotePrivacy> {
+  return invoke<EmotePrivacy>('get_emote_privacy');
+}
+
 export interface BuddyEntry { addressHash: string; displayName: string; addedDate: string; coPresenceTotal: number; lastSeenDate: string | null; }
 export interface BuddyListResult { buddies: BuddyEntry[]; }
 export interface BlockedListResult { blocked: string[]; }
@@ -288,7 +314,9 @@ export async function onPartyEvent(callback: (event: PartyEvent) => void): Promi
 export interface EmoteEvent {
   senderHash: string;
   senderName: string;
-  variant: string;
+  kind: 'hi' | 'dance' | 'wave' | 'hug' | 'high_five' | 'applaud';
+  /** Only populated when kind === 'hi'. */
+  variant: string | null;
   moodDelta: number;
 }
 
