@@ -805,6 +805,51 @@ fn sender_mood_delta(kind: &emote::EmoteKind) -> f64 {
     }
 }
 
+/// Receiver-side mood application. Pure, testable. Returns the mood delta
+/// that was applied (0.0 if nothing applied).
+///
+/// - `sender`: the emote's sender (NOT us)
+/// - `kind`: the emote kind
+/// - `we_are_target`: true iff `emote.target == our_address`
+/// - `nearby_witness`: true iff we are within witness radius (300px) of sender
+///   AND emote is a broadcast (no target or target != us)
+/// - Reward cooldown gates whether mood is actually credited.
+///
+/// Hi is excluded here — Hi receive-path mood stays in `handle_incoming_hi`
+/// (caller must check `EmoteKind::Hi(_)` and route there).
+fn apply_receive_mood(
+    emotes: &mut emote::EmoteState,
+    mood: &mut crate::mood::MoodState,
+    sender: [u8; 16],
+    kind: &emote::EmoteKind,
+    we_are_target: bool,
+    nearby_witness: bool,
+    now: std::time::Instant,
+) -> f64 {
+    let delta = match kind {
+        emote::EmoteKind::Hi(_) => 0.0, // handled elsewhere
+        emote::EmoteKind::Dance => if nearby_witness { 1.0 } else { 0.0 },
+        emote::EmoteKind::Wave => if we_are_target { 1.0 } else { 0.0 },
+        emote::EmoteKind::Hug => if we_are_target { 5.0 } else { 0.0 },
+        emote::EmoteKind::HighFive => if we_are_target { 3.0 } else { 0.0 },
+        emote::EmoteKind::Applaud => {
+            if we_are_target || nearby_witness { 3.0 } else { 0.0 }
+        }
+    };
+
+    if delta <= 0.0 {
+        return 0.0;
+    }
+
+    // Reward-cooldown gate — per (sender, kind) pair
+    if !emotes.cooldowns.try_reward(now, kind, sender) {
+        return 0.0;
+    }
+
+    mood.apply_mood_change(delta);
+    delta
+}
+
 #[tauri::command]
 fn get_mood(app: AppHandle) -> Result<serde_json::Value, String> {
     let state_wrapper = app.state::<GameStateWrapper>();
@@ -2154,53 +2199,127 @@ fn execute_network_actions(app: &AppHandle, actions: Vec<NetworkAction>) {
                 handle_trade_message(app, sender, message);
             }
             NetworkAction::EmoteReceived { sender, emote } => {
-                // Look up our address and sender name (Net lock first, then drop).
-                let (our_address, sender_name) = {
+                // Look up our address, sender name, and positions under Net lock.
+                let (our_address, sender_name, sender_pos, self_pos) = {
                     let net = app.state::<NetworkWrapper>();
                     let net_state = net.0.lock().unwrap_or_else(|e| e.into_inner());
-                    (
-                        net_state.our_address_hash(),
-                        net_state.peer_display_name(&sender).unwrap_or_default(),
-                    )
+                    let our_addr = net_state.our_address_hash();
+                    let name = net_state.peer_display_name(&sender).unwrap_or_default();
+                    let sender_pos = net_state
+                        .remote_frames()
+                        .iter()
+                        .find(|rf| {
+                            hex::decode(&rf.address_hash)
+                                .ok()
+                                .and_then(|b| b.try_into().ok())
+                                .map(|a: [u8; 16]| a == sender)
+                                .unwrap_or(false)
+                        })
+                        .map(|rf| (rf.x, rf.y));
+                    drop(net_state);
+
+                    let state_wrapper = app.state::<GameStateWrapper>();
+                    let state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
+                    let self_pos = (state.player.x, state.player.y);
+                    (our_addr, name, sender_pos, self_pos)
                 };
 
-                // Skip targeted emotes not aimed at us.
-                if let Some(target) = emote.target {
-                    if target != our_address {
-                        continue;
-                    }
+                // Skip targeted emotes not aimed at us (unless we should see
+                // them as witness for broadcast-style applaud — separate check).
+                let we_are_target = emote.target.map(|t| t == our_address).unwrap_or(false);
+                let is_broadcast = emote.target.is_none();
+                if emote.target.is_some() && !we_are_target {
+                    continue;
                 }
 
                 let state_wrapper = app.state::<GameStateWrapper>();
                 let mut state = state_wrapper.0.lock().unwrap_or_else(|e| e.into_inner());
 
-                let blocked = state.social.buddies.is_blocked(&sender);
-                if blocked {
-                    continue; // don't process or emit for blocked senders
+                // Block list drop
+                if state.social.buddies.is_blocked(&sender) {
+                    continue;
                 }
 
-                // Only Hi is handled in Task 1; other kinds return from Task 7.
-                let variant = match &emote.kind {
-                    emote::EmoteKind::Hi(v) => *v,
-                    _ => continue, // non-Hi handled later
+                // Privacy toggle drop (hug / high_five only; others unconditional)
+                let tag = emote::EmoteKindTag::from(&emote.kind);
+                if !state.social.emotes.privacy_accepts(tag) {
+                    continue;
+                }
+
+                // Receiver-side fire-cooldown mirror — drop if over-limit.
+                let now = std::time::Instant::now();
+                if state
+                    .social
+                    .emotes
+                    .cooldowns
+                    .check_fire(now, &emote.kind, Some(sender))
+                    .is_err()
+                {
+                    continue;
+                }
+                state.social.emotes.cooldowns.mark_fire(now, &emote.kind, Some(sender));
+
+                // Route by kind
+                let (mood_delta, event_kind) = match &emote.kind {
+                    emote::EmoteKind::Hi(variant) => {
+                        let delta = state.social.emotes.handle_incoming_hi(
+                            sender,
+                            *variant,
+                            false,
+                        );
+                        if delta > 0.0 {
+                            state.social.mood.apply_mood_change(delta);
+                        }
+                        (delta, "hi")
+                    }
+                    other => {
+                        let nearby = if is_broadcast {
+                            sender_pos
+                                .map(|(sx, sy)| {
+                                    let dx = self_pos.0 - sx;
+                                    let dy = self_pos.1 - sy;
+                                    (dx * dx + dy * dy).sqrt() <= 300.0
+                                })
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        };
+                        let social = &mut state.social;
+                        let delta = apply_receive_mood(
+                            &mut social.emotes,
+                            &mut social.mood,
+                            sender,
+                            other,
+                            we_are_target,
+                            nearby,
+                            now,
+                        );
+                        let kind_str = match other {
+                            emote::EmoteKind::Dance => "dance",
+                            emote::EmoteKind::Wave => "wave",
+                            emote::EmoteKind::Hug => "hug",
+                            emote::EmoteKind::HighFive => "high_five",
+                            emote::EmoteKind::Applaud => "applaud",
+                            emote::EmoteKind::Hi(_) => unreachable!(),
+                        };
+                        (delta, kind_str)
+                    }
                 };
 
-                let mood_delta = state.social.emotes.handle_incoming_hi(
-                    sender,
-                    variant,
-                    false, // already checked — not blocked
-                );
-                if mood_delta > 0.0 {
-                    state.social.mood.apply_mood_change(mood_delta);
-                }
+                drop(state);
+
+                let variant_str = match &emote.kind {
+                    emote::EmoteKind::Hi(v) => Some(v.as_str()),
+                    _ => None,
+                };
 
                 let _ = app.emit(
                     "emote_received",
                     serde_json::json!({
                         "senderHash": hex::encode(sender),
                         "senderName": sender_name,
-                        "kind": "hi",
-                        "variant": variant.as_str(),
+                        "kind": event_kind,
+                        "variant": variant_str,
                         "moodDelta": mood_delta,
                     }),
                 );
@@ -4054,6 +4173,120 @@ mod emote_fire_tests {
         assert!(emotes.can_hi(&target));
         emotes.record_hi_sent(target);
         assert!(!emotes.can_hi(&target));
+    }
+
+    #[test]
+    fn receive_emote_applies_target_mood_for_hug() {
+        let me = id(0x01);
+        let them = id(0x02);
+        let mut emotes = EmoteState::new(me, "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0; // leave headroom for +5 (default is 100.0 = clamp max)
+        let initial = mood.mood;
+
+        let delta = apply_receive_mood(
+            &mut emotes,
+            &mut mood,
+            them,
+            &EmoteKind::Hug,
+            true, false, Instant::now(),
+        );
+
+        assert!((delta - 5.0).abs() < 0.01);
+        assert!((mood.mood - (initial + 5.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn receive_emote_applies_witness_mood_for_dance_when_nearby() {
+        let me = id(0x01);
+        let them = id(0x02);
+        let mut emotes = EmoteState::new(me, "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0;
+        let initial = mood.mood;
+
+        let delta = apply_receive_mood(
+            &mut emotes, &mut mood, them, &EmoteKind::Dance,
+            false, true, Instant::now(),
+        );
+
+        assert!((delta - 1.0).abs() < 0.01);
+        assert!((mood.mood - (initial + 1.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn receive_emote_no_mood_for_dance_when_not_nearby() {
+        let mut emotes = EmoteState::new(id(0x01), "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0;
+        let initial = mood.mood;
+
+        let delta = apply_receive_mood(
+            &mut emotes, &mut mood, id(0x02), &EmoteKind::Dance,
+            false, false, Instant::now(),
+        );
+
+        assert!((delta - 0.0).abs() < 0.01);
+        assert!((mood.mood - initial).abs() < 0.01);
+    }
+
+    #[test]
+    fn receive_emote_reward_cooldown_blocks_second_dance_mood_from_same_dancer() {
+        let me = id(0x01);
+        let them = id(0x02);
+        let mut emotes = EmoteState::new(me, "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0;
+        let t0 = Instant::now();
+
+        let first = apply_receive_mood(
+            &mut emotes, &mut mood, them, &EmoteKind::Dance, false, true, t0,
+        );
+        assert!((first - 1.0).abs() < 0.01);
+        let after_first = mood.mood;
+
+        let t1 = t0 + Duration::from_secs(60);
+        let second = apply_receive_mood(
+            &mut emotes, &mut mood, them, &EmoteKind::Dance, false, true, t1,
+        );
+        assert!((second - 0.0).abs() < 0.01);
+        assert!((mood.mood - after_first).abs() < 0.01);
+    }
+
+    #[test]
+    fn receive_emote_applaud_broadcast_gives_witness_mood() {
+        let me = id(0x01);
+        let them = id(0x02);
+        let mut emotes = EmoteState::new(me, "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0;
+        let initial = mood.mood;
+
+        let delta = apply_receive_mood(
+            &mut emotes, &mut mood, them, &EmoteKind::Applaud,
+            false, true, Instant::now(),
+        );
+
+        assert!((delta - 3.0).abs() < 0.01);
+        assert!((mood.mood - (initial + 3.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn receive_emote_applaud_targeted_at_us_gives_target_mood() {
+        let me = id(0x01);
+        let them = id(0x02);
+        let mut emotes = EmoteState::new(me, "2026-04-10");
+        let mut mood = MoodState::default();
+        mood.mood = 50.0;
+        let initial = mood.mood;
+
+        let delta = apply_receive_mood(
+            &mut emotes, &mut mood, them, &EmoteKind::Applaud,
+            true, false, Instant::now(),
+        );
+
+        assert!((delta - 3.0).abs() < 0.01);
+        assert!((mood.mood - (initial + 3.0)).abs() < 0.01);
     }
 }
 
