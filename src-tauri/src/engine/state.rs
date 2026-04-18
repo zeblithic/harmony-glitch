@@ -805,6 +805,14 @@ impl GameState {
                     self.player.vx = 0.0;
                     self.player.vy = 0.0;
                     self.oob_ticks = 0;
+                    // Sync audio state — last_arrival is always a landing
+                    // surface, so the teleported player is on ground. Setting
+                    // on_ground=true makes the Land detector below see
+                    // prev=true, cur=true → no event, and the end-of-tick
+                    // `prev_on_ground = on_ground` stays true for next frame.
+                    self.player.on_ground = true;
+                    self.prev_on_ground = true;
+                    self.player.distance_since_footstep = 0.0;
                 }
             } else {
                 self.oob_ticks = 0;
@@ -1266,6 +1274,14 @@ impl GameState {
             self.player.x = save.x;
             self.player.y = save.y;
         }
+        // Refresh OOB anchor so the safety-net teleports back to the save
+        // location, not the default_spawn set by the preceding load_street.
+        self.last_arrival = crate::street::types::Point {
+            x: self.player.x,
+            y: self.player.y,
+        };
+        self.oob_ticks = 0;
+        self.pending_arrival = None;
         self.facing = save.facing;
         let capacity = self.inventory.capacity;
         self.inventory.slots = save.inventory.clone();
@@ -4395,6 +4411,60 @@ mod tests {
             "counter should reset when player leaves the floor region"
         );
     }
+
+    #[test]
+    fn oob_teleport_does_not_emit_spurious_land() {
+        // After OOB teleport, the next tick's physics may ground the player at
+        // the arrival platform. Without syncing prev_on_ground inside the
+        // teleport block, !prev_on_ground && on_ground would emit a Land.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(platformless_street(), vec![], vec![]);
+        // last_arrival inside test_street's platform range so the post-teleport
+        // tick grounds the player.
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: 0.0 };
+        state.pending_audio_events.clear();
+
+        state.player.x = -500.0;
+        state.player.y = 0.0;
+        state.player.on_ground = false;
+        state.prev_on_ground = false;
+
+        let input = InputState::default();
+        let mut frames = vec![];
+        for _ in 0..35 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            if let Some(frame) = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()) {
+                frames.push(frame);
+            }
+            if state.player.x == 100.0 {
+                break;
+            }
+        }
+
+        // Teleport must have fired and prev_on_ground must be synced to true.
+        assert_eq!(state.player.x, 100.0, "teleport should have fired");
+        assert!(
+            state.prev_on_ground,
+            "prev_on_ground must be synced to true after OOB teleport"
+        );
+        // distance_since_footstep must be reset to 0.0.
+        assert_eq!(
+            state.player.distance_since_footstep, 0.0,
+            "footstep accumulator must be reset after OOB teleport"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -4648,6 +4718,69 @@ mod save_tests {
             "y should be clamped to top bound"
         );
         assert_eq!(state.facing, Direction::Left);
+    }
+
+    #[test]
+    fn restore_save_refreshes_oob_anchor() {
+        // After restoring a save, last_arrival must reflect the save location
+        // so the OOB safety-net teleports back to where the player was, not
+        // the street's default_spawn from the preceding load_street.
+        let item_defs = crate::item::types::ItemDefs::new();
+        let entity_defs = crate::item::types::EntityDefs::new();
+        let recipe_defs = crate::item::types::RecipeDefs::new();
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            item_defs,
+            entity_defs,
+            recipe_defs,
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        let xml = include_str!("../../../assets/streets/demo_meadow.xml");
+        let street = crate::street::parser::parse_street(xml).unwrap();
+        state.load_street(street, vec![], vec![]);
+        // After load_street, last_arrival is at the street's default_spawn.
+        let default_spawn_x = state.last_arrival.x;
+
+        // Save somewhere other than the default spawn.
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 1234.0,
+            y: -42.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: AvatarAppearance::default(),
+            currants: 0,
+            energy: 600.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
+            quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
+        };
+        state.restore_save(&save);
+
+        // last_arrival should track the restored position (possibly clamped),
+        // NOT the default_spawn from load_street.
+        assert_ne!(
+            state.last_arrival.x, default_spawn_x,
+            "OOB anchor must be refreshed off of default_spawn"
+        );
+        assert_eq!(state.last_arrival.x, state.player.x);
+        assert_eq!(state.last_arrival.y, state.player.y);
+        assert_eq!(state.oob_ticks, 0);
+        assert!(state.pending_arrival.is_none());
     }
 
     #[test]

@@ -21,12 +21,14 @@ pub fn resolve_arrival(
         // Nudge the player inward from the reciprocal signpost so they don't
         // sit inside the pre-subscribe distance and immediately re-trigger
         // another swoop back to the origin. Matches the pre-ZEB-132 behavior
-        // that lived at state.rs:646.
+        // that lived at state.rs:646. Clamp to street bounds so a narrow
+        // street or a signpost near the midpoint can't push the spawn off-map.
         let street_mid = (street.left + street.right) / 2.0;
         let inward = if sp.x < street_mid { 1.0 } else { -1.0 };
         let nudge = PRE_SUBSCRIBE_DISTANCE + 50.0;
+        let arrival_x = (sp.x + inward * nudge).clamp(street.left, street.right);
         return SpawnPoint {
-            x: sp.x + inward * nudge,
+            x: arrival_x,
             y: street.ground_y,
             facing: None,
         };
@@ -37,12 +39,13 @@ pub fn resolve_arrival(
 /// Resolve the player's spawn location on `street` when there is no
 /// origin signpost context — first entry, initial load, or final fallback
 /// for resolve_arrival.
+///
+/// Never falls back to a signpost position: the transition system treats
+/// `player.x == signpost.x` as already-crossed (inclusive `>=`/`<=`), so
+/// spawning on a signpost would trigger an instant swoop on frame 1.
 pub fn resolve_default_spawn(street: &StreetData) -> SpawnPoint {
     if let Some(s) = street.default_spawn {
         return s;
-    }
-    if let Some(sp) = street.signposts.first() {
-        return SpawnPoint { x: sp.x, y: street.ground_y, facing: None };
     }
     SpawnPoint {
         x: (street.left + street.right) / 2.0,
@@ -153,6 +156,31 @@ mod tests {
     }
 
     #[test]
+    fn resolve_arrival_reciprocal_clamps_to_street_bounds() {
+        // Narrow street: reciprocal nudge of 550px would push spawn out.
+        let mut street = test_street(
+            vec![Signpost {
+                id: "sp".to_string(),
+                x: 100.0, // just right of center
+                y: 0.0,
+                connects: vec![connection("ORIGIN", None, None, None)],
+            }],
+            None,
+        );
+        street.left = -200.0;
+        street.right = 200.0;
+        let conn = connection("TARGET", None, None, None);
+        let sp = resolve_arrival(&street, "ORIGIN", Some(&conn));
+        // sp.x=100, mid=0, inward=-1, unclamped = 100-550 = -450.
+        // Clamped to street.left = -200.
+        assert_eq!(sp.x, -200.0);
+        assert!(
+            sp.x >= street.left && sp.x <= street.right,
+            "arrival must stay inside bounds"
+        );
+    }
+
+    #[test]
     fn resolve_arrival_last_resorts_to_default_spawn() {
         // No connection, no reciprocal signpost — falls to default_spawn.
         let street = test_street(
@@ -213,23 +241,19 @@ mod tests {
     }
 
     #[test]
-    fn resolve_default_spawn_falls_back_to_first_signpost() {
-        let first = Signpost {
-            id: "first".to_string(),
+    fn resolve_default_spawn_with_signposts_but_no_explicit_uses_center() {
+        // Critical: never fall back to a signpost position (would trigger
+        // instant swoop at load because transition uses inclusive bounds).
+        let signpost = Signpost {
+            id: "sp".to_string(),
             x: -600.0,
             y: 0.0,
             connects: vec![],
         };
-        let second = Signpost {
-            id: "second".to_string(),
-            x: 600.0,
-            y: 0.0,
-            connects: vec![],
-        };
-        let street = test_street(vec![first, second], None);
+        let street = test_street(vec![signpost], None);
         let sp = resolve_default_spawn(&street);
-        assert_eq!(sp.x, -600.0);
-        assert_eq!(sp.y, 0.0); // ground_y
+        assert_eq!(sp.x, 0.0); // street center, NOT -600.0
+        assert_eq!(sp.y, 0.0);
     }
 
     #[test]
