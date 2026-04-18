@@ -38,6 +38,34 @@ impl BuffState {
             })
             .fold(1.0, |acc, v| acc * v)
     }
+
+    /// Remove buffs whose `expires_at <= game_time`. For each expired buff
+    /// with `on_expire: Some(spec)`, immediately apply the successor.
+    /// Bounded to 8 expansion passes to defend against degenerate chains.
+    pub fn tick(&mut self, game_time: f64) {
+        const MAX_PASSES: usize = 8;
+        for _ in 0..MAX_PASSES {
+            // Collect expired kinds in sorted order for determinism.
+            let mut expired_kinds: Vec<String> = self
+                .active
+                .iter()
+                .filter(|(_, b)| b.expires_at <= game_time)
+                .map(|(k, _)| k.clone())
+                .collect();
+            expired_kinds.sort();
+            if expired_kinds.is_empty() {
+                return;
+            }
+            for kind in expired_kinds {
+                let Some(buff) = self.active.remove(&kind) else {
+                    continue;
+                };
+                if let Some(spec) = buff.on_expire {
+                    self.apply(&spec, game_time, "on_expire".to_string());
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -111,5 +139,77 @@ mod tests {
         s.apply(&other, 0.0, "campfire".into());
         // 0.5 * 0.75 = 0.375
         assert!((s.mood_decay_multiplier() - 0.375).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tick_removes_expired_buff_without_on_expire() {
+        let mut s = BuffState::default();
+        s.apply(&rookswort_spec(0.5, 600.0), 0.0, "rookswort".into());
+        s.tick(601.0); // past expires_at
+        assert!(s.active.is_empty());
+    }
+
+    #[test]
+    fn tick_does_not_remove_unexpired_buff() {
+        let mut s = BuffState::default();
+        s.apply(&rookswort_spec(0.5, 600.0), 0.0, "rookswort".into());
+        s.tick(300.0);
+        assert_eq!(s.active.len(), 1);
+    }
+
+    #[test]
+    fn tick_expired_buff_with_on_expire_applies_successor() {
+        let ramp_down = BuffSpec {
+            kind: "rookswort".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.75 },
+            duration_secs: 180.0,
+            on_expire: None,
+        };
+        let initial = BuffSpec {
+            kind: "rookswort".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+            duration_secs: 600.0,
+            on_expire: Some(Box::new(ramp_down)),
+        };
+        let mut s = BuffState::default();
+        s.apply(&initial, 0.0, "rookswort".into());
+        s.tick(601.0);
+        // Successor replaces in place (same kind).
+        let b = s.active.get("rookswort").expect("successor present");
+        assert_eq!(b.effect, BuffEffect::MoodDecayMultiplier { value: 0.75 });
+        assert!((b.expires_at - 781.0).abs() < 1e-9);
+        assert_eq!(b.source, "on_expire");
+    }
+
+    #[test]
+    fn tick_chain_terminates_after_bounded_passes() {
+        // Degenerate chain: every on_expire has duration 0, so successor
+        // is immediately expired. Without a pass bound, infinite loop.
+        fn zero_duration(next: Option<Box<BuffSpec>>) -> BuffSpec {
+            BuffSpec {
+                kind: "loop".into(),
+                effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+                duration_secs: 0.0,
+                on_expire: next,
+            }
+        }
+        // Build 20 levels of zero-duration chain
+        let mut chain = zero_duration(None);
+        for _ in 0..20 {
+            chain = zero_duration(Some(Box::new(chain)));
+        }
+        let mut s = BuffState::default();
+        s.apply(&chain, 0.0, "test".into());
+        // Should not hang. Bound is internal (8 passes).
+        s.tick(0.0);
+        // Final state: either empty or one buff — but NOT an infinite loop.
+        assert!(s.active.len() <= 1);
+    }
+
+    #[test]
+    fn tick_does_nothing_when_empty() {
+        let mut s = BuffState::default();
+        s.tick(1000.0);
+        assert!(s.active.is_empty());
     }
 }
