@@ -1170,6 +1170,10 @@ mod tests {
             "Vertical velocity should be reset to 0 after clamp, actual vy={}",
             body.vy
         );
+        assert!(
+            !body.on_ground,
+            "Player on invisible floor should not be marked on_ground (needed by OOB detector)"
+        );
     }
 
     #[test]
@@ -1197,6 +1201,11 @@ mod tests {
             );
         }
 
+        assert!(
+            body.y <= 0.01,
+            "Clamp should have engaged: y={} (expected ~0)",
+            body.y
+        );
         assert!(
             body.x > initial_x + 10.0,
             "Player should move right on the clamp floor, x={} (started {})",
@@ -1236,7 +1245,7 @@ mod tests {
         }
 
         assert!(
-            (body.y - (-50.0)).abs() < 0.5,
+            (body.y - (-50.0)).abs() < 0.01,
             "Player should land on platform at y=-50, actual y={}",
             body.y
         );
