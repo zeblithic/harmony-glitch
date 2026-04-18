@@ -4,8 +4,14 @@ import { svelteTesting } from '@testing-library/svelte/vite';
 
 export default defineConfig({
   plugins: [svelte({ hot: false }), svelteTesting()],
+  server: {
+    fs: {
+      strict: false,
+    },
+  },
   test: {
     environment: 'jsdom',
+    setupFiles: ['@testing-library/jest-dom/vitest'],
     include: ['src/**/*.test.ts', 'tools/**/*.test.mjs'],
     // Node 22+ exposes an experimental `localStorage` global whose methods
     // are `undefined` unless `--localstorage-file <path>` is also passed,
