@@ -2394,12 +2394,11 @@ mod tests {
         // MIN_SWOOP_SECS = 0.3s ≈ 18 frames) + one Complete-handler tick. After
         // Complete runs: pending_arrival was None (the original signpost had no
         // explicit arrival_x/y), so resolve_arrival walks the reciprocal-signpost
-        // chain and places the player at the return signpost x=-1900.
-        //
-        // We stop ticking AT completion because x=-1900 is within
-        // PRE_SUBSCRIBE_DISTANCE of that signpost — further ticks would retrigger
-        // a swoop back to LADEMO001 (a known behavior the OOB/re-entry plan
-        // accepts; callers are expected to handle the immediate re-approach).
+        // chain. The reciprocal branch applies an inward nudge of
+        // PRE_SUBSCRIBE_DISTANCE + 50 = 550 so the player doesn't land inside
+        // the return signpost's pre-subscribe range and bounce straight back.
+        // Signpost x=-1900, street mid=0, inward=+1.0 => nudged x = -1900 + 550
+        // = -1350.
         let mut saw_complete = false;
         for _ in 0..60 {
             state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
@@ -2413,14 +2412,16 @@ mod tests {
             "Complete handler should have cleared transition_origin_tsid"
         );
 
-        // Player lands at the return signpost x=-1900 (reciprocal fallback).
+        // Player lands nudged inward from the return signpost: reciprocal
+        // fallback places them at sp.x + inward * (PRE_SUBSCRIBE_DISTANCE + 50)
+        // = -1900 + 550 = -1350.
         assert!(
-            (state.player.x - (-1900.0)).abs() < 1.0,
-            "Player should be at reciprocal signpost x=-1900, got {}",
+            (state.player.x - (-1350.0)).abs() < 1.0,
+            "Player should be nudged to x=-1350 (-1900 + 550), got {}",
             state.player.x
         );
         // last_arrival records the arrival for the OOB safety net.
-        assert_eq!(state.last_arrival.x, -1900.0);
+        assert_eq!(state.last_arrival.x, -1350.0);
     }
 
     #[test]
@@ -4096,9 +4097,13 @@ mod tests {
         let input = InputState::default();
         state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
 
-        assert_eq!(state.player.x, 600.0);
+        // Reciprocal signpost at x=600 on a street with mid=0 => inward=-1,
+        // nudge = PRE_SUBSCRIBE_DISTANCE (500) + 50 = 550, so nudged x =
+        // 600 - 550 = 50. The nudge keeps the player out of pre-subscribe
+        // range so they don't immediately bounce back to OTHERTSID.
+        assert_eq!(state.player.x, 50.0);
         assert_eq!(state.player.y, 0.0); // ground_y
-        assert_eq!(state.last_arrival.x, 600.0);
+        assert_eq!(state.last_arrival.x, 50.0);
         assert!(state.transition_origin_tsid.is_none());
     }
 }

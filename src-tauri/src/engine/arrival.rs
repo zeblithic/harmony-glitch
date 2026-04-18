@@ -1,3 +1,4 @@
+use crate::engine::transition::PRE_SUBSCRIBE_DISTANCE;
 use crate::street::types::{Facing, SignpostConnection, SpawnPoint, StreetData};
 
 /// Resolve the point at which a player should land on `street` when arriving
@@ -17,7 +18,18 @@ pub fn resolve_arrival(
     if let Some(sp) = street.signposts.iter().find(|s|
         s.connects.iter().any(|c| c.target_tsid == origin_tsid)
     ) {
-        return SpawnPoint { x: sp.x, y: street.ground_y, facing: None };
+        // Nudge the player inward from the reciprocal signpost so they don't
+        // sit inside the pre-subscribe distance and immediately re-trigger
+        // another swoop back to the origin. Matches the pre-ZEB-132 behavior
+        // that lived at state.rs:646.
+        let street_mid = (street.left + street.right) / 2.0;
+        let inward = if sp.x < street_mid { 1.0 } else { -1.0 };
+        let nudge = PRE_SUBSCRIBE_DISTANCE + 50.0;
+        return SpawnPoint {
+            x: sp.x + inward * nudge,
+            y: street.ground_y,
+            facing: None,
+        };
     }
     resolve_default_spawn(street)
 }
@@ -104,8 +116,40 @@ mod tests {
         let street = test_street(vec![reciprocal], None);
         let conn = connection("TARGETTSID", None, None, None);
         let sp = resolve_arrival(&street, "ORIGIN", Some(&conn));
-        assert_eq!(sp.x, 800.0);
+        // Reciprocal signpost is at x=800; street mid = 0; sp.x > mid so
+        // inward = -1.0; nudge = PRE_SUBSCRIBE_DISTANCE (500) + 50 = 550.
+        // Nudged x = 800 - 550 = 250. The nudge prevents the arrival landing
+        // within pre-subscribe range of the return signpost.
+        assert_eq!(sp.x, 250.0); // 800 - (PRE_SUBSCRIBE_DISTANCE + 50) = 800 - 550
         assert_eq!(sp.y, 0.0); // ground_y
+    }
+
+    #[test]
+    fn resolve_arrival_reciprocal_signpost_nudges_inward() {
+        // Signpost on right half of street: inward = -1.0.
+        let sp_right = Signpost {
+            id: "east".to_string(),
+            x: 900.0,
+            y: 0.0,
+            connects: vec![connection("ORIGIN", None, None, None)],
+        };
+        let street = test_street(vec![sp_right], None);
+        let conn = connection("TARGET", None, None, None);
+        let result = resolve_arrival(&street, "ORIGIN", Some(&conn));
+        // street mid = 0, sp.x=900 > mid, inward=-1, nudge=550 => 900-550=350
+        assert_eq!(result.x, 350.0);
+
+        // Signpost on left half: inward = +1.0.
+        let sp_left = Signpost {
+            id: "west".to_string(),
+            x: -900.0,
+            y: 0.0,
+            connects: vec![connection("ORIGIN", None, None, None)],
+        };
+        let street2 = test_street(vec![sp_left], None);
+        let result2 = resolve_arrival(&street2, "ORIGIN", Some(&conn));
+        // sp.x=-900 < mid=0, inward=+1, nudge=550 => -900+550=-350
+        assert_eq!(result2.x, -350.0);
     }
 
     #[test]
@@ -147,7 +191,9 @@ mod tests {
         let street = test_street(vec![reciprocal], None);
         let conn = connection("TARGET", Some(-500.0), None, None); // partial
         let sp = resolve_arrival(&street, "ORIGIN", Some(&conn));
-        assert_eq!(sp.x, 300.0); // reciprocal wins, NOT the partial arrival_x
+        // Reciprocal wins (NOT the partial arrival_x). Signpost x=300, street
+        // mid=0, sp>mid, inward=-1, nudge=550 => nudged x = 300 - 550 = -250.
+        assert_eq!(sp.x, -250.0);
         assert_eq!(sp.y, 0.0);
     }
 
