@@ -84,6 +84,44 @@ pub fn apply_item_buff(buffs: &mut BuffState, item_def: &crate::item::types::Ite
     }
 }
 
+/// Per-buff data shape sent to the frontend each tick.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuffFrame {
+    pub kind: String,
+    pub icon: String,
+    pub label: String,
+    pub remaining_secs: f64,
+}
+
+/// Build the list of BuffFrames for the IPC game-state payload.
+/// `item_defs` is used to resolve display name and icon by source item id.
+/// Result is sorted by kind for stable UI rendering.
+pub fn build_buff_frames(
+    buffs: &BuffState,
+    item_defs: &crate::item::types::ItemDefs,
+    game_time: f64,
+) -> Vec<BuffFrame> {
+    let mut frames: Vec<BuffFrame> = buffs
+        .active
+        .values()
+        .map(|b| {
+            let (icon, label) = item_defs
+                .get(&b.source)
+                .map(|d| (d.icon.clone(), d.name.clone()))
+                .unwrap_or_else(|| (b.kind.clone(), b.kind.clone()));
+            BuffFrame {
+                kind: b.kind.clone(),
+                icon,
+                label,
+                remaining_secs: (b.expires_at - game_time).max(0.0),
+            }
+        })
+        .collect();
+    frames.sort_by(|a, b| a.kind.cmp(&b.kind));
+    frames
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,5 +325,43 @@ mod tests {
         );
         s.tick(1000.0);
         assert!(s.active.is_empty());
+    }
+
+    #[test]
+    fn build_buff_frames_uses_item_name_and_icon_from_catalog() {
+        use crate::item::types::{ItemDef, ItemDefs};
+        let mut item_defs: ItemDefs = Default::default();
+        item_defs.insert(
+            "rookswort".into(),
+            ItemDef {
+                id: "rookswort".into(),
+                name: "Rookswort".into(),
+                description: "".into(),
+                category: "food".into(),
+                stack_limit: 50,
+                icon: "rookswort_icon".into(),
+                base_cost: None,
+                energy_value: None,
+                mood_value: None,
+                buff_effect: None,
+            },
+        );
+        let mut buffs = BuffState::default();
+        buffs.apply(&rookswort_spec(0.5, 600.0), 0.0, "rookswort".into());
+        let frames = build_buff_frames(&buffs, &item_defs, 100.0);
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].label, "Rookswort");
+        assert_eq!(frames[0].icon, "rookswort_icon");
+        assert!((frames[0].remaining_secs - 500.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn build_buff_frames_clamps_negative_remaining_to_zero() {
+        let mut buffs = BuffState::default();
+        buffs.apply(&rookswort_spec(0.5, 10.0), 0.0, "rookswort".into());
+        let item_defs = crate::item::types::ItemDefs::default();
+        // game_time is past expires_at
+        let frames = build_buff_frames(&buffs, &item_defs, 100.0);
+        assert_eq!(frames[0].remaining_secs, 0.0);
     }
 }
