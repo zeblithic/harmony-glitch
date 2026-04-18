@@ -11,6 +11,11 @@
       <str id="top">87A8C9</str>
       <str id="bottom">98D4A0</str>
     </object>
+    <object id="default_spawn">
+      <int id="x">0</int>
+      <int id="y">0</int>
+      <str id="facing">right</str>
+    </object>
     <object id="layers">
       <object id="T_sky">
         <int id="w">3600</int>
@@ -139,6 +144,9 @@
         <object id="connects">
           <object id="connect_1">
             <objref id="target" tsid="LADEMO002" label="To the Heights" />
+            <int id="arrival_x">-1700</int>
+            <int id="arrival_y">0</int>
+            <str id="arrival_facing">right</str>
           </object>
         </object>
       </object>
