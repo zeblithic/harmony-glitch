@@ -176,6 +176,10 @@ pub struct SignpostConnection {
     /// own (x, y) — preserves legacy behavior for imported Glitch XMLs.
     #[serde(default)]
     pub arrival_x: Option<f64>,
+    /// Y coordinate paired with `arrival_x`. Both must be `Some` for the
+    /// arrival position to take effect; specifying only one field is silently
+    /// ignored and the runtime falls back to the legacy reciprocal-signpost
+    /// path. See `resolve_arrival` for the resolution order.
     #[serde(default)]
     pub arrival_y: Option<f64>,
     /// Player facing on arrival. If None, inferred from which half of the
