@@ -31,6 +31,7 @@ pub struct ActiveBuff {
     pub effect: BuffEffect,
     pub expires_at: f64,
     pub source: String,
+    #[serde(default)]
     pub on_expire: Option<Box<BuffSpec>>,
 }
 
@@ -101,5 +102,17 @@ mod tests {
         }"#;
         let spec: BuffSpec = serde_json::from_str(json).unwrap();
         assert!(spec.on_expire.is_none());
+    }
+
+    #[test]
+    fn active_buff_without_on_expire_field_in_json_defaults_to_none() {
+        let json = r#"{
+            "kind": "rookswort",
+            "effect": { "type": "moodDecayMultiplier", "value": 0.5 },
+            "expiresAt": 1234.5,
+            "source": "rookswort"
+        }"#;
+        let buff: ActiveBuff = serde_json::from_str(json).unwrap();
+        assert!(buff.on_expire.is_none());
     }
 }
