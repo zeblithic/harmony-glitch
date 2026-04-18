@@ -897,11 +897,6 @@ fn get_mood(app: AppHandle) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
         "mood": state.social.mood.mood,
         "maxMood": state.social.mood.max_mood,
-        "activeBuffs": crate::buff::build_buff_frames(
-            &state.social.buffs,
-            &state.item_defs,
-            state.game_time,
-        ),
         "multiplier": state.social.mood.multiplier(),
     }))
 }

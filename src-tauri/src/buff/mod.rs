@@ -85,7 +85,7 @@ pub fn apply_item_buff(buffs: &mut BuffState, item_def: &crate::item::types::Ite
 }
 
 /// Per-buff data shape sent to the frontend each tick.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuffFrame {
     pub kind: String,

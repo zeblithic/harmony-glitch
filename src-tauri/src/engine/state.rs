@@ -221,6 +221,8 @@ pub struct RenderFrame {
     pub quest_progress: crate::quest::types::QuestProgressFrame,
     pub mood: f64,
     pub max_mood: f64,
+    #[serde(default)]
+    pub active_buffs: Vec<crate::buff::BuffFrame>,
     pub nearest_social_target: Option<NearestSocialTarget>,
 }
 
@@ -1181,6 +1183,11 @@ impl GameState {
             },
             mood: self.social.mood.mood,
             max_mood: self.social.mood.max_mood,
+            active_buffs: crate::buff::build_buff_frames(
+                &self.social.buffs,
+                &self.item_defs,
+                self.game_time,
+            ),
             nearest_social_target: None, // Populated in lib.rs after remote players are augmented
         })
     }
