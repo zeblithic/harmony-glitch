@@ -41,8 +41,8 @@ impl SocialState {
 
     pub fn tick(&mut self, dt: f64, ctx: &SocialTickContext) {
         self.emotes.check_date_change(ctx.current_date);
-        let party_bonus = self.party.has_party_bonus();
-        self.mood.tick(dt, ctx.game_time, ctx.in_dialogue, party_bonus);
+        let party_factor = if self.party.has_party_bonus() { 0.75 } else { 1.0 };
+        self.mood.tick(dt, ctx.game_time, ctx.in_dialogue, party_factor);
         self.buddies.expire_requests(ctx.game_time);
         self.buddies.expire_outgoing_requests(ctx.game_time);
         self.party.expire_invite(ctx.game_time);

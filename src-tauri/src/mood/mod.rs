@@ -36,15 +36,17 @@ impl MoodState {
 
     /// Advances mood by `dt` seconds of game time.
     /// Decay is suppressed during dialogue or while the grace period is active.
-    /// `party_bonus` reduces the effective decay by 25% when true.
-    pub fn tick(&mut self, dt: f64, game_time: f64, in_dialogue: bool, party_bonus: bool) {
+    /// `decay_modifier` scales the effective decay (1.0 = normal, 0.5 = half,
+    /// 0.0 = halted, >1.0 accelerates). Negative values are clamped to 0.0.
+    pub fn tick(&mut self, dt: f64, game_time: f64, in_dialogue: bool, decay_modifier: f64) {
         if !dt.is_finite() || dt <= 0.0 || !game_time.is_finite() || game_time < 0.0 {
             return;
         }
         if in_dialogue || game_time < self.mood_grace_until {
             return;
         }
-        let effective_dt = if party_bonus { dt * 0.75 } else { dt };
+        let safe_modifier = decay_modifier.max(0.0);
+        let effective_dt = dt * safe_modifier;
         self.mood = decay::mood_decay(self.mood, self.max_mood, effective_dt);
     }
 
@@ -98,7 +100,7 @@ mod tests {
         let mut s = MoodState::default();
         // Bypass grace period by placing game_time well past grace_until
         let game_time = s.mood_grace_until + 1.0;
-        s.tick(60.0, game_time, false, false);
+        s.tick(60.0, game_time, false, 1.0);
         assert!(s.mood < 100.0, "mood should have decayed, got {}", s.mood);
     }
 
@@ -106,7 +108,7 @@ mod tests {
     fn tick_suppressed_during_dialogue() {
         let mut s = MoodState::default();
         let game_time = s.mood_grace_until + 1.0;
-        s.tick(60.0, game_time, true, false);
+        s.tick(60.0, game_time, true, 1.0);
         assert_eq!(s.mood, 100.0);
     }
 
@@ -114,7 +116,7 @@ mod tests {
     fn tick_suppressed_during_grace_period() {
         let mut s = MoodState::new_with_grace(100.0, 100.0, 0.0);
         // game_time is 0, grace_until is 300 — still in grace
-        s.tick(60.0, 0.0, false, false);
+        s.tick(60.0, 0.0, false, 1.0);
         assert_eq!(s.mood, 100.0);
     }
 
@@ -122,26 +124,8 @@ mod tests {
     fn tick_resumes_after_grace_period() {
         let mut s = MoodState::new_with_grace(100.0, 100.0, 0.0);
         let game_time = s.mood_grace_until + 1.0;
-        s.tick(60.0, game_time, false, false);
+        s.tick(60.0, game_time, false, 1.0);
         assert!(s.mood < 100.0, "mood should decay after grace, got {}", s.mood);
-    }
-
-    #[test]
-    fn tick_with_party_bonus_reduces_decay_by_25_percent() {
-        // Two identical states; one ticked with bonus, one without
-        let mut base = MoodState::default();
-        let mut bonus = MoodState::default();
-        let game_time = base.mood_grace_until + 1.0;
-        let dt = 60.0_f64;
-
-        base.tick(dt, game_time, false, false);
-        bonus.tick(dt, game_time, false, true);
-
-        let base_decay = 100.0 - base.mood;
-        let bonus_decay = 100.0 - bonus.mood;
-        // Bonus decay should be 75% of base decay
-        let ratio = bonus_decay / base_decay;
-        assert!((ratio - 0.75).abs() < 1e-10, "expected 0.75 ratio, got {ratio}");
     }
 
     #[test]
@@ -167,19 +151,70 @@ mod tests {
     fn tick_ignores_invalid_inputs() {
         let mut s = MoodState::default();
 
-        s.tick(f64::NAN, 1.0, false, false);
+        s.tick(f64::NAN, 1.0, false, 1.0);
         assert_eq!(s.mood, 100.0);
 
-        s.tick(f64::INFINITY, 1.0, false, false);
+        s.tick(f64::INFINITY, 1.0, false, 1.0);
         assert_eq!(s.mood, 100.0);
 
-        s.tick(60.0, f64::NAN, false, false);
+        s.tick(60.0, f64::NAN, false, 1.0);
         assert_eq!(s.mood, 100.0);
 
-        s.tick(60.0, -1.0, false, false);
+        s.tick(60.0, -1.0, false, 1.0);
         assert_eq!(s.mood, 100.0);
 
-        s.tick(-10.0, 1.0, false, false);
+        s.tick(-10.0, 1.0, false, 1.0);
+        assert_eq!(s.mood, 100.0);
+    }
+
+    #[test]
+    fn tick_with_decay_modifier_of_one_matches_unmodified_baseline() {
+        let mut s = MoodState::default();
+        let game_time = s.mood_grace_until + 1.0;
+        s.tick(60.0, game_time, false, 1.0);
+        // Same as prior baseline test (no party, no buffs)
+        assert!(s.mood < 100.0);
+    }
+
+    #[test]
+    fn tick_with_decay_modifier_of_zero_halts_decay() {
+        let mut s = MoodState::default();
+        let game_time = s.mood_grace_until + 1.0;
+        s.tick(60.0, game_time, false, 0.0);
+        assert_eq!(s.mood, 100.0);
+    }
+
+    #[test]
+    fn tick_with_decay_modifier_of_0_75_reduces_by_25_percent() {
+        let mut base = MoodState::default();
+        let mut reduced = MoodState::default();
+        let game_time = base.mood_grace_until + 1.0;
+        base.tick(60.0, game_time, false, 1.0);
+        reduced.tick(60.0, game_time, false, 0.75);
+        let base_decay = 100.0 - base.mood;
+        let reduced_decay = 100.0 - reduced.mood;
+        let ratio = reduced_decay / base_decay;
+        assert!((ratio - 0.75).abs() < 1e-9, "got {ratio}");
+    }
+
+    #[test]
+    fn tick_with_decay_modifier_above_one_accelerates_decay() {
+        let mut base = MoodState::default();
+        let mut debuffed = MoodState::default();
+        let game_time = base.mood_grace_until + 1.0;
+        base.tick(60.0, game_time, false, 1.0);
+        debuffed.tick(60.0, game_time, false, 2.0);
+        let base_decay = 100.0 - base.mood;
+        let debuff_decay = 100.0 - debuffed.mood;
+        assert!(debuff_decay > base_decay, "debuff should decay faster");
+    }
+
+    #[test]
+    fn tick_clamps_negative_decay_modifier_to_zero() {
+        let mut s = MoodState::default();
+        let game_time = s.mood_grace_until + 1.0;
+        s.tick(60.0, game_time, false, -5.0);
+        // Clamped to 0.0, so mood is unchanged (not increased).
         assert_eq!(s.mood, 100.0);
     }
 }
