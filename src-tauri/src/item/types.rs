@@ -679,4 +679,24 @@ mod tests {
         let def: ItemDef = serde_json::from_str(json).unwrap();
         assert!(def.buff_effect.is_none());
     }
+
+    #[test]
+    fn items_catalog_loads_rookswort_with_expected_buff_effect() {
+        // Loads the actual shipped catalog to guard against JSON regressions.
+        let json = std::fs::read_to_string("../assets/items.json")
+            .expect("assets/items.json should be readable from src-tauri/");
+        let catalog: std::collections::HashMap<String, ItemDef> =
+            serde_json::from_str(&json).expect("items.json parses");
+        let rookswort = catalog.get("rookswort").expect("rookswort entry exists");
+        let be = rookswort
+            .buff_effect
+            .as_ref()
+            .expect("rookswort has buffEffect");
+        assert_eq!(be.kind, "rookswort");
+        assert!((be.duration_secs - 600.0).abs() < 1e-9);
+        assert_eq!(
+            be.effect,
+            crate::buff::BuffEffect::MoodDecayMultiplier { value: 0.5 }
+        );
+    }
 }
