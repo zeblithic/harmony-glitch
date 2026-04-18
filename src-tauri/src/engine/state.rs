@@ -26,6 +26,11 @@ const PASSIVE_ENERGY_DECAY_RATE: f64 = 0.1;
 /// leaving plenty of upward headroom to see jumps and falls to lower platforms.
 const PLAYER_VERTICAL_FRAMING: f64 = 0.85;
 
+/// Consecutive ticks the player must be stuck on the floor clamp with no
+/// platform underneath before the OOB safety-net teleport fires.
+/// 30 ticks ≈ 500ms at 60fps.
+const OOB_THRESHOLD_TICKS: u32 = 30;
+
 fn default_currants() -> u64 {
     50
 }
@@ -771,6 +776,33 @@ impl GameState {
                 street.right,
                 street.bottom,
             );
+
+            // --- OOB safety-net detector ---
+            // If the player is sitting on the street.bottom clamp with no
+            // platform catching them (on_ground=false), they're on the
+            // invisible floor with nowhere to go. After OOB_THRESHOLD_TICKS
+            // consecutive frames in that state, teleport to last_arrival.
+            let at_floor = (self.player.y - street.bottom).abs() < 1.0;
+            if at_floor && !self.player.on_ground {
+                self.oob_ticks += 1;
+                if self.oob_ticks >= OOB_THRESHOLD_TICKS {
+                    eprintln!(
+                        "[oob] respawn: street={} player=({:.1},{:.1}) -> last_arrival=({:.1},{:.1})",
+                        street.tsid,
+                        self.player.x,
+                        self.player.y,
+                        self.last_arrival.x,
+                        self.last_arrival.y
+                    );
+                    self.player.x = self.last_arrival.x;
+                    self.player.y = self.last_arrival.y;
+                    self.player.vx = 0.0;
+                    self.player.vy = 0.0;
+                    self.oob_ticks = 0;
+                }
+            } else {
+                self.oob_ticks = 0;
+            }
 
             // Jump/Land audio detection
             if self.prev_on_ground && !self.player.on_ground && self.player.vy < 0.0 {
@@ -4157,6 +4189,161 @@ mod tests {
         assert_eq!(state.player.y, 0.0); // ground_y
         assert_eq!(state.last_arrival.x, 50.0);
         assert!(state.transition_origin_tsid.is_none());
+    }
+
+    /// Street with no platforms at all — used to exercise the OOB safety net
+    /// where the player cannot land on anything and falls to the street.bottom
+    /// clamp. test_street has a ground platform at y=0 that would catch the
+    /// player via Phase 2 swept collision, masking the OOB condition.
+    fn platformless_street() -> StreetData {
+        StreetData {
+            tsid: "oob_test".into(),
+            name: "OOB Test".into(),
+            left: -3000.0,
+            right: 3000.0,
+            top: -1000.0,
+            bottom: 0.0,
+            ground_y: 0.0,
+            gradient: None,
+            layers: vec![Layer {
+                name: "middleground".into(),
+                z: 0,
+                w: 6000.0,
+                h: 1000.0,
+                is_middleground: true,
+                decos: vec![],
+                platform_lines: vec![],
+                walls: vec![],
+                ladders: vec![],
+                filters: None,
+            }],
+            signposts: vec![],
+            default_spawn: None,
+        }
+    }
+
+    #[test]
+    fn oob_detector_fires_after_threshold_ticks() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        // Uses platformless_street so physics doesn't catch the player on a
+        // platform at y=0 (which would set on_ground=true and mask OOB).
+        state.load_street(platformless_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+
+        // Simulate player stuck on the floor clamp: y == street.bottom (0.0),
+        // not grounded (no platform below).
+        state.player.x = -500.0;
+        state.player.y = 0.0;
+        state.player.on_ground = false;
+
+        let input = InputState::default();
+        // Tick up to 35 times — hold player at floor, no platform. Stop
+        // once the teleport fires (detected by x changing to last_arrival.x)
+        // so the post-teleport assertions see the teleport's final state,
+        // not a subsequent iteration that resets y=0.
+        let mut fired = false;
+        for _ in 0..35 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+            if state.player.x == 100.0 {
+                fired = true;
+                break;
+            }
+        }
+
+        // Safety net should have fired: player at last_arrival.
+        assert!(fired, "OOB teleport should have fired within 35 ticks");
+        assert_eq!(state.player.x, 100.0);
+        assert_eq!(state.player.y, -10.0);
+        assert_eq!(state.oob_ticks, 0);
+    }
+
+    #[test]
+    fn oob_detector_resets_when_grounded() {
+        // test_street has a ground platform spanning [-2800, 2800] at y=0.
+        // Stuck phase positions the player at x=-2900 (outside platform
+        // range) so the invisible-floor condition holds; grounded phase
+        // moves to x=0 (on platform) so physics keeps on_ground=true.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+
+        let input = InputState::default();
+
+        // 20 ticks stuck at floor outside platform range — counter increments.
+        state.player.x = -2900.0;
+        for _ in 0..20 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+        assert!(state.oob_ticks > 0, "counter should increment during stuck ticks");
+
+        // Move onto the platform and tick — physics sets on_ground=true,
+        // counter should reset.
+        state.player.x = 0.0;
+        for _ in 0..20 {
+            state.player.on_ground = true;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+        assert_eq!(state.oob_ticks, 0, "counter should reset when grounded");
+        // Player should NOT have been teleported.
+        assert_ne!(state.player.x, 100.0);
+    }
+
+    #[test]
+    fn oob_detector_does_not_fire_when_walking_on_bottom_platform() {
+        // Walking on a platform that happens to sit at street.bottom (like
+        // plat_main at y=0 in demo_meadow). on_ground=true → no trigger.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+        let initial_x = 250.0;
+        state.player.x = initial_x;
+
+        let input = InputState::default();
+        for _ in 0..60 {
+            state.player.y = 0.0;
+            state.player.on_ground = true; // on a real platform at y=0
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+
+        assert_eq!(state.oob_ticks, 0);
+        assert_eq!(state.player.x, initial_x, "player should not be teleported");
     }
 }
 
