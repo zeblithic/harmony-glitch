@@ -113,6 +113,19 @@ pub struct GameState {
     pub pickup_feedback: Vec<PickupFeedback>,
     pub transition: TransitionState,
     pub transition_origin_tsid: Option<String>,
+    /// Last valid landing location on the current street — where the safety
+    /// net teleports the player when OOB is detected. Initialized from
+    /// resolve_default_spawn on street load, updated on every signpost
+    /// traversal via the active connection's arrival fields.
+    pub last_arrival: crate::street::types::Point,
+    /// Counter for consecutive ticks the player has been stuck on the
+    /// floor clamp with nothing to stand on. Reset when grounded or below
+    /// the clamp threshold; teleport fires at OOB_THRESHOLD_TICKS.
+    pub oob_ticks: u32,
+    /// Arrival SpawnPoint captured at signpost-crossing time, used by the
+    /// transition-completion handler to place the player. None when not
+    /// transitioning or when the active connection has no explicit arrival.
+    pub pending_arrival: Option<crate::street::types::SpawnPoint>,
     pub tsid_to_name: std::collections::HashMap<String, String>,
     pub entity_states: std::collections::HashMap<String, EntityInstanceState>,
     pub game_time: f64,
@@ -290,6 +303,9 @@ impl GameState {
             pickup_feedback: vec![],
             transition: TransitionState::new(),
             transition_origin_tsid: None,
+            last_arrival: crate::street::types::Point { x: 0.0, y: 0.0 },
+            oob_ticks: 0,
+            pending_arrival: None,
             tsid_to_name: std::collections::HashMap::from([
                 ("LADEMO001".to_string(), "demo_meadow".to_string()),
                 ("LADEMO002".to_string(), "demo_heights".to_string()),
@@ -336,9 +352,19 @@ impl GameState {
             TransitionPhase::Swooping { .. } | TransitionPhase::Complete { .. }
         );
         if !is_transitioning {
-            let center_x = (street.left + street.right) / 2.0;
-            self.player = PhysicsBody::new(center_x, street.ground_y);
+            let spawn = crate::engine::arrival::resolve_default_spawn(&street);
+            self.player = PhysicsBody::new(spawn.x, spawn.y);
+            self.last_arrival = crate::street::types::Point { x: spawn.x, y: spawn.y };
+            let facing = spawn.facing.unwrap_or_else(|| {
+                crate::engine::arrival::infer_facing(spawn.x, &street)
+            });
+            self.facing = match facing {
+                crate::street::types::Facing::Left => Direction::Left,
+                crate::street::types::Facing::Right => Direction::Right,
+            };
         }
+        self.oob_ticks = 0;
+        self.pending_arrival = None;
         self.street = Some(street);
         self.pending_audio_events.push(AudioEvent::StreetChanged {
             street_id: self.street.as_ref().unwrap().tsid.clone(),
@@ -1514,6 +1540,64 @@ mod tests {
         let input = InputState::default();
         let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
         assert!(frame.is_some());
+    }
+
+    #[test]
+    fn load_street_sets_last_arrival_from_default_spawn() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        let mut street = test_street();
+        street.default_spawn = Some(crate::street::types::SpawnPoint {
+            x: 123.0,
+            y: -50.0,
+            facing: Some(crate::street::types::Facing::Left),
+        });
+
+        state.load_street(street, vec![], vec![]);
+
+        assert_eq!(state.last_arrival.x, 123.0);
+        assert_eq!(state.last_arrival.y, -50.0);
+        assert_eq!(state.player.x, 123.0);
+        assert_eq!(state.player.y, -50.0);
+        assert_eq!(state.oob_ticks, 0);
+        assert!(state.pending_arrival.is_none());
+    }
+
+    #[test]
+    fn load_street_without_default_spawn_uses_center() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let street = test_street(); // test_street has default_spawn: None
+        let expected_x = (street.left + street.right) / 2.0;
+        let expected_y = street.ground_y;
+
+        state.load_street(street, vec![], vec![]);
+
+        assert_eq!(state.player.x, expected_x);
+        assert_eq!(state.player.y, expected_y);
+        assert_eq!(state.last_arrival.x, expected_x);
+        assert_eq!(state.last_arrival.y, expected_y);
     }
 
     #[test]
