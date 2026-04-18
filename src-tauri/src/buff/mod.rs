@@ -76,6 +76,14 @@ impl BuffState {
     }
 }
 
+/// Apply an item's buff effect (if any) to the player's BuffState.
+/// Uses the item's `id` as the buff source for HUD attribution.
+pub fn apply_item_buff(buffs: &mut BuffState, item_def: &crate::item::types::ItemDef, game_time: f64) {
+    if let Some(spec) = &item_def.buff_effect {
+        buffs.apply(spec, game_time, item_def.id.clone());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +226,47 @@ mod tests {
     fn tick_does_nothing_when_empty() {
         let mut s = BuffState::default();
         s.tick(1000.0);
+        assert!(s.active.is_empty());
+    }
+
+    #[test]
+    fn apply_item_buff_applies_when_item_has_buff_effect() {
+        use crate::item::types::ItemDef;
+        let rookswort = ItemDef {
+            id: "rookswort".into(),
+            name: "Rookswort".into(),
+            description: "test".into(),
+            category: "food".into(),
+            stack_limit: 50,
+            icon: "rookswort".into(),
+            base_cost: None,
+            energy_value: None,
+            mood_value: None,
+            buff_effect: Some(rookswort_spec(0.5, 600.0)),
+        };
+        let mut s = BuffState::default();
+        apply_item_buff(&mut s, &rookswort, 100.0);
+        assert_eq!(s.active.len(), 1);
+        assert_eq!(s.active["rookswort"].source, "rookswort");
+    }
+
+    #[test]
+    fn apply_item_buff_noop_when_item_has_no_buff_effect() {
+        use crate::item::types::ItemDef;
+        let cherry = ItemDef {
+            id: "cherry".into(),
+            name: "Cherry".into(),
+            description: "test".into(),
+            category: "food".into(),
+            stack_limit: 50,
+            icon: "cherry".into(),
+            base_cost: None,
+            energy_value: Some(10),
+            mood_value: None,
+            buff_effect: None,
+        };
+        let mut s = BuffState::default();
+        apply_item_buff(&mut s, &cherry, 100.0);
         assert!(s.active.is_empty());
     }
 

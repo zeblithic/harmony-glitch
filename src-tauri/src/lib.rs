@@ -3598,6 +3598,12 @@ fn eat_item(item_id: String, app: AppHandle) -> Result<serde_json::Value, String
         state.social.mood.apply_mood_change(mood_gained);
     }
 
+    // Apply buff effect (if item has one).
+    if let Some(item_def) = state.item_defs.get(&item_id).cloned() {
+        let gt = state.game_time;
+        crate::buff::apply_item_buff(&mut state.social.buffs, &item_def, gt);
+    }
+
     let gained = new_energy - energy;
     let px = state.player.x;
     let py = state.player.y;
