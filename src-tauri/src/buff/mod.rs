@@ -161,7 +161,15 @@ pub struct BuffFrame {
 }
 
 /// Build the list of BuffFrames for the IPC game-state payload.
-/// `item_defs` is used to resolve display name and icon by source item id.
+/// `item_defs` is used to resolve display name and icon.
+///
+/// Lookup order: first by `source` (set to item id for item-applied buffs),
+/// then by `kind` (covers `on_expire` successors whose source is the literal
+/// `"on_expire"` string but whose `kind` often matches the originating item).
+/// Falls back to the raw `kind` string for both icon and label when neither
+/// lookup hits — so entirely system-sourced buffs still render something
+/// visible instead of disappearing.
+///
 /// Result is sorted by kind for stable UI rendering.
 pub fn build_buff_frames(
     buffs: &BuffState,
@@ -174,6 +182,7 @@ pub fn build_buff_frames(
         .map(|b| {
             let (icon, label) = item_defs
                 .get(&b.source)
+                .or_else(|| item_defs.get(&b.kind))
                 .map(|d| (d.icon.clone(), d.name.clone()))
                 .unwrap_or_else(|| (b.kind.clone(), b.kind.clone()));
             BuffFrame {
@@ -529,6 +538,70 @@ mod tests {
             assert!(!s.active.contains_key("nan_kind"));
             assert_eq!(s.active.len(), 1);
         }
+    }
+
+    #[test]
+    fn build_buff_frames_falls_back_to_kind_lookup_for_on_expire_successors() {
+        // on_expire successors inherit the literal source "on_expire" instead
+        // of the original item id. The HUD lookup must therefore also try
+        // `kind` as a secondary key so tier-ramp-down successors still show
+        // the parent item's icon/label rather than the raw kind string.
+        use crate::item::types::{ItemDef, ItemDefs};
+        let mut item_defs: ItemDefs = Default::default();
+        item_defs.insert(
+            "rookswort".into(),
+            ItemDef {
+                id: "rookswort".into(),
+                name: "Rookswort".into(),
+                description: "".into(),
+                category: "food".into(),
+                stack_limit: 50,
+                icon: "rookswort_icon".into(),
+                base_cost: None,
+                energy_value: None,
+                mood_value: None,
+                buff_effect: None,
+            },
+        );
+        let mut buffs = BuffState::default();
+        // Simulate an on_expire successor — source is "on_expire" but kind
+        // matches the catalog entry.
+        buffs.active.insert(
+            "rookswort".into(),
+            ActiveBuff {
+                kind: "rookswort".into(),
+                effect: BuffEffect::MoodDecayMultiplier { value: 0.75 },
+                expires_at: 200.0,
+                source: "on_expire".into(),
+                on_expire: None,
+            },
+        );
+        let frames = build_buff_frames(&buffs, &item_defs, 100.0);
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].label, "Rookswort");
+        assert_eq!(frames[0].icon, "rookswort_icon");
+    }
+
+    #[test]
+    fn build_buff_frames_uses_kind_string_when_neither_source_nor_kind_resolves() {
+        // System-sourced buff with no matching catalog entry — falls back
+        // to the kind string for both icon and label so the HUD still
+        // shows something rather than a blank.
+        let mut buffs = BuffState::default();
+        buffs.active.insert(
+            "mystery".into(),
+            ActiveBuff {
+                kind: "mystery".into(),
+                effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+                expires_at: 200.0,
+                source: "environment".into(),
+                on_expire: None,
+            },
+        );
+        let item_defs = crate::item::types::ItemDefs::default();
+        let frames = build_buff_frames(&buffs, &item_defs, 100.0);
+        assert_eq!(frames[0].icon, "mystery");
+        assert_eq!(frames[0].label, "mystery");
     }
 
     #[test]

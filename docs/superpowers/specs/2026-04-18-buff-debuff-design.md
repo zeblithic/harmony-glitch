@@ -45,7 +45,7 @@ src-tauri/src/mood/mod.rs    [modify]  tick signature: party_bonus: bool → dec
 src-tauri/src/social/mod.rs  [modify]  add buffs: BuffState; compose decay_modifier in tick
 src-tauri/src/lib.rs         [modify]  expose active_buffs on game-state frame IPC
 
-data/items/rookswort.json    [modify]  add buffEffect field (create item entry if missing)
+assets/items.json            [modify]  add buffEffect field to the rookswort entry
 
 src/lib/components/BuffHud.svelte [new]  render active-buffs row in HUD
 src/lib/types.ts             [modify]  add BuffFrame + activeBuffs: BuffFrame[] on RenderFrame
@@ -250,11 +250,18 @@ The lower clamp prevents negative effective_dt (which would *increase* mood, non
 
 ## Persistence
 
-`BuffState` derives `Serialize`/`Deserialize` and is included in the game save struct. `expires_at` is absolute `game_time`, which is already persisted in the save (it's needed for the existing `mood_grace_until` mechanism, so consistency is free).
+`BuffState` derives `Serialize`/`Deserialize` and is included in the game save struct. In-memory, each `ActiveBuff.expires_at` is absolute against `GameState.game_time`. However, `game_time` itself is **not** persisted — a fresh `GameState` starts at `game_time = 0.0` every session — so storing absolute `expires_at` values verbatim would make a restored buff live for its full original wall-clock lifetime from `t = 0` after app restart.
 
-**On load:** The first post-load tick naturally expires any buffs whose `expires_at` has passed, firing their `on_expire` chains normally. This is correct — if the player saved during a 10-minute rookswort and real-world time passed, the buff should end when the game resumes, with any chained successors firing as the content author designed.
+**Save boundary transform.** `BuffState` provides two helpers that shift `expires_at` across the save/load boundary:
 
-**Edge case:** If a save file predates the buff system (no `buffs` field), `#[serde(default)]` on the relevant save-struct field gives an empty `BuffState`. The plan should confirm this default is set correctly.
+- `to_save_form(current_time)`: returns a clone with `expires_at` rebased to **remaining seconds** (`expires_at - current_time`). Called by `GameState::save_state` with `self.game_time` so the on-disk shape represents durations, not clock values.
+- `from_save_form(save, current_time)`: inverse — adds `current_time` to each `expires_at`, converting remaining-seconds back to absolute against the live session's clock. Called by `GameState::restore_save` with the restored session's `self.game_time`.
+
+**On load:** After `from_save_form`, each buff's `expires_at` represents "the session clock value at which this buff expires." Subsequent `tick()` calls expire buffs whose `expires_at <= game_time` exactly as they would have during the original session, and `on_expire` chains fire normally when a buff crosses the expiry boundary. The transform is size-preserving and deterministic, so save/reload during an active buff preserves its remaining duration to the nanosecond.
+
+**Edge case — legacy saves:** If a save file predates the buff system (no `buffs` field), `#[serde(default)]` on `SaveState.buffs` gives an empty `BuffState`. No migration needed.
+
+**Edge case — session time jumps.** `game_time` accumulates during play; wall-clock time between sessions does not. A player who saves mid-buff and resumes two weeks later will find their buff still has the same remaining duration — matching the "game time, not wall time" contract used elsewhere in the engine.
 
 ## HUD
 
