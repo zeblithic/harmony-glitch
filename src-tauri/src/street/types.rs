@@ -71,6 +71,20 @@ pub struct Point {
     pub y: f64,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Facing {
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct SpawnPoint {
+    pub x: f64,
+    pub y: f64,
+    pub facing: Option<Facing>,
+}
+
 /// A vertical collision barrier.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -230,6 +244,37 @@ impl PlatformLine {
 
     pub fn max_x(&self) -> f64 {
         self.start.x.max(self.end.x)
+    }
+}
+
+#[cfg(test)]
+mod types_tests {
+    use super::*;
+
+    #[test]
+    fn facing_serializes_lowercase() {
+        let json = serde_json::to_string(&Facing::Left).unwrap();
+        assert_eq!(json, "\"left\"");
+        let json = serde_json::to_string(&Facing::Right).unwrap();
+        assert_eq!(json, "\"right\"");
+    }
+
+    #[test]
+    fn spawn_point_roundtrips_through_serde() {
+        let sp = SpawnPoint { x: 123.5, y: -4.0, facing: Some(Facing::Right) };
+        let json = serde_json::to_string(&sp).unwrap();
+        let back: SpawnPoint = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.x, 123.5);
+        assert_eq!(back.y, -4.0);
+        assert_eq!(back.facing, Some(Facing::Right));
+    }
+
+    #[test]
+    fn spawn_point_roundtrips_without_facing() {
+        let sp = SpawnPoint { x: 0.0, y: 0.0, facing: None };
+        let json = serde_json::to_string(&sp).unwrap();
+        let back: SpawnPoint = serde_json::from_str(&json).unwrap();
+        assert!(back.facing.is_none());
     }
 }
 
