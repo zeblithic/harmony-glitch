@@ -1903,6 +1903,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -1942,6 +1945,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -1983,6 +1989,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -2034,6 +2043,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -2124,6 +2136,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -2149,6 +2164,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO001".into(),
                 target_label: "Back to Meadow".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(new_street, vec![], vec![]);
@@ -3267,6 +3285,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -3297,6 +3318,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO001".into(),
                 target_label: "Back to Meadow".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(new_street, vec![], vec![]);

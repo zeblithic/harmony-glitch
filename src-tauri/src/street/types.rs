@@ -171,6 +171,17 @@ pub struct Signpost {
 pub struct SignpostConnection {
     pub target_tsid: String,
     pub target_label: String,
+    /// Where on the target street the player arrives when using this
+    /// connection. If None, runtime falls back to the target signpost's
+    /// own (x, y) — preserves legacy behavior for imported Glitch XMLs.
+    #[serde(default)]
+    pub arrival_x: Option<f64>,
+    #[serde(default)]
+    pub arrival_y: Option<f64>,
+    /// Player facing on arrival. If None, inferred from which half of the
+    /// target street arrival_x sits in.
+    #[serde(default)]
+    pub arrival_facing: Option<Facing>,
 }
 
 impl StreetData {

@@ -234,6 +234,9 @@ mod tests {
                         .map(|t| SignpostConnection {
                             target_tsid: t.to_string(),
                             target_label: format!("Target {t}"),
+                            arrival_x: None,
+                            arrival_y: None,
+                            arrival_facing: None,
                         })
                         .collect(),
                 }]

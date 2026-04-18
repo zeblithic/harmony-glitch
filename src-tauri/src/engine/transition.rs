@@ -237,6 +237,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: target.into(),
                 target_label: "Go".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }
     }

@@ -304,6 +304,16 @@ fn parse_signposts(dynamic: &XmlValue) -> Vec<Signpost> {
                             Some(XmlValue::ObjRef { tsid, label }) => Some(SignpostConnection {
                                 target_tsid: tsid.clone(),
                                 target_label: label.clone(),
+                                arrival_x: c.get("arrival_x").and_then(|v| v.as_f64()),
+                                arrival_y: c.get("arrival_y").and_then(|v| v.as_f64()),
+                                arrival_facing: c
+                                    .get("arrival_facing")
+                                    .and_then(|v| v.as_str())
+                                    .and_then(|s| match s {
+                                        "left" => Some(crate::street::types::Facing::Left),
+                                        "right" => Some(crate::street::types::Facing::Right),
+                                        _ => None,
+                                    }),
                             }),
                             _ => None,
                         })
@@ -640,6 +650,69 @@ mod tests {
             "demo_meadow should have signpost"
         );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO002");
+    }
+
+    #[test]
+    fn parse_signpost_connection_with_arrival_fields() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="signposts">
+    <object id="sign_a">
+      <int id="x">500</int>
+      <int id="y">0</int>
+      <object id="connects">
+        <object id="connect_1">
+          <objref id="target" tsid="OTHERTSID" label="To Other" />
+          <int id="arrival_x">-800</int>
+          <int id="arrival_y">0</int>
+          <str id="arrival_facing">right</str>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        assert_eq!(street.signposts.len(), 1);
+        let conn = &street.signposts[0].connects[0];
+        assert_eq!(conn.target_tsid, "OTHERTSID");
+        assert_eq!(conn.arrival_x, Some(-800.0));
+        assert_eq!(conn.arrival_y, Some(0.0));
+        assert_eq!(conn.arrival_facing, Some(crate::street::types::Facing::Right));
+    }
+
+    #[test]
+    fn parse_signpost_connection_without_arrival_fields() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="signposts">
+    <object id="sign_a">
+      <int id="x">500</int>
+      <int id="y">0</int>
+      <object id="connects">
+        <object id="connect_1">
+          <objref id="target" tsid="OTHERTSID" label="To Other" />
+        </object>
+      </object>
+    </object>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        let conn = &street.signposts[0].connects[0];
+        assert!(conn.arrival_x.is_none());
+        assert!(conn.arrival_y.is_none());
+        assert!(conn.arrival_facing.is_none());
     }
 
     #[test]
