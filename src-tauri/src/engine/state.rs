@@ -650,6 +650,26 @@ impl GameState {
                     TransitionDirection::Left => self.player.x <= signpost_x,
                 };
                 if crossed {
+                    // Capture the arrival SpawnPoint from the active connection (if it has
+                    // explicit arrival fields) so the transition-completion handler can
+                    // place the player without falling back to .find()-on-reciprocal.
+                    // First connection wins — multi-connection UI is a separate ticket.
+                    self.pending_arrival = street
+                        .signposts
+                        .iter()
+                        .find(|s| (s.x - signpost_x).abs() < 0.5)
+                        .and_then(|s| s.connects.first())
+                        .and_then(|c| {
+                            if let (Some(x), Some(y)) = (c.arrival_x, c.arrival_y) {
+                                Some(crate::street::types::SpawnPoint {
+                                    x,
+                                    y,
+                                    facing: c.arrival_facing,
+                                })
+                            } else {
+                                None
+                            }
+                        });
                     self.transition_origin_tsid = Some(street.tsid.clone());
                     self.transition.trigger_swoop();
                 }
@@ -2050,6 +2070,110 @@ mod tests {
             state.transition.phase,
             TransitionPhase::Swooping { .. }
         ));
+    }
+
+    #[test]
+    fn signpost_crossing_captures_pending_arrival_when_connection_has_fields() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        // Build a street where a signpost at x=900 connects to TARGET with
+        // explicit arrival fields.
+        use crate::street::types::{Facing, Signpost, SignpostConnection};
+        let mut street = test_street();
+        street.signposts.push(Signpost {
+            id: "east".to_string(),
+            x: 900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "TARGETTSID".to_string(),
+                target_label: "To Target".to_string(),
+                arrival_x: Some(-777.0),
+                arrival_y: Some(-5.0),
+                arrival_facing: Some(Facing::Right),
+            }],
+        });
+        state.load_street(street, vec![], vec![]);
+
+        // Walk player to the signpost and cross it.
+        state.player.x = 850.0;
+        state.player.on_ground = true;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+        // First tick: pre-subscribe (player within 500px of signpost).
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        // Force player past signpost.x to trigger crossing.
+        state.player.x = 950.0;
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert!(
+            state.pending_arrival.is_some(),
+            "pending_arrival should be populated"
+        );
+        let sp = state.pending_arrival.unwrap();
+        assert_eq!(sp.x, -777.0);
+        assert_eq!(sp.y, -5.0);
+        assert_eq!(sp.facing, Some(Facing::Right));
+    }
+
+    #[test]
+    fn signpost_crossing_leaves_pending_arrival_none_when_no_arrival_fields() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        use crate::street::types::{Signpost, SignpostConnection};
+        let mut street = test_street();
+        street.signposts.push(Signpost {
+            id: "east".to_string(),
+            x: 900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "TARGETTSID".to_string(),
+                target_label: "To Target".to_string(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
+            }],
+        });
+        state.load_street(street, vec![], vec![]);
+
+        state.player.x = 850.0;
+        state.player.on_ground = true;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        state.player.x = 950.0;
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert!(
+            state.pending_arrival.is_none(),
+            "pending_arrival should remain None without explicit arrival fields"
+        );
+        // But origin_tsid should still be set — legacy path will run at completion.
+        assert!(state.transition_origin_tsid.is_some());
     }
 
     #[test]
