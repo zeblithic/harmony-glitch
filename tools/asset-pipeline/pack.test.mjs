@@ -312,6 +312,7 @@ describe('SVG support', () => {
     const withMaxUnder = await readImageMeta(pngPath, 'small', 1, 256);
 
     for (const result of [withoutMax, withMaxUnder]) {
+      expect(result).not.toBeNull();
       expect(typeof result.width).toBe('number');
       expect(typeof result.height).toBe('number');
       expect(result.width).toBeGreaterThan(0);
