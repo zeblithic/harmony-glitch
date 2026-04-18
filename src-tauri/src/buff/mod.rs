@@ -16,6 +16,10 @@ impl BuffState {
     /// Apply a buff. If a buff with the same `kind` is already active,
     /// it is replaced in place (refresh semantics).
     pub fn apply(&mut self, spec: &BuffSpec, game_time: f64, source: String) {
+        debug_assert!(
+            spec.duration_secs.is_finite() && game_time.is_finite(),
+            "buff apply requires finite game_time and duration_secs"
+        );
         let active = ActiveBuff {
             kind: spec.kind.clone(),
             effect: spec.effect.clone(),
@@ -43,13 +47,17 @@ impl BuffState {
     /// with `on_expire: Some(spec)`, immediately apply the successor.
     /// Bounded to 8 expansion passes to defend against degenerate chains.
     pub fn tick(&mut self, game_time: f64) {
+        // Guard against zero-duration on_expire chains that would otherwise
+        // loop forever. Each pass handles one level of chain depth; 8 is
+        // comfortable for the deepest chains we expect in content data
+        // (typical ramp-downs are 2-3 levels).
         const MAX_PASSES: usize = 8;
         for _ in 0..MAX_PASSES {
             // Collect expired kinds in sorted order for determinism.
             let mut expired_kinds: Vec<String> = self
                 .active
                 .iter()
-                .filter(|(_, b)| b.expires_at <= game_time)
+                .filter(|(_, b)| !b.expires_at.is_finite() || b.expires_at <= game_time)
                 .map(|(k, _)| k.clone())
                 .collect();
             expired_kinds.sort();
@@ -209,6 +217,25 @@ mod tests {
     #[test]
     fn tick_does_nothing_when_empty() {
         let mut s = BuffState::default();
+        s.tick(1000.0);
+        assert!(s.active.is_empty());
+    }
+
+    #[test]
+    fn tick_treats_nan_expires_at_as_expired() {
+        // Defense-in-depth: if some bug produced a NaN expires_at, the
+        // buff should be removed on next tick rather than becoming immortal.
+        let mut s = BuffState::default();
+        s.active.insert(
+            "bad".into(),
+            ActiveBuff {
+                kind: "bad".into(),
+                effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+                expires_at: f64::NAN,
+                source: "test".into(),
+                on_expire: None,
+            },
+        );
         s.tick(1000.0);
         assert!(s.active.is_empty());
     }
