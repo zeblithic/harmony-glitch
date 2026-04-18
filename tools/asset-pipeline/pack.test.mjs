@@ -10,6 +10,8 @@ import {
   groupAnimations,
   collectImages,
   readImageMeta,
+  readImageMetaBatched,
+  batchPromises,
 } from './pack.mjs';
 
 // ---------------------------------------------------------------------------
@@ -250,5 +252,141 @@ describe('SVG support', () => {
     expect(meta.width).toBe(20);
     expect(meta.height).toBe(20);
     expect(meta.buffer).toBeInstanceOf(Buffer);
+  });
+
+  it('readImageMeta clamps oversized SVGs to maxSize', async () => {
+    // 800x400 SVG — wider than tall, so width should clamp to 256 and height
+    // should be proportional (128) when maxSize=256 with "inside" fit.
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400"><rect width="800" height="400" fill="red"/></svg>';
+    const svgPath = join(dir, 'huge.svg');
+    await writeFile(svgPath, svgContent);
+
+    const meta = await readImageMeta(svgPath, 'huge', 1, 256);
+
+    expect(meta).not.toBeNull();
+    expect(meta.width).toBe(256);
+    expect(meta.height).toBe(128);
+  });
+
+  it('readImageMeta leaves small PNGs untouched when under maxSize', async () => {
+    const pngPath = join(dir, 'small.png');
+    await sharp({
+      create: { width: 50, height: 50, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+    }).png().toFile(pngPath);
+
+    const meta = await readImageMeta(pngPath, 'small', 1, 256);
+
+    expect(meta).not.toBeNull();
+    expect(meta.width).toBe(50);
+    expect(meta.height).toBe(50);
+    // Small PNGs are read by path, not buffer — buffer should be absent.
+    expect(meta.buffer).toBeUndefined();
+  });
+
+  it('readImageMeta resizes oversized PNGs to maxSize', async () => {
+    const pngPath = join(dir, 'big.png');
+    await sharp({
+      create: { width: 512, height: 300, channels: 4, background: { r: 0, g: 255, b: 0, alpha: 1 } },
+    }).png().toFile(pngPath);
+
+    const meta = await readImageMeta(pngPath, 'big', 1, 256);
+
+    expect(meta).not.toBeNull();
+    expect(meta.width).toBe(256);
+    // 300 * (256/512) = 150
+    expect(meta.height).toBe(150);
+    expect(meta.buffer).toBeInstanceOf(Buffer);
+  });
+
+  it('readImageMeta returns numeric width/height on every non-null path', async () => {
+    // Regression: the maxSize PNG path previously returned meta.width /
+    // meta.height directly, which could be undefined and propagate NaN
+    // into shelfPack. Verify every return shape has numeric dimensions.
+    const pngPath = join(dir, 'small.png');
+    await sharp({
+      create: { width: 30, height: 30, channels: 4, background: { r: 0, g: 0, b: 255, alpha: 1 } },
+    }).png().toFile(pngPath);
+
+    const withoutMax = await readImageMeta(pngPath, 'small', 1);
+    const withMaxUnder = await readImageMeta(pngPath, 'small', 1, 256);
+
+    for (const result of [withoutMax, withMaxUnder]) {
+      expect(result).not.toBeNull();
+      expect(typeof result.width).toBe('number');
+      expect(typeof result.height).toBe('number');
+      expect(result.width).toBeGreaterThan(0);
+      expect(result.height).toBeGreaterThan(0);
+    }
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// batching helpers
+// ---------------------------------------------------------------------------
+
+describe('batching helpers', () => {
+  let dir;
+
+  beforeEach(async () => {
+    dir = join(tmpdir(), `pack-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(dir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('readImageMetaBatched returns all entries in order', async () => {
+    const entries = [];
+    for (let i = 0; i < 10; i++) {
+      const p = join(dir, `f${i}.png`);
+      await sharp({
+        create: { width: 10 + i, height: 10 + i, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      }).png().toFile(p);
+      entries.push({ path: p, name: `f${i}` });
+    }
+
+    const results = await readImageMetaBatched(entries, 1, null, 3);
+
+    expect(results).toHaveLength(10);
+    for (let i = 0; i < 10; i++) {
+      expect(results[i].name).toBe(`f${i}`);
+      expect(results[i].width).toBe(10 + i);
+    }
+  });
+
+  it('batchPromises caps concurrent in-flight calls at batchSize', async () => {
+    // Instrument the processor so we can observe concurrency directly — this
+    // is the actual invariant the refactor exists to uphold. A regression back
+    // to unbounded Promise.all would drive peak up to items.length.
+    let inFlight = 0;
+    let peak = 0;
+    const processor = async (n) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      // Hold the promise long enough for all queued items to start if they're
+      // going to, so an unbounded implementation would show peak ≈ items.length.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+      return n * 2;
+    };
+
+    const items = Array.from({ length: 20 }, (_, i) => i);
+    const results = await batchPromises(items, processor, 3);
+
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(results).toHaveLength(20);
+    // Order preserved, values transformed.
+    expect(results).toEqual(items.map((n) => n * 2));
+  });
+
+  it('batchPromises rejects invalid batchSize', async () => {
+    const noop = async (x) => x;
+    await expect(batchPromises([1], noop, 0)).rejects.toThrow(RangeError);
+    await expect(batchPromises([1], noop, -1)).rejects.toThrow(RangeError);
+    await expect(batchPromises([1], noop, 1.5)).rejects.toThrow(RangeError);
+    await expect(batchPromises([1], noop, NaN)).rejects.toThrow(RangeError);
   });
 });
