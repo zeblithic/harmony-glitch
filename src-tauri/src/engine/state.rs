@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::avatar::types::{AnimationState, AvatarAppearance, Direction};
 use crate::engine::audio::AudioEvent;
 use crate::engine::jukebox::{self, JukeboxState, TrackCatalog};
-use crate::engine::transition::{
-    TransitionDirection, TransitionPhase, TransitionState, PRE_SUBSCRIBE_DISTANCE,
-};
+use crate::engine::transition::{TransitionDirection, TransitionPhase, TransitionState};
 use crate::item::imagination::PlayerUpgrades;
 use crate::item::interaction;
 use crate::item::inventory::Inventory;
@@ -27,6 +25,17 @@ const PASSIVE_ENERGY_DECAY_RATE: f64 = 0.1;
 /// 0.85 = player sits 15% up from the bottom (Glitch's typical framing),
 /// leaving plenty of upward headroom to see jumps and falls to lower platforms.
 const PLAYER_VERTICAL_FRAMING: f64 = 0.85;
+
+/// Consecutive ticks the player must be stuck on the floor clamp with no
+/// platform underneath before the OOB safety-net teleport fires.
+/// 30 ticks ≈ 500ms at 60fps.
+const OOB_THRESHOLD_TICKS: u32 = 30;
+
+/// Tolerance for detecting the floor-clamp position. Must exceed
+/// floating-point residue from the Y-clamp in PhysicsBody::tick but stay
+/// well below the minimum gap between any real platform and street.bottom
+/// (typically >= 40px). 1.0px is generous and safe for current street data.
+const OOB_FLOOR_TOLERANCE: f64 = 1.0;
 
 fn default_currants() -> u64 {
     50
@@ -113,6 +122,19 @@ pub struct GameState {
     pub pickup_feedback: Vec<PickupFeedback>,
     pub transition: TransitionState,
     pub transition_origin_tsid: Option<String>,
+    /// Last valid landing location on the current street — where the safety
+    /// net teleports the player when OOB is detected. Initialized from
+    /// resolve_default_spawn on street load, updated on every signpost
+    /// traversal via the active connection's arrival fields.
+    pub last_arrival: crate::street::types::Point,
+    /// Counter for consecutive ticks the player has been stuck on the
+    /// floor clamp with nothing to stand on. Reset when grounded or below
+    /// the clamp threshold; teleport fires at OOB_THRESHOLD_TICKS.
+    pub oob_ticks: u32,
+    /// Arrival SpawnPoint captured at signpost-crossing time, used by the
+    /// transition-completion handler to place the player. None when not
+    /// transitioning or when the active connection has no explicit arrival.
+    pub pending_arrival: Option<crate::street::types::SpawnPoint>,
     pub tsid_to_name: std::collections::HashMap<String, String>,
     pub entity_states: std::collections::HashMap<String, EntityInstanceState>,
     pub game_time: f64,
@@ -290,6 +312,9 @@ impl GameState {
             pickup_feedback: vec![],
             transition: TransitionState::new(),
             transition_origin_tsid: None,
+            last_arrival: crate::street::types::Point { x: 0.0, y: 0.0 },
+            oob_ticks: 0,
+            pending_arrival: None,
             tsid_to_name: std::collections::HashMap::from([
                 ("LADEMO001".to_string(), "demo_meadow".to_string()),
                 ("LADEMO002".to_string(), "demo_heights".to_string()),
@@ -336,9 +361,23 @@ impl GameState {
             TransitionPhase::Swooping { .. } | TransitionPhase::Complete { .. }
         );
         if !is_transitioning {
-            let center_x = (street.left + street.right) / 2.0;
-            self.player = PhysicsBody::new(center_x, street.ground_y);
+            let spawn = crate::engine::arrival::resolve_default_spawn(&street);
+            self.player = PhysicsBody::new(spawn.x, spawn.y);
+            self.last_arrival = crate::street::types::Point { x: spawn.x, y: spawn.y };
+            let facing = spawn.facing.unwrap_or_else(|| {
+                crate::engine::arrival::infer_facing(spawn.x, &street)
+            });
+            self.facing = match facing {
+                crate::street::types::Facing::Left => Direction::Left,
+                crate::street::types::Facing::Right => Direction::Right,
+            };
+            // Stale pending_arrival only makes sense to clear on a fresh load.
+            // During an in-flight transition it was just populated at signpost
+            // crossing by check_signposts — the completion handler needs to
+            // consume it.
+            self.pending_arrival = None;
         }
+        self.oob_ticks = 0;
         self.street = Some(street);
         self.pending_audio_events.push(AudioEvent::StreetChanged {
             street_id: self.street.as_ref().unwrap().tsid.clone(),
@@ -624,6 +663,29 @@ impl GameState {
                     TransitionDirection::Left => self.player.x <= signpost_x,
                 };
                 if crossed {
+                    // Capture the arrival SpawnPoint from the active connection (if it has
+                    // explicit arrival fields) so the transition-completion handler can
+                    // place the player without falling back to .find()-on-reciprocal.
+                    // First connection wins — multi-connection UI is a separate ticket.
+                    self.pending_arrival = street
+                        .signposts
+                        .iter()
+                        .find(|s| (s.x - signpost_x).abs() < 0.5)
+                        .and_then(|s| s.connects.first())
+                        // Both-or-neither contract: arrival_x AND arrival_y must be Some, or
+                        // the whole thing falls through to None and the transition-completion
+                        // handler runs the legacy reciprocal-signpost fallback.
+                        .and_then(|c| {
+                            if let (Some(x), Some(y)) = (c.arrival_x, c.arrival_y) {
+                                Some(crate::street::types::SpawnPoint {
+                                    x,
+                                    y,
+                                    facing: c.arrival_facing,
+                                })
+                            } else {
+                                None
+                            }
+                        });
                     self.transition_origin_tsid = Some(street.tsid.clone());
                     self.transition.trigger_swoop();
                 }
@@ -643,24 +705,31 @@ impl GameState {
             if self.transition_origin_tsid.is_some() {
                 let origin_tsid = self.transition_origin_tsid.take().unwrap();
                 let street = self.street.as_ref().unwrap();
-                let return_signpost = street
-                    .signposts
-                    .iter()
-                    .find(|s| s.connects.iter().any(|c| c.target_tsid == origin_tsid));
 
-                if let Some(sp) = return_signpost {
-                    let street_mid = (street.left + street.right) / 2.0;
-                    let inward = if sp.x < street_mid { 1.0 } else { -1.0 };
-                    self.player.x = sp.x + inward * (PRE_SUBSCRIBE_DISTANCE + 50.0);
-                    self.player.y = street.ground_y;
-                    self.player.vx = 0.0;
-                    self.player.vy = 0.0;
-                } else {
-                    self.player.x = (street.left + street.right) / 2.0;
-                    self.player.y = street.ground_y;
-                    self.player.vx = 0.0;
-                    self.player.vy = 0.0;
-                }
+                // Prefer the pending_arrival captured at signpost-crossing time;
+                // fall back to resolve_arrival, which walks the (reciprocal → default
+                // → center) chain.
+                let arrival = self.pending_arrival.take().unwrap_or_else(|| {
+                    crate::engine::arrival::resolve_arrival(street, &origin_tsid, None)
+                });
+
+                let facing = arrival.facing.unwrap_or_else(|| {
+                    crate::engine::arrival::infer_facing(arrival.x, street)
+                });
+
+                self.player.x = arrival.x;
+                self.player.y = arrival.y;
+                self.player.vx = 0.0;
+                self.player.vy = 0.0;
+                self.facing = match facing {
+                    crate::street::types::Facing::Left => Direction::Left,
+                    crate::street::types::Facing::Right => Direction::Right,
+                };
+                self.last_arrival = crate::street::types::Point {
+                    x: arrival.x,
+                    y: arrival.y,
+                };
+                self.oob_ticks = 0;
                 // Player placed on ground — sync prev_on_ground to prevent
                 // spurious Land audio event on the first post-swoop tick.
                 self.prev_on_ground = true;
@@ -711,7 +780,43 @@ impl GameState {
                 street.walls(),
                 street.left,
                 street.right,
+                street.bottom,
             );
+
+            // --- OOB safety-net detector ---
+            // If the player is sitting on the street.bottom clamp with no
+            // platform catching them (on_ground=false), they're on the
+            // invisible floor with nowhere to go. After OOB_THRESHOLD_TICKS
+            // consecutive frames in that state, teleport to last_arrival.
+            let at_floor = (self.player.y - street.bottom).abs() < OOB_FLOOR_TOLERANCE;
+            if at_floor && !self.player.on_ground {
+                self.oob_ticks += 1;
+                if self.oob_ticks >= OOB_THRESHOLD_TICKS {
+                    eprintln!(
+                        "[oob] respawn: street={} player=({:.1},{:.1}) -> last_arrival=({:.1},{:.1})",
+                        street.tsid,
+                        self.player.x,
+                        self.player.y,
+                        self.last_arrival.x,
+                        self.last_arrival.y
+                    );
+                    self.player.x = self.last_arrival.x;
+                    self.player.y = self.last_arrival.y;
+                    self.player.vx = 0.0;
+                    self.player.vy = 0.0;
+                    self.oob_ticks = 0;
+                    // Sync audio state — last_arrival is always a landing
+                    // surface, so the teleported player is on ground. Setting
+                    // on_ground=true makes the Land detector below see
+                    // prev=true, cur=true → no event, and the end-of-tick
+                    // `prev_on_ground = on_ground` stays true for next frame.
+                    self.player.on_ground = true;
+                    self.prev_on_ground = true;
+                    self.player.distance_since_footstep = 0.0;
+                }
+            } else {
+                self.oob_ticks = 0;
+            }
 
             // Jump/Land audio detection
             if self.prev_on_ground && !self.player.on_ground && self.player.vy < 0.0 {
@@ -1169,6 +1274,14 @@ impl GameState {
             self.player.x = save.x;
             self.player.y = save.y;
         }
+        // Refresh OOB anchor so the safety-net teleports back to the save
+        // location, not the default_spawn set by the preceding load_street.
+        self.last_arrival = crate::street::types::Point {
+            x: self.player.x,
+            y: self.player.y,
+        };
+        self.oob_ticks = 0;
+        self.pending_arrival = None;
         self.facing = save.facing;
         let capacity = self.inventory.capacity;
         self.inventory.slots = save.inventory.clone();
@@ -1491,6 +1604,7 @@ mod tests {
                 filters: None,
             }],
             signposts: vec![],
+            default_spawn: None,
         }
     }
 
@@ -1512,6 +1626,64 @@ mod tests {
         let input = InputState::default();
         let frame = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
         assert!(frame.is_some());
+    }
+
+    #[test]
+    fn load_street_sets_last_arrival_from_default_spawn() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        let mut street = test_street();
+        street.default_spawn = Some(crate::street::types::SpawnPoint {
+            x: 123.0,
+            y: -50.0,
+            facing: Some(crate::street::types::Facing::Left),
+        });
+
+        state.load_street(street, vec![], vec![]);
+
+        assert_eq!(state.last_arrival.x, 123.0);
+        assert_eq!(state.last_arrival.y, -50.0);
+        assert_eq!(state.player.x, 123.0);
+        assert_eq!(state.player.y, -50.0);
+        assert_eq!(state.oob_ticks, 0);
+        assert!(state.pending_arrival.is_none());
+    }
+
+    #[test]
+    fn load_street_without_default_spawn_uses_center() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let street = test_street(); // test_street has default_spawn: None
+        let expected_x = (street.left + street.right) / 2.0;
+        let expected_y = street.ground_y;
+
+        state.load_street(street, vec![], vec![]);
+
+        assert_eq!(state.player.x, expected_x);
+        assert_eq!(state.player.y, expected_y);
+        assert_eq!(state.last_arrival.x, expected_x);
+        assert_eq!(state.last_arrival.y, expected_y);
     }
 
     #[test]
@@ -1663,6 +1835,7 @@ mod tests {
                 filters: None,
             }],
             signposts: vec![],
+            default_spawn: None,
         };
         state.load_street(small_street, vec![], vec![]);
 
@@ -1903,6 +2076,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -1942,6 +2118,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -1957,6 +2136,110 @@ mod tests {
             state.transition.phase,
             TransitionPhase::Swooping { .. }
         ));
+    }
+
+    #[test]
+    fn signpost_crossing_captures_pending_arrival_when_connection_has_fields() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        // Build a street where a signpost at x=900 connects to TARGET with
+        // explicit arrival fields.
+        use crate::street::types::{Facing, Signpost, SignpostConnection};
+        let mut street = test_street();
+        street.signposts.push(Signpost {
+            id: "east".to_string(),
+            x: 900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "TARGETTSID".to_string(),
+                target_label: "To Target".to_string(),
+                arrival_x: Some(-777.0),
+                arrival_y: Some(-5.0),
+                arrival_facing: Some(Facing::Right),
+            }],
+        });
+        state.load_street(street, vec![], vec![]);
+
+        // Walk player to the signpost and cross it.
+        state.player.x = 850.0;
+        state.player.on_ground = true;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+        // First tick: pre-subscribe (player within 500px of signpost).
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        // Force player past signpost.x to trigger crossing.
+        state.player.x = 950.0;
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert!(
+            state.pending_arrival.is_some(),
+            "pending_arrival should be populated"
+        );
+        let sp = state.pending_arrival.unwrap();
+        assert_eq!(sp.x, -777.0);
+        assert_eq!(sp.y, -5.0);
+        assert_eq!(sp.facing, Some(Facing::Right));
+    }
+
+    #[test]
+    fn signpost_crossing_leaves_pending_arrival_none_when_no_arrival_fields() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        use crate::street::types::{Signpost, SignpostConnection};
+        let mut street = test_street();
+        street.signposts.push(Signpost {
+            id: "east".to_string(),
+            x: 900.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "TARGETTSID".to_string(),
+                target_label: "To Target".to_string(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
+            }],
+        });
+        state.load_street(street, vec![], vec![]);
+
+        state.player.x = 850.0;
+        state.player.on_ground = true;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        state.player.x = 950.0;
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert!(
+            state.pending_arrival.is_none(),
+            "pending_arrival should remain None without explicit arrival fields"
+        );
+        // But origin_tsid should still be set — legacy path will run at completion.
+        assert!(state.transition_origin_tsid.is_some());
     }
 
     #[test]
@@ -1983,6 +2266,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -2034,6 +2320,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -2124,6 +2413,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -2149,25 +2441,45 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO001".into(),
                 target_label: "Back to Meadow".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(new_street, vec![], vec![]);
 
-        for _ in 0..30 {
+        // Tick through the remaining swoop (mark_street_ready shrinks it to
+        // MIN_SWOOP_SECS = 0.3s ≈ 18 frames) + one Complete-handler tick. After
+        // Complete runs: pending_arrival was None (the original signpost had no
+        // explicit arrival_x/y), so resolve_arrival walks the reciprocal-signpost
+        // chain. The reciprocal branch applies an inward nudge of
+        // PRE_SUBSCRIBE_DISTANCE + 50 = 550 so the player doesn't land inside
+        // the return signpost's pre-subscribe range and bounce straight back.
+        // Signpost x=-1900, street mid=0, inward=+1.0 => nudged x = -1900 + 550
+        // = -1350.
+        let mut saw_complete = false;
+        for _ in 0..60 {
             state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+            if state.transition_origin_tsid.is_none() && !saw_complete {
+                saw_complete = true;
+                break;
+            }
         }
-
-        assert_eq!(state.transition.phase, TransitionPhase::None);
-        assert!(state.transition_origin_tsid.is_none());
-        // Player is placed PRE_SUBSCRIBE_DISTANCE + 50px inward from the return
-        // signpost (x=-1900), i.e. at x=-1350, so signpost detection resets cleanly.
-        let expected_x = -1900.0 + (PRE_SUBSCRIBE_DISTANCE + 50.0);
         assert!(
-            (state.player.x - expected_x).abs() < 1.0,
-            "Player should be at x={} (just outside pre-subscribe zone), got {}",
-            expected_x,
+            saw_complete,
+            "Complete handler should have cleared transition_origin_tsid"
+        );
+
+        // Player lands nudged inward from the return signpost: reciprocal
+        // fallback places them at sp.x + inward * (PRE_SUBSCRIBE_DISTANCE + 50)
+        // = -1900 + 550 = -1350.
+        assert!(
+            (state.player.x - (-1350.0)).abs() < 1.0,
+            "Player should be nudged to x=-1350 (-1900 + 550), got {}",
             state.player.x
         );
+        // last_arrival records the arrival for the OOB safety net.
+        assert_eq!(state.last_arrival.x, -1350.0);
     }
 
     #[test]
@@ -2719,8 +3031,8 @@ mod tests {
         }
 
         // With 8 different seeds, we should see both Left and Right
-        let has_left = facings.iter().any(|f| *f == Direction::Left);
-        let has_right = facings.iter().any(|f| *f == Direction::Right);
+        let has_left = facings.contains(&Direction::Left);
+        let has_right = facings.contains(&Direction::Right);
         assert!(
             has_left && has_right,
             "Expected both Left and Right facings across seeds, got {:?}",
@@ -3267,6 +3579,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO002".into(),
                 target_label: "To the Heights".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(street, vec![], vec![]);
@@ -3297,6 +3612,9 @@ mod tests {
             connects: vec![SignpostConnection {
                 target_tsid: "LADEMO001".into(),
                 target_label: "Back to Meadow".into(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
             }],
         }];
         state.load_street(new_street, vec![], vec![]);
@@ -3444,6 +3762,7 @@ mod tests {
                 filters: None,
             }],
             signposts: vec![],
+            default_spawn: None,
         }
     }
 
@@ -3748,6 +4067,404 @@ mod tests {
 
         assert_eq!(state.energy, 0.0);
     }
+
+    #[test]
+    fn transition_completion_uses_pending_arrival_when_set() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        // Simulate mid-transition state: pending_arrival set, origin_tsid set,
+        // transition phase Complete.
+        state.pending_arrival = Some(crate::street::types::SpawnPoint {
+            x: 333.0,
+            y: -17.0,
+            facing: Some(crate::street::types::Facing::Left),
+        });
+        state.transition_origin_tsid = Some("OTHERTSID".to_string());
+        state.transition.phase = crate::engine::transition::TransitionPhase::Complete {
+            new_street: "test".to_string(),
+            direction: crate::engine::transition::TransitionDirection::Right,
+        };
+
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        // Player x is applied from pending_arrival and isn't changed by physics
+        // (no horizontal input). Player y is applied pre-physics; after the
+        // physics sub-tick, gravity nudges y toward the ground platform, so we
+        // only check that last_arrival (which isn't touched by physics) records
+        // the exact pending_arrival values.
+        assert_eq!(state.player.x, 333.0);
+        assert_eq!(state.last_arrival.x, 333.0);
+        assert_eq!(state.last_arrival.y, -17.0);
+        // origin_tsid consumed, pending_arrival cleared.
+        assert!(state.transition_origin_tsid.is_none());
+        assert!(state.pending_arrival.is_none());
+        assert_eq!(state.oob_ticks, 0);
+    }
+
+    #[test]
+    fn pending_arrival_survives_mid_transition_load_street() {
+        // Regression: load_street() is called by the frontend IPC handler
+        // while transition.phase is Swooping/Complete. pending_arrival must
+        // NOT be wiped during that load, or the Task 8 fast-path is dead.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        // Simulate the captured state at signpost crossing.
+        state.pending_arrival = Some(crate::street::types::SpawnPoint {
+            x: 444.0,
+            y: -22.0,
+            facing: Some(crate::street::types::Facing::Right),
+        });
+        state.transition_origin_tsid = Some("ORIGINTSID".to_string());
+        state.transition.phase = crate::engine::transition::TransitionPhase::Swooping {
+            to_street: "test".to_string(),
+            direction: crate::engine::transition::TransitionDirection::Right,
+            progress: 0.5,
+            elapsed: 1.0,
+            target_duration: 2.0,
+            street_ready: false,
+        };
+
+        // Frontend IPC: load the target street mid-transition.
+        state.load_street(test_street(), vec![], vec![]);
+
+        // Critical: pending_arrival must survive.
+        assert!(
+            state.pending_arrival.is_some(),
+            "pending_arrival should survive load_street during an in-flight transition"
+        );
+        let sp = state.pending_arrival.unwrap();
+        assert_eq!(sp.x, 444.0);
+        assert_eq!(sp.y, -22.0);
+    }
+
+    #[test]
+    fn transition_completion_falls_back_to_reciprocal_signpost() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        // Street where a signpost at x=600 connects back to OTHERTSID.
+        use crate::street::types::{Signpost, SignpostConnection};
+        let mut street = test_street();
+        street.signposts.push(Signpost {
+            id: "reciprocal".to_string(),
+            x: 600.0,
+            y: 0.0,
+            connects: vec![SignpostConnection {
+                target_tsid: "OTHERTSID".to_string(),
+                target_label: "Back".to_string(),
+                arrival_x: None,
+                arrival_y: None,
+                arrival_facing: None,
+            }],
+        });
+        state.load_street(street, vec![], vec![]);
+
+        state.pending_arrival = None; // legacy path
+        state.transition_origin_tsid = Some("OTHERTSID".to_string());
+        state.transition.phase = crate::engine::transition::TransitionPhase::Complete {
+            new_street: "test".to_string(),
+            direction: crate::engine::transition::TransitionDirection::Right,
+        };
+
+        let input = InputState::default();
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        // Reciprocal signpost at x=600 on a street with mid=0 => inward=-1,
+        // nudge = PRE_SUBSCRIBE_DISTANCE (500) + 50 = 550, so nudged x =
+        // 600 - 550 = 50. The nudge keeps the player out of pre-subscribe
+        // range so they don't immediately bounce back to OTHERTSID.
+        assert_eq!(state.player.x, 50.0);
+        assert_eq!(state.player.y, 0.0); // ground_y
+        assert_eq!(state.last_arrival.x, 50.0);
+        assert!(state.transition_origin_tsid.is_none());
+    }
+
+    /// Street with no platforms at all — used to exercise the OOB safety net
+    /// where the player cannot land on anything and falls to the street.bottom
+    /// clamp. test_street has a ground platform at y=0 that would catch the
+    /// player via Phase 2 swept collision, masking the OOB condition.
+    fn platformless_street() -> StreetData {
+        StreetData {
+            tsid: "oob_test".into(),
+            name: "OOB Test".into(),
+            left: -3000.0,
+            right: 3000.0,
+            top: -1000.0,
+            bottom: 0.0,
+            ground_y: 0.0,
+            gradient: None,
+            layers: vec![Layer {
+                name: "middleground".into(),
+                z: 0,
+                w: 6000.0,
+                h: 1000.0,
+                is_middleground: true,
+                decos: vec![],
+                platform_lines: vec![],
+                walls: vec![],
+                ladders: vec![],
+                filters: None,
+            }],
+            signposts: vec![],
+            default_spawn: None,
+        }
+    }
+
+    #[test]
+    fn oob_detector_fires_after_threshold_ticks() {
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        // Uses platformless_street so physics doesn't catch the player on a
+        // platform at y=0 (which would set on_ground=true and mask OOB).
+        state.load_street(platformless_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+
+        // Simulate player stuck on the floor clamp: y == street.bottom (0.0),
+        // not grounded (no platform below).
+        state.player.x = -500.0;
+        state.player.y = 0.0;
+        state.player.on_ground = false;
+
+        let input = InputState::default();
+        // Tick up to 35 times — hold player at floor, no platform. Stop
+        // once the teleport fires (detected by x changing to last_arrival.x)
+        // so the post-teleport assertions see the teleport's final state,
+        // not a subsequent iteration that resets y=0.
+        let mut fired = false;
+        for _ in 0..35 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+            if state.player.x == 100.0 {
+                fired = true;
+                break;
+            }
+        }
+
+        // Safety net should have fired: player at last_arrival.
+        assert!(fired, "OOB teleport should have fired within 35 ticks");
+        assert_eq!(state.player.x, 100.0);
+        assert_eq!(state.player.y, -10.0);
+        assert_eq!(state.oob_ticks, 0);
+    }
+
+    #[test]
+    fn oob_detector_resets_when_grounded() {
+        // test_street has a ground platform spanning [-2800, 2800] at y=0.
+        // Stuck phase positions the player at x=-2900 (outside platform
+        // range) so the invisible-floor condition holds; grounded phase
+        // moves to x=0 (on platform) so physics keeps on_ground=true.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+
+        let input = InputState::default();
+
+        // 20 ticks stuck at floor outside platform range — counter increments.
+        state.player.x = -2900.0;
+        for _ in 0..20 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+        assert!(state.oob_ticks > 0, "counter should increment during stuck ticks");
+
+        // Move onto the platform and tick — physics sets on_ground=true,
+        // counter should reset.
+        state.player.x = 0.0;
+        for _ in 0..20 {
+            state.player.on_ground = true;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+        assert_eq!(state.oob_ticks, 0, "counter should reset when grounded");
+        // Player should NOT have been teleported.
+        assert_ne!(state.player.x, 100.0);
+    }
+
+    #[test]
+    fn oob_detector_does_not_fire_when_walking_on_bottom_platform() {
+        // Walking on a platform that happens to sit at street.bottom (like
+        // plat_main at y=0 in demo_meadow). on_ground=true → no trigger.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+        let initial_x = 250.0;
+        state.player.x = initial_x;
+
+        let input = InputState::default();
+        for _ in 0..60 {
+            state.player.y = 0.0;
+            state.player.on_ground = true; // on a real platform at y=0
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+
+        assert_eq!(state.oob_ticks, 0);
+        assert_eq!(state.player.x, initial_x, "player should not be teleported");
+    }
+
+    #[test]
+    fn oob_detector_resets_when_leaving_floor_region() {
+        // Counter resets when at_floor becomes false, even without on_ground.
+        // Covers the else branch's !at_floor path — player falling past
+        // street.bottom is caught by the clamp, then jumps/is pushed back up
+        // into mid-air: counter must reset so they don't immediately teleport
+        // on next accidental floor-touch.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(platformless_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+
+        let input = InputState::default();
+
+        // 20 ticks stuck at floor, on_ground=false — counter increments.
+        for _ in 0..20 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+        assert!(state.oob_ticks > 0, "counter should be incrementing");
+
+        // 1 tick with player well above floor (at_floor=false), still not grounded.
+        // This is the distinctive case: !at_floor && !on_ground → else branch.
+        state.player.y = -200.0;
+        state.player.on_ground = false;
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert_eq!(
+            state.oob_ticks, 0,
+            "counter should reset when player leaves the floor region"
+        );
+    }
+
+    #[test]
+    fn oob_teleport_does_not_emit_spurious_land() {
+        // After OOB teleport, the next tick's physics may ground the player at
+        // the arrival platform. Without syncing prev_on_ground inside the
+        // teleport block, !prev_on_ground && on_ground would emit a Land.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(platformless_street(), vec![], vec![]);
+        // last_arrival inside test_street's platform range so the post-teleport
+        // tick grounds the player.
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: 0.0 };
+        state.pending_audio_events.clear();
+
+        state.player.x = -500.0;
+        state.player.y = 0.0;
+        state.player.on_ground = false;
+        state.prev_on_ground = false;
+
+        let input = InputState::default();
+        let mut frames = vec![];
+        for _ in 0..35 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            if let Some(frame) = state.tick(1.0 / 60.0, &input, &mut rand::thread_rng()) {
+                frames.push(frame);
+            }
+            if state.player.x == 100.0 {
+                break;
+            }
+        }
+
+        // Teleport must have fired and prev_on_ground must be synced to true.
+        assert_eq!(state.player.x, 100.0, "teleport should have fired");
+        assert!(
+            state.prev_on_ground,
+            "prev_on_ground must be synced to true after OOB teleport"
+        );
+        // distance_since_footstep must be reset to 0.0.
+        assert_eq!(
+            state.player.distance_since_footstep, 0.0,
+            "footstep accumulator must be reset after OOB teleport"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -4004,6 +4721,69 @@ mod save_tests {
     }
 
     #[test]
+    fn restore_save_refreshes_oob_anchor() {
+        // After restoring a save, last_arrival must reflect the save location
+        // so the OOB safety-net teleports back to where the player was, not
+        // the street's default_spawn from the preceding load_street.
+        let item_defs = crate::item::types::ItemDefs::new();
+        let entity_defs = crate::item::types::EntityDefs::new();
+        let recipe_defs = crate::item::types::RecipeDefs::new();
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            item_defs,
+            entity_defs,
+            recipe_defs,
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        let xml = include_str!("../../../assets/streets/demo_meadow.xml");
+        let street = crate::street::parser::parse_street(xml).unwrap();
+        state.load_street(street, vec![], vec![]);
+        // After load_street, last_arrival is at the street's default_spawn.
+        let default_spawn_x = state.last_arrival.x;
+
+        // Save somewhere other than the default spawn.
+        let save = SaveState {
+            street_id: "demo_meadow".to_string(),
+            x: 1234.0,
+            y: -42.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: AvatarAppearance::default(),
+            currants: 0,
+            energy: 600.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 0,
+            skill_progress: SkillProgress::default(),
+            upgrades: PlayerUpgrades::default(),
+            quest_progress: crate::quest::types::QuestProgress::default(),
+            mood: 100.0,
+            max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
+        };
+        state.restore_save(&save);
+
+        // last_arrival should track the restored position (possibly clamped),
+        // NOT the default_spawn from load_street.
+        assert_ne!(
+            state.last_arrival.x, default_spawn_x,
+            "OOB anchor must be refreshed off of default_spawn"
+        );
+        assert_eq!(state.last_arrival.x, state.player.x);
+        assert_eq!(state.last_arrival.y, state.player.y);
+        assert_eq!(state.oob_ticks, 0);
+        assert!(state.pending_arrival.is_none());
+    }
+
+    #[test]
     fn restore_save_fills_inventory() {
         let item_defs = crate::item::types::ItemDefs::new();
         let entity_defs = crate::item::types::EntityDefs::new();
@@ -4247,6 +5027,7 @@ mod save_tests {
                 }),
                 layers: vec![],
                 signposts: vec![],
+                default_spawn: None,
             },
             vec![],
             vec![],

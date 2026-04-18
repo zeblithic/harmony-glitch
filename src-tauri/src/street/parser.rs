@@ -39,6 +39,7 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
     let (layers, layer_signposts) = parse_layers(dynamic)?;
     let mut signposts = parse_signposts(dynamic); // demo XML: signposts at dynamic level
     signposts.extend(layer_signposts); // real Glitch XML: signposts inside middleground
+    let default_spawn = parse_default_spawn(dynamic);
 
     Ok(StreetData {
         tsid,
@@ -51,7 +52,23 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
         gradient,
         layers,
         signposts,
+        default_spawn,
     })
+}
+
+fn parse_default_spawn(dynamic: &XmlValue) -> Option<SpawnPoint> {
+    let obj = dynamic.get("default_spawn").and_then(|v| v.as_object())?;
+    let x = obj.get("x").and_then(|v| v.as_f64())?;
+    let y = obj.get("y").and_then(|v| v.as_f64())?;
+    let facing = obj
+        .get("facing")
+        .and_then(|v| v.as_str())
+        .and_then(|s| match s {
+            "left" => Some(crate::street::types::Facing::Left),
+            "right" => Some(crate::street::types::Facing::Right),
+            _ => None,
+        });
+    Some(SpawnPoint { x, y, facing })
 }
 
 fn parse_layers(dynamic: &XmlValue) -> Result<(Vec<Layer>, Vec<Signpost>), String> {
@@ -304,6 +321,16 @@ fn parse_signposts(dynamic: &XmlValue) -> Vec<Signpost> {
                             Some(XmlValue::ObjRef { tsid, label }) => Some(SignpostConnection {
                                 target_tsid: tsid.clone(),
                                 target_label: label.clone(),
+                                arrival_x: c.get("arrival_x").and_then(|v| v.as_f64()),
+                                arrival_y: c.get("arrival_y").and_then(|v| v.as_f64()),
+                                arrival_facing: c
+                                    .get("arrival_facing")
+                                    .and_then(|v| v.as_str())
+                                    .and_then(|s| match s {
+                                        "left" => Some(crate::street::types::Facing::Left),
+                                        "right" => Some(crate::street::types::Facing::Right),
+                                        _ => None,
+                                    }),
                             }),
                             _ => None,
                         })
@@ -625,7 +652,7 @@ mod tests {
         assert_eq!(street.tsid, "LADEMO002");
         assert_eq!(street.name, "Demo Heights");
         assert!(
-            street.signposts.len() >= 1,
+            !street.signposts.is_empty(),
             "demo_heights should have at least 1 signpost"
         );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO001");
@@ -636,10 +663,73 @@ mod tests {
         let xml = include_str!("../../../assets/streets/demo_meadow.xml");
         let street = parse_street(xml).unwrap();
         assert!(
-            street.signposts.len() >= 1,
+            !street.signposts.is_empty(),
             "demo_meadow should have signpost"
         );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO002");
+    }
+
+    #[test]
+    fn parse_signpost_connection_with_arrival_fields() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="signposts">
+    <object id="sign_a">
+      <int id="x">500</int>
+      <int id="y">0</int>
+      <object id="connects">
+        <object id="connect_1">
+          <objref id="target" tsid="OTHERTSID" label="To Other" />
+          <int id="arrival_x">-800</int>
+          <int id="arrival_y">0</int>
+          <str id="arrival_facing">right</str>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        assert_eq!(street.signposts.len(), 1);
+        let conn = &street.signposts[0].connects[0];
+        assert_eq!(conn.target_tsid, "OTHERTSID");
+        assert_eq!(conn.arrival_x, Some(-800.0));
+        assert_eq!(conn.arrival_y, Some(0.0));
+        assert_eq!(conn.arrival_facing, Some(crate::street::types::Facing::Right));
+    }
+
+    #[test]
+    fn parse_signpost_connection_without_arrival_fields() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="signposts">
+    <object id="sign_a">
+      <int id="x">500</int>
+      <int id="y">0</int>
+      <object id="connects">
+        <object id="connect_1">
+          <objref id="target" tsid="OTHERTSID" label="To Other" />
+        </object>
+      </object>
+    </object>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        let conn = &street.signposts[0].connects[0];
+        assert!(conn.arrival_x.is_none());
+        assert!(conn.arrival_y.is_none());
+        assert!(conn.arrival_facing.is_none());
     }
 
     #[test]
@@ -731,6 +821,66 @@ mod tests {
         assert_eq!(street.name, "Custom Street");
         assert_eq!(street.layers.len(), 1);
         assert!(street.layers[0].is_middleground);
+    }
+
+    #[test]
+    fn parse_street_with_default_spawn() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="default_spawn">
+    <int id="x">250</int>
+    <int id="y">-50</int>
+    <str id="facing">left</str>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        let sp = street.default_spawn.expect("default_spawn should parse");
+        assert_eq!(sp.x, 250.0);
+        assert_eq!(sp.y, -50.0);
+        assert_eq!(sp.facing, Some(crate::street::types::Facing::Left));
+    }
+
+    #[test]
+    fn parse_street_without_default_spawn() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        assert!(street.default_spawn.is_none());
+    }
+
+    #[test]
+    fn parse_street_default_spawn_without_facing() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="default_spawn">
+    <int id="x">0</int>
+    <int id="y">0</int>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        let sp = street.default_spawn.unwrap();
+        assert_eq!(sp.x, 0.0);
+        assert_eq!(sp.y, 0.0);
+        assert!(sp.facing.is_none());
     }
 
     #[test]

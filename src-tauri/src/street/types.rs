@@ -22,6 +22,11 @@ pub struct StreetData {
     pub layers: Vec<Layer>,
     /// Signpost connections to other streets
     pub signposts: Vec<Signpost>,
+    /// Where the player spawns on first entry (before any signpost traversal)
+    /// and the last-resort fallback for resolve_arrival. If None, runtime
+    /// resolves to first signpost position or (center_x, ground_y).
+    #[serde(default)]
+    pub default_spawn: Option<SpawnPoint>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +74,20 @@ pub struct PlatformLine {
 pub struct Point {
     pub x: f64,
     pub y: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Facing {
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct SpawnPoint {
+    pub x: f64,
+    pub y: f64,
+    pub facing: Option<Facing>,
 }
 
 /// A vertical collision barrier.
@@ -157,6 +176,21 @@ pub struct Signpost {
 pub struct SignpostConnection {
     pub target_tsid: String,
     pub target_label: String,
+    /// Where on the target street the player arrives when using this
+    /// connection. If None, runtime falls back to the target signpost's
+    /// own (x, y) — preserves legacy behavior for imported Glitch XMLs.
+    #[serde(default)]
+    pub arrival_x: Option<f64>,
+    /// Y coordinate paired with `arrival_x`. Both must be `Some` for the
+    /// arrival position to take effect; specifying only one field is silently
+    /// ignored and the runtime falls back to the legacy reciprocal-signpost
+    /// path. See `resolve_arrival` for the resolution order.
+    #[serde(default)]
+    pub arrival_y: Option<f64>,
+    /// Player facing on arrival. If None, inferred from which half of the
+    /// target street arrival_x sits in.
+    #[serde(default)]
+    pub arrival_facing: Option<Facing>,
 }
 
 impl StreetData {
@@ -230,6 +264,37 @@ impl PlatformLine {
 
     pub fn max_x(&self) -> f64 {
         self.start.x.max(self.end.x)
+    }
+}
+
+#[cfg(test)]
+mod types_tests {
+    use super::*;
+
+    #[test]
+    fn facing_serializes_lowercase() {
+        let json = serde_json::to_string(&Facing::Left).unwrap();
+        assert_eq!(json, "\"left\"");
+        let json = serde_json::to_string(&Facing::Right).unwrap();
+        assert_eq!(json, "\"right\"");
+    }
+
+    #[test]
+    fn spawn_point_roundtrips_through_serde() {
+        let sp = SpawnPoint { x: 123.5, y: -4.0, facing: Some(Facing::Right) };
+        let json = serde_json::to_string(&sp).unwrap();
+        let back: SpawnPoint = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.x, 123.5);
+        assert_eq!(back.y, -4.0);
+        assert_eq!(back.facing, Some(Facing::Right));
+    }
+
+    #[test]
+    fn spawn_point_roundtrips_without_facing() {
+        let sp = SpawnPoint { x: 0.0, y: 0.0, facing: None };
+        let json = serde_json::to_string(&sp).unwrap();
+        let back: SpawnPoint = serde_json::from_str(&json).unwrap();
+        assert!(back.facing.is_none());
     }
 }
 
@@ -311,6 +376,7 @@ mod tests {
             gradient: None,
             layers: vec![],
             signposts: vec![],
+            default_spawn: None,
         };
         assert!((s.width() - 6000.0).abs() < 0.001);
         assert!((s.height() - 1000.0).abs() < 0.001);
@@ -353,6 +419,7 @@ mod tests {
             gradient: None,
             layers: vec![mg.clone(), bg.clone()],
             signposts: vec![],
+            default_spawn: None,
         };
         assert!((s.parallax_factor(&mg) - 1.0).abs() < 0.001);
         assert!((s.parallax_factor(&bg) - 0.91).abs() < 0.01);
@@ -522,6 +589,7 @@ mod tests {
             gradient: None,
             layers: vec![mg],
             signposts: vec![],
+            default_spawn: None,
         };
         assert_eq!(s.walls().len(), 1);
         assert_eq!(s.walls()[0].id, "w1");
