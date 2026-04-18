@@ -19,6 +19,8 @@ pub struct ItemDef {
     pub energy_value: Option<u32>,
     #[serde(default)]
     pub mood_value: Option<u32>,
+    #[serde(default)]
+    pub buff_effect: Option<crate::buff::BuffSpec>,
 }
 
 /// A stack of items in inventory.
@@ -562,6 +564,7 @@ mod tests {
             base_cost: None,
             energy_value: None,
             mood_value: None,
+            buff_effect: None,
         };
         let json = serde_json::to_string(&def).unwrap();
         assert!(json.contains("stackLimit"));
@@ -642,5 +645,38 @@ mod tests {
         let json = r#"{"name":"Wood","description":"Wood.","category":"material","stackLimit":50,"icon":"wood","baseCost":4}"#;
         let def: ItemDef = serde_json::from_str(json).unwrap();
         assert_eq!(def.energy_value, None);
+    }
+
+    #[test]
+    fn item_def_with_buff_effect_deserializes() {
+        let json = r#"{
+            "name": "Rookswort",
+            "description": "Slows mood loss.",
+            "category": "food",
+            "stackLimit": 50,
+            "icon": "rookswort",
+            "buffEffect": {
+                "kind": "rookswort",
+                "effect": { "type": "moodDecayMultiplier", "value": 0.5 },
+                "durationSecs": 600.0
+            }
+        }"#;
+        let def: ItemDef = serde_json::from_str(json).unwrap();
+        let be = def.buff_effect.as_ref().expect("buff_effect present");
+        assert_eq!(be.kind, "rookswort");
+        assert!((be.duration_secs - 600.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn item_def_without_buff_effect_defaults_to_none() {
+        let json = r#"{
+            "name": "Cherry",
+            "description": "A cherry.",
+            "category": "food",
+            "stackLimit": 50,
+            "icon": "cherry"
+        }"#;
+        let def: ItemDef = serde_json::from_str(json).unwrap();
+        assert!(def.buff_effect.is_none());
     }
 }

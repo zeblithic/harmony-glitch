@@ -132,6 +132,7 @@ mod tests {
                 base_cost: Some(3),
                 energy_value: Some(12),
                 mood_value: None,
+                buff_effect: None,
             },
         );
         defs.insert(
@@ -146,6 +147,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         defs
@@ -183,6 +185,7 @@ mod tests {
                 base_cost: Some(1),
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let store = StoreDef {
@@ -249,6 +252,7 @@ mod tests {
                 base_cost: Some(100),
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let store = test_store(); // store only sells "cherry"
@@ -321,6 +325,7 @@ mod tests {
                 base_cost: Some(1),
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let store = StoreDef {

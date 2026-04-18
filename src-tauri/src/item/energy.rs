@@ -63,6 +63,7 @@ mod tests {
                 base_cost: Some(3),
                 energy_value: Some(12),
                 mood_value: Some(3),
+                buff_effect: None,
             },
         );
         defs.insert(
@@ -77,6 +78,7 @@ mod tests {
                 base_cost: Some(4),
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         defs
@@ -172,6 +174,7 @@ mod tests {
                 base_cost: None,
                 energy_value: Some(20),
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut inv = Inventory::new(16);

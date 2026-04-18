@@ -1950,6 +1950,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2500,6 +2501,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2595,6 +2597,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -3091,6 +3094,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
