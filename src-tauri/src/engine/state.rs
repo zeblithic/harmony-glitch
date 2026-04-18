@@ -1264,7 +1264,7 @@ impl GameState {
             buddies: self.social.buddies.to_save_entries(),
             blocked: self.social.buddies.blocked_to_hex(),
             last_hi_date: Some(self.social.emotes.current_date.clone()),
-            buffs: self.social.buffs.clone(),
+            buffs: self.social.buffs.to_save_form(self.game_time),
         })
     }
 
@@ -1317,7 +1317,7 @@ impl GameState {
         if let Some(ref date) = save.last_hi_date {
             self.social.emotes.check_date_change(date);
         }
-        self.social.buffs = save.buffs.clone();
+        self.social.buffs = crate::buff::BuffState::from_save_form(&save.buffs, self.game_time);
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -2349,6 +2349,72 @@ mod tests {
         let transition = frame.transition.unwrap();
         assert!(transition.progress > 0.0);
         assert_eq!(transition.to_street, "demo_heights");
+    }
+
+    #[test]
+    fn buff_save_restore_preserves_remaining_time_across_app_restart() {
+        // Regression (ZEB-80 PR #60 feedback): SaveState does not persist
+        // game_time, and a fresh GameState starts at game_time=0.0. Without
+        // the save-form rebase, a buff applied at game_time=3600 with 600s
+        // duration would live 4200s after restart instead of 600s.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.game_time = 3600.0;
+        state.social.buffs.apply(
+            &crate::buff::BuffSpec {
+                kind: "rookswort".into(),
+                effect: crate::buff::BuffEffect::MoodDecayMultiplier { value: 0.5 },
+                duration_secs: 600.0,
+                on_expire: None,
+            },
+            state.game_time,
+            "rookswort".into(),
+        );
+        assert!((state.social.buffs.active["rookswort"].expires_at - 4200.0).abs() < 1e-9);
+
+        // Save — should encode remaining-seconds (600.0), not absolute 4200.
+        let save = state.save_state().expect("save_state should succeed");
+        assert!((save.buffs.active["rookswort"].expires_at - 600.0).abs() < 1e-9);
+
+        // Simulate app restart: brand-new GameState with clock at 0.0.
+        let mut restarted = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        restarted.load_street(test_street(), vec![], vec![]);
+        assert_eq!(restarted.game_time, 0.0);
+        restarted.restore_save(&save);
+
+        let restored = restarted
+            .social
+            .buffs
+            .active
+            .get("rookswort")
+            .expect("buff preserved across restore");
+        assert!((restored.expires_at - 600.0).abs() < 1e-9);
+
+        // Ticking past t=600 in the new clock expires the buff.
+        restarted.social.buffs.tick(601.0);
+        assert!(restarted.social.buffs.active.is_empty());
     }
 
     #[test]

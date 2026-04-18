@@ -683,8 +683,12 @@ mod tests {
     #[test]
     fn items_catalog_loads_rookswort_with_expected_buff_effect() {
         // Loads the actual shipped catalog to guard against JSON regressions.
-        let json = std::fs::read_to_string("../assets/items.json")
-            .expect("assets/items.json should be readable from src-tauri/");
+        // Anchor against CARGO_MANIFEST_DIR so the test works regardless of
+        // the runner's CWD (IDE runners, CI, nested shells).
+        let items_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/items.json");
+        let json = std::fs::read_to_string(&items_path)
+            .expect("assets/items.json should be readable");
         let catalog: std::collections::HashMap<String, ItemDef> =
             serde_json::from_str(&json).expect("items.json parses");
         let rookswort = catalog.get("rookswort").expect("rookswort entry exists");

@@ -55,6 +55,9 @@ describe('BuffHud', () => {
     });
     const icons = container.querySelectorAll('.buff-icon');
     expect(icons.length).toBe(2);
+    const labels = Array.from(icons).map((el) => el.getAttribute('aria-label') ?? '');
+    expect(labels[0]).toMatch(/^Rookswort:/);
+    expect(labels[1]).toMatch(/^Campfire:/);
   });
 
   it('clamps negative remainingSecs to 0s in display', () => {

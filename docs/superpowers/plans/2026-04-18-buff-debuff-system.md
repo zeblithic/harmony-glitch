@@ -820,12 +820,14 @@ ALSO remove or replace the now-invalid tests that used the old bool parameter:
 - Find all other tests using `tick(..., false)` or `tick(..., true)` — update the last arg to `1.0` or `0.75` respectively. Affected tests: `tick_decays_mood`, `tick_suppressed_during_dialogue`, `tick_suppressed_during_grace_period`, `tick_resumes_after_grace_period`, `tick_ignores_invalid_inputs`.
 
 Example transformation:
+
 ```rust
 // Before
 s.tick(60.0, game_time, false, false);
 // After
 s.tick(60.0, game_time, false, 1.0);
 ```
+
 
 - [ ] **Step 2: Run tests to verify they fail (compilation error expected)**
 
@@ -1724,10 +1726,9 @@ And extend the type import near line 35 to include `BuffFrame` if you use it as 
 
 - [ ] **Step 3: Render BuffHud in the template**
 
-In `src/App.svelte`, locate the `<MoodHud>` usage (around line 1147). Right after it, add:
+In `src/App.svelte`, locate the `<MoodHud>` usage (around line 1147). Right after it, add the `<BuffHud>` line (keep the existing `<MoodHud>` as-is):
 
 ```svelte
-    <MoodHud mood={latestFrame?.mood ?? 100} maxMood={latestFrame?.maxMood ?? 100} />
     <BuffHud buffs={latestFrame?.activeBuffs ?? []} />
 ```
 

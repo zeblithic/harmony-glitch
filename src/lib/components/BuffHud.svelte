@@ -1,10 +1,5 @@
 <script lang="ts">
-  interface BuffFrame {
-    kind: string;
-    icon: string;
-    label: string;
-    remainingSecs: number;
-  }
+  import type { BuffFrame } from '../types';
 
   let { buffs = [] }: { buffs: BuffFrame[] } = $props();
 
@@ -28,18 +23,17 @@
 </script>
 
 {#if buffs.length > 0}
-  <div class="buff-hud" role="list" aria-label="Active buffs">
+  <ul class="buff-hud" aria-label="Active buffs">
     {#each buffs as buff (buff.kind)}
-      <div
+      <li
         class="buff-icon"
-        role="listitem"
         aria-label="{buff.label}: {formatRemaining(buff.remainingSecs)} remaining"
       >
         <span class="buff-icon-sprite">{iconGlyph(buff.kind)}</span>
         <span class="buff-timer">{formatRemaining(buff.remainingSecs)}</span>
-      </div>
+      </li>
     {/each}
-  </div>
+  </ul>
 {/if}
 
 <style>
@@ -47,6 +41,9 @@
     position: fixed;
     top: 74px;
     left: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
     display: flex;
     flex-direction: row;
     gap: 6px;

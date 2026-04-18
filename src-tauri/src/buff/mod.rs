@@ -15,11 +15,21 @@ pub struct BuffState {
 impl BuffState {
     /// Apply a buff. If a buff with the same `kind` is already active,
     /// it is replaced in place (refresh semantics).
+    ///
+    /// Non-finite inputs are a no-op (logged once) so release behavior is
+    /// deterministic — the caller never ends up with a NaN/∞ `expires_at`.
     pub fn apply(&mut self, spec: &BuffSpec, game_time: f64, source: String) {
-        debug_assert!(
-            spec.duration_secs.is_finite() && game_time.is_finite(),
-            "buff apply requires finite game_time and duration_secs"
-        );
+        if !spec.duration_secs.is_finite() || !game_time.is_finite() {
+            debug_assert!(
+                false,
+                "buff apply requires finite game_time and duration_secs"
+            );
+            eprintln!(
+                "[buff] apply skipped: non-finite input (duration_secs={}, game_time={}, kind={})",
+                spec.duration_secs, game_time, spec.kind
+            );
+            return;
+        }
         let active = ActiveBuff {
             kind: spec.kind.clone(),
             effect: spec.effect.clone(),
@@ -28,6 +38,44 @@ impl BuffState {
             on_expire: spec.on_expire.clone(),
         };
         self.active.insert(spec.kind.clone(), active);
+    }
+
+    /// Rebase `expires_at` to save-relative form (remaining seconds until
+    /// expiry at `current_time`). The returned `BuffState` should be placed
+    /// into `SaveState.buffs` — its `expires_at` values are NOT valid
+    /// against any live game_time clock until `from_save_form` reverses
+    /// the transform.
+    ///
+    /// Why: `game_time` is not persisted in `SaveState`, and a new session
+    /// starts with `game_time = 0.0`. Without this rebase, a buff saved at
+    /// `game_time = 3600` with `expires_at = 4200` would live 4200 more
+    /// seconds after restart instead of the intended 600.
+    pub fn to_save_form(&self, current_time: f64) -> Self {
+        let active = self
+            .active
+            .iter()
+            .map(|(k, b)| {
+                let mut b = b.clone();
+                b.expires_at -= current_time;
+                (k.clone(), b)
+            })
+            .collect();
+        Self { active }
+    }
+
+    /// Inverse of `to_save_form`: shifts `expires_at` from save-relative
+    /// (remaining seconds) back to absolute against `current_time`.
+    pub fn from_save_form(save: &Self, current_time: f64) -> Self {
+        let active = save
+            .active
+            .iter()
+            .map(|(k, b)| {
+                let mut b = b.clone();
+                b.expires_at += current_time;
+                (k.clone(), b)
+            })
+            .collect();
+        Self { active }
     }
 
     /// Fold all active `MoodDecayMultiplier` effects multiplicatively.
@@ -74,10 +122,18 @@ impl BuffState {
             if expired_kinds.is_empty() {
                 return;
             }
-            for kind in expired_kinds {
-                let Some(buff) = self.active.remove(&kind) else {
-                    continue;
-                };
+            // Two-phase: remove all expired entries FIRST, then apply their
+            // on_expire successors. If we interleaved these, an on_expire
+            // successor whose `kind` matched a not-yet-processed entry in
+            // `expired_kinds` would be overwritten or (worse) removed by the
+            // stale list on its own key. Collecting first decouples removal
+            // from successor-application, so a freshly applied successor is
+            // never a candidate for removal in the same pass.
+            let expired: Vec<ActiveBuff> = expired_kinds
+                .into_iter()
+                .filter_map(|kind| self.active.remove(&kind))
+                .collect();
+            for buff in expired {
                 if let Some(spec) = buff.on_expire {
                     self.apply(&spec, game_time, "on_expire".to_string());
                 }
@@ -363,6 +419,116 @@ mod tests {
         assert_eq!(frames[0].label, "Rookswort");
         assert_eq!(frames[0].icon, "rookswort_icon");
         assert!((frames[0].remaining_secs - 500.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tick_does_not_remove_successor_whose_kind_matches_another_expiring_kind() {
+        // Regression: buff "alpha" expires and its on_expire applies a
+        // successor with kind "beta". Another buff "beta" was ALSO in the
+        // expired list for this pass. The old implementation removed "beta"
+        // by kind after alpha's successor had already taken its place,
+        // wiping the successor out.
+        let alphas_successor = BuffSpec {
+            kind: "beta".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.25 },
+            duration_secs: 300.0,
+            on_expire: None,
+        };
+        let alpha = BuffSpec {
+            kind: "alpha".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+            duration_secs: 100.0,
+            on_expire: Some(Box::new(alphas_successor)),
+        };
+        let beta = BuffSpec {
+            kind: "beta".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.75 },
+            duration_secs: 100.0,
+            on_expire: None,
+        };
+        let mut s = BuffState::default();
+        s.apply(&alpha, 0.0, "alpha".into());
+        s.apply(&beta, 0.0, "beta".into());
+        // Both expire at t=100. Tick at t=101 expires both.
+        s.tick(101.0);
+        // The successor with kind=beta, value=0.25, expiring at t=401
+        // must be present — it was freshly applied at t=101 during alpha's
+        // expiry and should NOT be swept away by the stale expired_kinds list.
+        let survivor = s.active.get("beta").expect("successor must survive tick");
+        assert_eq!(survivor.effect, BuffEffect::MoodDecayMultiplier { value: 0.25 });
+        assert!((survivor.expires_at - 401.0).abs() < 1e-9);
+        assert_eq!(survivor.source, "on_expire");
+    }
+
+    #[test]
+    fn save_form_round_trips_remaining_time_across_game_time_reset() {
+        // Simulates app-restart semantics: save at game_time=3600 with a
+        // buff that had 600s remaining, then load in a fresh session
+        // (game_time=0). The buff's remaining lifetime must still be 600s,
+        // NOT the 4200s that an unshifted absolute `expires_at` would imply.
+        let mut live = BuffState::default();
+        live.apply(&rookswort_spec(0.5, 600.0), 3600.0, "rookswort".into());
+        assert!((live.active["rookswort"].expires_at - 4200.0).abs() < 1e-9);
+
+        let save = live.to_save_form(3600.0);
+        // On disk, expires_at is now the remaining-time, not an absolute.
+        assert!((save.active["rookswort"].expires_at - 600.0).abs() < 1e-9);
+
+        // Load in a new session with fresh clock.
+        let restored = BuffState::from_save_form(&save, 0.0);
+        assert!((restored.active["rookswort"].expires_at - 600.0).abs() < 1e-9);
+
+        // If the new session advances past 600s, the buff expires as expected.
+        let mut s = restored.clone();
+        s.tick(601.0);
+        assert!(s.active.is_empty(), "buff should expire at its rebased time");
+
+        // And before 600s, it survives.
+        let mut s = restored;
+        s.tick(500.0);
+        assert_eq!(s.active.len(), 1);
+    }
+
+    #[test]
+    fn save_form_round_trips_multiple_buffs() {
+        let mut live = BuffState::default();
+        live.apply(&rookswort_spec(0.5, 600.0), 1000.0, "rookswort".into());
+        let campfire = BuffSpec {
+            kind: "campfire".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.75 },
+            duration_secs: 60.0,
+            on_expire: None,
+        };
+        live.apply(&campfire, 1000.0, "campfire".into());
+
+        let save = live.to_save_form(1000.0);
+        let restored = BuffState::from_save_form(&save, 50000.0);
+        assert!((restored.active["rookswort"].expires_at - 50600.0).abs() < 1e-9);
+        assert!((restored.active["campfire"].expires_at - 50060.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn apply_is_noop_on_non_finite_inputs_in_release() {
+        // Release-mode behavior: no-op (not panic). Debug builds still
+        // trip the debug_assert, but this test only exercises the
+        // release-mode early-return path to verify state is untouched.
+        let mut s = BuffState::default();
+        // Apply one valid buff first.
+        s.apply(&rookswort_spec(0.5, 600.0), 0.0, "rookswort".into());
+        // Now try invalid inputs — these must not corrupt state in release.
+        let nan_spec = BuffSpec {
+            kind: "nan_kind".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+            duration_secs: f64::NAN,
+            on_expire: None,
+        };
+        // Debug builds assert; skip the check there. Release-mode behavior
+        // is what we want to verify — no panic, no insert.
+        if cfg!(not(debug_assertions)) {
+            s.apply(&nan_spec, 0.0, "nan".into());
+            assert!(!s.active.contains_key("nan_kind"));
+            assert_eq!(s.active.len(), 1);
+        }
     }
 
     #[test]

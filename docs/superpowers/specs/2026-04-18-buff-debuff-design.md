@@ -34,7 +34,7 @@ Resolved during brainstorming — captured here so implementation stays on-track
 
 ## File Structure
 
-```
+```text
 src-tauri/src/buff/          [new module]
 ├── mod.rs                   BuffState + apply/tick/mood_decay_multiplier
 └── types.rs                 ActiveBuff, BuffSpec, BuffEffect enum
@@ -47,8 +47,8 @@ src-tauri/src/lib.rs         [modify]  expose active_buffs on game-state frame I
 
 data/items/rookswort.json    [modify]  add buffEffect field (create item entry if missing)
 
-src/components/BuffHud.tsx   [new]     render active-buffs row in HUD
-src/types/game-state.ts      [modify]  add activeBuffs: BuffFrame[] (or wherever frame types live)
+src/lib/components/BuffHud.svelte [new]  render active-buffs row in HUD
+src/lib/types.ts             [modify]  add BuffFrame + activeBuffs: BuffFrame[] on RenderFrame
 ```
 
 ## Data Model
@@ -282,7 +282,7 @@ A small helper in `lib.rs` (or wherever the frame is assembled) walks `social.bu
 
 ### Frontend component
 
-`src/components/BuffHud.tsx`:
+`src/lib/components/BuffHud.svelte`:
 
 - Horizontal row of icons positioned near the existing mood bar in the top-left HUD cluster (exact placement follows current HUD layout conventions — no new design system needed)
 - Each icon: item sprite from the ZEB-131 atlas at a reasonable size (32px target; match existing HUD icons)

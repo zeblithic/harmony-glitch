@@ -4,6 +4,11 @@ import { svelteTesting } from '@testing-library/svelte/vite';
 
 export default defineConfig({
   plugins: [svelte({ hot: false }), svelteTesting()],
+  // Vite server FS sandbox is relaxed so vitest can resolve
+  // `node_modules` when it is symlinked into a git worktree (common dev
+  // setup for parallel branches). This affects only the local vitest
+  // dev-server, never a production bundle. Narrow this to `server.fs.allow`
+  // paths if tooling ever runs untrusted code here.
   server: {
     fs: {
       strict: false,
