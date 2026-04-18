@@ -25,6 +25,19 @@ impl BuffState {
         };
         self.active.insert(spec.kind.clone(), active);
     }
+
+    /// Fold all active `MoodDecayMultiplier` effects multiplicatively.
+    /// Returns `1.0` when no relevant buffs are active. Future `BuffEffect`
+    /// variants are ignored by the `filter_map` — no refactor needed when
+    /// adding e.g. `EnergyDecayMultiplier`.
+    pub fn mood_decay_multiplier(&self) -> f64 {
+        self.active
+            .values()
+            .filter_map(|b| match b.effect {
+                BuffEffect::MoodDecayMultiplier { value } => Some(value),
+            })
+            .fold(1.0, |acc, v| acc * v)
+    }
 }
 
 #[cfg(test)]
@@ -69,5 +82,34 @@ mod tests {
         let b = s.active.get("rookswort").unwrap();
         assert_eq!(b.effect, BuffEffect::MoodDecayMultiplier { value: 0.25 });
         assert_eq!(b.source, "rookswort_tier2");
+    }
+
+    #[test]
+    fn mood_decay_multiplier_returns_one_when_empty() {
+        let s = BuffState::default();
+        assert_eq!(s.mood_decay_multiplier(), 1.0);
+    }
+
+    #[test]
+    fn mood_decay_multiplier_single_buff_returns_its_value() {
+        let mut s = BuffState::default();
+        s.apply(&rookswort_spec(0.5, 600.0), 0.0, "rookswort".into());
+        assert!((s.mood_decay_multiplier() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mood_decay_multiplier_composes_multiplicatively() {
+        let mut s = BuffState::default();
+        s.apply(&rookswort_spec(0.5, 600.0), 0.0, "rookswort".into());
+        // A second buff of a different kind — simulate a future campfire warmth.
+        let other = BuffSpec {
+            kind: "campfire".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.75 },
+            duration_secs: 60.0,
+            on_expire: None,
+        };
+        s.apply(&other, 0.0, "campfire".into());
+        // 0.5 * 0.75 = 0.375
+        assert!((s.mood_decay_multiplier() - 0.375).abs() < 1e-9);
     }
 }
