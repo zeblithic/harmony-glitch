@@ -199,6 +199,13 @@ export interface NearestSocialTarget {
   inParty: boolean;
 }
 
+export interface BuffFrame {
+  kind: string;
+  icon: string;
+  label: string;
+  remainingSecs: number;
+}
+
 export interface RenderFrame {
   player: PlayerFrame;
   remotePlayers: RemotePlayerFrame[];
@@ -221,6 +228,7 @@ export interface RenderFrame {
   questProgress: QuestProgressFrame;
   mood: number;
   maxMood: number;
+  activeBuffs: BuffFrame[];
   nearestSocialTarget: NearestSocialTarget | null;
 }
 
