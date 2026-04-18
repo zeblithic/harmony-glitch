@@ -41,8 +41,14 @@ impl BuffState {
     pub fn mood_decay_multiplier(&self) -> f64 {
         self.active
             .values()
-            .filter_map(|b| match b.effect {
-                BuffEffect::MoodDecayMultiplier { value } => Some(value),
+            .filter_map(|b| match &b.effect {
+                BuffEffect::MoodDecayMultiplier { value } => Some(*value),
+                // Future variants that don't affect mood decay should be
+                // silently skipped by this function. Add them to whichever
+                // subsystem cares (e.g., an energy_decay_multiplier helper
+                // parallel to this one).
+                #[allow(unreachable_patterns)]
+                _ => None,
             })
             .fold(1.0, |acc, v| acc * v)
     }

@@ -8,6 +8,14 @@
 
   let { buffs = [] }: { buffs: BuffFrame[] } = $props();
 
+  const BUFF_EMOJI: Record<string, string> = {
+    rookswort: '🌿',
+  };
+
+  function iconGlyph(kind: string): string {
+    return BUFF_EMOJI[kind] ?? '✨';
+  }
+
   function formatRemaining(secs: number): string {
     const safe = Math.max(0, Math.floor(secs));
     if (safe >= 60) {
@@ -27,7 +35,7 @@
         role="listitem"
         aria-label="{buff.label}: {formatRemaining(buff.remainingSecs)} remaining"
       >
-        <span class="buff-icon-sprite">{buff.icon}</span>
+        <span class="buff-icon-sprite">{iconGlyph(buff.kind)}</span>
         <span class="buff-timer">{formatRemaining(buff.remainingSecs)}</span>
       </div>
     {/each}
@@ -59,8 +67,7 @@
   }
 
   .buff-icon-sprite {
-    font-size: 11px;
-    color: #fbbf24;
+    font-size: 16px;
   }
 
   .buff-timer {

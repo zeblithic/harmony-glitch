@@ -67,4 +67,26 @@ describe('BuffHud', () => {
     });
     expect(screen.getByText('0s')).toBeInTheDocument();
   });
+
+  it('renders rookswort with the 🌿 glyph', () => {
+    render(BuffHud, {
+      props: {
+        buffs: [
+          { kind: 'rookswort', icon: 'rookswort', label: 'Rookswort', remainingSecs: 300 },
+        ],
+      },
+    });
+    expect(screen.getByText('🌿')).toBeInTheDocument();
+  });
+
+  it('falls back to ✨ glyph for unknown buff kinds', () => {
+    render(BuffHud, {
+      props: {
+        buffs: [
+          { kind: 'some_unknown_kind', icon: 'whatever', label: 'Unknown', remainingSecs: 30 },
+        ],
+      },
+    });
+    expect(screen.getByText('✨')).toBeInTheDocument();
+  });
 });
