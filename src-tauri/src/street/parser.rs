@@ -652,7 +652,7 @@ mod tests {
         assert_eq!(street.tsid, "LADEMO002");
         assert_eq!(street.name, "Demo Heights");
         assert!(
-            street.signposts.len() >= 1,
+            !street.signposts.is_empty(),
             "demo_heights should have at least 1 signpost"
         );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO001");
@@ -663,7 +663,7 @@ mod tests {
         let xml = include_str!("../../../assets/streets/demo_meadow.xml");
         let street = parse_street(xml).unwrap();
         assert!(
-            street.signposts.len() >= 1,
+            !street.signposts.is_empty(),
             "demo_meadow should have signpost"
         );
         assert_eq!(street.signposts[0].connects[0].target_tsid, "LADEMO002");

@@ -3015,8 +3015,8 @@ mod tests {
         }
 
         // With 8 different seeds, we should see both Left and Right
-        let has_left = facings.iter().any(|f| *f == Direction::Left);
-        let has_right = facings.iter().any(|f| *f == Direction::Right);
+        let has_left = facings.contains(&Direction::Left);
+        let has_right = facings.contains(&Direction::Right);
         assert!(
             has_left && has_right,
             "Expected both Left and Right facings across seeds, got {:?}",

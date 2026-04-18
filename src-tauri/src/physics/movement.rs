@@ -65,6 +65,7 @@ impl PhysicsBody {
     /// Run one physics tick.
     /// Glitch coordinate system: Y=0 at bottom, negative Y = up.
     /// Gravity pulls toward positive Y (toward ground_y=0).
+    #[allow(clippy::too_many_arguments)]
     pub fn tick(
         &mut self,
         dt: f64,
