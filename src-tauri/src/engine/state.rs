@@ -360,9 +360,13 @@ impl GameState {
                 crate::street::types::Facing::Left => Direction::Left,
                 crate::street::types::Facing::Right => Direction::Right,
             };
+            // Stale pending_arrival only makes sense to clear on a fresh load.
+            // During an in-flight transition it was just populated at signpost
+            // crossing by check_signposts — the completion handler needs to
+            // consume it.
+            self.pending_arrival = None;
         }
         self.oob_ticks = 0;
-        self.pending_arrival = None;
         self.street = Some(street);
         self.pending_audio_events.push(AudioEvent::StreetChanged {
             street_id: self.street.as_ref().unwrap().tsid.clone(),
@@ -4054,6 +4058,54 @@ mod tests {
         assert!(state.transition_origin_tsid.is_none());
         assert!(state.pending_arrival.is_none());
         assert_eq!(state.oob_ticks, 0);
+    }
+
+    #[test]
+    fn pending_arrival_survives_mid_transition_load_street() {
+        // Regression: load_street() is called by the frontend IPC handler
+        // while transition.phase is Swooping/Complete. pending_arrival must
+        // NOT be wiped during that load, or the Task 8 fast-path is dead.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+
+        // Simulate the captured state at signpost crossing.
+        state.pending_arrival = Some(crate::street::types::SpawnPoint {
+            x: 444.0,
+            y: -22.0,
+            facing: Some(crate::street::types::Facing::Right),
+        });
+        state.transition_origin_tsid = Some("ORIGINTSID".to_string());
+        state.transition.phase = crate::engine::transition::TransitionPhase::Swooping {
+            to_street: "test".to_string(),
+            direction: crate::engine::transition::TransitionDirection::Right,
+            progress: 0.5,
+            elapsed: 1.0,
+            target_duration: 2.0,
+            street_ready: false,
+        };
+
+        // Frontend IPC: load the target street mid-transition.
+        state.load_street(test_street(), vec![], vec![]);
+
+        // Critical: pending_arrival must survive.
+        assert!(
+            state.pending_arrival.is_some(),
+            "pending_arrival should survive load_street during an in-flight transition"
+        );
+        let sp = state.pending_arrival.unwrap();
+        assert_eq!(sp.x, 444.0);
+        assert_eq!(sp.y, -22.0);
     }
 
     #[test]
