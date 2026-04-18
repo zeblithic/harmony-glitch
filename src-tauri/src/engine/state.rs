@@ -659,6 +659,9 @@ impl GameState {
                         .iter()
                         .find(|s| (s.x - signpost_x).abs() < 0.5)
                         .and_then(|s| s.connects.first())
+                        // Both-or-neither contract: arrival_x AND arrival_y must be Some, or
+                        // the whole thing falls through to None and the transition-completion
+                        // handler runs the legacy reciprocal-signpost fallback.
                         .and_then(|c| {
                             if let (Some(x), Some(y)) = (c.arrival_x, c.arrival_y) {
                                 Some(crate::street::types::SpawnPoint {
