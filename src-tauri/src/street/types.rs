@@ -22,6 +22,11 @@ pub struct StreetData {
     pub layers: Vec<Layer>,
     /// Signpost connections to other streets
     pub signposts: Vec<Signpost>,
+    /// Where the player spawns on first entry (before any signpost traversal)
+    /// and the last-resort fallback for resolve_arrival. If None, runtime
+    /// resolves to first signpost position or (center_x, ground_y).
+    #[serde(default)]
+    pub default_spawn: Option<SpawnPoint>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -371,6 +376,7 @@ mod tests {
             gradient: None,
             layers: vec![],
             signposts: vec![],
+            default_spawn: None,
         };
         assert!((s.width() - 6000.0).abs() < 0.001);
         assert!((s.height() - 1000.0).abs() < 0.001);
@@ -413,6 +419,7 @@ mod tests {
             gradient: None,
             layers: vec![mg.clone(), bg.clone()],
             signposts: vec![],
+            default_spawn: None,
         };
         assert!((s.parallax_factor(&mg) - 1.0).abs() < 0.001);
         assert!((s.parallax_factor(&bg) - 0.91).abs() < 0.01);
@@ -582,6 +589,7 @@ mod tests {
             gradient: None,
             layers: vec![mg],
             signposts: vec![],
+            default_spawn: None,
         };
         assert_eq!(s.walls().len(), 1);
         assert_eq!(s.walls()[0].id, "w1");

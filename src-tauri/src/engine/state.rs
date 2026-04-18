@@ -1491,6 +1491,7 @@ mod tests {
                 filters: None,
             }],
             signposts: vec![],
+            default_spawn: None,
         }
     }
 
@@ -1663,6 +1664,7 @@ mod tests {
                 filters: None,
             }],
             signposts: vec![],
+            default_spawn: None,
         };
         state.load_street(small_street, vec![], vec![]);
 
@@ -3468,6 +3470,7 @@ mod tests {
                 filters: None,
             }],
             signposts: vec![],
+            default_spawn: None,
         }
     }
 
@@ -4271,6 +4274,7 @@ mod save_tests {
                 }),
                 layers: vec![],
                 signposts: vec![],
+                default_spawn: None,
             },
             vec![],
             vec![],

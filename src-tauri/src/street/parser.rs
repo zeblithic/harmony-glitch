@@ -39,6 +39,7 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
     let (layers, layer_signposts) = parse_layers(dynamic)?;
     let mut signposts = parse_signposts(dynamic); // demo XML: signposts at dynamic level
     signposts.extend(layer_signposts); // real Glitch XML: signposts inside middleground
+    let default_spawn = parse_default_spawn(dynamic);
 
     Ok(StreetData {
         tsid,
@@ -51,7 +52,23 @@ pub fn parse_street(xml: &str) -> Result<StreetData, String> {
         gradient,
         layers,
         signposts,
+        default_spawn,
     })
+}
+
+fn parse_default_spawn(dynamic: &XmlValue) -> Option<SpawnPoint> {
+    let obj = dynamic.get("default_spawn").and_then(|v| v.as_object())?;
+    let x = obj.get("x").and_then(|v| v.as_f64())?;
+    let y = obj.get("y").and_then(|v| v.as_f64())?;
+    let facing = obj
+        .get("facing")
+        .and_then(|v| v.as_str())
+        .and_then(|s| match s {
+            "left" => Some(crate::street::types::Facing::Left),
+            "right" => Some(crate::street::types::Facing::Right),
+            _ => None,
+        });
+    Some(SpawnPoint { x, y, facing })
 }
 
 fn parse_layers(dynamic: &XmlValue) -> Result<(Vec<Layer>, Vec<Signpost>), String> {
@@ -804,6 +821,64 @@ mod tests {
         assert_eq!(street.name, "Custom Street");
         assert_eq!(street.layers.len(), 1);
         assert!(street.layers[0].is_middleground);
+    }
+
+    #[test]
+    fn parse_street_with_default_spawn() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="default_spawn">
+    <int id="x">250</int>
+    <int id="y">-50</int>
+    <str id="facing">left</str>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        let sp = street.default_spawn.expect("default_spawn should parse");
+        assert_eq!(sp.x, 250.0);
+        assert_eq!(sp.y, -50.0);
+        assert_eq!(sp.facing, Some(crate::street::types::Facing::Left));
+    }
+
+    #[test]
+    fn parse_street_without_default_spawn() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        assert!(street.default_spawn.is_none());
+    }
+
+    #[test]
+    fn parse_street_default_spawn_without_facing() {
+        let xml = r#"<?xml version="1.0"?>
+<object id="dynamic">
+  <str id="label">TestStreet</str>
+  <str id="tsid">LATEST001</str>
+  <int id="l">-1000</int>
+  <int id="r">1000</int>
+  <int id="t">-500</int>
+  <int id="b">0</int>
+  <object id="default_spawn">
+    <int id="x">0</int>
+    <int id="y">0</int>
+  </object>
+</object>"#;
+        let street = parse_street(xml).unwrap();
+        let sp = street.default_spawn.unwrap();
+        assert!(sp.facing.is_none());
     }
 
     #[test]
