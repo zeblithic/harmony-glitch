@@ -101,6 +101,8 @@ pub struct SaveState {
     pub blocked: Vec<String>,
     #[serde(default)]
     pub last_hi_date: Option<String>,
+    #[serde(default)]
+    pub buffs: crate::buff::BuffState,
 }
 
 /// The complete game state.
@@ -1255,6 +1257,7 @@ impl GameState {
             buddies: self.social.buddies.to_save_entries(),
             blocked: self.social.buddies.blocked_to_hex(),
             last_hi_date: Some(self.social.emotes.current_date.clone()),
+            buffs: self.social.buffs.clone(),
         })
     }
 
@@ -1307,6 +1310,7 @@ impl GameState {
         if let Some(ref date) = save.last_hi_date {
             self.social.emotes.check_date_change(date);
         }
+        self.social.buffs = save.buffs.clone();
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -4526,6 +4530,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -4563,6 +4568,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(
@@ -4597,6 +4603,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -4635,6 +4642,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
 
         write_save_state(&path, &save).unwrap();
@@ -4708,6 +4716,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         state.restore_save(&save);
 
@@ -4772,6 +4781,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         state.restore_save(&save);
 
@@ -4829,6 +4839,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         state.restore_save(&save);
 
@@ -4862,6 +4873,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -4893,6 +4905,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -4929,6 +4942,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();
@@ -4975,6 +4989,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let parsed: SaveState = serde_json::from_str(&json).unwrap();
@@ -5099,5 +5114,80 @@ mod save_tests {
         let restored: SaveState = serde_json::from_str(&reserialized).unwrap();
         assert_eq!(restored.buddies.len(), 1);
         assert_eq!(restored.blocked.len(), 1);
+    }
+
+    #[test]
+    fn save_state_with_active_buff_roundtrips() {
+        use crate::buff::{ActiveBuff, BuffEffect, BuffState};
+        let mut buffs = BuffState::default();
+        buffs.active.insert(
+            "rookswort".into(),
+            ActiveBuff {
+                kind: "rookswort".into(),
+                effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+                expires_at: 1234.5,
+                source: "rookswort".into(),
+                on_expire: None,
+            },
+        );
+        let save = SaveState {
+            street_id: "test".into(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: Default::default(),
+            currants: 0,
+            energy: 100.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 0,
+            upgrades: Default::default(),
+            skill_progress: Default::default(),
+            quest_progress: Default::default(),
+            mood: 100.0,
+            max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
+            buffs,
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let back: SaveState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.buffs.active.len(), 1);
+        assert!((back.buffs.active["rookswort"].expires_at - 1234.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn save_state_missing_buffs_field_defaults_to_empty() {
+        // Simulates loading a pre-buff save: serialize a full SaveState,
+        // strip the buffs field, deserialize, verify default.
+        let save = SaveState {
+            street_id: "test".into(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: Default::default(),
+            currants: 0,
+            energy: 100.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 0,
+            upgrades: Default::default(),
+            skill_progress: Default::default(),
+            quest_progress: Default::default(),
+            mood: 100.0,
+            max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
+            buffs: Default::default(),
+        };
+        let mut json_value: serde_json::Value = serde_json::to_value(&save).unwrap();
+        json_value.as_object_mut().unwrap().remove("buffs");
+        let json_str = serde_json::to_string(&json_value).unwrap();
+        let back: SaveState = serde_json::from_str(&json_str).unwrap();
+        assert!(back.buffs.active.is_empty());
     }
 }
