@@ -129,6 +129,41 @@ mod tests {
         );
         let sp = resolve_default_spawn(&street);
         assert_eq!(sp.x, 7.0);
+        assert_eq!(sp.y, 0.0);
+        assert_eq!(sp.facing, None);
+    }
+
+    #[test]
+    fn resolve_arrival_partial_fields_fall_through_to_reciprocal() {
+        // arrival_x present but arrival_y absent — not enough to form a SpawnPoint,
+        // should fall through to the reciprocal-signpost path per the both-or-neither
+        // contract documented on SignpostConnection.
+        let reciprocal = Signpost {
+            id: "back".to_string(),
+            x: 300.0,
+            y: 0.0,
+            connects: vec![connection("ORIGIN", None, None, None)],
+        };
+        let street = test_street(vec![reciprocal], None);
+        let conn = connection("TARGET", Some(-500.0), None, None); // partial
+        let sp = resolve_arrival(&street, "ORIGIN", Some(&conn));
+        assert_eq!(sp.x, 300.0); // reciprocal wins, NOT the partial arrival_x
+        assert_eq!(sp.y, 0.0);
+    }
+
+    #[test]
+    fn resolve_arrival_with_barren_connection_falls_through_to_default_spawn() {
+        // Connection is provided but has no arrival fields; no reciprocal signpost
+        // on the street; default_spawn is present — should return default_spawn.
+        let street = test_street(
+            vec![],
+            Some(SpawnPoint { x: 42.0, y: -10.0, facing: Some(Facing::Left) }),
+        );
+        let conn = connection("TARGET", None, None, None);
+        let sp = resolve_arrival(&street, "ORIGIN", Some(&conn));
+        assert_eq!(sp.x, 42.0);
+        assert_eq!(sp.y, -10.0);
+        assert_eq!(sp.facing, Some(Facing::Left));
     }
 
     #[test]
