@@ -34,6 +34,10 @@ impl BuffState {
     /// Returns `1.0` when no relevant buffs are active. Future `BuffEffect`
     /// variants are ignored by the `filter_map` — no refactor needed when
     /// adding e.g. `EnergyDecayMultiplier`.
+    // Clippy suggests converting to `.map(...)` because there's currently only
+    // one BuffEffect variant. Keep filter_map: when new variants are added,
+    // they should be silently skipped here, not force this function to change.
+    #[allow(clippy::unnecessary_filter_map)]
     pub fn mood_decay_multiplier(&self) -> f64 {
         self.active
             .values()
