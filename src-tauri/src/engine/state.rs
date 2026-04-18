@@ -31,6 +31,12 @@ const PLAYER_VERTICAL_FRAMING: f64 = 0.85;
 /// 30 ticks ≈ 500ms at 60fps.
 const OOB_THRESHOLD_TICKS: u32 = 30;
 
+/// Tolerance for detecting the floor-clamp position. Must exceed
+/// floating-point residue from the Y-clamp in PhysicsBody::tick but stay
+/// well below the minimum gap between any real platform and street.bottom
+/// (typically >= 40px). 1.0px is generous and safe for current street data.
+const OOB_FLOOR_TOLERANCE: f64 = 1.0;
+
 fn default_currants() -> u64 {
     50
 }
@@ -782,7 +788,7 @@ impl GameState {
             // platform catching them (on_ground=false), they're on the
             // invisible floor with nowhere to go. After OOB_THRESHOLD_TICKS
             // consecutive frames in that state, teleport to last_arrival.
-            let at_floor = (self.player.y - street.bottom).abs() < 1.0;
+            let at_floor = (self.player.y - street.bottom).abs() < OOB_FLOOR_TOLERANCE;
             if at_floor && !self.player.on_ground {
                 self.oob_ticks += 1;
                 if self.oob_ticks >= OOB_THRESHOLD_TICKS {
@@ -4344,6 +4350,50 @@ mod tests {
 
         assert_eq!(state.oob_ticks, 0);
         assert_eq!(state.player.x, initial_x, "player should not be teleported");
+    }
+
+    #[test]
+    fn oob_detector_resets_when_leaving_floor_region() {
+        // Counter resets when at_floor becomes false, even without on_ground.
+        // Covers the else branch's !at_floor path — player falling past
+        // street.bottom is caught by the clamp, then jumps/is pushed back up
+        // into mid-air: counter must reset so they don't immediately teleport
+        // on next accidental floor-touch.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(platformless_street(), vec![], vec![]);
+        state.last_arrival = crate::street::types::Point { x: 100.0, y: -10.0 };
+
+        let input = InputState::default();
+
+        // 20 ticks stuck at floor, on_ground=false — counter increments.
+        for _ in 0..20 {
+            state.player.y = 0.0;
+            state.player.on_ground = false;
+            state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+        }
+        assert!(state.oob_ticks > 0, "counter should be incrementing");
+
+        // 1 tick with player well above floor (at_floor=false), still not grounded.
+        // This is the distinctive case: !at_floor && !on_ground → else branch.
+        state.player.y = -200.0;
+        state.player.on_ground = false;
+        state.tick(1.0 / 60.0, &input, &mut rand::thread_rng());
+
+        assert_eq!(
+            state.oob_ticks, 0,
+            "counter should reset when player leaves the floor region"
+        );
     }
 }
 
