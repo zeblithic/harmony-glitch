@@ -73,6 +73,7 @@ impl PhysicsBody {
         walls: &[Wall],
         street_left: f64,
         street_right: f64,
+        street_bottom: f64,
     ) {
         let was_on_ground = self.on_ground;
 
@@ -246,6 +247,16 @@ impl PhysicsBody {
         } else {
             self.distance_since_footstep = 0.0;
         }
+
+        // Hard floor: street.bottom is the absolute lowest Y any entity can occupy.
+        // Ground geometry should cover the play area, but this clamp prevents the
+        // infinite-fall bug if a player walks off an un-platformed gap. vx is
+        // deliberately preserved so the player can walk off the invisible floor
+        // back onto a real platform.
+        if self.y > street_bottom {
+            self.y = street_bottom;
+            self.vy = 0.0;
+        }
     }
 }
 
@@ -292,7 +303,7 @@ mod tests {
         let walls = solid_wall(100.0, -400.0, 400.0);
 
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
 
         assert!(
@@ -315,7 +326,7 @@ mod tests {
         let walls = solid_wall(100.0, -400.0, 400.0);
 
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
 
         assert!(
@@ -353,7 +364,7 @@ mod tests {
         };
 
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
 
         // Should have walked past x=100 — wall does not block because player is above it
@@ -378,7 +389,7 @@ mod tests {
         let walls = solid_wall(100.0, -400.0, 100.0);
 
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
 
         // Should have walked past x=100 — wall does not block because player is below it
@@ -410,7 +421,7 @@ mod tests {
         };
         let platforms = flat_ground();
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
         assert!(
             body.x <= 100.0 - body.half_width + 0.01,
@@ -426,7 +437,7 @@ mod tests {
             ..Default::default()
         };
         for _ in 0..60 {
-            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0);
+            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
         assert!(
             body2.x < 100.0 - body2.half_width,
@@ -456,7 +467,7 @@ mod tests {
             ..Default::default()
         };
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
         assert!(
             body.x >= 100.0 + body.half_width - 0.01,
@@ -472,7 +483,7 @@ mod tests {
             ..Default::default()
         };
         for _ in 0..60 {
-            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0);
+            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
         assert!(
             body2.x > 100.0 + body2.half_width,
@@ -502,7 +513,7 @@ mod tests {
             ..Default::default()
         };
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
         assert!(
             body.x > 100.0 + body.half_width,
@@ -518,7 +529,7 @@ mod tests {
             ..Default::default()
         };
         for _ in 0..60 {
-            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0);
+            body2.tick(1.0 / 60.0, &input2, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
         assert!(
             body2.x < 100.0 - body2.half_width,
@@ -537,7 +548,7 @@ mod tests {
         let walls = solid_wall(100.0, -400.0, 400.0);
 
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
         }
 
         assert!(
@@ -582,7 +593,7 @@ mod tests {
             ..Default::default()
         };
         let platforms = flat_ground();
-        body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 1000.0, 0.0);
 
         // Player should stop at wall_a (the first wall hit), not wall_b
         let expected = 100.0 - half;
@@ -609,7 +620,7 @@ mod tests {
         let walls = solid_wall(200.0, -400.0, 400.0);
 
         for _ in 0..120 {
-            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 150.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &walls, -1000.0, 150.0, 0.0);
         }
 
         assert!(
@@ -625,7 +636,7 @@ mod tests {
         let input = InputState::default();
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         // Should have moved downward (vy positive, y increased)
         assert!(body.vy > 0.0);
@@ -638,7 +649,7 @@ mod tests {
         let input = InputState::default();
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         assert!(body.on_ground);
         assert_eq!(body.y, 0.0);
@@ -655,7 +666,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         assert!(body.x > 0.0);
     }
@@ -670,7 +681,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         assert!(body.x < 0.0);
     }
@@ -685,7 +696,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         // Should have negative vy (going up) and moved up (negative y)
         assert!(body.vy < 0.0 || body.y < 0.0);
@@ -703,7 +714,7 @@ mod tests {
         let platforms = flat_ground();
 
         // First tick with jump pressed: should jump
-        body.tick(1.0 / 60.0, &jump_input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &jump_input, &platforms, &[], -1000.0, 1000.0, 0.0);
         assert!(!body.on_ground, "Should jump on rising edge");
         assert!(body.vy < 0.0, "Should have upward velocity");
 
@@ -713,7 +724,7 @@ mod tests {
         body.on_ground = true;
 
         // Tick again with jump still held — should NOT re-jump
-        body.tick(1.0 / 60.0, &jump_input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &jump_input, &platforms, &[], -1000.0, 1000.0, 0.0);
         assert!(body.on_ground, "Should NOT re-jump while key is held");
     }
 
@@ -728,7 +739,7 @@ mod tests {
         };
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         // vy should not have gotten the jump impulse
         // (it gets gravity instead)
@@ -747,7 +758,7 @@ mod tests {
 
         // Run many ticks to push past boundary
         for _ in 0..100 {
-            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
         }
 
         assert!(body.x <= 1000.0 - body.half_width);
@@ -775,7 +786,7 @@ mod tests {
         body.on_ground = false;
         let input = InputState::default();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         // Should land on slope via swept collision — y snapped to slope surface
         // slope y_at(100) = 0 + 0.5 * (-100) = -50
@@ -795,7 +806,7 @@ mod tests {
 
         // Fall for a long time
         for _ in 0..600 {
-            body.tick(1.0 / 60.0, &input, &platforms, &[], -100000.0, 100000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -100000.0, 100000.0, f64::MAX);
         }
 
         assert!(body.vy <= TERMINAL_VELOCITY);
@@ -826,7 +837,7 @@ mod tests {
 
         // Run several ticks with no input
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
         }
 
         // Player should not have slid — position essentially unchanged
@@ -876,7 +887,7 @@ mod tests {
         body.vy = 50.0; // Gentle fall
         let input = InputState::default();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         assert!(body.on_ground);
         // Should have landed on the higher platform (y = -50), not the lower one (y = 0)
@@ -911,7 +922,7 @@ mod tests {
 
         // Walk right for several frames
         for _ in 0..30 {
-            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
             assert!(
                 body.on_ground,
                 "Player fell off slope at x={}, y={}",
@@ -961,7 +972,7 @@ mod tests {
 
         // Walk right for enough frames to enter the slope region
         for _ in 0..120 {
-            body.tick(1.0 / 60.0, &input, &platforms, &[], -1800.0, 1800.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1800.0, 1800.0, 0.0);
         }
 
         // Player should have moved past x=400 and followed the slope upward
@@ -1015,7 +1026,7 @@ mod tests {
 
         // Jump — player should be blocked by the ceiling
         for _ in 0..30 {
-            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
         }
 
         // Player's head should not have passed above the ceiling platform
@@ -1062,7 +1073,7 @@ mod tests {
             ..Default::default()
         };
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         // Player should be jumping upward, not blocked
         assert!(body.vy < 0.0, "Player should be moving upward");
@@ -1079,7 +1090,7 @@ mod tests {
         let input = InputState::default();
         let platforms = flat_ground();
 
-        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+        body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 0.0);
 
         assert!(
             body.on_ground,
@@ -1108,9 +1119,11 @@ mod tests {
             ..Default::default()
         };
 
-        // Walk right until past the platform edge
+        // Walk right until past the platform edge.
+        // Use street_bottom=500 (well below any reachable Y in 60 frames) so the
+        // Y-clamp does not engage during this short run and vy stays positive.
         for _ in 0..60 {
-            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0);
+            body.tick(1.0 / 60.0, &input, &platforms, &[], -1000.0, 1000.0, 500.0);
         }
 
         // Player should have walked past x=100 and started falling
@@ -1120,5 +1133,113 @@ mod tests {
             "Player should be falling after walking off edge"
         );
         assert!(body.vy > 0.0, "Player should have downward velocity");
+    }
+
+    // --- Y-clamp (street_bottom) tests ---
+
+    #[test]
+    fn player_y_clamped_to_street_bottom_when_no_platform_below() {
+        // Player starts mid-air above street.bottom with no platform to catch them.
+        let mut body = PhysicsBody::new(0.0, -500.0);
+        body.on_ground = false;
+        body.vy = 0.0;
+        let input = InputState::default();
+        let platforms: Vec<PlatformLine> = vec![]; // no ground anywhere
+        let walls: Vec<Wall> = vec![];
+
+        // Let gravity run for 5 seconds — plenty of time to pass street.bottom.
+        for _ in 0..300 {
+            body.tick(
+                1.0 / 60.0,
+                &input,
+                &platforms,
+                &walls,
+                -1000.0,
+                1000.0,
+                0.0, // street_bottom
+            );
+        }
+
+        assert!(
+            body.y <= 0.0 + 0.01,
+            "Player should be clamped to street_bottom=0, actual y={}",
+            body.y
+        );
+        assert!(
+            body.vy.abs() < 0.01,
+            "Vertical velocity should be reset to 0 after clamp, actual vy={}",
+            body.vy
+        );
+    }
+
+    #[test]
+    fn player_vx_preserved_when_y_clamp_engages() {
+        // Player hits the floor with horizontal input — they should still move sideways.
+        let mut body = PhysicsBody::new(0.0, -100.0);
+        body.on_ground = false;
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
+        let platforms: Vec<PlatformLine> = vec![];
+        let walls: Vec<Wall> = vec![];
+
+        let initial_x = body.x;
+        for _ in 0..60 {
+            body.tick(
+                1.0 / 60.0,
+                &input,
+                &platforms,
+                &walls,
+                -1000.0,
+                1000.0,
+                0.0,
+            );
+        }
+
+        assert!(
+            body.x > initial_x + 10.0,
+            "Player should move right on the clamp floor, x={} (started {})",
+            body.x,
+            initial_x
+        );
+    }
+
+    #[test]
+    fn higher_platform_wins_over_y_clamp() {
+        // Player falling — a platform at y=-50 should catch them before they
+        // reach street_bottom=0.
+        let mut body = PhysicsBody::new(0.0, -200.0);
+        body.on_ground = false;
+        body.vy = 0.0;
+        let input = InputState::default();
+        let platforms = vec![PlatformLine {
+            id: "mid".into(),
+            start: Point { x: -500.0, y: -50.0 },
+            end: Point { x: 500.0, y: -50.0 },
+            pc_perm: None,
+            item_perm: None,
+            surface: "default".into(),
+        }];
+        let walls: Vec<Wall> = vec![];
+
+        for _ in 0..120 {
+            body.tick(
+                1.0 / 60.0,
+                &input,
+                &platforms,
+                &walls,
+                -1000.0,
+                1000.0,
+                0.0,
+            );
+        }
+
+        assert!(
+            (body.y - (-50.0)).abs() < 0.5,
+            "Player should land on platform at y=-50, actual y={}",
+            body.y
+        );
+        assert!(body.on_ground, "Player should be grounded on the platform");
     }
 }

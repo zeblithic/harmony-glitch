@@ -711,6 +711,7 @@ impl GameState {
                 street.walls(),
                 street.left,
                 street.right,
+                street.bottom,
             );
 
             // Jump/Land audio detection
