@@ -241,6 +241,7 @@ mod tests {
                         .collect(),
                 }]
             },
+            default_spawn: None,
         }
     }
 

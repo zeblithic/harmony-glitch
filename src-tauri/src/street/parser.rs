@@ -878,6 +878,8 @@ mod tests {
 </object>"#;
         let street = parse_street(xml).unwrap();
         let sp = street.default_spawn.unwrap();
+        assert_eq!(sp.x, 0.0);
+        assert_eq!(sp.y, 0.0);
         assert!(sp.facing.is_none());
     }
 
