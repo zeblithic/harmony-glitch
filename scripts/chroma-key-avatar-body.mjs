@@ -17,6 +17,7 @@
  */
 
 import sharp from 'sharp';
+import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -24,6 +25,12 @@ const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.dirname(path.dirname(__filename));
 const BODY_PNG = path.join(REPO_ROOT, 'assets/sprites/avatar/base/body.png');
 const TOLERANCE = 8;
+
+if (!existsSync(BODY_PNG)) {
+  console.error(`File not found: ${path.relative(REPO_ROOT, BODY_PNG)}`);
+  console.error('Run ./scripts/fetch-avatar-assets.sh first (or regenerate via tools/avatar-pipeline/extract.mjs).');
+  process.exit(1);
+}
 
 const { data, info } = await sharp(BODY_PNG)
   .ensureAlpha()

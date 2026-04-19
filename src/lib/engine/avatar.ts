@@ -183,9 +183,12 @@ export class AvatarCompositor {
 
       for (const { key, path: sheetPath } of sheetPaths) {
         try {
+          // cachePrefix includes itemId so swapping items within a slot
+          // (e.g. shirt A → shirt B) doesn't reuse the previous item's
+          // frame-key namespace and collide in the Pixi Assets cache.
           const sheet: Spritesheet = await Assets.load({
             src: sheetPath,
-            data: { cachePrefix: `${key}.` },
+            data: { cachePrefix: `${key}.${newId}.` },
           });
           this.sheets.set(key, sheet);
 
@@ -355,8 +358,14 @@ export class AvatarCompositor {
    * multi-part entries are skipped for single-part items and vice versa.
    */
   private rebuildChildren(): void {
+    // Explicitly destroy the prior overlay Graphics — removeChildren()
+    // detaches but doesn't free GPU resources. Toggling the overlay
+    // repeatedly during dev would otherwise leak Pixi objects.
+    if (this.debugGraphics) {
+      this.debugGraphics.destroy();
+      this.debugGraphics = null;
+    }
     this.container.removeChildren();
-    this.debugGraphics = null;
 
     let hasLayers = false;
     for (const { slot, part } of LAYER_ORDER) {

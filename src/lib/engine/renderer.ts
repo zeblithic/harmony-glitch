@@ -783,6 +783,12 @@ export class GameRenderer {
 
   destroy(): void {
     this.destroyed = true;
+    if (import.meta.env.DEV) {
+      const w = window as unknown as { __GAME_RENDERER__?: GameRenderer };
+      if (w.__GAME_RENDERER__ === this) {
+        delete w.__GAME_RENDERER__;
+      }
+    }
     this.compositor.destroy();
     for (const [, entry] of this.remoteAvatars) {
       entry.compositor.destroy();

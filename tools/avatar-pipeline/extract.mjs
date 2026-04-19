@@ -682,6 +682,10 @@ async function extractBaseBody() {
     for (let f = 0; f < count; f += step) {
       const frameNum = start + f;
       const outFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}.png`);
+      // Exporter + chroma-key in separate try/catch so a sharp/I/O error
+      // in the keying pass is logged (not silently producing an unkeyed frame).
+      // Ruffle failures stay silent — missing frames are expected near end-of-range.
+      let exported = false;
       try {
         run(RUFFLE_EXPORTER, [
           BODY_SWF, outFile,
@@ -690,9 +694,16 @@ async function extractBaseBody() {
           '--scale', String(SCALE),
           '--silent',
         ], { stdio: 'pipe' });
-        await chromaKeyBg(outFile);
+        exported = true;
       } catch {
-        // Skip failures
+        // Exporter failure — skip quietly
+      }
+      if (exported) {
+        try {
+          await chromaKeyBg(outFile);
+        } catch (err) {
+          console.warn(`  chromaKeyBg failed for ${outFile}: ${err.message}`);
+        }
       }
       frameIdx++;
     }
