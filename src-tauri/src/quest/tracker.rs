@@ -173,6 +173,7 @@ mod tests {
                 base_cost: Some(3),
                 energy_value: Some(12),
                 mood_value: None,
+                buff_effect: None,
             },
         );
         defs.insert(
@@ -187,6 +188,7 @@ mod tests {
                 base_cost: Some(8),
                 energy_value: Some(50),
                 mood_value: None,
+                buff_effect: None,
             },
         );
         defs

@@ -9717,7 +9717,12 @@
     "icon": "rookswort",
     "baseCost": 75,
     "energyValue": 75,
-    "moodValue": 22
+    "moodValue": 22,
+    "buffEffect": {
+      "kind": "rookswort",
+      "effect": { "type": "moodDecayMultiplier", "value": 0.5 },
+      "durationSecs": 600
+    }
   },
   "roux": {
     "name": "Roux",

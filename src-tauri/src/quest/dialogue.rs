@@ -316,6 +316,7 @@ mod tests {
                 base_cost: Some(3),
                 energy_value: Some(12),
                 mood_value: None,
+                buff_effect: None,
             },
         );
         defs

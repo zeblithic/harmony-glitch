@@ -14,6 +14,7 @@
   import CurrantHud from './lib/components/CurrantHud.svelte';
   import EnergyHud from './lib/components/EnergyHud.svelte';
   import MoodHud from './lib/components/MoodHud.svelte';
+  import BuffHud from './lib/components/BuffHud.svelte';
   import ImaginationHud from './lib/components/ImaginationHud.svelte';
   import UpgradePanel from './lib/components/UpgradePanel.svelte';
   import AvatarEditor from './lib/components/AvatarEditor.svelte';
@@ -1145,6 +1146,7 @@
     <CurrantHud currants={latestFrame?.currants ?? 0} />
     <EnergyHud energy={latestFrame?.energy ?? 600} maxEnergy={latestFrame?.maxEnergy ?? 600} />
     <MoodHud mood={latestFrame?.mood ?? 100} maxMood={latestFrame?.maxMood ?? 100} />
+    <BuffHud buffs={latestFrame?.activeBuffs ?? []} />
     <ImaginationHud
       imagination={latestFrame?.imagination ?? 0}
       onOpen={() => { upgradePanelOpen = true; }}

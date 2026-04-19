@@ -7,6 +7,7 @@ pub use buddy::BuddyState;
 pub use party::PartyState;
 pub use types::{BuddySaveEntry, SocialMessage};
 
+use crate::buff::BuffState;
 use crate::emote::EmoteState;
 use crate::mood::MoodState;
 
@@ -16,6 +17,7 @@ pub struct SocialState {
     pub emotes: EmoteState,
     pub buddies: BuddyState,
     pub party: PartyState,
+    pub buffs: BuffState,
 }
 
 pub struct SocialTickContext<'a> {
@@ -31,6 +33,7 @@ impl SocialState {
             emotes: EmoteState::new(identity, date),
             buddies: BuddyState::default(),
             party: PartyState::default(),
+            buffs: BuffState::default(),
         }
     }
 
@@ -41,8 +44,16 @@ impl SocialState {
 
     pub fn tick(&mut self, dt: f64, ctx: &SocialTickContext) {
         self.emotes.check_date_change(ctx.current_date);
-        let party_bonus = self.party.has_party_bonus();
-        self.mood.tick(dt, ctx.game_time, ctx.in_dialogue, party_bonus);
+
+        // Expire buffs before reading the modifier so the current frame
+        // sees a consistent active set.
+        self.buffs.tick(ctx.game_time);
+
+        let party_factor = if self.party.has_party_bonus() { 0.75 } else { 1.0 };
+        let buff_factor = self.buffs.mood_decay_multiplier();
+        let decay_modifier = party_factor * buff_factor;
+
+        self.mood.tick(dt, ctx.game_time, ctx.in_dialogue, decay_modifier);
         self.buddies.expire_requests(ctx.game_time);
         self.buddies.expire_outgoing_requests(ctx.game_time);
         self.party.expire_invite(ctx.game_time);
@@ -160,5 +171,66 @@ mod tests {
             "date change should clear hi_today"
         );
         assert_eq!(s.emotes.current_date, "2026-04-11");
+    }
+
+    #[test]
+    fn tick_composes_party_bonus_and_buff_multiplicatively() {
+        use crate::buff::{BuffEffect, BuffSpec};
+
+        let mut base = make_social();
+        let mut both = make_social();
+
+        // Skip grace period by pushing game_time past mood_grace_until.
+        let game_time = base.mood.mood_grace_until + 1.0;
+
+        // "Both" gets a party bonus (2 members) AND a rookswort buff.
+        both.party.create_party([1u8; 16], "Me".into(), 0.0);
+        both.party
+            .party
+            .as_mut()
+            .unwrap()
+            .add_member(PartyMember {
+                address_hash: [2u8; 16],
+                display_name: "Peer".into(),
+                joined_at: 1.0,
+            })
+            .unwrap();
+        assert!(both.party.has_party_bonus()); // sanity: need 2 members
+
+        let spec = BuffSpec {
+            kind: "rookswort".into(),
+            effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+            duration_secs: 600.0,
+            on_expire: None,
+        };
+        both.buffs.apply(&spec, game_time, "rookswort".into());
+
+        let ctx = SocialTickContext {
+            current_date: "2026-04-18",
+            in_dialogue: false,
+            game_time,
+        };
+        base.tick(60.0, &ctx);
+        both.tick(60.0, &ctx);
+
+        let base_decay = 100.0 - base.mood.mood;
+        let both_decay = 100.0 - both.mood.mood;
+        // Expected: party (0.75) × buff (0.5) = 0.375
+        let ratio = both_decay / base_decay;
+        assert!((ratio - 0.375).abs() < 1e-9, "got {ratio}");
+    }
+
+    #[test]
+    fn tick_with_no_buffs_or_party_preserves_baseline() {
+        let mut s = make_social();
+        let game_time = s.mood.mood_grace_until + 1.0;
+        let ctx = SocialTickContext {
+            current_date: "2026-04-18",
+            in_dialogue: false,
+            game_time,
+        };
+        let before = s.mood.mood;
+        s.tick(60.0, &ctx);
+        assert!(s.mood.mood < before, "baseline decay still occurs");
     }
 }

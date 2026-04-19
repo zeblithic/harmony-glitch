@@ -101,6 +101,8 @@ pub struct SaveState {
     pub blocked: Vec<String>,
     #[serde(default)]
     pub last_hi_date: Option<String>,
+    #[serde(default)]
+    pub buffs: crate::buff::BuffState,
 }
 
 /// The complete game state.
@@ -219,6 +221,8 @@ pub struct RenderFrame {
     pub quest_progress: crate::quest::types::QuestProgressFrame,
     pub mood: f64,
     pub max_mood: f64,
+    #[serde(default)]
+    pub active_buffs: Vec<crate::buff::BuffFrame>,
     pub nearest_social_target: Option<NearestSocialTarget>,
 }
 
@@ -1179,6 +1183,11 @@ impl GameState {
             },
             mood: self.social.mood.mood,
             max_mood: self.social.mood.max_mood,
+            active_buffs: crate::buff::build_buff_frames(
+                &self.social.buffs,
+                &self.item_defs,
+                self.game_time,
+            ),
             nearest_social_target: None, // Populated in lib.rs after remote players are augmented
         })
     }
@@ -1255,6 +1264,7 @@ impl GameState {
             buddies: self.social.buddies.to_save_entries(),
             blocked: self.social.buddies.blocked_to_hex(),
             last_hi_date: Some(self.social.emotes.current_date.clone()),
+            buffs: self.social.buffs.to_save_form(self.game_time),
         })
     }
 
@@ -1307,6 +1317,7 @@ impl GameState {
         if let Some(ref date) = save.last_hi_date {
             self.social.emotes.check_date_change(date);
         }
+        self.social.buffs = crate::buff::BuffState::from_save_form(&save.buffs, self.game_time);
     }
 
     /// Replay a journaled trade that wasn't persisted before a crash.
@@ -1950,6 +1961,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2340,6 +2352,72 @@ mod tests {
     }
 
     #[test]
+    fn buff_save_restore_preserves_remaining_time_across_app_restart() {
+        // Regression (ZEB-80 PR #60 feedback): SaveState does not persist
+        // game_time, and a fresh GameState starts at game_time=0.0. Without
+        // the save-form rebase, a buff applied at game_time=3600 with 600s
+        // duration would live 4200s after restart instead of 600s.
+        let mut state = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        state.load_street(test_street(), vec![], vec![]);
+        state.game_time = 3600.0;
+        state.social.buffs.apply(
+            &crate::buff::BuffSpec {
+                kind: "rookswort".into(),
+                effect: crate::buff::BuffEffect::MoodDecayMultiplier { value: 0.5 },
+                duration_secs: 600.0,
+                on_expire: None,
+            },
+            state.game_time,
+            "rookswort".into(),
+        );
+        assert!((state.social.buffs.active["rookswort"].expires_at - 4200.0).abs() < 1e-9);
+
+        // Save — should encode remaining-seconds (600.0), not absolute 4200.
+        let save = state.save_state().expect("save_state should succeed");
+        assert!((save.buffs.active["rookswort"].expires_at - 600.0).abs() < 1e-9);
+
+        // Simulate app restart: brand-new GameState with clock at 0.0.
+        let mut restarted = GameState::new(
+            1280.0,
+            720.0,
+            ItemDefs::new(),
+            EntityDefs::new(),
+            HashMap::new(),
+            empty_catalog(),
+            empty_store_catalog(),
+            empty_skill_defs(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        restarted.load_street(test_street(), vec![], vec![]);
+        assert_eq!(restarted.game_time, 0.0);
+        restarted.restore_save(&save);
+
+        let restored = restarted
+            .social
+            .buffs
+            .active
+            .get("rookswort")
+            .expect("buff preserved across restore");
+        assert!((restored.expires_at - 600.0).abs() < 1e-9);
+
+        // Ticking past t=600 in the new clock expires the buff.
+        restarted.social.buffs.tick(601.0);
+        assert!(restarted.social.buffs.active.is_empty());
+    }
+
+    #[test]
     fn game_time_accumulates() {
         let mut state = GameState::new(
             1280.0,
@@ -2500,6 +2578,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -2595,6 +2674,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -3091,6 +3171,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         let mut entity_defs = EntityDefs::new();
@@ -4522,6 +4603,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -4559,6 +4641,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         assert!(
@@ -4593,6 +4676,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -4631,6 +4715,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
 
         write_save_state(&path, &save).unwrap();
@@ -4704,6 +4789,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         state.restore_save(&save);
 
@@ -4768,6 +4854,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         state.restore_save(&save);
 
@@ -4825,6 +4912,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         state.restore_save(&save);
 
@@ -4858,6 +4946,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let mut value: serde_json::Value = serde_json::to_value(&full).unwrap();
         value.as_object_mut().unwrap().remove("currants");
@@ -4889,6 +4978,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let loaded: SaveState = serde_json::from_str(&json).unwrap();
@@ -4925,6 +5015,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let restored: SaveState = serde_json::from_str(&json).unwrap();
@@ -4971,6 +5062,7 @@ mod save_tests {
             buddies: vec![],
             blocked: vec![],
             last_hi_date: None,
+            buffs: Default::default(),
         };
         let json = serde_json::to_string(&save).unwrap();
         let parsed: SaveState = serde_json::from_str(&json).unwrap();
@@ -5095,5 +5187,80 @@ mod save_tests {
         let restored: SaveState = serde_json::from_str(&reserialized).unwrap();
         assert_eq!(restored.buddies.len(), 1);
         assert_eq!(restored.blocked.len(), 1);
+    }
+
+    #[test]
+    fn save_state_with_active_buff_roundtrips() {
+        use crate::buff::{ActiveBuff, BuffEffect, BuffState};
+        let mut buffs = BuffState::default();
+        buffs.active.insert(
+            "rookswort".into(),
+            ActiveBuff {
+                kind: "rookswort".into(),
+                effect: BuffEffect::MoodDecayMultiplier { value: 0.5 },
+                expires_at: 1234.5,
+                source: "rookswort".into(),
+                on_expire: None,
+            },
+        );
+        let save = SaveState {
+            street_id: "test".into(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: Default::default(),
+            currants: 0,
+            energy: 100.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 0,
+            upgrades: Default::default(),
+            skill_progress: Default::default(),
+            quest_progress: Default::default(),
+            mood: 100.0,
+            max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
+            buffs,
+        };
+        let json = serde_json::to_string(&save).unwrap();
+        let back: SaveState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.buffs.active.len(), 1);
+        assert!((back.buffs.active["rookswort"].expires_at - 1234.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn save_state_missing_buffs_field_defaults_to_empty() {
+        // Simulates loading a pre-buff save: serialize a full SaveState,
+        // strip the buffs field, deserialize, verify default.
+        let save = SaveState {
+            street_id: "test".into(),
+            x: 0.0,
+            y: 0.0,
+            facing: Direction::Right,
+            inventory: vec![],
+            avatar: Default::default(),
+            currants: 0,
+            energy: 100.0,
+            max_energy: 600.0,
+            last_trade_id: None,
+            imagination: 0,
+            upgrades: Default::default(),
+            skill_progress: Default::default(),
+            quest_progress: Default::default(),
+            mood: 100.0,
+            max_mood: 100.0,
+            buddies: vec![],
+            blocked: vec![],
+            last_hi_date: None,
+            buffs: Default::default(),
+        };
+        let mut json_value: serde_json::Value = serde_json::to_value(&save).unwrap();
+        json_value.as_object_mut().unwrap().remove("buffs");
+        let json_str = serde_json::to_string(&json_value).unwrap();
+        let back: SaveState = serde_json::from_str(&json_str).unwrap();
+        assert!(back.buffs.active.is_empty());
     }
 }

@@ -512,6 +512,7 @@ mod tests {
                 base_cost: None,
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         defs
@@ -1634,6 +1635,7 @@ mod tests {
                 base_cost: Some(3),
                 energy_value: None,
                 mood_value: None,
+                buff_effect: None,
             },
         );
         (entities, entity_defs, item_defs)
