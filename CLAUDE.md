@@ -1,9 +1,32 @@
 # CLAUDE.md — harmony-glitch
 
+## Session hygiene — NO GIT WORKTREES
+
+**Do not create git worktrees in this repo.** Use `git checkout -b <branch>` in this clone for all branch/PR work. This overrides the `superpowers:using-git-worktrees` skill.
+
+**Do not clean up worktrees either.** Never run `git worktree remove` or `rmdir` on a worktree path — leave stale worktrees for the user to garbage-collect manually.
+
+Why: sessions get anchored to a worktree path, and the Bash tool's CWD reset makes every call fail the moment that path disappears. This has killed multiple sessions mid-cleanup even when the actual merge shipped cleanly. Override only if the user explicitly asks for a worktree or says another agent is working in this repo concurrently.
+
 ## Project
 
 Harmony Glitch — a decentralized resurrection of the Glitch MMO on the Harmony network stack.
 Currently in Phase A: walking simulator (single-player, no networking).
+
+## Setup
+
+Before running the app, fetch the avatar sprite-sheet assets. They're generated
+from the upstream `glitch-avatars` SWF library (~30 min to extract locally) and
+shipped out-of-band via Google Drive rather than committed to git:
+
+    ./scripts/fetch-avatar-assets.sh
+
+Without this step the in-world avatar renders as a blue placeholder rectangle
+and the avatar editor will populate its wardrobe from an empty manifest. To
+regenerate the zip instead of downloading, run
+`node tools/avatar-pipeline/extract.mjs` (prefix with `caffeinate -i` on
+macOS so idle-sleep doesn't stretch a 30-minute run into 12 hours; Linux
+and Windows don't idle-sleep active foreground CPU jobs the same way).
 
 ## Tech Stack
 
