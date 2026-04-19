@@ -40,10 +40,12 @@ src-tauri/src/buff/          [new module]
 └── types.rs                 ActiveBuff, BuffSpec, BuffEffect enum
 
 src-tauri/src/item/types.rs  [extend]  +buff_effect: Option<BuffSpec> on ItemDef
-src-tauri/src/item/interaction.rs [extend]  apply buff in use_item when buff_effect present
+src-tauri/src/lib.rs         [modify]  apply buff in eat_item when buff_effect present;
+                                       expose active_buffs on RenderFrame
 src-tauri/src/mood/mod.rs    [modify]  tick signature: party_bonus: bool → decay_modifier: f64
 src-tauri/src/social/mod.rs  [modify]  add buffs: BuffState; compose decay_modifier in tick
-src-tauri/src/lib.rs         [modify]  expose active_buffs on game-state frame IPC
+src-tauri/src/engine/state.rs [modify] add BuffState field to SaveState (serde default);
+                                       add active_buffs field to RenderFrame
 
 assets/items.json            [modify]  add buffEffect field to the rookswort entry
 
@@ -150,15 +152,17 @@ The implementation plan verifies whether rookswort already has a catalog entry a
 
 ## Runtime Flow
 
-### Apply (on `use_item`)
+### Apply (on `eat_item`)
+
+Buffs are applied at the same site where item consumption happens — the `eat_item` IPC handler in `src-tauri/src/lib.rs`. The actual call goes through a thin helper (`crate::buff::apply_item_buff`) so the wiring is one line at the callsite:
 
 ```rust
-// In the use_item handler, after item-exists / stack-available validation
-if let Some(spec) = &item_def.buff_effect {
-    self.social.buffs.apply(spec, game_time, item_id.to_string());
-    // then consume the item stack as usual
-}
+// In the eat_item handler, after the mood/energy effects have applied
+// but before the inventory decrement.
+crate::buff::apply_item_buff(&mut state.social.buffs, &item_def, state.game_time);
 ```
+
+`apply_item_buff` is a no-op when `item_def.buff_effect` is `None`, so this is safe to call unconditionally — no need to sprinkle `if let Some` guards at every callsite. The helper passes `item_def.id` as the buff `source`, which is what the HUD uses for icon/label attribution.
 
 `BuffState::apply`:
 
@@ -206,11 +210,12 @@ pub fn tick(&mut self, dt: f64, ctx: &SocialTickContext) {
 }
 ```
 
-`BuffState::tick(game_time: f64)`:
+`BuffState::tick(game_time: f64)` uses a **two-phase** loop per expansion pass to avoid a subtle self-wipe bug: if step 2 below removed each kind and immediately applied its successor, a successor whose `kind` matched a later entry in the pre-computed expired list would be inserted by the successor call and then removed by the stale list on its own key.
 
-1. Collect all kinds whose `expires_at <= game_time` into a `Vec<String>` sorted by kind name (for deterministic test behavior).
-2. For each expired kind: `remove` from the map, then if its `on_expire` was `Some(spec)`, immediately call `apply(&spec, game_time, source = "on_expire")`.
-3. Bound the expansion pass count (e.g., 8 iterations) in case a degenerate `on_expire` chain produces already-expired successors. This is a defensive guard for bad content data, not expected normal behavior.
+1. Collect all kinds whose `expires_at <= game_time` into a `Vec<String>` sorted by kind name (for deterministic test behavior). Non-finite `expires_at` is treated as already-expired as a defense-in-depth guard.
+2. **Phase A — remove first:** drain every expired entry out of the map and into a temporary `Vec<ActiveBuff>`. At the end of Phase A the map contains no expired entries.
+3. **Phase B — then apply successors:** iterate the drained list; for each buff with `on_expire: Some(spec)` call `apply(&spec, game_time, source = "on_expire")`. Newly inserted successors live in the map for the next pass to consider, not this one.
+4. Bound the expansion pass count (`MAX_PASSES = 8`) in case a degenerate `on_expire` chain produces already-expired successors. This is a defensive guard for bad content data, not expected normal behavior.
 
 `BuffState::mood_decay_multiplier()`:
 
@@ -335,16 +340,16 @@ Visuals are intentionally minimal. Polish belongs in a follow-up.
 
 ### Integration — state.rs tick loop or IPC boundary
 
-- `use_rookswort_applies_buff_and_slows_decay_for_ten_minutes`
-- `rookswort_buff_expires_and_decay_returns_to_baseline` — tick past `expires_at`, assert mood_decay_multiplier is 1.0 again
-- `rookswort_persists_across_save_and_load` — save with buff active, reload, assert same `expires_at` and still in active map
+- `eat_rookswort_applies_buff_and_slows_decay_for_ten_minutes` — call the `eat_item` handler for rookswort, assert `social.buffs.active["rookswort"]` is present and that subsequent `mood.tick(dt, ...)` consumes `dt × 0.5`
+- `rookswort_buff_expires_and_decay_returns_to_baseline` — tick past `expires_at`, assert the buff is removed and `mood_decay_multiplier()` returns `1.0`
+- `buff_save_restore_preserves_remaining_time_across_app_restart` — save at `game_time = 3600` while a 600s rookswort is active; simulate full app restart (fresh `GameState`, `game_time = 0`); restore; assert the buff's rebased `expires_at ≈ 600.0` (remaining duration preserved, not the pre-save absolute), and that ticking past `game_time = 600` in the new session expires it
 
 ## Risks and Open Questions
 
 - **Rookswort catalog entry presence.** The plan must verify whether rookswort is already in the item catalog and, if so, whether its current metadata is compatible with adding `buffEffect`. If missing, the implementation creates it with the JSON above.
 - **HUD layout conflict.** The existing mood/energy HUD placement is not re-examined in this design. If adding the buff row creates visual crowding, resolution is an implementation-time adjustment.
-- **Save format compatibility.** Adding `buffs: BuffState` to the save struct must use `#[serde(default)]` to preserve compatibility with existing saves that lack the field. Plan should add an explicit test that loads a pre-buff save without error.
-- **`on_expire` source attribution.** When an `on_expire` buff is applied, its `source` is set to `"on_expire"` in the flow above. This is fine for debugging but produces generic HUD labels for successor buffs. If any v1 chain ever surfaces in the HUD (none planned), this may need revisiting.
+- **Save format compatibility.** `SaveState.buffs` uses `#[serde(default)]`, so saves written before the buff system was introduced deserialize into an empty `BuffState`. Additionally, the save/load path rebases `expires_at` to remaining-seconds via `to_save_form` / `from_save_form` (see Persistence section) so buffs survive a full app restart with their remaining duration intact.
+- **`on_expire` source attribution.** When an `on_expire` buff is applied, its `source` is set to the literal `"on_expire"` string. `build_buff_frames` mitigates this by falling back to a secondary `kind` lookup in `item_defs`, so a tier-ramp-down successor whose `kind` matches the originating item still resolves to the correct icon and display name. A fully general fix (propagating the parent's source through successor chains) is deferred until a chain surfaces in the HUD where `kind` does *not* happen to match an item id.
 
 ## Glossary
 
