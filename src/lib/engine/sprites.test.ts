@@ -244,24 +244,31 @@ describe('SpriteManager', () => {
       expect(manager.hasEntityTexture('npc_chicken')).toBe(true);
     });
 
-    it('resolves aliased entity sprite_class via items atlas', async () => {
+    // Table-driven: one row per entry in SpriteManager.ENTITY_TO_ITEM_ALIAS.
+    // If an alias is removed from the code, its row here fails — catches
+    // silent mapping regressions.
+    it.each([
+      ['npc_pig', 'npc_piggy'],
+      ['tree_wood', 'wood_tree'],
+      ['npc_greeter', 'greeter_stone'],
+      ['vendor', 'npc_rare_item_vendor'],
+    ])('resolves aliased entity %s → items atlas frame %s', async (spriteClass, frameName) => {
       const { Assets } = await import('pixi.js');
-      const pigTex = { width: 256, height: 256, label: 'piggy' };
-      const mockAtlas = { textures: { npc_piggy: pigTex } };
+      const tex = { width: 256, height: 256, label: frameName };
+      const mockAtlas = { textures: { [frameName]: tex } };
       vi.mocked(Assets.load).mockImplementation(async (path: string) => {
         if (path === 'sprites/items/items.json') return mockAtlas;
         throw new Error('not found');
       });
       await manager.loadAtlas('items', 'sprites/items/items.json');
 
-      const entity = {
-        id: 'e1', entityType: 'npc', name: 'Pig',
-        spriteClass: 'npc_pig', x: 0, y: 0,
+      manager.createEntity({
+        id: 'e1', entityType: 'npc', name: 'Alias Test',
+        spriteClass, x: 0, y: 0,
         cooldownRemaining: null, depleted: false,
         facing: 'right' as const,
-      };
-      manager.createEntity(entity);
-      expect(manager.hasEntityTexture('npc_pig')).toBe(true);
+      });
+      expect(manager.hasEntityTexture(spriteClass)).toBe(true);
     });
   });
 
