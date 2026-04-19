@@ -1,5 +1,13 @@
 # CLAUDE.md — harmony-glitch
 
+## Session hygiene — NO GIT WORKTREES
+
+**Do not create git worktrees in this repo.** Use `git checkout -b <branch>` in this clone for all branch/PR work. This overrides the `superpowers:using-git-worktrees` skill.
+
+**Do not clean up worktrees either.** Never run `git worktree remove` or `rmdir` on a worktree path — leave stale worktrees for the user to garbage-collect manually.
+
+Why: sessions get anchored to a worktree path, and the Bash tool's CWD reset makes every call fail the moment that path disappears. This has killed multiple sessions mid-cleanup even when the actual merge shipped cleanly. Override only if the user explicitly asks for a worktree or says another agent is working in this repo concurrently.
+
 ## Project
 
 Harmony Glitch — a decentralized resurrection of the Glitch MMO on the Harmony network stack.
