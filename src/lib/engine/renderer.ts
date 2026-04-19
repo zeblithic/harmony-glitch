@@ -68,6 +68,21 @@ export class GameRenderer {
     this.transitionContainer.visible = false;
     this.spriteManager = new SpriteManager();
     this.compositor = new AvatarCompositor();
+
+    if (import.meta.env.DEV) {
+      (window as unknown as { __GAME_RENDERER__: GameRenderer }).__GAME_RENDERER__ = this;
+    }
+  }
+
+  /**
+   * Dev-only: toggle avatar debug overlay on local + remote compositors.
+   * Invoke from devtools: `__GAME_RENDERER__.setAvatarDebugOverlay(true)`.
+   */
+  setAvatarDebugOverlay(enabled: boolean): void {
+    this.compositor.setDebugOverlay(enabled);
+    for (const remote of this.remoteAvatars.values()) {
+      remote.compositor.setDebugOverlay(enabled);
+    }
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
