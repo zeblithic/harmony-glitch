@@ -223,8 +223,11 @@ pub fn tick(&mut self, dt: f64, ctx: &SocialTickContext) {
 pub fn mood_decay_multiplier(&self) -> f64 {
     self.active
         .values()
-        .filter_map(|b| match b.effect {
-            BuffEffect::MoodDecayMultiplier { value } => Some(value),
+        .filter_map(|b| match &b.effect {
+            BuffEffect::MoodDecayMultiplier { value } => Some(*value),
+            // Future BuffEffect variants fall through here — adding a new
+            // variant doesn't force this function to change.
+            _ => None,
         })
         .fold(1.0, |acc, v| acc * v)
 }
@@ -281,7 +284,7 @@ interface GameStateFrame {
 }
 
 interface BuffFrame {
-  kind: string;              // stable id for React keys
+  kind: string;              // stable id for list-rendering keys
   icon: string;              // sprite id — v1 reuses the source item's icon
   label: string;             // display name for accessibility; "Rookswort"
   remainingSecs: number;     // clamped to >= 0
