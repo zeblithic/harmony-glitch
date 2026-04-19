@@ -13,6 +13,20 @@ Why: sessions get anchored to a worktree path, and the Bash tool's CWD reset mak
 Harmony Glitch — a decentralized resurrection of the Glitch MMO on the Harmony network stack.
 Currently in Phase A: walking simulator (single-player, no networking).
 
+## Setup
+
+Before running the app, fetch the avatar sprite-sheet assets. They're generated
+from the upstream `glitch-avatars` SWF library (~30 min to extract locally) and
+shipped out-of-band via Google Drive rather than committed to git:
+
+    ./scripts/fetch-avatar-assets.sh
+
+Without this step the in-world avatar renders as a blue placeholder rectangle
+and the avatar editor will populate its wardrobe from an empty manifest. To
+regenerate the zip instead of downloading, run
+`caffeinate -i node tools/avatar-pipeline/extract.mjs` — caffeinate prevents
+macOS idle-sleep from stretching a 30-minute run into 12 hours.
+
 ## Tech Stack
 
 - **Backend:** Rust (Tauri v2)
