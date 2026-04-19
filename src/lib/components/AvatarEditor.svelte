@@ -337,8 +337,8 @@
   .avatar-editor {
     position: fixed;
     top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    left: 24px;
+    transform: translateY(-50%);
     width: 340px;
     max-height: 80vh;
     padding: 16px;

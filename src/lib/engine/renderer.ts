@@ -1,7 +1,7 @@
 import { Application, Container, FillGradient, Graphics, Text } from 'pixi.js';
 import type { StreetData, RenderFrame, RemotePlayerFrame, AvatarAppearance, Direction } from '../types';
 import { SpriteManager, type EntityContainer } from './sprites';
-import { AvatarCompositor } from './avatar';
+import { AvatarCompositor, AVATAR_DISPLAY_HEIGHT } from './avatar';
 
 interface RemoteAvatarEntry {
   container: Container;
@@ -58,6 +58,7 @@ export class GameRenderer {
   private spriteManager: SpriteManager;
   private compositor: AvatarCompositor;
   private destroyed = false;
+  private avatarDebugOverlayEnabled = false;
 
   constructor() {
     this.app = new Application();
@@ -68,6 +69,24 @@ export class GameRenderer {
     this.transitionContainer.visible = false;
     this.spriteManager = new SpriteManager();
     this.compositor = new AvatarCompositor();
+
+    if (import.meta.env.DEV) {
+      (window as unknown as { __GAME_RENDERER__: GameRenderer }).__GAME_RENDERER__ = this;
+    }
+  }
+
+  /**
+   * Dev-only: toggle avatar debug overlay on local + remote compositors.
+   * Invoke from devtools: `__GAME_RENDERER__.setAvatarDebugOverlay(true)`.
+   * Persists the flag so remote avatars created after the toggle (e.g.
+   * peers joining mid-session) inherit it too.
+   */
+  setAvatarDebugOverlay(enabled: boolean): void {
+    this.avatarDebugOverlayEnabled = enabled;
+    this.compositor.setDebugOverlay(enabled);
+    for (const remote of this.remoteAvatars.values()) {
+      remote.compositor.setDebugOverlay(enabled);
+    }
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
@@ -364,6 +383,11 @@ export class GameRenderer {
 
       if (!entry) {
         const compositor = new AvatarCompositor();
+        // Inherit the current overlay state so peers joining after a
+        // toggle render consistently with the local avatar.
+        if (this.avatarDebugOverlayEnabled) {
+          compositor.setDebugOverlay(true);
+        }
         const container = new Container();
         container.addChild(compositor.getContainer());
 
@@ -380,7 +404,7 @@ export class GameRenderer {
           style: { fontSize: 12, fill: 0xffffff, align: 'center' },
         });
         label.anchor.set(0.5, 1);
-        label.y = -95;
+        label.y = -(AVATAR_DISPLAY_HEIGHT + 5);
         container.addChild(label);
 
         this.worldContainer.addChild(container);
@@ -609,14 +633,17 @@ export class GameRenderer {
         bubble.text.destroy();
         return false;
       }
+      // Chat bubble Text has anchor (0.5, 1) — bubble.y is the bottom of
+      // the bubble. Sit it just above the avatar's head regardless of scale.
+      const bubbleYOffset = AVATAR_DISPLAY_HEIGHT + 5;
       const player = remotePlayers.find((p) => p.addressHash === bubble.targetHash);
       if (player && this.street) {
         bubble.text.x = player.x - this.street.left;
-        bubble.text.y = player.y - this.street.top - 75;
+        bubble.text.y = player.y - this.street.top - bubbleYOffset;
       } else if (this.avatarContainer) {
         // Local player's bubble — position above local avatar.
         bubble.text.x = this.avatarContainer.x;
-        bubble.text.y = this.avatarContainer.y - 75;
+        bubble.text.y = this.avatarContainer.y - bubbleYOffset;
       }
       bubble.text.alpha = Math.min(1, GameRenderer.CHAT_DURATION - bubble.age);
       return true;
@@ -768,6 +795,12 @@ export class GameRenderer {
 
   destroy(): void {
     this.destroyed = true;
+    if (import.meta.env.DEV) {
+      const w = window as unknown as { __GAME_RENDERER__?: GameRenderer };
+      if (w.__GAME_RENDERER__ === this) {
+        delete w.__GAME_RENDERER__;
+      }
+    }
     this.compositor.destroy();
     for (const [, entry] of this.remoteAvatars) {
       entry.compositor.destroy();

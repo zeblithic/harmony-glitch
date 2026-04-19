@@ -168,6 +168,37 @@ function run(cmd, args, opts = {}) {
 }
 
 /**
+ * Key out the SWF-stage background color from a rendered PNG, in place.
+ *
+ * Wardrobe items are rendered via swf-wrapper on a white stage and get a
+ * white-to-alpha pass inside trimWithMetadata. The base avatar renders
+ * directly, so Ruffle uses the body SWF's own background color (teal-ish).
+ * This helper samples the top-left pixel and keys any near-match to alpha=0
+ * so the body sheet ships with a transparent background like wardrobe items.
+ */
+async function chromaKeyBg(pngPath, tolerance = 8) {
+  const { data, info } = await sharp(pngPath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const buf = Buffer.from(data);
+  const bgR = buf[0], bgG = buf[1], bgB = buf[2];
+  if (buf[3] === 0) return; // already transparent
+  for (let i = 0; i < buf.length; i += 4) {
+    if (
+      Math.abs(buf[i]     - bgR) <= tolerance &&
+      Math.abs(buf[i + 1] - bgG) <= tolerance &&
+      Math.abs(buf[i + 2] - bgB) <= tolerance
+    ) {
+      buf[i + 3] = 0;
+    }
+  }
+  await sharp(buf, { raw: { width: info.width, height: info.height, channels: 4 } })
+    .png()
+    .toFile(pngPath);
+}
+
+/**
  * Find content bounds in a rendered frame (non-white, non-transparent pixels).
  * Returns { x, y, w, h } or null if no content.
  */
@@ -651,6 +682,10 @@ async function extractBaseBody() {
     for (let f = 0; f < count; f += step) {
       const frameNum = start + f;
       const outFile = path.join(animDir, `${String(frameIdx).padStart(2, '0')}.png`);
+      // Exporter + chroma-key in separate try/catch so a sharp/I/O error
+      // in the keying pass is logged (not silently producing an unkeyed frame).
+      // Ruffle failures stay silent — missing frames are expected near end-of-range.
+      let exported = false;
       try {
         run(RUFFLE_EXPORTER, [
           BODY_SWF, outFile,
@@ -659,8 +694,19 @@ async function extractBaseBody() {
           '--scale', String(SCALE),
           '--silent',
         ], { stdio: 'pipe' });
+        exported = true;
       } catch {
-        // Skip failures
+        // Exporter failure — skip quietly
+      }
+      if (exported) {
+        try {
+          await chromaKeyBg(outFile);
+        } catch (err) {
+          // Drop the unkeyed frame so a later pack pass doesn't bake
+          // the SWF's teal background into the final body sheet.
+          console.warn(`  chromaKeyBg failed for ${outFile}: ${err.message} — discarding frame`);
+          await rm(outFile).catch(() => {});
+        }
       }
       frameIdx++;
     }

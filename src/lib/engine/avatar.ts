@@ -86,10 +86,18 @@ const HAIR_TINT_SLOTS = new Set(['hair']);
 
 /**
  * Display scale for the avatar. The base body sprite sheet is rendered at 8x
- * (544×1013 per frame). This scale brings it to a reasonable in-world size.
- * The physics body is 30×60, so ~90px tall gives 1.5x the collision box.
+ * (544×1013 per frame). ~240px tall is roughly 4× the 30×60 collision box,
+ * which gives readable clothing detail without dwarfing the physics shape.
  */
-const DISPLAY_SCALE = 90 / 1013;
+const DISPLAY_SCALE = 240 / 1013;
+
+/**
+ * On-screen pixel height of a composited avatar (feet at y=0, head at
+ * y=-AVATAR_DISPLAY_HEIGHT). Exported so the renderer can position name
+ * labels and chat bubbles relative to the avatar's head without hard-coding
+ * offsets that drift when DISPLAY_SCALE changes.
+ */
+export const AVATAR_DISPLAY_HEIGHT = Math.round(1013 * DISPLAY_SCALE);
 
 /** Fade-in duration for newly loaded layers (in seconds at 60fps). */
 const FADE_IN_RATE = 1 / 10; // ~10 frames = ~167ms at 60fps
@@ -112,6 +120,9 @@ export class AvatarCompositor {
   private currentAnimation: AnimationState | null = null;
   private manifest: AvatarManifest | null = null;
   private fadingIn: Set<string> = new Set();
+  private debugOverlayEnabled = false;
+  private debugGraphics: Graphics | null = null;
+  private placeholderGraphics: Graphics | null = null;
 
   constructor() {
     this.container = new Container();
@@ -120,6 +131,17 @@ export class AvatarCompositor {
 
   getContainer(): Container {
     return this.container;
+  }
+
+  /**
+   * Toggle a debug overlay that visualizes the canonical 544×1013 avatar
+   * canvas, the anchor point, and each layer's orig+trim-derived expected
+   * bounds. If a sprite's rendered pixels don't align with its green bounds
+   * box, PixiJS isn't honoring the trim metadata.
+   */
+  setDebugOverlay(enabled: boolean): void {
+    this.debugOverlayEnabled = enabled;
+    this.rebuildChildren();
   }
 
   /**
@@ -170,7 +192,13 @@ export class AvatarCompositor {
 
       for (const { key, path: sheetPath } of sheetPaths) {
         try {
-          const sheet: Spritesheet = await Assets.load(sheetPath);
+          // cachePrefix includes itemId so swapping items within a slot
+          // (e.g. shirt A → shirt B) doesn't reuse the previous item's
+          // frame-key namespace and collide in the Pixi Assets cache.
+          const sheet: Spritesheet = await Assets.load({
+            src: sheetPath,
+            data: { cachePrefix: `${key}.${newId}.` },
+          });
           this.sheets.set(key, sheet);
 
           const anim = this.currentAnimation ?? 'idle';
@@ -202,7 +230,11 @@ export class AvatarCompositor {
    * Sync all layers to the current animation state and facing direction.
    */
   updateAnimation(animation: AnimationState, facing: Direction): void {
-    this.container.scale.x = (facing === 'right' ? 1 : -1) * DISPLAY_SCALE;
+    // Preserve scale magnitude so the no-layer placeholder (scaled 1×) isn't
+    // stretched back up to DISPLAY_SCALE on the next tick. rebuildChildren()
+    // sets the magnitude; this method only flips the sign for facing.
+    const magnitude = Math.abs(this.container.scale.x) || DISPLAY_SCALE;
+    this.container.scale.x = magnitude * (facing === 'right' ? 1 : -1);
 
     // Tick fade-in for newly loaded layers
     if (this.fadingIn.size > 0) {
@@ -234,6 +266,14 @@ export class AvatarCompositor {
     for (const [, sprite] of this.layers) {
       sprite.stop();
       sprite.destroy();
+    }
+    if (this.debugGraphics) {
+      this.debugGraphics.destroy();
+      this.debugGraphics = null;
+    }
+    if (this.placeholderGraphics) {
+      this.placeholderGraphics.destroy();
+      this.placeholderGraphics = null;
     }
     this.layers.clear();
     this.sheets.clear();
@@ -339,6 +379,18 @@ export class AvatarCompositor {
    * multi-part entries are skipped for single-part items and vice versa.
    */
   private rebuildChildren(): void {
+    // Explicitly destroy prior diagnostic + placeholder Graphics —
+    // removeChildren() detaches but doesn't free GPU resources, and toggling
+    // appearances or the overlay repeatedly during dev would otherwise
+    // leak Pixi objects.
+    if (this.debugGraphics) {
+      this.debugGraphics.destroy();
+      this.debugGraphics = null;
+    }
+    if (this.placeholderGraphics) {
+      this.placeholderGraphics.destroy();
+      this.placeholderGraphics = null;
+    }
     this.container.removeChildren();
 
     let hasLayers = false;
@@ -355,10 +407,48 @@ export class AvatarCompositor {
       const g = new Graphics();
       g.rect(-15, -60, 30, 60);
       g.fill(0x5865f2);
+      this.placeholderGraphics = g;
       this.container.addChild(g);
       this.container.scale.set(1);
-    } else {
-      this.container.scale.set(DISPLAY_SCALE);
+      return;
     }
+
+    this.container.scale.set(DISPLAY_SCALE);
+
+    if (this.debugOverlayEnabled) {
+      this.renderDebugOverlay();
+    }
+  }
+
+  /**
+   * Draw a diagnostic overlay on top of the composited avatar. Strokes are
+   * sized in container-local units; the container scales everything down by
+   * DISPLAY_SCALE (~0.089) on the way to the screen.
+   */
+  private renderDebugOverlay(): void {
+    const g = new Graphics();
+
+    g.rect(-272, -1013, 544, 1013);
+    g.stroke({ color: 0xff0000, width: 20 });
+
+    g.moveTo(-120, 0).lineTo(120, 0);
+    g.moveTo(0, -120).lineTo(0, 120);
+    g.stroke({ color: 0xffff00, width: 12 });
+
+    for (const sprite of this.layers.values()) {
+      const tex = sprite.texture;
+      if (!tex.orig) continue;
+      const origW = tex.orig.width;
+      const origH = tex.orig.height;
+      const tx = tex.trim?.x ?? 0;
+      const ty = tex.trim?.y ?? 0;
+      const tw = tex.trim?.width ?? origW;
+      const th = tex.trim?.height ?? origH;
+      g.rect(tx - origW / 2, ty - origH, tw, th);
+      g.stroke({ color: 0x00ff00, width: 8 });
+    }
+
+    this.debugGraphics = g;
+    this.container.addChild(g);
   }
 }
