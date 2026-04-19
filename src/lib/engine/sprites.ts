@@ -24,6 +24,20 @@ export interface EntityContainer extends Container {
 }
 
 export class SpriteManager {
+  /**
+   * Map entity sprite_class → items-atlas frame name. Lets entity lookups
+   * re-use icon art from the items atlas when no dedicated entity sheet
+   * ships that sprite_class. Entries are only needed for renames
+   * (`tree_wood` in code vs `wood_tree` in the atlas); classes whose name
+   * already matches a frame (`npc_chicken`, `npc_butterfly`) fall through.
+   */
+  private static readonly ENTITY_TO_ITEM_ALIAS: Record<string, string> = {
+    npc_pig: 'npc_piggy',
+    tree_wood: 'wood_tree',
+    npc_greeter: 'greeter_stone',
+    vendor: 'npc_rare_item_vendor',
+  };
+
   private textureCache: Map<string, Texture> = new Map();
   private warnedMissing: Set<string> = new Set();
 
@@ -196,6 +210,17 @@ export class SpriteManager {
     if (this.textureCache.has(cacheKey)) {
       return this.textureCache.get(cacheKey)!;
     }
+
+    // Fall back to the items atlas — either via an explicit alias or by
+    // name match. Caching under `entity:` means the renderer's
+    // hasEntityTexture() upgrade check picks it up on the next frame.
+    const itemFrame = SpriteManager.ENTITY_TO_ITEM_ALIAS[spriteClass] ?? spriteClass;
+    const itemTexture = this.textureCache.get(`item:${itemFrame}`);
+    if (itemTexture) {
+      this.textureCache.set(cacheKey, itemTexture);
+      return itemTexture;
+    }
+
     // Fire-and-forget async load — returns null now, cached for next encounter
     if (!this.warnedMissing.has(cacheKey)) {
       this.warnedMissing.add(cacheKey);

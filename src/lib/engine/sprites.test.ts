@@ -221,6 +221,57 @@ describe('SpriteManager', () => {
     });
   });
 
+  describe('entity → items atlas fallback', () => {
+    it('resolves entity lookup via matching items atlas frame', async () => {
+      const { Assets } = await import('pixi.js');
+      const chickenTex = { width: 256, height: 256, label: 'chicken' };
+      const mockAtlas = { textures: { npc_chicken: chickenTex } };
+      vi.mocked(Assets.load).mockImplementation(async (path: string) => {
+        if (path === 'sprites/items/items.json') return mockAtlas;
+        throw new Error('not found');
+      });
+      await manager.loadAtlas('items', 'sprites/items/items.json');
+
+      expect(manager.hasEntityTexture('npc_chicken')).toBe(false);
+      const entity = {
+        id: 'e1', entityType: 'npc', name: 'Chicken',
+        spriteClass: 'npc_chicken', x: 0, y: 0,
+        cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
+      };
+      manager.createEntity(entity);
+      // Resolution is synchronous — no microtask flush needed
+      expect(manager.hasEntityTexture('npc_chicken')).toBe(true);
+    });
+
+    // Table-driven: one row per entry in SpriteManager.ENTITY_TO_ITEM_ALIAS.
+    // If an alias is removed from the code, its row here fails — catches
+    // silent mapping regressions.
+    it.each([
+      ['npc_pig', 'npc_piggy'],
+      ['tree_wood', 'wood_tree'],
+      ['npc_greeter', 'greeter_stone'],
+      ['vendor', 'npc_rare_item_vendor'],
+    ])('resolves aliased entity %s → items atlas frame %s', async (spriteClass, frameName) => {
+      const { Assets } = await import('pixi.js');
+      const tex = { width: 256, height: 256, label: frameName };
+      const mockAtlas = { textures: { [frameName]: tex } };
+      vi.mocked(Assets.load).mockImplementation(async (path: string) => {
+        if (path === 'sprites/items/items.json') return mockAtlas;
+        throw new Error('not found');
+      });
+      await manager.loadAtlas('items', 'sprites/items/items.json');
+
+      manager.createEntity({
+        id: 'e1', entityType: 'npc', name: 'Alias Test',
+        spriteClass, x: 0, y: 0,
+        cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
+      });
+      expect(manager.hasEntityTexture(spriteClass)).toBe(true);
+    });
+  });
+
   describe('missing texture dedup', () => {
     it('logs missing entity texture only once per spriteClass', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
