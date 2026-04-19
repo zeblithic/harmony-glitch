@@ -702,7 +702,10 @@ async function extractBaseBody() {
         try {
           await chromaKeyBg(outFile);
         } catch (err) {
-          console.warn(`  chromaKeyBg failed for ${outFile}: ${err.message}`);
+          // Drop the unkeyed frame so a later pack pass doesn't bake
+          // the SWF's teal background into the final body sheet.
+          console.warn(`  chromaKeyBg failed for ${outFile}: ${err.message} — discarding frame`);
+          await rm(outFile).catch(() => {});
         }
       }
       frameIdx++;

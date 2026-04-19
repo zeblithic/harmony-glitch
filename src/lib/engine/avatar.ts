@@ -91,6 +91,14 @@ const HAIR_TINT_SLOTS = new Set(['hair']);
  */
 const DISPLAY_SCALE = 240 / 1013;
 
+/**
+ * On-screen pixel height of a composited avatar (feet at y=0, head at
+ * y=-AVATAR_DISPLAY_HEIGHT). Exported so the renderer can position name
+ * labels and chat bubbles relative to the avatar's head without hard-coding
+ * offsets that drift when DISPLAY_SCALE changes.
+ */
+export const AVATAR_DISPLAY_HEIGHT = Math.round(1013 * DISPLAY_SCALE);
+
 /** Fade-in duration for newly loaded layers (in seconds at 60fps). */
 const FADE_IN_RATE = 1 / 10; // ~10 frames = ~167ms at 60fps
 
@@ -114,6 +122,7 @@ export class AvatarCompositor {
   private fadingIn: Set<string> = new Set();
   private debugOverlayEnabled = false;
   private debugGraphics: Graphics | null = null;
+  private placeholderGraphics: Graphics | null = null;
 
   constructor() {
     this.container = new Container();
@@ -221,7 +230,11 @@ export class AvatarCompositor {
    * Sync all layers to the current animation state and facing direction.
    */
   updateAnimation(animation: AnimationState, facing: Direction): void {
-    this.container.scale.x = (facing === 'right' ? 1 : -1) * DISPLAY_SCALE;
+    // Preserve scale magnitude so the no-layer placeholder (scaled 1×) isn't
+    // stretched back up to DISPLAY_SCALE on the next tick. rebuildChildren()
+    // sets the magnitude; this method only flips the sign for facing.
+    const magnitude = Math.abs(this.container.scale.x) || DISPLAY_SCALE;
+    this.container.scale.x = magnitude * (facing === 'right' ? 1 : -1);
 
     // Tick fade-in for newly loaded layers
     if (this.fadingIn.size > 0) {
@@ -253,6 +266,14 @@ export class AvatarCompositor {
     for (const [, sprite] of this.layers) {
       sprite.stop();
       sprite.destroy();
+    }
+    if (this.debugGraphics) {
+      this.debugGraphics.destroy();
+      this.debugGraphics = null;
+    }
+    if (this.placeholderGraphics) {
+      this.placeholderGraphics.destroy();
+      this.placeholderGraphics = null;
     }
     this.layers.clear();
     this.sheets.clear();
@@ -358,12 +379,17 @@ export class AvatarCompositor {
    * multi-part entries are skipped for single-part items and vice versa.
    */
   private rebuildChildren(): void {
-    // Explicitly destroy the prior overlay Graphics — removeChildren()
-    // detaches but doesn't free GPU resources. Toggling the overlay
-    // repeatedly during dev would otherwise leak Pixi objects.
+    // Explicitly destroy prior diagnostic + placeholder Graphics —
+    // removeChildren() detaches but doesn't free GPU resources, and toggling
+    // appearances or the overlay repeatedly during dev would otherwise
+    // leak Pixi objects.
     if (this.debugGraphics) {
       this.debugGraphics.destroy();
       this.debugGraphics = null;
+    }
+    if (this.placeholderGraphics) {
+      this.placeholderGraphics.destroy();
+      this.placeholderGraphics = null;
     }
     this.container.removeChildren();
 
@@ -381,6 +407,7 @@ export class AvatarCompositor {
       const g = new Graphics();
       g.rect(-15, -60, 30, 60);
       g.fill(0x5865f2);
+      this.placeholderGraphics = g;
       this.container.addChild(g);
       this.container.scale.set(1);
       return;
