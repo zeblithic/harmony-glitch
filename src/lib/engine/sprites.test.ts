@@ -221,6 +221,50 @@ describe('SpriteManager', () => {
     });
   });
 
+  describe('entity → items atlas fallback', () => {
+    it('resolves entity lookup via matching items atlas frame', async () => {
+      const { Assets } = await import('pixi.js');
+      const chickenTex = { width: 256, height: 256, label: 'chicken' };
+      const mockAtlas = { textures: { npc_chicken: chickenTex } };
+      vi.mocked(Assets.load).mockImplementation(async (path: string) => {
+        if (path === 'sprites/items/items.json') return mockAtlas;
+        throw new Error('not found');
+      });
+      await manager.loadAtlas('items', 'sprites/items/items.json');
+
+      expect(manager.hasEntityTexture('npc_chicken')).toBe(false);
+      const entity = {
+        id: 'e1', entityType: 'npc', name: 'Chicken',
+        spriteClass: 'npc_chicken', x: 0, y: 0,
+        cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
+      };
+      manager.createEntity(entity);
+      // Resolution is synchronous — no microtask flush needed
+      expect(manager.hasEntityTexture('npc_chicken')).toBe(true);
+    });
+
+    it('resolves aliased entity sprite_class via items atlas', async () => {
+      const { Assets } = await import('pixi.js');
+      const pigTex = { width: 256, height: 256, label: 'piggy' };
+      const mockAtlas = { textures: { npc_piggy: pigTex } };
+      vi.mocked(Assets.load).mockImplementation(async (path: string) => {
+        if (path === 'sprites/items/items.json') return mockAtlas;
+        throw new Error('not found');
+      });
+      await manager.loadAtlas('items', 'sprites/items/items.json');
+
+      const entity = {
+        id: 'e1', entityType: 'npc', name: 'Pig',
+        spriteClass: 'npc_pig', x: 0, y: 0,
+        cooldownRemaining: null, depleted: false,
+        facing: 'right' as const,
+      };
+      manager.createEntity(entity);
+      expect(manager.hasEntityTexture('npc_pig')).toBe(true);
+    });
+  });
+
   describe('missing texture dedup', () => {
     it('logs missing entity texture only once per spriteClass', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
