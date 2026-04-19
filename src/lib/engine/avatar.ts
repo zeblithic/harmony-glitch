@@ -269,7 +269,7 @@ export class AvatarCompositor {
    */
   private resolveSheetPaths(slot: string, itemId: string): { key: string; path: string }[] {
     if (slot === 'body') {
-      return [{ key: 'body', path: 'sprites/avatar/base/body.json' }];
+      return [{ key: 'body', path: '/assets/sprites/avatar/base/body.json' }];
     }
 
     const category = LAYER_ORDER.find(l => l.slot === slot)?.category ?? slot;
@@ -284,12 +284,12 @@ export class AvatarCompositor {
       // Multi-part: one sheet per sub-sprite
       return parts.map((part: string) => ({
         key: `${slot}.${part}`,
-        path: `sprites/avatar/${category}/${itemId}.${part}.json`,
+        path: `/assets/sprites/avatar/${category}/${itemId}.${part}.json`,
       }));
     }
 
     // Single-part (vanity items, or wardrobe fallback)
-    return [{ key: slot, path: `sprites/avatar/${category}/${itemId}.json` }];
+    return [{ key: slot, path: `/assets/sprites/avatar/${category}/${itemId}.json` }];
   }
 
   /**
