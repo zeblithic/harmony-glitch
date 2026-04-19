@@ -24,8 +24,9 @@ shipped out-of-band via Google Drive rather than committed to git:
 Without this step the in-world avatar renders as a blue placeholder rectangle
 and the avatar editor will populate its wardrobe from an empty manifest. To
 regenerate the zip instead of downloading, run
-`caffeinate -i node tools/avatar-pipeline/extract.mjs` — caffeinate prevents
-macOS idle-sleep from stretching a 30-minute run into 12 hours.
+`node tools/avatar-pipeline/extract.mjs` (prefix with `caffeinate -i` on
+macOS so idle-sleep doesn't stretch a 30-minute run into 12 hours; Linux
+and Windows don't idle-sleep active foreground CPU jobs the same way).
 
 ## Tech Stack
 

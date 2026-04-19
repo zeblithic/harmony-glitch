@@ -2,6 +2,8 @@ import { Assets, AnimatedSprite, Container, Graphics } from 'pixi.js';
 import type { Spritesheet } from 'pixi.js';
 import type { AnimationState, AvatarAppearance, AvatarManifest, Direction } from '../types';
 
+const AVATAR_ASSET_BASE = '/assets/sprites/avatar';
+
 const ANIMATION_SPEEDS: Record<AnimationState, number> = {
   idle: 0.08,
   walking: 0.15,
@@ -131,7 +133,7 @@ export class AvatarCompositor {
     // Load manifest on first use
     if (!this.manifest) {
       try {
-        const resp = await fetch('/assets/sprites/avatar/manifest.json');
+        const resp = await fetch(`${AVATAR_ASSET_BASE}/manifest.json`);
         if (resp.ok) this.manifest = await resp.json();
       } catch { /* manifest unavailable */ }
     }
@@ -269,7 +271,7 @@ export class AvatarCompositor {
    */
   private resolveSheetPaths(slot: string, itemId: string): { key: string; path: string }[] {
     if (slot === 'body') {
-      return [{ key: 'body', path: '/assets/sprites/avatar/base/body.json' }];
+      return [{ key: 'body', path: `${AVATAR_ASSET_BASE}/base/body.json` }];
     }
 
     const category = LAYER_ORDER.find(l => l.slot === slot)?.category ?? slot;
@@ -284,12 +286,12 @@ export class AvatarCompositor {
       // Multi-part: one sheet per sub-sprite
       return parts.map((part: string) => ({
         key: `${slot}.${part}`,
-        path: `/assets/sprites/avatar/${category}/${itemId}.${part}.json`,
+        path: `${AVATAR_ASSET_BASE}/${category}/${itemId}.${part}.json`,
       }));
     }
 
     // Single-part (vanity items, or wardrobe fallback)
-    return [{ key: slot, path: `/assets/sprites/avatar/${category}/${itemId}.json` }];
+    return [{ key: slot, path: `${AVATAR_ASSET_BASE}/${category}/${itemId}.json` }];
   }
 
   /**

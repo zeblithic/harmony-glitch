@@ -13,9 +13,9 @@
 set -euo pipefail
 
 FILE_ID="1iL1crPLmU5gsfVxo1zd8aPFfrRaEaIkC"
+EXPECTED_SHA256="b455ceaca010a42454faa2b4a0c579e413e5708147b546604d4a775e5fd78b89"
 OUT_ROOT="assets/sprites"
 OUT_DIR="${OUT_ROOT}/avatar"
-ZIP_PATH="${TMPDIR:-/tmp}/harmony-glitch-avatar-assets.zip"
 
 # Script lives in scripts/; cd to repo root so relative paths work regardless
 # of where the script is invoked from.
@@ -26,6 +26,11 @@ if [ -f "$OUT_DIR/manifest.json" ]; then
   echo "Remove the directory first if you want to re-fetch: rm -rf $OUT_DIR"
   exit 0
 fi
+
+# Unique temp path + guaranteed cleanup on any exit path (success, failure,
+# interrupt). Defends against concurrent invocations and stale files on crash.
+ZIP_PATH="$(mktemp "${TMPDIR:-/tmp}/harmony-glitch-avatar-assets.XXXXXX")"
+trap 'rm -f "$ZIP_PATH"' EXIT
 
 echo "Fetching avatar asset zip from Google Drive..."
 # For files under ~100 MB, this direct URL works without a confirm-token.
@@ -51,14 +56,35 @@ recently). Workarounds:
   2. Or regenerate locally:
        caffeinate -i node tools/avatar-pipeline/extract.mjs
 EOF
-  rm -f "$ZIP_PATH"
+  exit 1
+fi
+
+# Verify the download matches the pinned hash — protects against a corrupted
+# transfer or a swapped-out Drive file. Content integrity comes from this
+# single check; the path/mtime/ownership of the zip are not trusted.
+if command -v sha256sum >/dev/null 2>&1; then
+  actual_sha256="$(sha256sum "$ZIP_PATH" | awk '{print $1}')"
+else
+  actual_sha256="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
+fi
+if [ "$actual_sha256" != "$EXPECTED_SHA256" ]; then
+  cat >&2 <<EOF
+Error: SHA256 mismatch for avatar asset zip.
+  expected: $EXPECTED_SHA256
+  actual:   $actual_sha256
+
+The zip at the pinned Google Drive URL has changed since this script was
+written, or the download was corrupted. If intentional (new asset batch),
+regenerate the hash with:
+  shasum -a 256 <path-to-new-zip>
+and update EXPECTED_SHA256 at the top of this script.
+EOF
   exit 1
 fi
 
 echo "Unpacking into $OUT_DIR/..."
 mkdir -p "$OUT_ROOT"
 unzip -q -o "$ZIP_PATH" -d "$OUT_ROOT"
-rm -f "$ZIP_PATH"
 
 echo "Done. Loaded categories:"
 jq -r '.categories | to_entries[] | "  \(.key): \(.value.items | length) items"' \
